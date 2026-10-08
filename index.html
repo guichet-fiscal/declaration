@@ -281,11 +281,11 @@ dialog::backdrop{background:rgba(8,18,22,.55)}
 .dlg-body{padding:16px 20px 18px;display:grid;gap:16px;overflow:auto;min-height:0;grid-auto-rows:max-content;align-content:start}
 .dlg-foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;padding:14px 20px;border-top:1px solid var(--rule);background:var(--paper)}
 .dlg-foot .spacer{flex:1 1 auto}
-.dlg-sec{display:grid;gap:4px}
+.dlg-sec{display:grid;gap:4px;align-content:start}
 .dlg-sec h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
 .dlg-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px}
 @media (max-width:560px){.dlg-cols{grid-template-columns:minmax(0,1fr)}}
-.kv{margin-top:6px}
+.kv{margin-top:6px;align-content:start}
 .kv dd{font-family:var(--f-body);font-variant-numeric:normal;text-align:right;overflow-wrap:anywhere}
 .kv dd.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .kv .tot-dt,.kv .tot-dd{border-top:1px solid var(--ink);padding-top:7px;font-weight:700;color:var(--ink)}
@@ -346,6 +346,7 @@ td.tone-text{color:var(--tone)}
 .search-row .sort{display:inline-flex;gap:8px;align-items:center}
 .econ-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;align-items:start}
 .econ-grid .span2{grid-column:1/-1}
+.econ-grid > .card{margin-top:0}
 @media (max-width:900px){.econ-grid{grid-template-columns:minmax(0,1fr)}}
 .chart .line{fill:none;stroke:var(--s3);stroke-width:2;stroke-linejoin:round;pointer-events:none}
 .chart .area{fill:var(--s3);opacity:.12;pointer-events:none}
@@ -363,6 +364,17 @@ td.tone-text{color:var(--tone)}
 .minis .kpi .v{font-size:18px}
 table.compact{min-width:560px;font-size:13.5px}
 table.compact td{padding:8px 10px}
+@media (max-width:560px){
+  table.pen-table{min-width:0}
+  .pen-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 0;border-bottom:1px solid var(--rule-2)}
+  .pen-table tr:last-child{border-bottom:0}
+  .pen-table td{padding:0;border:0}
+  .pen-table td:nth-child(1){grid-column:1;grid-row:1;color:var(--ink-3)}
+  .pen-table td:nth-child(3){grid-column:2;grid-row:1;text-align:right}
+  .pen-table td:nth-child(2){grid-column:1/-1;grid-row:2}
+  .pen-table td:nth-child(4){grid-column:1/-1;grid-row:3}
+  .pen-table td.act{grid-column:1/-1;grid-row:4;display:flex;flex-wrap:wrap;gap:6px;white-space:normal;text-align:left}
+}
 .pen-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 150px;gap:10px}
 @media (max-width:620px){.pen-grid{grid-template-columns:minmax(0,1fr)}}
 .journal-list{list-style:none;margin:12px 0 0;padding:0}
@@ -404,6 +416,9 @@ table.compact td{padding:8px 10px}
 .sal-cot{font-size:13px;text-align:right;color:var(--ink-2)}
 input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
 @media (max-width:520px){.sal-head{display:none}.sal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px}.sal-row .sal-cot{grid-column:1/3;text-align:left}}
+/* Modifications */
+.row-actions{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.edit-banner{border-left-color:var(--accent);align-items:center;flex-wrap:wrap}
 </style>
 </head>
 <body data-gate="chargement">
@@ -488,7 +503,7 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
         <div class="card-head">
           <div>
             <h3>Trésor</h3>
-            <p class="sub">Recettes encaissées et crédits accordés, 8 dernières périodes.</p>
+            <p class="sub" id="dash-tr-sub">Recettes encaissées et crédits accordés, 8 dernières périodes.</p>
           </div>
         </div>
         <div class="legend" id="legend"></div>
@@ -602,18 +617,18 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
     <div class="econ-grid">
       <div class="card">
         <h3>Chiffre d’affaires déclaré</h3>
-        <p class="sub">Total des entreprises, 12 dernières périodes.</p>
+        <p class="sub" id="ch-ca-sub">Total des entreprises, 12 dernières périodes.</p>
         <div class="chart" id="ch-ca"></div>
       </div>
       <div class="card">
         <h3>Recettes et crédits</h3>
-        <p class="sub">Ce qui entre dans le Trésor et ce qui en sort, 12 dernières périodes.</p>
+        <p class="sub" id="ch-tr-sub">Ce qui entre dans le Trésor et ce qui en sort, 12 dernières périodes.</p>
         <div class="legend" id="lg-tr"></div>
         <div class="chart" id="ch-tr"></div>
       </div>
       <div class="card">
         <h3>Emplois déclarés</h3>
-        <p class="sub">Nombre total de salariés, 12 dernières périodes.</p>
+        <p class="sub" id="ch-emp-sub">Nombre total de salariés, 12 dernières périodes.</p>
         <div class="chart" id="ch-emp"></div>
       </div>
       <div class="card">
@@ -672,6 +687,7 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
       </div>
     </div>
     <div id="d-receipt" hidden></div>
+    <div class="notice edit-banner" id="d-editing" hidden></div>
     <div class="form-grid">
       <div>
         <details class="paste" id="d-paste-box" open>
@@ -789,6 +805,7 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
       </div>
     </div>
     <div id="m-receipt" hidden></div>
+    <div class="notice edit-banner" id="m-editing" hidden></div>
     <div class="form-grid">
       <div>
         <details class="paste" id="m-paste-box" open>
@@ -970,6 +987,13 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
             </div>
             <div class="row2">
               <div class="field">
+                <label for="s-debut">Début du suivi</label>
+                <select id="s-debut"></select>
+                <span class="hint">Les périodes plus anciennes ne sont plus affichées. Les suivantes s’ajoutent toutes seules.</span>
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
                 <label for="s-smin">Salaire minimum par salarié</label>
                 <input id="s-smin" type="number" min="0" step="1" class="mono">
                 <span class="hint">Par période. Un salaire moyen plus bas déclenche une alerte. Mettez 0 pour ne pas vérifier.</span>
@@ -1141,7 +1165,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
   budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {},
-  baremeMode: "progressif", baremeCotBase: "individuel",
+  baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
   baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
   services: ["Police nationale", "Gendarmerie", "SAMU", "Sapeurs-pompiers", "Mairie", "Justice", "Douane"]
@@ -1154,7 +1178,7 @@ const S = {
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
   journal: [], journalLoaded: false, journalError: null, journalBusy: false, jLimit: 100,
   exportKeys: [], keysError: null,
-  setDirty: false, svcDirty: false, envDirty: false, barDirty: false
+  setDirty: false, svcDirty: false, envDirty: false, barDirty: false, editDecl: null, editDem: null
 };
 const cfg = () => {
   const c = Object.assign({}, DEFAULTS, S.config || {});
@@ -1217,15 +1241,24 @@ function prevKey(key) {
   const per = /-S\d{2}$/.test(key) ? "semaine" : "mois";
   return keyOf(new Date(b.start.getTime() - 864e5), per);
 }
+// Première période suivie par le guichet : rien n’est affiché avant.
+function startTime() {
+  const c = cfg(), b = bounds(c.debutSuivi);
+  if (!b) return -Infinity;
+  const bb = bounds(keyOf(b.start, c.periodicite));
+  return bb ? bb.start.getTime() : -Infinity;
+}
+const keyStart = k => { const b = bounds(k); return b ? b.start.getTime() : 0; };
 function recentKeys(n) {
   let k = keyOf(new Date());
-  const out = [k];
-  while (out.length < n) { k = prevKey(k); out.push(k); }
+  const out = [k], st = startTime();
+  while (out.length < n) { const p = prevKey(k); if (keyStart(p) < st) break; out.push(p); k = p; }
   return out;
 }
 function defaultKey() {
   // La dernière période terminée : c'est celle que les entreprises déclarent.
-  return prevKey(keyOf(new Date()));
+  const now = keyOf(new Date()), p = prevKey(now);
+  return keyStart(p) < startTime() ? now : p;
 }
 function lastClosedKey() {
   // La dernière période dont la date limite de dépôt est passée.
@@ -1233,8 +1266,8 @@ function lastClosedKey() {
   return defaultKey();
 }
 function keysEnding(k, n) {
-  const out = [k];
-  while (out.length < n) out.push(prevKey(out[out.length - 1]));
+  const out = [k], st = startTime();
+  while (out.length < n) { const p = prevKey(out[out.length - 1]); if (keyStart(p) < st) break; out.push(p); }
   return out.reverse();
 }
 function periodLabel(key) {
@@ -1255,6 +1288,8 @@ function periodPlain(key) {
   if (!b) return key || "—";
   return b.week ? `Semaine ${b.week}` : periodLabel(key);
 }
+// « 12 dernières périodes », ou « depuis la semaine 39 » tant que le suivi est plus récent.
+const spanLabel = (keys, n) => (keys.length < n ? `depuis le début du suivi (${periodPlain(keys.slice().sort((a, b) => keyStart(a) - keyStart(b))[0]).toLowerCase()})` : `${n} dernières périodes`);
 
 /* ---------- Calculs ---------- */
 function compute(ca, ch, ms, late, c, nb, salaries) {
@@ -1722,7 +1757,7 @@ function renderAgents() {
     });
     return h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: a.nom || "Sans nom" }), h("span", { class: "meta mono", text: a.discord_id })),
-      sel, rm);
+      sel, h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => renameAgent(a), text: "Renommer" }), rm));
   }));
 }
 $("#form-agent").addEventListener("submit", async e => {
@@ -1798,7 +1833,8 @@ function ensureOption(sel, value, label) {
   sel.value = value;
 }
 function renderOptions() {
-  const keys = recentKeys(8).map(k => [k, periodLabel(k)]);
+  const nowK = keyOf(new Date());
+  const keys = recentKeys(8).map(k => [k, periodLabel(k) + (k === nowK ? " · en cours" : "")]);
   fillSelect($("#dash-per"), keys, S.dashKey || defaultKey());
   fillSelect($("#eco-per"), keys, S.dashKey || defaultKey());
   if (S.dashKey && $("#eco-per").value !== S.dashKey && $$("option", $("#eco-per")).some(o => o.value === S.dashKey)) $("#eco-per").value = S.dashKey;
@@ -2015,11 +2051,12 @@ function treasuryChart(box, legend, n, givenKeys) {
   drawCols(box, {
     short: keys.map(periodShort), full: keys.map(periodLabel),
     series: [{ name: "Recettes encaissées", cls: "b1", values: t.rec }, { name: "Crédits accordés", cls: "b2", values: t.dep }],
-    label: `Recettes encaissées et crédits accordés sur les ${n} dernières périodes`, empty: "Aucun mouvement sur ces périodes pour l’instant."
+    label: `Recettes encaissées et crédits accordés, ${spanLabel(keys, n)}`, empty: "Aucun mouvement sur ces périodes pour l’instant."
   });
 }
 function renderChart() {
   treasuryChart($("#chart"), $("#legend"), 8);
+  $("#dash-tr-sub").textContent = `Recettes encaissées et crédits accordés, ${spanLabel(recentKeys(8), 8)}.`;
   $("#svc-list").hidden = true;
 }
 
@@ -2274,12 +2311,17 @@ function openDecl(id) {
           if (ok) { closeDialog(); toast("Déclaration supprimée."); }
         }, text: "Supprimer" }));
     });
-    foot.push(delBtn, h("span", { class: "spacer" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => startEditDecl(d), text: "Modifier" }), delBtn, h("span", { class: "spacer" }));
+    const ecd = echOf(d);
+    if (dec && st !== "payee" && !(ecd && ecd.echeances.some(x => x.payee))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("decisions/" + id).delete())) { toast("Décision annulée : le dossier est de nouveau à valider."); openDecl(id); } }, text: "Remettre à valider" }));
     if (st !== "controle") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("controle"), text: "Contrôle fiscal" }));
     if (st !== "rejetee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("rejetee"), text: "Rejeter" }));
     if (st !== "validee" && st !== "payee") foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
     if (st !== "payee") foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => go("payee"), text: "Encaisser" }));
-    else foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("validee"), text: "Annuler l’encaissement" }));
+    else foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => {
+      if (ecd) { let k = -1; ecd.echeances.forEach((x, j) => { if (x.payee) k = j; }); if (k >= 0) { if (await unpayEcheance(d, k)) openDecl(id); return; } }
+      go("validee");
+    }, text: "Annuler l’encaissement" }));
   }
   openDialog({ eyebrow: `Déclaration ${dossierNo("DF", id)} · ${periodLabel(d.periode)}`, title: d.entrepriseNom || "Sans nom", stampEl: stamp(DSTAT[st] || DSTAT.soumise), body, foot });
 }
@@ -2320,7 +2362,11 @@ function openDem(id) {
         ["Demandeur", dm.demandeur || "—"],
         ["Reçue le", dm.recueAt ? fmtDateTime(new Date(dm.recueAt)) : "—"],
         a && a.at && st !== "attente" ? ["Décidée le", fmtDateTime(new Date(a.at))] : null]))),
-    dm.justification ? sec("Justification", h("p", { class: "prewrap", text: dm.justification })) : null
+    dm.justification ? sec("Justification", h("p", { class: "prewrap", text: dm.justification })) : null,
+    a && st !== "attente" ? sec("Décision actuelle", kv([
+      ["Décision", chip(ASTAT[st] || ASTAT.attente)],
+      st === "accordee" || st === "partielle" ? ["Crédits accordés", money(a.montantAccorde), "num"] : null,
+      a.modifieLe ? ["Dernière modification", fmtDateTime(new Date(a.modifieLe))] : null])) : null
   ];
   let mIn = null, cIn = null, after = null;
   if (w) {
@@ -2330,8 +2376,9 @@ function openDem(id) {
     cIn.value = a && a.commentaire ? a.commentaire : "";
     after = h("dd", { class: "num" });
     const already = a && (st === "accordee" || st === "partielle") ? Number(a.montantAccorde) || 0 : 0;
-    const nowK = keyOf(new Date()), capV = envCap(dm.service), usedNow = envUse(nowK)[norm(dm.service)] || 0;
-    const alreadyNow = a && (st === "accordee" || st === "partielle") && a.at && keyOf(new Date(a.at)) === nowK ? Number(a.montantAccorde) || 0 : 0;
+    // Un accord modifié garde sa date : il reste imputé sur l’enveloppe de sa période d’origine.
+    const nowK = already && a.at ? keyOf(new Date(a.at)) : keyOf(new Date()), capV = envCap(dm.service), usedNow = envUse(nowK)[norm(dm.service)] || 0;
+    const alreadyNow = already && a.at && keyOf(new Date(a.at)) === nowK ? already : 0;
     const envDt = h("dt", { text: capV ? `Enveloppe ${dm.service} restante (${periodPlain(nowK).toLowerCase()})` : `Enveloppe ${dm.service}` });
     const envDd = h("dd", { class: "num" });
     const upd = () => {
@@ -2355,8 +2402,12 @@ function openDem(id) {
       statut = m >= (Number(dm.montant) || 0) ? "accordee" : "partielle";
     }
     if (statut === "refusee" || statut === "etude") m = 0;
-    const ok = await write(() => S.db.doc("arbitrages/" + id).set({ statut, montantAccorde: Math.round(m), commentaire: cIn ? cIn.value.trim() : "", at: nowISO(), by: S.uid || null }));
-    if (ok) { toast({ accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut]); closeDialog(); }
+    const keepAt = !!(a && a.at && ["accordee", "partielle"].includes(st) && ["accordee", "partielle"].includes(statut));
+    const ok = await write(() => S.db.doc("arbitrages/" + id).set({ statut, montantAccorde: Math.round(m), commentaire: cIn ? cIn.value.trim() : "", at: keepAt ? a.at : nowISO(), modifieLe: keepAt ? nowISO() : null, by: S.uid || null }));
+    if (ok) { toast(keepAt ? `Accord modifié : ${money(m)}.` : { accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut]); closeDialog(); }
+  };
+  const resetDecision = async () => {
+    if (await write(() => S.db.doc("arbitrages/" + id).delete())) { toast(st === "refusee" ? "Refus annulé : la demande est de nouveau en attente." : st === "etude" ? "La demande est de nouveau en attente." : "Accord annulé : les crédits reviennent au Trésor et la demande est de nouveau en attente."); openDem(id); }
   };
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(decisionDoc(dm), () => openDem(id)), text: "Décision en image" }),
     h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(decisionText(dm), "Décision copiée : collez-la en réponse sur Discord."), text: "Copier le texte" })];
@@ -2371,10 +2422,17 @@ function openDem(id) {
           if (ok) { closeDialog(); toast("Demande supprimée."); }
         }, text: "Supprimer" }));
     });
-    foot.push(delBtn, h("span", { class: "spacer" }));
-    if (st !== "etude") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => save("etude"), text: "Mettre à l’étude" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => startEditDem(dm), text: "Modifier" }), delBtn, h("span", { class: "spacer" }));
+    const granted = st === "accordee" || st === "partielle";
+    if (st !== "attente") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: resetDecision, text: granted ? "Annuler l’accord" : st === "refusee" ? "Annuler le refus" : "Remettre en attente" }));
+    if (st === "attente") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => save("etude"), text: "Mettre à l’étude" }));
     if (st !== "refusee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => save("refusee"), text: "Refuser" }));
-    foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => save("accorder"), text: st === "accordee" || st === "partielle" ? "Modifier l’accord" : "Accorder" }));
+    if (granted) {
+      const upd8 = h("button", { class: "btn ink small", type: "button", onclick: () => save("accorder"), text: "Enregistrer le nouveau montant", disabled: true });
+      const check = () => { upd8.disabled = Number(mIn.value) === Number(a.montantAccorde) && cIn.value.trim() === (a.commentaire || ""); };
+      mIn.addEventListener("input", check); cIn.addEventListener("input", check);
+      foot.push(upd8);
+    } else foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => save("accorder"), text: "Accorder" }));
   }
   openDialog({ eyebrow: `Demande ${dossierNo("DM", id)} · ${NATURES[dm.nature] || "Demande"}`, title: dm.objet || "Demande de moyens", stampEl: stamp(ASTAT[st] || ASTAT.attente), body, foot });
 }
@@ -2537,7 +2595,8 @@ $("#form-decl").addEventListener("submit", async e => {
   const late = depot.getTime() > deadline(key).getTime();
   const r = compute(ca, ch, ms, late, c, nb, sal);
   const ent = findEnt(name);
-  const dup = S.declarations.some(d => d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
+  const editing = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
+  const dup = S.declarations.some(d => (!editing || d.id !== editing.id) && d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
   const body = {
     entrepriseId: ent ? ent.id : null, entrepriseNom: ent ? ent.nom : name, periode: key,
     ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
@@ -2549,15 +2608,22 @@ $("#form-decl").addEventListener("submit", async e => {
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
     depotAt: depot.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
   };
+  if (editing) Object.assign(body, { createdAt: editing.createdAt || nowISO(), saisiPar: editing.saisiPar || S.uid || null, rectificative: !!editing.rectificative || dup, modifieLe: nowISO() });
   const btn = $("#d-submit");
   btn.disabled = true;
-  const ref = S.db.collection("declarations").doc();
+  const ref = editing ? S.db.doc("declarations/" + editing.id) : S.db.collection("declarations").doc();
   const ok = await write(() => ref.set(body));
   btn.disabled = !writer();
   if (!ok) return;
+  if (editing) {
+    const dec = S.decisions[editing.id];
+    if (dec && Number(dec.montant) === Number(editing.total) && body.total !== editing.total) await write(() => S.db.doc("decisions/" + editing.id).set(Object.assign({}, dec, { montant: body.total })));
+    S.editDecl = null;
+    editBanner("decl");
+  }
   const rc = $("#d-receipt");
   rc.className = "receipt";
-  rc.replaceChildren(stamp(["Enregistrée", "ok"]),
+  rc.replaceChildren(stamp([editing ? "Modifiée" : "Enregistrée", "ok"]),
     h("div", { style: "min-width:0;flex:1 1 260px" },
       h("strong", { text: `${dossierNo("DF", ref.id)} · ${body.entrepriseNom}` }),
       h("div", { class: "muted", text: `${periodLabel(key)} · montant calculé ${money(body.total)}${late ? " (majoré)" : ""}${dup ? " · rectificative" : ""}` })),
@@ -2570,7 +2636,7 @@ $("#form-decl").addEventListener("submit", async e => {
   $("#d-date").value = toLocalInput(new Date());
   $("#d-per").value = defaultKey();
   renderDeclPreview();
-  toast("Déclaration enregistrée.");
+  toast(editing ? "Déclaration modifiée." : "Déclaration enregistrée.");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -2637,15 +2703,18 @@ $("#form-dem").addEventListener("submit", async e => {
     urgence: $("#m-urg").value, justification: $("#m-just").value.trim(), demandeur: $("#m-dem").value.trim(),
     recueAt: recue.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
   };
+  const editingDem = S.editDem ? S.demandes.find(x => x.id === S.editDem) || null : null;
+  if (editingDem) Object.assign(body, { createdAt: editingDem.createdAt || nowISO(), saisiPar: editingDem.saisiPar || S.uid || null, modifieLe: nowISO() });
   const btn = $("#m-submit");
   btn.disabled = true;
-  const ref = S.db.collection("demandes").doc();
+  const ref = editingDem ? S.db.doc("demandes/" + editingDem.id) : S.db.collection("demandes").doc();
   const ok = await write(() => ref.set(body));
   btn.disabled = !writer();
   if (!ok) return;
+  if (editingDem) { S.editDem = null; editBanner("dem"); }
   const rc = $("#m-receipt");
   rc.className = "receipt";
-  rc.replaceChildren(stamp(["Enregistrée", "ok"]),
+  rc.replaceChildren(stamp([editingDem ? "Modifiée" : "Enregistrée", "ok"]),
     h("div", { style: "min-width:0;flex:1 1 260px" },
       h("strong", { text: `${dossierNo("DM", ref.id)} · ${service}` }),
       h("div", { class: "muted", text: `${objet} · ${money(body.montant)} demandés` })),
@@ -2655,7 +2724,7 @@ $("#form-dem").addEventListener("submit", async e => {
   $("#m-paste").value = "";
   $("#m-parse-msg").textContent = "";
   $("#m-date").value = toLocalInput(new Date());
-  toast("Demande enregistrée.");
+  toast(editingDem ? "Demande modifiée." : "Demande enregistrée.");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -2729,6 +2798,13 @@ function renderSettings() {
     $("#s-budget").value = String(c.budgetInitial);
     $("#s-devise").value = c.devise;
     $("#s-smin").value = String(c.salaireMin || 0);
+    const opts = [];
+    let kk = keyOf(new Date());
+    for (let i = 0; i < 30; i++) { opts.push([kk, periodLabel(kk)]); kk = prevKey(kk); }
+    const sb = bounds(c.debutSuivi), want = sb ? keyOf(sb.start, c.periodicite) : opts[opts.length - 1][0];
+    fill($("#s-debut"), opts.map(([v, l]) => h("option", { value: v, text: l })));
+    if (!opts.some(o => o[0] === want)) $("#s-debut").append(h("option", { value: want, text: periodLabel(want) }));
+    $("#s-debut").value = want;
   }
   if (!S.svcDirty) $("#s-services").value = c.services.join("\n");
   const list = $("#ent-admin");
@@ -2751,7 +2827,7 @@ function renderSettings() {
     return h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), h("span", { class: "meta", text: [e.secteur, e.patron].filter(Boolean).join(" · ") || "—" })),
       h("label", { class: "switch", for: "act-" + e.id }, cb, "Active"),
-      rm);
+      h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e), text: "Modifier", disabled: !writer() }), rm));
   }));
 }
 $("#form-set").addEventListener("input", () => { S.setDirty = true; $("#s-msg").textContent = "Modifications non enregistrées."; });
@@ -2762,7 +2838,8 @@ $("#form-set").addEventListener("submit", async e => {
     periodicite: $("#s-per").value,
     delaiJours: Number($("#s-delai").value), tauxIS: Number($("#s-is").value), tauxCot: Number($("#s-cot").value),
     majoration: Number($("#s-maj").value), budgetInitial: Number($("#s-budget").value), devise: $("#s-devise").value.trim() || "€",
-    salaireMin: Number($("#s-smin").value) || 0
+    salaireMin: Number($("#s-smin").value) || 0,
+    debutSuivi: $("#s-debut").value || DEFAULTS.debutSuivi
   };
   const bad = [];
   if (!Number.isFinite(v.delaiJours) || v.delaiJours < 0 || v.delaiJours > 14) bad.push("le délai (0 à 14 jours)");
@@ -3153,7 +3230,7 @@ async function setPenaltyStatus(p, statut) {
   body.statut = statut;
   body.paidAt = statut === "payee" ? nowISO() : null;
   const ok = await write(() => S.db.doc("penalites/" + p.id).set(body));
-  if (ok) toast({ payee: "Pénalité encaissée.", annulee: "Pénalité annulée.", due: "Pénalité remise à payer." }[statut]);
+  if (ok) toast({ payee: "Pénalité encaissée.", annulee: "Pénalité annulée.", due: p.statut === "payee" ? "Encaissement annulé : la pénalité est de nouveau à payer." : "Pénalité rétablie : elle est de nouveau à payer." }[statut]);
   return ok;
 }
 async function createEcheancier(d, n) {
@@ -3183,10 +3260,26 @@ async function payEcheance(d, idx) {
   return true;
 }
 const nextEcheance = e => e.echeances.findIndex(x => !x.payee);
+async function unpayEcheance(d, idx) {
+  const e = echOf(d);
+  if (!e) return false;
+  const body = JSON.parse(JSON.stringify(e));
+  delete body.id;
+  body.echeances[idx].payee = false;
+  body.echeances[idx].paidAt = null;
+  const ok = await write(() => S.db.doc("echeanciers/" + d.id).set(body));
+  if (!ok) return false;
+  const dec = S.decisions[d.id];
+  if (dec && dec.statut === "payee") await write(() => S.db.doc("decisions/" + d.id).set(Object.assign({}, dec, { statut: "validee", paidAt: null })));
+  toast(`Encaissement de l’échéance ${idx + 1}/${body.echeances.length} annulé.`);
+  return true;
+}
 function echeancierSection(d, reopen) {
   const e = echOf(d), st = dStatus(d), w = writer();
   if (e) {
     const next = nextEcheance(e);
+    let lastPaid = -1;
+    e.echeances.forEach((x, j) => { if (x.payee) lastPaid = j; });
     const rows = e.echeances.map((x, i) => {
       const late = !x.payee && new Date(x.date).getTime() < Date.now();
       return h("tr", {},
@@ -3194,7 +3287,9 @@ function echeancierSection(d, reopen) {
         h("td", { text: longDate(new Date(x.date)) }),
         h("td", { class: "num", text: money(x.montant) }),
         h("td", {}, chip(x.payee ? [`Payée le ${fmtDate(new Date(x.paidAt))}`, "ok"] : late ? ["En retard", "bad"] : ["À venir", "muted"])),
-        h("td", { class: "act" }, w && i === next && st === "validee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await payEcheance(d, i)) reopen(); }, text: "Encaisser" }) : null));
+        h("td", { class: "act" },
+          w && i === next && st === "validee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await payEcheance(d, i)) reopen(); }, text: "Encaisser" }) : null,
+          w && i === lastPaid && (st === "validee" || st === "payee") ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await unpayEcheance(d, i)) reopen(); }, text: "Annuler l’encaissement" }) : null));
     });
     const canDelete = w && !e.echeances.some(x => x.payee);
     return sec("Paiement en plusieurs fois",
@@ -3253,10 +3348,13 @@ function openFiche(e, opts) {
     h("td", {}, chip(PSTAT[p.statut] || PSTAT.due)),
     h("td", { class: "act" },
       h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(penaltyDoc(p), reopen), text: "Image" }),
+      w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: () => editPenalty(p, reopen), text: "Modifier" }) : null,
       w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "payee")) reopen(); }, text: "Encaisser" }) : null,
-      w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "annulee")) reopen(); }, text: "Annuler" }) : null)));
+      w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "annulee")) reopen(); }, text: "Annuler" }) : null,
+      w && p.statut === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "due")) reopen(); }, text: "Annuler l’encaissement" }) : null,
+      w && p.statut === "annulee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "due")) reopen(); }, text: "Rétablir" }) : null)));
   const pens = sm.pens.length
-    ? h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" }, h("tbody", {}, penRows)))
+    ? h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact pen-table" }, h("tbody", {}, penRows)))
     : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune pénalité." });
 
   let penForm = null;
@@ -3286,12 +3384,13 @@ function openFiche(e, opts) {
   const body = [
     minis,
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r })))) : null,
-    sec("Chiffre d’affaires et montant dû, 12 dernières périodes", legend, chartBox),
+    sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
     sec("Historique des déclarations", hist),
     sec("Pénalités", pens, penForm)
   ];
   const foot = [
     w && !e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const d = sm.ds[0]; if (d) registerFromDecl(d); }, text: "Enregistrer au registre" }) : null,
+    w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e, () => openFiche(S.entreprises.find(x => x.id === e.id) || e)), text: "Modifier l’entreprise" }) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -3390,9 +3489,12 @@ function renderEconomie() {
   setKpi("e-mas", money(mas), emp ? `${money(mas / emp)} par salarié en moyenne` : "aucun salarié déclaré");
   setKpi("e-rec", money(rec), penPaid ? `dont ${money(penPaid)} de pénalités` : "impôts et cotisations encaissés", rec > 0 ? "ok" : "");
   setKpi("e-taux", dues ? `${Math.round(paidPart / dues * 100)} %` : "—", dues ? `${money(dues - paidPart)} restent à payer` : "aucun avis émis", dues && paidPart < dues ? "warn" : "");
-  drawCols($("#ch-ca"), { short, full, series: [{ name: "Chiffre d’affaires", cls: "b1", values: per.map(ds => sumOf(ds, "ca")) }], label: "Chiffre d’affaires déclaré, 12 dernières périodes" });
+  drawCols($("#ch-ca"), { short, full, series: [{ name: "Chiffre d’affaires", cls: "b1", values: per.map(ds => sumOf(ds, "ca")) }], label: "Chiffre d’affaires déclaré, " + spanLabel(keys, 12) });
   treasuryChart($("#ch-tr"), $("#lg-tr"), 12, keys);
-  drawLine($("#ch-emp"), { short, full, values: per.map(ds => sumOf(ds, "nbSalaries")), name: "Salariés déclarés", label: "Emplois déclarés, 12 dernières périodes", fmt: v => NF.format(v) + " salarié" + plural(v) });
+  $("#ch-ca-sub").textContent = `Total des entreprises, ${spanLabel(keys, 12)}.`;
+  $("#ch-tr-sub").textContent = `Ce qui entre dans le Trésor et ce qui en sort, ${spanLabel(keys, 12)}.`;
+  $("#ch-emp-sub").textContent = `Nombre total de salariés, ${spanLabel(keys, 12)}.`;
+  drawLine($("#ch-emp"), { short, full, values: per.map(ds => sumOf(ds, "nbSalaries")), name: "Salariés déclarés", label: "Emplois déclarés, " + spanLabel(keys, 12), fmt: v => NF.format(v) + " salarié" + plural(v) });
   const bySec = {};
   for (const d of cur) { const s = secteurOf(d); bySec[s] = bySec[s] || { value: 0, n: 0 }; bySec[s].value += Number(d.ca) || 0; bySec[s].n++; }
   $("#sec-sub").textContent = periodLabel(key);
@@ -3789,6 +3891,147 @@ $("#d-sal-rows").addEventListener("click", e => {
   renderDeclPreview();
 });
 $("#d-sal-rows").addEventListener("input", syncSalaries);
+
+
+/* ---------- Modifier : déclarations, demandes, entreprises, pénalités, agents ---------- */
+function editBanner(kind) {
+  const isD = kind === "decl", id = isD ? S.editDecl : S.editDem;
+  const box = $(isD ? "#d-editing" : "#m-editing");
+  const btn = $(isD ? "#d-submit" : "#m-submit");
+  if (!id) { box.hidden = true; fill(box); btn.textContent = isD ? "Enregistrer la déclaration" : "Enregistrer la demande"; return; }
+  const item = isD ? S.declarations.find(x => x.id === id) : S.demandes.find(x => x.id === id);
+  fill(box,
+    h("div", { style: "flex:1 1 auto;min-width:0" },
+      h("strong", { text: `Modification de ${dossierNo(isD ? "DF" : "DM", id)}${item ? " · " + (isD ? item.entrepriseNom : item.service) : ""}. ` }),
+      isD ? "Le calcul sera refait avec le barème actuel. Un avis déjà émis est mis à jour, sauf s’il avait été rectifié à la main." : "La décision déjà prise sur cette demande est conservée."),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => cancelEdit(kind), text: "Annuler la modification" }));
+  box.hidden = false;
+  btn.textContent = "Enregistrer les modifications";
+}
+function cancelEdit(kind) {
+  if (kind === "decl") {
+    S.editDecl = null;
+    $("#form-decl").reset();
+    if (salMode()) setSalaries([]);
+    $("#d-date").value = toLocalInput(new Date());
+    $("#d-per").value = defaultKey();
+    renderDeclPreview();
+  } else {
+    S.editDem = null;
+    $("#form-dem").reset();
+    $("#m-date").value = toLocalInput(new Date());
+  }
+  editBanner(kind);
+}
+function startEditDecl(d) {
+  const ec = echOf(d);
+  if (ec) { toast("Supprimez d’abord l’échéancier de ce dossier pour en modifier les montants.", true); return; }
+  closeDialog();
+  showTab("declaration");
+  S.editDecl = d.id;
+  $("#form-decl").reset();
+  $("#d-ent").value = d.entrepriseNom || "";
+  ensureOption($("#d-per"), d.periode, periodLabel(d.periode));
+  $("#d-ca").value = String(d.ca ?? 0);
+  $("#d-ch").value = String(d.charges ?? 0);
+  $("#d-ms").value = String(d.masse ?? 0);
+  $("#d-nb").value = String(d.nbSalaries ?? 0);
+  if (salMode()) {
+    const list = d.salaries && d.salaries.length ? d.salaries
+      : (d.nbSalaries > 0 ? Array.from({ length: Math.min(d.nbSalaries, 60) }, (_, i) => ({ nom: `Salarié ${i + 1}`, salaire: Math.round((d.masse || 0) / d.nbSalaries) })) : []);
+    setSalaries(list);
+  }
+  $("#d-decl").value = d.declarant || "";
+  $("#d-note").value = d.note || "";
+  $("#d-date").value = toLocalInput(d.depotAt ? new Date(d.depotAt) : new Date());
+  $("#d-receipt").hidden = true;
+  editBanner("decl");
+  renderDeclPreview();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function startEditDem(dm) {
+  closeDialog();
+  showTab("demande");
+  S.editDem = dm.id;
+  $("#form-dem").reset();
+  $("#m-service").value = dm.service || "";
+  $("#m-nature").value = NATURES[dm.nature] ? dm.nature : "autre";
+  $("#m-objet").value = dm.objet || "";
+  $("#m-qte").value = dm.quantite ? String(dm.quantite) : "";
+  $("#m-montant").value = dm.montant ? String(dm.montant) : "";
+  $("#m-urg").value = URG[dm.urgence] ? dm.urgence : "normale";
+  $("#m-just").value = dm.justification || "";
+  $("#m-dem").value = dm.demandeur || "";
+  $("#m-date").value = toLocalInput(dm.recueAt ? new Date(dm.recueAt) : new Date());
+  $("#m-receipt").hidden = true;
+  editBanner("dem");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function field(id, label, input) { input.id = id; return h("div", { class: "field" }, h("label", { for: id, text: label }), input); }
+function editEntreprise(e, back) {
+  const nom = h("input", { autocomplete: "off" }), sect = h("input", { autocomplete: "off" }), patron = h("input", { autocomplete: "off" });
+  nom.value = e.nom || ""; sect.value = e.secteur || ""; patron.value = e.patron || "";
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const progress = h("span", { class: "hint" });
+  const save = h("button", { class: "btn small", type: "button", text: "Enregistrer" });
+  save.addEventListener("click", async () => {
+    const n = nom.value.trim();
+    if (!n) { err.textContent = "Indiquez le nom de l’entreprise."; nom.focus(); return; }
+    if (S.entreprises.some(x => x.id !== e.id && norm(x.nom) === norm(n))) { err.textContent = `« ${n} » existe déjà au registre.`; return; }
+    save.disabled = true;
+    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim() }));
+    if (!ok) { save.disabled = false; return; }
+    if (n !== e.nom) {
+      const jobs = [];
+      for (const d of S.declarations) if (d.entrepriseId === e.id && d.entrepriseNom !== n) jobs.push(["declarations", d.id]);
+      for (const p of S.penalites) if (p.entrepriseId === e.id && p.entrepriseNom !== n) jobs.push(["penalites", p.id]);
+      for (const [id, ec] of Object.entries(S.echeanciers)) if (ec.entrepriseId === e.id && ec.entrepriseNom !== n) jobs.push(["echeanciers", id]);
+      let done = 0;
+      for (const [col, id] of jobs) { await write(() => S.db.doc(col + "/" + id).update({ entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
+    }
+    toast(`« ${n} » mise à jour.`);
+    if (back) back(); else closeDialog();
+  });
+  openDialog({
+    eyebrow: "Registre des entreprises", title: `Modifier « ${e.nom} »`,
+    body: [h("div", { class: "row3" }, field("ee-nom", "Nom", nom), field("ee-sect", "Secteur", sect), field("ee-patron", "Patron", patron)),
+      h("p", { class: "hint", style: "margin:0", text: "Un changement de nom est reporté sur toutes ses déclarations, pénalités et échéanciers." }), err, progress],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour à la fiche" : "Annuler" }), h("span", { class: "spacer" }), save]
+  });
+  setTimeout(() => nom.focus(), 30);
+}
+function editPenalty(p, back) {
+  const motif = h("input", { autocomplete: "off" }), amount = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric" });
+  motif.value = p.motif || ""; amount.value = String(p.montant || "");
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const save = h("button", { class: "btn small", type: "button", text: "Enregistrer" });
+  save.addEventListener("click", async () => {
+    const v = Number(amount.value);
+    if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; return; }
+    if (!Number.isFinite(v) || v <= 0) { err.textContent = "Indiquez un montant supérieur à 0."; return; }
+    const body = Object.assign({}, p);
+    delete body.id;
+    body.motif = motif.value.trim();
+    body.montant = Math.round(v);
+    if (await write(() => S.db.doc("penalites/" + p.id).set(body))) { toast("Pénalité modifiée."); back(); }
+  });
+  openDialog({
+    eyebrow: `Pénalité ${dossierNo("PN", p.id)} · ${p.entrepriseNom}`, title: "Modifier la pénalité",
+    body: [h("div", { class: "row2" }, field("pe-motif", "Motif", motif), h("div", { class: "field" }, h("label", { for: "pe-montant", text: "Montant" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(amount, { id: "pe-montant" })))), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour à la fiche" }), h("span", { class: "spacer" }), save]
+  });
+}
+function renameAgent(a) {
+  const nom = h("input", { autocomplete: "off" });
+  nom.value = a.nom || "";
+  const save = h("button", { class: "btn small", type: "button", text: "Enregistrer" });
+  save.addEventListener("click", async () => {
+    const { error } = await S.sb.from("agents").update({ nom: nom.value.trim() }).eq("discord_id", a.discord_id);
+    if (error) toast("Modification refusée : " + error.message, true); else { toast("Nom mis à jour."); closeDialog(); loadAgents(); }
+  });
+  openDialog({ eyebrow: "Accès au guichet · " + a.discord_id, title: "Renommer l’agent", body: [field("ag-nom", "Nom affiché", nom)], foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), save] });
+  setTimeout(() => nom.focus(), 30);
+}
 
 /* ---------- Onglets ---------- */
 function showTab(name) {
