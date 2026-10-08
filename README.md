@@ -20,6 +20,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/schema.sql` : les tables et les règles d’accès de la base
 - `supabase/v2_journal_export.sql` : le journal des actions et l’export vers Google Sheets
 - `supabase/v3_discord.sql` : la table privée des salons Discord
+- `supabase/v4_inspection_cloture.sql` : le rôle Inspection et le verrou des semaines clôturées
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -39,7 +40,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` : il crée la table privée où sont gardées les adresses des salons Discord.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -156,12 +157,23 @@ La feuille contient les onglets Déclarations, Entreprises, Demandes, Pénalité
 
 Dans **Réglages → Accès au guichet**, ajoutez son identifiant Discord, son nom et son rôle :
 
-- **Direction** : saisit les dossiers, décide et gère les accès.
+- **Direction** : tout, y compris encaisser, annuler, infliger les pénalités, arbitrer les demandes, clôturer les semaines, restaurer depuis le journal, les réglages et les accès.
+- **Inspection** : saisit les déclarations et les demandes, émet les avis, place un dossier en contrôle, relance les entreprises et publie sur Discord. Elle ne peut ni encaisser, ni annuler, ni supprimer, ni arbitrer, ni toucher aux réglages. Ces limites sont appliquées par la base elle-même, pas seulement par le site.
 - **Lecture seule** : consulte le registre et télécharge les sauvegardes. C’est le bon rôle pour les administrateurs du serveur.
+
+Le rôle Inspection demande d’avoir exécuté `supabase/v4_inspection_cloture.sql`.
 
 Les joueurs n’ont pas besoin d’accès : ils déclarent sur Discord.
 
 Si plus personne n’a le rôle Direction, un propriétaire du projet Supabase peut le redonner dans **Table Editor → agents → Insert row**.
+
+## Clôturer une semaine
+
+Une fois le délai de dépôt passé, **Tableau de bord → Clôturer la semaine** (ou **Recouvrement → Clôture des semaines**) affiche le bilan de la période puis la verrouille. Une semaine clôturée ne reçoit plus de déclaration, ses déclarations ne peuvent plus être modifiées ni supprimées, et le montant de ses avis est figé. Les encaissements, échéanciers, pénalités et relances restent possibles. Le verrou est posé par la base : il tient même si quelqu’un contourne le site. La Direction peut rouvrir la semaine à tout moment ; le bilan au jour de la clôture reste disponible en image.
+
+## Restaurer depuis le journal
+
+Dans le **Journal**, chaque action encore réversible porte un bouton : **Restaurer** remet le dossier tel qu’il était avant une modification ou une suppression, **Annuler** retire un dossier ajouté par erreur. Le site montre ce qui va changer avant de confirmer, et propose de restaurer en même temps les dossiers supprimés avec lui (l’avis d’une déclaration supprimée, par exemple). La restauration est elle-même inscrite au journal. Réservé à la Direction.
 
 ## Continuité et sauvegardes
 

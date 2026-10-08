@@ -443,6 +443,11 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
 .ent-add.ent-add2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ent-add.ent-add2 .btn{justify-self:start}
 @media (max-width:620px){.ent-add.ent-add2{grid-template-columns:minmax(0,1fr)}}
+.checks-col{display:grid;gap:8px}
+.checks-col .switch{align-items:flex-start;line-height:1.4}
+.checks-col .switch input{margin-top:3px;flex:none}
+.notice.lock{border-left-color:var(--accent)}
+.jrestore{margin-left:8px}
 </style>
 </head>
 <body data-gate="chargement">
@@ -469,8 +474,8 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
     <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-writer>Saisir une déclaration</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-writer>Saisir une demande</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-agent>Saisir une déclaration</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-agent>Saisir une demande</button>
     <button class="tab" role="tab" type="button" id="tab-btn-journal" data-tab="journal" aria-selected="false">Journal</button>
     <button class="tab" role="tab" type="button" id="tab-btn-modeles" data-tab="modeles" aria-selected="false">Modèles Discord</button>
     <button class="tab" role="tab" type="button" id="tab-btn-reglages" data-tab="reglages" aria-selected="false" data-writer>Réglages</button>
@@ -500,6 +505,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
       <div class="toolbar">
         <label for="dash-per" class="muted" style="font-weight:500">Période</label>
         <select id="dash-per"></select>
+        <button class="btn ghost" type="button" id="btn-cloture">Clôture</button>
         <button class="btn ghost" type="button" id="btn-recap">Copier le récap pour Discord</button>
         <button class="btn" type="button" id="btn-backup" disabled>Sauvegarder</button>
       </div>
@@ -650,6 +656,11 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
       </div>
     </div>
     <div class="card" style="margin-top:16px">
+      <h3>Clôture des semaines</h3>
+      <p class="sub">Une semaine clôturée est verrouillée : ses déclarations et le montant de ses avis ne bougent plus. Les encaissements restent possibles.</p>
+      <div id="rc-clotures"><div class="empty">Chargement…</div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
       <h3>Relances envoyées</h3>
       <p class="sub">Les plus récentes en premier.</p>
       <div id="rc-hist"><div class="empty">Chargement…</div></div>
@@ -729,6 +740,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
           <option value="arbitrages">Arbitrages</option>
           <option value="entreprises">Entreprises</option>
           <option value="relances">Relances</option>
+          <option value="clotures">Clôtures</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1160,7 +1172,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
           <form class="ent-add agent-add" id="form-agent" novalidate>
             <div class="field"><label for="a-id">Identifiant Discord</label><input id="a-id" class="mono" inputmode="numeric" autocomplete="off" placeholder="123456789012345678"></div>
             <div class="field"><label for="a-nom">Nom</label><input id="a-nom" autocomplete="off" placeholder="Ex. : Inspecteur Martin"></div>
-            <div class="field"><label for="a-role">Rôle</label><select id="a-role"><option value="direction">Direction</option><option value="lecture">Lecture seule</option></select></div>
+            <div class="field"><label for="a-role">Rôle</label><select id="a-role"><option value="direction">Direction</option><option value="inspecteur">Inspection</option><option value="lecture" selected>Lecture seule</option></select></div>
             <button class="btn" type="submit" id="a-add">Ajouter</button>
           </form>
           <span id="a-msg" class="err" aria-live="polite"></span>
@@ -1248,7 +1260,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [],
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1262,7 +1274,10 @@ const cfg = () => {
   if (!c.enveloppes || typeof c.enveloppes !== "object") c.enveloppes = {};
   return c;
 };
+// writer() : la Direction. canAgent() : la Direction ou l’Inspection.
 const writer = () => S.connected && !S.readOnly && (S.admin || S.canWrite !== false);
+const canAgent = () => S.connected && !S.readOnly && (S.role === "direction" || S.role === "inspecteur");
+const ROLE_LABEL = { direction: "Direction", inspecteur: "Inspection", lecture: "Lecture seule" };
 
 const NATURES = { vehicule: "Véhicule", equipement: "Équipement & moyens", salaires: "Budget salaires", fonctionnement: "Fonctionnement", autre: "Autre" };
 const URG = { normale: ["Normale", "muted"], prioritaire: ["Prioritaire", "warn"], urgente: ["Urgente", "bad"] };
@@ -1556,7 +1571,11 @@ async function write(fn) {
     catch (e) {
       const code = e && e.code;
       if (code === "unavailable" && attempt === 0) { await sleep(400 + Math.random() * 600); continue; }
-      if (code === "invalid_argument") { setReadOnly(); toast("Enregistrement refusé : votre accès ne permet que la lecture.", true); }
+      if (code === "refused") toast(e.message, true);
+      else if (code === "invalid_argument") {
+        if (S.admin) { setReadOnly(); toast("Enregistrement refusé : votre accès ne permet que la lecture.", true); }
+        else toast("Action réservée à la Direction.", true);
+      }
       else if (code === "quota_exceeded") toast("Le registre est plein : supprimez d’anciens dossiers avant d’en ajouter.", true);
       else if (code === "revoked") { setOffline(); toast("Votre accès à ce guichet a changé. Rechargez la page.", true); }
       else toast("L’enregistrement a échoué. Vérifiez votre connexion puis réessayez.", true);
@@ -1599,7 +1618,7 @@ function setOffline() {
 function setReadOnly() {
   if (S.readOnly) return;
   S.readOnly = true;
-  setNotice([h("div", {}, h("strong", { text: "Lecture seule. " }), "Vous consultez le registre et pouvez télécharger les sauvegardes. Seule la Direction saisit et décide.")]);
+  setNotice([h("div", {}, h("strong", { text: "Lecture seule. " }), "Vous consultez le registre et pouvez télécharger les sauvegardes. Seules la Direction et l’Inspection saisissent les dossiers.")]);
   applyRole();
 }
 function applyRole() {
@@ -1607,14 +1626,15 @@ function applyRole() {
   role.className = "role";
   if (S.offline) role.textContent = "Hors ligne";
   else if (!S.connected) role.textContent = "Connexion au registre…";
-  else if (S.readOnly || !writer()) role.textContent = "Lecture seule" + (S.agentName ? " · " + S.agentName : "");
-  else if (S.admin) { role.textContent = "Direction" + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
-  else role.textContent = "Agent";
-  const w = writer();
-  $$(".tab[data-writer]").forEach(b => { b.hidden = !w && (S.connected || S.offline); });
-  if (!w && (S.connected || S.offline) && ["declaration", "demande", "reglages"].includes(S.tab)) showTab("dashboard");
+  else if (S.readOnly || !canAgent()) role.textContent = "Lecture seule" + (S.agentName ? " · " + S.agentName : "");
+  else { role.textContent = (ROLE_LABEL[S.role] || "Agent") + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
+  const w = writer(), ag = canAgent(), known = S.connected || S.offline;
+  $$(".tab[data-writer]").forEach(b => { b.hidden = !w && known; });
+  $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
+  if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
-  $$("#d-submit, #m-submit, #s-save, #s-svc-save, #s-bar-save, #e-add, #d-parse, #m-parse, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#s-save, #s-svc-save, #s-bar-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
   $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
   render();
@@ -1643,6 +1663,7 @@ function makeStore(sb) {
   }
   const mapErr = e => {
     const code = (e && e.code) || "", msg = (e && e.message) || "";
+    if (code === "P0001") return { code: "refused", message: msg };
     if (code === "42501" || /row-level security|permission denied/i.test(msg)) return { code: "invalid_argument", message: msg };
     if (code === "PGRST301" || /jwt/i.test(msg)) return { code: "revoked", message: msg };
     return { code: "unavailable", message: msg || "Erreur réseau" };
@@ -1718,7 +1739,7 @@ function makeStore(sb) {
       async add(data) { const r = docRef(col + "/" + newId()); await r.set(data); return r; }
     };
   }
-  return { doc: docRef, collection: colRef, loadAll, startLive };
+  return { doc: docRef, collection: colRef, loadAll, startLive, peek: path => cache.get(path) };
 }
 
 /* ---------- Téléchargements (navigateur classique) ---------- */
@@ -1791,6 +1812,7 @@ async function init() {
   S.discordId = acces && acces.discord_id;
   S.agentName = (acces && acces.nom) || (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || "";
   if (!acces || !acces.role) { showGate("refuse"); return; }
+  S.role = acces.role;
   S.admin = acces.role === "direction";
   S.canWrite = S.admin;
   const store = makeStore(sb);
@@ -1800,7 +1822,13 @@ async function init() {
   S.connected = true;
   subscribe();
   store.startLive();
-  if (!S.admin) setReadOnly(); else { applyRole(); loadAgents(); loadPrivate(); }
+  if (S.role !== "direction" && S.role !== "inspecteur") setReadOnly();
+  else {
+    applyRole();
+    if (S.admin) loadAgents();
+    else setNotice([h("div", {}, h("strong", { text: "Inspection. " }), "Vous saisissez les déclarations et les demandes, émettez les avis, placez un dossier en contrôle et relancez les entreprises. Les encaissements, annulations, pénalités, arbitrages et réglages restent à la Direction.")]);
+    loadPrivate();
+  }
   if (S.tab === "journal") loadJournal();
   if (S.tab === "reglages" && S.admin) loadKeys();
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
@@ -1820,12 +1848,12 @@ function renderAgents() {
   list.replaceChildren(...S.agents.map(a => {
     const me = a.discord_id === S.discordId;
     const sel = h("select", { id: "role-" + a.discord_id, "aria-label": "Rôle de " + (a.nom || a.discord_id), style: "width:auto" },
-      h("option", { value: "direction", text: "Direction" }), h("option", { value: "lecture", text: "Lecture seule" }));
+      h("option", { value: "direction", text: "Direction" }), h("option", { value: "inspecteur", text: "Inspection" }), h("option", { value: "lecture", text: "Lecture seule" }));
     sel.value = a.role;
     sel.disabled = me;
     sel.addEventListener("change", async () => {
       const { error } = await S.sb.from("agents").update({ role: sel.value }).eq("discord_id", a.discord_id);
-      if (error) { toast("Modification refusée.", true); sel.value = a.role; } else { a.role = sel.value; toast("Rôle mis à jour."); }
+      if (error) { toast(/check constraint/i.test(error.message || "") ? "Exécutez d’abord supabase/v4_inspection_cloture.sql pour créer le rôle Inspection." : "Modification refusée.", true); sel.value = a.role; } else { a.role = sel.value; toast("Rôle mis à jour."); }
     });
     const rm = h("button", { class: "btn danger small", type: "button", text: me ? "Vous" : "Retirer", disabled: me });
     rm.addEventListener("click", async () => {
@@ -1846,7 +1874,7 @@ $("#form-agent").addEventListener("submit", async e => {
   if (!/^\d{15,21}$/.test(id)) { $("#a-id").setAttribute("aria-invalid", "true"); $("#a-id").focus(); msg.textContent = "Un identifiant Discord compte 17 à 20 chiffres."; return; }
   $("#a-id").removeAttribute("aria-invalid");
   const { error } = await S.sb.from("agents").insert({ discord_id: id, nom, role });
-  if (error) { msg.textContent = error.code === "23505" ? "Cet identifiant a déjà accès." : "Ajout refusé : " + error.message; return; }
+  if (error) { msg.textContent = error.code === "23505" ? "Cet identifiant a déjà accès." : error.code === "23514" ? "Rôle inconnu de la base : exécutez d’abord supabase/v4_inspection_cloture.sql." : "Ajout refusé : " + error.message; return; }
   $("#form-agent").reset();
   toast(`${nom || "Agent"} ajouté.`);
   loadAgents();
@@ -1868,6 +1896,7 @@ function subscribe() {
   col("penalites", s => { S.penalites = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("echeanciers", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.echeanciers = o; });
   col("relances", s => { S.relances = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("clotures", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.clotures = o; });
 }
 
 /* ---------- Rendu ---------- */
@@ -1914,7 +1943,7 @@ function ensureOption(sel, value, label) {
 }
 function renderOptions() {
   const nowK = keyOf(new Date());
-  const keys = recentKeys(8).map(k => [k, periodLabel(k) + (k === nowK ? " · en cours" : "")]);
+  const keys = recentKeys(8).map(k => [k, periodLabel(k) + (k === nowK ? " · en cours" : "") + (isClosed(k) ? " · clôturée" : "")]);
   fillSelect($("#dash-per"), keys, S.dashKey || defaultKey());
   fillSelect($("#eco-per"), keys, S.dashKey || defaultKey());
   if (S.dashKey && $("#eco-per").value !== S.dashKey && $$("option", $("#eco-per")).some(o => o.value === S.dashKey)) $("#eco-per").value = S.dashKey;
@@ -1937,7 +1966,10 @@ function setKpi(id, value, sub, tone) {
 function renderDashboard() {
   const key = S.dashKey = $("#dash-per").value || defaultKey();
   const dl = deadline(key);
-  $("#dash-deadline").textContent = `${periodLabel(key)} · dépôt avant le ${fmtDateTime(dl)}${Date.now() > dl.getTime() ? " (délai dépassé)" : ""}.`;
+  $("#dash-deadline").textContent = `${periodLabel(key)} · dépôt avant le ${fmtDateTime(dl)}${Date.now() > dl.getTime() ? " (délai dépassé)" : ""}${isClosed(key) ? " · " + closedNote(key).replace(periodPlain(key) + " c", "c") : ""}.`;
+  const cb = $("#btn-cloture");
+  cb.hidden = !S.connected || Date.now() < bounds(key).end.getTime();
+  cb.textContent = isClosed(key) ? "Semaine clôturée" : writer() && Date.now() > dl.getTime() ? "Clôturer la semaine" : "Bilan de la semaine";
   const ready = S.connected && S.loaded.has("declarations") && S.loaded.has("entreprises");
   if (!ready) {
     $("#registry").replaceChildren(h("div", { class: "empty", text: S.offline ? "Le registre s’affichera une fois la page ouverte depuis Claude." : "Chargement du registre…" }));
@@ -2160,7 +2192,7 @@ function renderAlerts() {
         h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: d.entrepriseNom || "Sans nom" }),
         h("span", { class: "meta-inline", text: ` · ${periodShort(d.periode)} · ${dossierNo("DF", d.id)}` }),
         h("div", { class: "reasons" }, a.map(r => h("span", { class: "reason", text: r })))),
-      w ? h("button", { class: "btn ghost small", type: "button", onclick: () => decide(d, "controle", dMontant(d), "Contrôle déclenché : " + a.join(" ; ")), text: "Contrôler" }) : null))),
+      w || (canAgent() && ["soumise", "validee"].includes(dStatus(d))) ? h("button", { class: "btn ghost small", type: "button", onclick: () => decide(d, "controle", dMontant(d), "Contrôle déclenché : " + a.join(" ; ")), text: "Contrôler" }) : null))),
     rows.length > 8 ? h("div", { class: "reg-foot", text: `+ ${rows.length - 8} autre${plural(rows.length - 8)} : onglet Entreprises, filtre Alertes.` }) : null);
 }
 
@@ -2215,7 +2247,7 @@ function renderDeclTable(key) {
     let act = null;
     const ec = echOf(d), nx = ec ? nextEcheance(ec) : -1;
     if (w && st === "validee" && ec && nx >= 0) act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); payEcheance(d, nx); }, text: `Encaisser ${nx + 1}/${ec.echeances.length}` });
-    else if (w && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
+    else if (canAgent() && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
     else if (w && st === "validee") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || ""); }, text: "Encaisser" });
     return h("tr", {},
       h("td", { class: "no", text: dossierNo("DF", d.id) }),
@@ -2362,15 +2394,20 @@ function openDecl(id) {
       h("strong", { text: "Entreprise non enregistrée. " }), "Ajoutez-la au registre pour suivre ses prochaines déclarations. ",
       h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => registerFromDecl(d), text: "Enregistrer « " + d.entrepriseNom + " »" }))));
   }
+  const ag = canAgent(), locked = isClosed(d.periode);
+  // L’Inspection émet l’avis et place en contrôle tant que le dossier n’est ni payé ni rejeté.
+  const inspOk = ag && ["soumise", "validee", "controle"].includes(st);
+  if (locked) body.unshift(h("div", { class: "notice lock", style: "margin:0" }, h("div", {}, h("strong", { text: closedNote(d.periode) + ". " }), "La déclaration et le montant de l’avis sont verrouillés. Les encaissements restent possibles.")));
   let mIn = null, nIn = null;
-  if (w) {
+  if (w || inspOk) {
     mIn = h("input", { id: "dlg-montant", type: "number", min: "0", step: "1", inputmode: "numeric" });
     mIn.value = String(dec && dec.montant != null ? dec.montant : d.total);
+    mIn.disabled = locked;
     nIn = h("textarea", { id: "dlg-note", rows: "2", placeholder: "Motif d’un redressement, d’un contrôle ou d’un rejet" });
     nIn.value = dec && dec.note ? dec.note : "";
     body.push(h("div", { class: "decide" },
       h("div", { class: "row2" },
-        h("div", { class: "field" }, h("label", { for: "dlg-montant", text: "Montant retenu" }), h("div", { class: "money", "data-cur": cur() }, mIn), h("span", { class: "hint", text: "Modifiez-le pour un redressement." })),
+        h("div", { class: "field" }, h("label", { for: "dlg-montant", text: "Montant retenu" }), h("div", { class: "money", "data-cur": cur() }, mIn), h("span", { class: "hint", text: locked ? "Verrouillé : la semaine est clôturée." : "Modifiez-le pour un redressement." })),
         h("div", { class: "field" }, h("label", { for: "dlg-note", text: "Observation de la Direction" }), nIn))));
   } else if (dec && dec.note) body.push(sec("Observation de la Direction", h("p", { class: "prewrap", text: dec.note })));
 
@@ -2381,7 +2418,9 @@ function openDecl(id) {
   };
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisDoc(d), () => openDecl(id)), text: "Avis en image" }),
     h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(avisText(d), "Avis copié : collez-le en réponse sur Discord."), text: "Copier le texte" })];
-  if (w) {
+  const ecd = echOf(d);
+  if (ag && !locked && (w || st !== "payee")) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => startEditDecl(d), text: "Modifier" }));
+  if (w && !locked) {
     const delBtn = h("button", { class: "btn danger small", type: "button", text: "Supprimer la saisie" });
     delBtn.addEventListener("click", () => {
       const f = $(".dlg-foot", dlg);
@@ -2392,12 +2431,14 @@ function openDecl(id) {
           if (ok) { closeDialog(); toast("Déclaration supprimée."); }
         }, text: "Supprimer" }));
     });
-    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => startEditDecl(d), text: "Modifier" }), delBtn, h("span", { class: "spacer" }));
-    const ecd = echOf(d);
-    if (dec && st !== "payee" && !(ecd && ecd.echeances.some(x => x.payee))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("decisions/" + id).delete())) { toast("Décision annulée : le dossier est de nouveau à valider."); openDecl(id); } }, text: "Remettre à valider" }));
-    if (st !== "controle") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("controle"), text: "Contrôle fiscal" }));
-    if (st !== "rejetee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("rejetee"), text: "Rejeter" }));
-    if (st !== "validee" && st !== "payee") foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
+    foot.push(delBtn);
+  }
+  if (w || inspOk) foot.push(h("span", { class: "spacer" }));
+  if (w && !locked && dec && st !== "payee" && !(ecd && ecd.echeances.some(x => x.payee))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("decisions/" + id).delete())) { toast("Décision annulée : le dossier est de nouveau à valider."); openDecl(id); } }, text: "Remettre à valider" }));
+  if ((w || inspOk) && st !== "controle") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("controle"), text: "Contrôle fiscal" }));
+  if (w && st !== "rejetee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("rejetee"), text: "Rejeter" }));
+  if ((w || inspOk) && st !== "validee" && st !== "payee") foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
+  if (w) {
     if (st !== "payee") foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => go("payee"), text: "Encaisser" }));
     else foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => {
       if (ecd) { let k = -1; ecd.echeances.forEach((x, j) => { if (x.payee) k = j; }); if (k >= 0) { if (await unpayEcheance(d, k)) openDecl(id); return; } }
@@ -2518,7 +2559,7 @@ function openDem(id) {
       mIn.addEventListener("input", check); cIn.addEventListener("input", check);
       foot.push(upd8);
     } else foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => save("accorder"), text: "Accorder" }));
-  }
+  } else if (canAgent() && ["attente", "etude"].includes(st)) foot.push(h("span", { class: "spacer" }), h("button", { class: "btn ghost small", type: "button", onclick: () => startEditDem(dm), text: "Modifier" }));
   openDialog({ eyebrow: `Demande ${dossierNo("DM", id)} · ${NATURES[dm.nature] || "Demande"}`, title: dm.objet || "Demande de moyens", stampEl: stamp(ASTAT[st] || ASTAT.attente), body, foot });
 }
 
@@ -2653,7 +2694,7 @@ $("#d-paste").addEventListener("paste", () => setTimeout(parseDecl, 0));
 
 $("#form-decl").addEventListener("submit", async e => {
   e.preventDefault();
-  if (!writer()) return;
+  if (!canAgent()) return;
   const err = $("#d-err");
   err.textContent = "";
   $$("#form-decl [aria-invalid]").forEach(x => x.removeAttribute("aria-invalid"));
@@ -2681,6 +2722,8 @@ $("#form-decl").addEventListener("submit", async e => {
   const r = compute(ca, ch, ms, late, c, nb, sal);
   const ent = findEnt(name);
   const editing = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
+  const lockedK = isClosed(key) ? key : editing && isClosed(editing.periode) ? editing.periode : null;
+  if (lockedK) { err.textContent = `${closedNote(lockedK)} : la Direction doit la rouvrir pour y ajouter ou modifier une déclaration.`; return; }
   const dup = S.declarations.some(d => (!editing || d.id !== editing.id) && d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
   const body = {
     entrepriseId: ent ? ent.id : null, entrepriseNom: ent ? ent.nom : name, periode: key,
@@ -2698,7 +2741,7 @@ $("#form-decl").addEventListener("submit", async e => {
   btn.disabled = true;
   const ref = editing ? S.db.doc("declarations/" + editing.id) : S.db.collection("declarations").doc();
   const ok = await write(() => ref.set(body));
-  btn.disabled = !writer();
+  btn.disabled = !canAgent();
   if (!ok) return;
   if (editing) {
     const dec = S.decisions[editing.id];
@@ -2765,7 +2808,7 @@ $("#m-paste").addEventListener("paste", () => setTimeout(parseDem, 0));
 
 $("#form-dem").addEventListener("submit", async e => {
   e.preventDefault();
-  if (!writer()) return;
+  if (!canAgent()) return;
   const err = $("#m-err");
   err.textContent = "";
   $$("#form-dem [aria-invalid]").forEach(x => x.removeAttribute("aria-invalid"));
@@ -2794,7 +2837,7 @@ $("#form-dem").addEventListener("submit", async e => {
   btn.disabled = true;
   const ref = editingDem ? S.db.doc("demandes/" + editingDem.id) : S.db.collection("demandes").doc();
   const ok = await write(() => ref.set(body));
-  btn.disabled = !writer();
+  btn.disabled = !canAgent();
   if (!ok) return;
   if (editingDem) { S.editDem = null; editBanner("dem"); }
   const rc = $("#m-receipt");
@@ -2977,7 +3020,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -3263,7 +3306,7 @@ async function showDocImage(doc, back) {
     eyebrow: "Image à poster sur Discord", title: `${capFirst(doc.kind)} ${doc.no}`, wide: true,
     body: [h("img", { class: "avis-preview", src: url, alt: `${capFirst(doc.kind)} ${doc.no}` })],
     foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour au dossier" }) : null, h("span", { class: "spacer" }),
-      writer() && doc.discord && hookFor(doc.discord.channel) ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (!(await publishDoc(doc))) b.disabled = false; else b.textContent = "Publié sur Discord"; }, text: "Publier sur Discord" }) : null,
+      canAgent() && doc.discord && hookFor(doc.discord.channel) ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (!(await publishDoc(doc))) b.disabled = false; else b.textContent = "Publié sur Discord"; }, text: "Publier sur Discord" }) : null,
       dl, copyBtn].filter(Boolean)
   });
 }
@@ -3658,6 +3701,8 @@ function describe(e) {
       if (x === "suppression") return `a effacé l’arbitrage de ${who}`;
       return ({ accordee: `a accordé ${money(a.montantAccorde)} à ${who}`, partielle: `a accordé ${money(a.montantAccorde)}, en partie, à ${who}`, refusee: `a refusé la demande de ${who}`, etude: `a mis à l’étude la demande de ${who}` })[a.statut] || `a modifié l’arbitrage de ${who}`;
     }
+    case "clotures":
+      return x === "suppression" ? `a rouvert ${periodPlain(e.doc_id).toLowerCase()}` : `a clôturé ${periodPlain(e.doc_id).toLowerCase()}`;
     case "relances":
       if (x === "suppression") return `a supprimé une relance de ${v.entrepriseNom}`;
       return v.type === "declaration" ? `a relancé ${v.entrepriseNom} pour ${(v.periodes || []).map(periodPlain).join(", ")}` : `a relancé ${v.entrepriseNom} pour ${money(v.montant)} d’impayés`;
@@ -3673,7 +3718,7 @@ function describe(e) {
     }
     case "meta": return "a téléchargé une sauvegarde du registre";
     case "agents": {
-      const nom = v.nom || v.discord_id, role = v.role === "direction" ? "Direction" : "Lecture seule";
+      const nom = v.nom || v.discord_id, role = ROLE_LABEL[v.role] || "Lecture seule";
       if (x === "ajout") return `a donné l’accès ${role} à ${nom}`;
       if (x === "suppression") return `a retiré l’accès de ${nom}`;
       return `a changé l’accès de ${nom} en ${role}`;
@@ -3682,13 +3727,39 @@ function describe(e) {
   }
 }
 const shortJson = s => (s === undefined ? "—" : s.length > 90 ? s.slice(0, 87) + "…" : s);
+const FIELD_LABEL = {
+  nom: "Nom", secteur: "Secteur", patron: "Patron", discord: "ID Discord", debutActivite: "Début d’activité", actif: "Active",
+  entrepriseNom: "Entreprise", periode: "Période", ca: "Chiffre d’affaires", charges: "Charges", masse: "Masse salariale", nbSalaries: "Salariés",
+  resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
+  statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
+  quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
+  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement",
+  services: "Services", enveloppes: "Enveloppes", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
+  baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
+  salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
+};
+const MONEY_F = new Set(["ca", "charges", "masse", "resultat", "impot", "cotisations", "majoration", "total", "montant", "montantAccorde", "budgetInitial", "salaireMin"]);
+const SKIP_F = new Set(["createdAt", "updatedAt", "by", "saisiPar", "at", "modifieLe", "detail", "bareme", "depotAt", "paidAt", "recueAt", "majPct", "rectificative", "groupee", "byNom", "entrepriseId", "declId", "items", "bilan", "echeance"]);
+function fmtField(k, v) {
+  if (v === undefined || v === null || v === "") return "—";
+  if (MONEY_F.has(k) && typeof v === "number") return money(v);
+  if (k === "statut") return ((DSTAT[v] || ASTAT[v] || PSTAT[v] || [String(v)])[0]);
+  if ((k === "periode" || k === "debutActivite" || k === "debutSuivi") && bounds(v)) return periodPlain(v);
+  if (typeof v === "boolean") return v ? "oui" : "non";
+  if (Array.isArray(v)) return `${v.length} élément${plural(v.length)}`;
+  if (typeof v === "object") return "…";
+  return shortJson(String(v));
+}
 function diffRows(b, a) {
   const keys = new Set(Object.keys(b || {}).concat(Object.keys(a || {})));
   const out = [];
   for (const k of keys) {
-    if (["createdAt", "updatedAt", "by", "saisiPar", "at"].includes(k)) continue;
-    const vb = JSON.stringify((b || {})[k]), va = JSON.stringify((a || {})[k]);
-    if (vb !== va) out.push(`${k} : ${shortJson(vb)} → ${shortJson(va)}`);
+    if (SKIP_F.has(k)) continue;
+    const xb = (b || {})[k], xa = (a || {})[k];
+    if (JSON.stringify(xb) === JSON.stringify(xa)) continue;
+    const label = FIELD_LABEL[k] || k, fb = fmtField(k, xb), fa = fmtField(k, xa);
+    if (fb === "—" && fa === "—") continue;
+    out.push(fb === fa ? `${label} : modifié` : `${label} : ${fb} → ${fa}`);
   }
   return out;
 }
@@ -3712,7 +3783,8 @@ function renderJournal() {
       h("time", { datetime: r.e.at, text: `${fmtDate(d)} ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` }),
       h("div", { style: "min-width:0" }, h("span", { class: "jwho", text: r.who }), " ", r.text, r.no ? h("span", { class: "tag", text: r.no }) : null,
         diffs.length ? h("details", {}, h("summary", { text: "Détail des changements" }), h("div", { class: "diff" }, diffs.map(t => h("span", { text: t })))) : null),
-      h("span", { class: "chip t-" + ({ ajout: "info", modification: "muted", suppression: "bad" }[r.e.action] || "muted"), text: capFirst(r.e.action) }));
+      h("span", {}, h("span", { class: "chip t-" + ({ ajout: "info", modification: "muted", suppression: "bad" }[r.e.action] || "muted"), text: capFirst(r.e.action) }),
+        writer() && restorable(r.e) ? h("button", { class: "linkbtn jrestore", type: "button", onclick: () => openRestore(r.e), text: r.e.action === "ajout" ? "Annuler" : "Restaurer" }) : null));
   }));
   fill(more, rows.length > shown.length ? h("div", { class: "reg-foot" }, `${shown.length} sur ${rows.length} actions affichées. `, h("button", { class: "linkbtn", type: "button", onclick: () => { S.jLimit += 100; renderJournal(); }, text: "Afficher 100 de plus" })) : null);
 }
@@ -4035,6 +4107,7 @@ function cancelEdit(kind) {
   editBanner(kind);
 }
 function startEditDecl(d) {
+  if (isClosed(d.periode)) { toast(closedNote(d.periode) + " : la Direction doit la rouvrir avant de modifier ce dossier.", true); return; }
   const ec = echOf(d);
   if (ec) { toast("Supprimez d’abord l’échéancier de ce dossier pour en modifier les montants.", true); return; }
   closeDialog();
@@ -4195,7 +4268,7 @@ const autoOn = k => { const a = (S.discord && S.discord.auto) || {}; const def =
 
 // Les adresses des salons sont dans une table que seule la Direction lit (supabase/v3_discord.sql).
 async function loadPrivate() {
-  if (!S.sb || !writer()) return;
+  if (!S.sb || !canAgent()) return;
   const { data, error } = await S.sb.from("parametres_prives").select("cle,valeur");
   if (error) { S.discordState = tableMissing(error) ? "missing" : "error"; S.discord = null; }
   else { S.discordState = "ok"; const row = (data || []).find(r => r.cle === "discord"); S.discord = (row && row.valeur) || {}; }
@@ -4264,7 +4337,7 @@ async function publishDoc(doc, label) {
   return res.ok;
 }
 async function autoPublish(kind, doc, label) {
-  if (!doc || !autoOn(kind) || !writer()) return false;
+  if (!doc || !autoOn(kind) || !canAgent()) return false;
   return publishDoc(doc, label);
 }
 
@@ -4482,8 +4555,9 @@ function rcMore(key, n) {
 }
 function renderRecouvrement() {
   if (S.tab !== "recouvrement") return;
-  if (!S.connected || !S.loaded.has("declarations")) { ["#rc-retards", "#rc-impayes", "#rc-hist"].forEach(s => fill($(s), h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" }))); return; }
-  const w = writer();
+  if (!S.connected || !S.loaded.has("declarations")) { ["#rc-retards", "#rc-impayes", "#rc-hist", "#rc-clotures"].forEach(s => fill($(s), h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" }))); return; }
+  const w = canAgent();
+  renderClotures();
   const rt = retardataires();
   $("#rc-retards-sub").textContent = rt.length
     ? `${rt.length} entreprise${plural(rt.length)} n’${rt.length > 1 ? "ont" : "a"} pas déposé toutes ${rt.length > 1 ? "leurs" : "ses"} déclarations échues depuis ${periodPlain(cfg().debutSuivi).toLowerCase()}.`
@@ -4520,6 +4594,136 @@ function renderRecouvrement() {
 }
 $("#rc-retards-all").addEventListener("click", () => relanceAll("declaration"));
 $("#rc-impayes-all").addEventListener("click", () => relanceAll("paiement"));
+
+/* ---------- Clôture des semaines ---------- */
+// Une période clôturée est verrouillée par la base (supabase/v4_inspection_cloture.sql) :
+// plus de déclaration ajoutée, modifiée ou supprimée, plus de changement de montant d'avis.
+const isClosed = key => !!(key && S.clotures[key]);
+const closedNote = key => { const c = S.clotures[key]; return c ? `${periodPlain(key)} clôturée le ${fmtDate(new Date(c.at))}${c.byNom ? " par " + c.byNom : ""}` : ""; };
+function bilanPeriode(key) {
+  const ents = activeEnts().filter(e => entStartTime(e) <= keyStart(key));
+  const all = S.declarations.filter(d => d.periode === key && dStatus(d) !== "rejetee");
+  const nonDecl = ents.filter(e => !all.some(d => sameEnt(d, e)));
+  return {
+    attendues: ents.length, deposees: ents.length - nonDecl.length, nonDeclarants: nonDecl.map(e => e.nom),
+    aValider: all.filter(d => dStatus(d) === "soumise").length, enControle: all.filter(d => dStatus(d) === "controle").length,
+    declare: periodDecls(key).reduce((s, d) => s + dMontant(d), 0), encaisse: all.reduce((s, d) => s + dEncaisse(d), 0),
+    reste: all.reduce((s, d) => s + dReste(d), 0), retards: all.filter(d => d.enRetard).length
+  };
+}
+function bilanDoc(key) {
+  const c = S.clotures[key], b = (c && c.bilan) || bilanPeriode(key);
+  return {
+    kind: "BILAN DE PÉRIODE", no: periodPlain(key).replace("Semaine ", "S"), date: c ? "Clôturée le " + longDate(new Date(c.at)) : "Établi le " + longDate(new Date()),
+    meta: [["Période", periodLabel(key)], ["Déclarations", `${b.deposees} sur ${b.attendues} entreprises`], ["Clôturée par", c ? c.byNom || "Direction" : "Pas encore clôturée"], ["Hors délai", String(b.retards)]],
+    lines: [["Montant des avis", money(b.declare)], ["Encaissé", money(b.encaisse)], ["Reste à recouvrer", money(b.reste), true], ["Encore à valider", String(b.aValider)], ["En contrôle", String(b.enControle)]]
+      .concat(b.nonDeclarants.length ? [["Non déclarées", b.nonDeclarants.slice(0, 8).join(", ") + (b.nonDeclarants.length > 8 ? ` et ${b.nonDeclarants.length - 8} autres` : "")]] : []),
+    total: ["Taux de déclaration", b.attendues ? Math.round(b.deposees / b.attendues * 100) + " %" : "—"],
+    stamp: c ? ["CLÔTURÉE", "accent"] : ["PROVISOIRE", "muted"],
+    footer: "Chiffres arrêtés à la clôture. Préfecture de police · Direction des impôts et cotisations."
+  };
+}
+function openCloture(key) {
+  const c = S.clotures[key], b = c && c.bilan ? c.bilan : bilanPeriode(key), live = bilanPeriode(key), w = writer();
+  const ended = Date.now() > deadline(key).getTime();
+  const body = [
+    h("p", { style: "margin:0", text: c
+      ? `${closedNote(key)}. Ses déclarations ne peuvent plus être ajoutées, modifiées ni supprimées, et le montant de ses avis est figé. Les encaissements, échéanciers, pénalités et relances restent possibles. Les chiffres ci-dessous sont ceux du jour de la clôture.`
+      : "Clôturer la semaine la verrouille : plus de déclaration ajoutée, modifiée ou supprimée par erreur, et le montant des avis est figé. Les encaissements, échéanciers, pénalités et relances restent possibles. La Direction peut la rouvrir à tout moment." }),
+    sec(c ? "Bilan à la clôture" : "Bilan provisoire", kv([
+      ["Déclarations déposées", `${b.deposees} sur ${b.attendues}`, "num"],
+      ["Encore à valider", String(b.aValider), "num"],
+      ["En contrôle", String(b.enControle), "num"],
+      ["Déposées hors délai", String(b.retards), "num"],
+      ["Montant des avis", money(b.declare), "num"],
+      ["Encaissé", money(b.encaisse), "num"],
+      ["Reste à recouvrer", money(b.reste), "tot"]])),
+    c && live.encaisse !== b.encaisse ? h("p", { class: "hint", style: "margin:0", text: `Depuis la clôture : ${money(live.encaisse)} encaissés, ${money(live.reste)} restent à recouvrer.` }) : null,
+    b.nonDeclarants.length ? sec("Pas déclarées", h("p", { style: "margin:0", text: b.nonDeclarants.join(", ") })) : null,
+    !c && b.aValider ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: `${b.aValider} déclaration${plural(b.aValider)} encore à valider. ` }), "Vous pourrez toujours émettre leurs avis, mais plus changer leurs montants.")) : null,
+    !c && b.nonDeclarants.length ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: `${b.nonDeclarants.length} entreprise${plural(b.nonDeclarants.length)} sans déclaration. ` }), "Une fois la semaine clôturée, plus aucune déclaration n’y sera acceptée. Relancez-les d’abord si besoin.")) : null,
+    !ended ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Délai de dépôt pas encore écoulé. " }), `La semaine pourra être clôturée après le ${fmtDateTime(deadline(key))}.`)) : null
+  ];
+  const close = async () => {
+    const ok = await write(() => S.db.doc("clotures/" + key).set({ at: nowISO(), by: S.uid || null, byNom: S.agentName || "", bilan: live }));
+    if (ok) { toast(`${periodPlain(key)} clôturée.`); openCloture(key); }
+  };
+  const reopen = async () => {
+    if (await write(() => S.db.doc("clotures/" + key).delete())) { toast(`${periodPlain(key)} rouverte : ses dossiers peuvent de nouveau être modifiés.`); openCloture(key); }
+  };
+  openDialog({
+    eyebrow: "Clôture de période", title: periodLabel(key), stampEl: stamp(c ? ["Clôturée", "accent"] : ["Ouverte", "muted"]), body,
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(bilanDoc(key), () => openCloture(key)), text: "Bilan en image" }),
+      h("span", { class: "spacer" }),
+      w && c ? h("button", { class: "btn ghost small", type: "button", onclick: reopen, text: "Rouvrir la semaine" }) : null,
+      w && !c ? h("button", { class: "btn ink small", type: "button", onclick: close, disabled: !ended, text: `Clôturer ${periodPlain(key).toLowerCase()}` }) : null].filter(Boolean)
+  });
+}
+function renderClotures() {
+  const box = $("#rc-clotures");
+  if (!S.connected || !S.loaded.has("declarations")) return;
+  const keys = recentKeys(12).filter(k => Date.now() > bounds(k).end.getTime());
+  if (!keys.length) { fill(box, h("div", { class: "empty", text: "Aucune période terminée depuis le début du suivi." })); return; }
+  fill(box, h("ul", { class: "ent-list" }, keys.map(k => {
+    const b = bilanPeriode(k), c = S.clotures[k];
+    return h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openCloture(k), text: periodLabel(k) }),
+        h("span", { class: "meta", text: c ? closedNote(k) : `${b.deposees}/${b.attendues} déclarations · ${money(b.reste)} à recouvrer${b.aValider ? ` · ${b.aValider} à valider` : ""}` })),
+      chip(c ? ["Clôturée", "accent"] : Date.now() > deadline(k).getTime() ? ["À clôturer", "warn"] : ["Dépôts en cours", "muted"]),
+      h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openCloture(k), text: !c && writer() && Date.now() > deadline(k).getTime() ? "Clôturer" : "Voir" })));
+  })));
+}
+$("#btn-cloture").addEventListener("click", () => openCloture(S.dashKey || defaultKey()));
+
+/* ---------- Restaurer depuis le journal ---------- */
+// Restaurable seulement si l’action a encore un effet : un ajout dont le dossier existe, une suppression pas encore réparée.
+function restorable(e) {
+  if (!RESTORABLE.has(e.collection) || !S.db) return false;
+  const cur = S.db.peek(jPath(e));
+  if (e.action === "ajout") return e.collection !== "config" && cur !== undefined;
+  if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
+  return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
+}
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures"]);
+const jPath = e => e.collection + "/" + e.doc_id;
+function openRestore(e) {
+  const path = jPath(e);
+  const current = S.db.peek(path);
+  const target = e.action === "ajout" ? null : e.avant;
+  const after = e.action === "suppression" ? null : e.apres || null;
+  const changedSince = JSON.stringify(current === undefined ? null : current) !== JSON.stringify(after);
+  const what = e.action === "ajout" ? "Annuler cet ajout : le dossier sera supprimé." : e.action === "suppression" ? "Recréer le dossier tel qu’il était avant sa suppression." : "Revenir à l’état du dossier avant cette modification.";
+  const diffs = diffRows(current || {}, target || {});
+  // Dossiers liés supprimés au même moment (par exemple l'avis d'une déclaration supprimée).
+  const t0 = new Date(e.at).getTime();
+  const linked = e.action === "suppression" ? S.journal.filter(x => x.id !== e.id && x.action === "suppression" && x.doc_id === e.doc_id && RESTORABLE.has(x.collection)
+    && Math.abs(new Date(x.at).getTime() - t0) < 15000 && S.db.peek(jPath(x)) === undefined && x.avant) : [];
+  const LINK = { decisions: "l’avis d’imposition", arbitrages: "la décision budgétaire", echeanciers: "l’échéancier", demandes: "la demande", declarations: "la déclaration" };
+  const boxes = linked.map(x => { const cb = h("input", { type: "checkbox", id: "rs-" + x.id, "data-jid": String(x.id) }); cb.checked = true; return h("label", { class: "switch", for: "rs-" + x.id }, cb, `Restaurer aussi ${LINK[x.collection] || "le dossier lié"} ${jNo(x) || x.doc_id}, supprimé en même temps`); });
+  const shown = diffs.slice(0, 10);
+  if (diffs.length > 10) shown.push(`et ${diffs.length - 10} autre${plural(diffs.length - 10)} champ${plural(diffs.length - 10)}`);
+  const go = h("button", { class: "btn ink small", type: "button", text: e.action === "ajout" ? "Supprimer le dossier" : "Restaurer" });
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    const ok = await write(async () => {
+      if (e.action === "ajout") await S.db.doc(path).delete();
+      else await S.db.doc(path).set(target || {});
+      for (const b of $$("input[data-jid]", dlg)) if (b.checked) { const x = linked.find(y => String(y.id) === b.dataset.jid); if (x) await S.db.doc(jPath(x)).set(x.avant); }
+    });
+    if (ok) { closeDialog(); toast(e.action === "ajout" ? "Ajout annulé." : "Dossier restauré."); setTimeout(loadJournal, 700); }
+    else go.disabled = false;
+  });
+  openDialog({
+    eyebrow: "Journal · restauration", title: `${e.auteur || "Sans nom"} ${describe(e)}`,
+    body: [h("p", { style: "margin:0", text: `${what} Action du ${fmtDateTime(new Date(e.at))}.` }),
+      changedSince && current !== undefined && e.action !== "suppression" ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Le dossier a encore changé depuis. " }), "Les changements plus récents seront eux aussi effacés.")) : null,
+      e.action === "suppression" && current !== undefined ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Un dossier porte déjà ce numéro. " }), "Il sera remplacé par la version supprimée.")) : null,
+      shown.length ? sec(e.action === "suppression" ? "Dossier recréé" : "Ce qui va changer", h("div", { class: "diff" }, shown.map(t => h("span", { text: t })))) : null,
+      boxes.length ? sec("Dossiers liés", h("div", { class: "checks-col" }, boxes)) : null,
+      h("p", { class: "hint", style: "margin:0", text: "La restauration est elle-même inscrite au journal : elle peut être annulée de la même façon." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+}
 
 /* ---------- Onglets ---------- */
 function showTab(name) {
