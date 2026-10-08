@@ -23,7 +23,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v3_discord.sql` : la table privée des salons Discord
 - `supabase/v4_inspection_cloture.sql` : le rôle Inspection et le verrou des semaines clôturées
 - `supabase/v5_pieces.sql` : l’espace privé des captures d’écran des contrôles fiscaux
-- `supabase/v6_direct.sql` : le journal en direct et la présence des agents
+- `supabase/v6_direct.sql` : le journal en direct, la présence des agents et les rectificatives saisies par l’Inspection
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -69,7 +69,7 @@ Si l’écran « Accès pas encore accordé » s’affiche, l’identifiant qu�
 ### 6. Reprendre les données de l’ancien guichet
 
 1. Dans l’ancien guichet (la page Claude), cliquez **Sauvegarder**.
-2. Dans le nouveau site, ouvrez **Réglages → Sauvegarde et restauration**, choisissez le fichier, puis cliquez **Restaurer**.
+2. Dans le nouveau site, ouvrez **Réglages → Sauvegardes et export**, choisissez le fichier, puis cliquez **Restaurer**.
 
 ---
 
@@ -111,7 +111,7 @@ Par défaut, l’impôt et les cotisations sont calculés par tranches, comme un
 | De 130 000 € à 150 000 € | 44 % |
 | Au-delà de 150 000 € | 80 % (surtaxe infraction) |
 
-Tout se modifie dans **Réglages → Barèmes par tranches** : ajouter ou supprimer une tranche, changer un plafond, un taux ou un libellé. Une tranche qui porte un libellé (comme « Surtaxe infraction ») déclenche une alerte quand une entreprise l’atteint. Le barème des salaires peut s’appliquer de trois façons :
+Tout se modifie dans **Réglages → Barèmes** : ajouter ou supprimer une tranche, changer un plafond, un taux ou un libellé. Une tranche qui porte un libellé (comme « Surtaxe infraction ») déclenche une alerte quand une entreprise l’atteint. Le barème des salaires peut s’appliquer de trois façons :
 
 - **Chaque salaire séparément** (recommandé) : l’entreprise liste ses salariés avec leur salaire, et chaque salaire a sa propre cotisation. Un petit salaire paie peu, un gros salaire paie plus. Le modèle Discord demande alors un salarié par ligne (`- Nom : salaire`).
 - **Masse salariale totale** : le barème s’applique au total des salaires de l’entreprise.
@@ -137,9 +137,9 @@ Une alerte n’est pas une preuve : c’est une raison de faire un contrôle en 
 
 1. Si ce n’est pas déjà fait, exécutez `supabase/v3_discord.sql` dans **SQL Editor** (voir la mise en place, étape 2).
 2. Dans Discord, pour chaque salon : **Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l’URL du webhook**.
-3. Dans le guichet, **Réglages → Publication sur Discord** : collez l’adresse du salon des entreprises, du salon des services publics et, si vous voulez, d’un salon des relances et d’un salon de la justice (avec le rôle à mentionner, par exemple `<@&ID du rôle des magistrats>`). Cochez ce qui doit partir tout seul, puis **Enregistrer** et **Envoyer un message d’essai**.
+3. Dans le guichet, **Réglages → Discord** : collez l’adresse du salon des entreprises, du salon des services publics et, si vous voulez, d’un salon des relances et d’un salon de la justice (avec le rôle à mentionner, par exemple `<@&ID du rôle des magistrats>`). Cochez ce qui doit partir tout seul, puis **Enregistrer** et **Envoyer un message d’essai**.
 4. Pour mentionner un patron : **Modifier l’entreprise → ID Discord du patron** (clic droit sur le membre → Copier l’identifiant, avec le mode développeur activé).
-5. Pour mentionner un service : **Réglages → Services publics et enveloppes**, colonne « Rôle Discord à mentionner », au format `<@&ID du rôle>` (clic droit sur le rôle → Copier l’identifiant).
+5. Pour mentionner un service : **Réglages → Services publics**, colonne « Rôle Discord à mentionner », au format `<@&ID du rôle>` (clic droit sur le rôle → Copier l’identifiant).
 
 Le guichet ne mentionne jamais `@everyone` ni `@here` : seuls le patron ou le rôle du service concerné sont notifiés. Les adresses des webhooks ne sont lisibles que par la Direction : elles n’apparaissent ni dans le journal, ni dans les sauvegardes, ni dans Google Sheets. Si une adresse fuite, supprimez le webhook dans Discord et collez-en un nouveau.
 
@@ -152,7 +152,7 @@ La feuille contient aussi les relances et mises en demeure, les attestations, le
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
 1. Créez la feuille **avec un compte Google du serveur**, pas un compte personnel.
-2. Dans le guichet, ouvrez **Réglages → Suivi dans Google Sheets**, donnez un nom à la clé et cliquez **Créer une clé d’export**. Copiez la clé : elle ne sera plus affichée.
+2. Dans le guichet, ouvrez **Réglages → Sauvegardes et export → Suivi dans Google Sheets**, donnez un nom à la clé et cliquez **Créer une clé d’export**. Copiez la clé : elle ne sera plus affichée.
 3. Dans la feuille, ouvrez **Extensions → Apps Script**. Remplacez tout le contenu par celui de `google-sheets/export.gs` et enregistrez.
 4. Rechargez la feuille. Un menu **Guichet fiscal** apparaît.
 5. **Guichet fiscal → Enregistrer la clé d’export**, puis collez la clé.
@@ -163,7 +163,7 @@ La feuille contient les onglets Déclarations, Entreprises, Demandes, Pénalité
 
 ## Donner l’accès à quelqu’un
 
-Dans **Réglages → Accès au guichet**, ajoutez son identifiant Discord, son nom et son rôle :
+Dans **Réglages → Accès**, ajoutez son identifiant Discord, son nom et son rôle :
 
 - **Direction** : tout, y compris encaisser, annuler, infliger les pénalités, arbitrer les demandes, clôturer les semaines, restaurer depuis le journal, les réglages et les accès.
 - **Inspection** : saisit les déclarations et les demandes, émet les avis, place un dossier en contrôle, relance les entreprises et publie sur Discord. Elle ne peut ni encaisser, ni annuler, ni supprimer, ni arbitrer, ni toucher aux réglages. Ces limites sont appliquées par la base elle-même, pas seulement par le site.
@@ -189,7 +189,7 @@ L’Inspection mène le contrôle jusqu’à la proposition ; seule la Direction
 
 ## Recouvrement forcé et justice
 
-Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. Les délais et taux se règlent dans **Réglages → Recouvrement et justice**.
+Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. Les délais et taux se règlent dans **Réglages → Recouvrement**.
 
 **Une entreprise qui ne déclare pas**
 
@@ -209,6 +209,22 @@ Quand les droits rappelés par un contrôle dépassent 100 000 € avec une majo
 
 L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; la majoration, la saisie et la transmission à la justice sont réservées à la Direction. Rien de nouveau à exécuter dans Supabase pour cette partie.
 
+## Cohérence des dossiers
+
+Chaque statut suit la vie du dossier, partout (tableau de bord, Entreprises, Recouvrement, fiche, recherche, attestation, PDF de justice) :
+
+- **Semaine clôturée sans déclaration** : plus de relance ni de mise en demeure, puisque rien ne peut plus y être déposé. Elle apparaît « clôturée » dans les déclarations manquantes, bloque l’attestation, et la Direction choisit : **Sanctionner le défaut** (une imposition estimée sur les dernières déclarations, majorée comme une taxation d’office, inscrite en pénalité) ou rouvrir la semaine pour taxer d’office.
+- **Alertes de fraude possible** : elles disparaissent quand un contrôle porte sur la déclaration, quelle que soit son issue, ou quand la Direction les **classe** avec un motif. Payer ce qu’on a déclaré ne suffit pas : la question est de savoir si la déclaration est sincère. Si une correction fait apparaître d’autres alertes, elles reviennent.
+- **Contrôle mis en recouvrement** : il devient **Soldé** quand le redressement est payé, **Dégrevé** s’il est annulé.
+- **Relances et mises en demeure** : « Régularisée » dès que la déclaration est déposée ou la somme payée. Une saisie ne s’appuie que sur une mise en demeure qui portait sur les mêmes sommes.
+- **Saisies et justice** : une somme sous saisie n’est ni relancée ni saisie une seconde fois. Si tout est payé autrement, la saisie affiche « Sommes réglées · à lever » et le dossier de justice « Dette réglée ? ».
+- **Déclaration rectificative** : elle remplace la précédente de la même semaine, qui est rejetée ; ce qui avait été payé est repris en avoir (et un trop-perçu est signalé). Après une taxation d’office, la majoration d’office demeure. Si la déclaration d’origine était déjà payée et que la rectificative vient de l’Inspection, la Direction valide le remplacement depuis le dossier (**Remplacer DF-…**). Rejeter la rectificative rétablit l’originale.
+- **Paiement en plusieurs fois** : seules les échéances passées sont exigibles (relance, majoration, saisie) ; encaisser le solde marque les échéances restantes comme payées.
+- **Fin d’un contrôle** : chaque avis suspendu retrouve exactement son état d’avant ; une déclaration qui n’avait pas encore d’avis reçoit le sien, publié normalement.
+- **Pénalités** : une seule pénalité de retard par déclaration, aucune en taxation d’office (sa majoration la remplace) ; les majorations d’un avis rejeté ou remis à valider sont annulées.
+
+Les **Réglages** sont rangés en rubriques (Calendrier et taux, Barèmes, Exonération, Recouvrement, Entreprises, Services publics, Discord, Accès, Sauvegardes et export) ; la dernière ouverte est retenue. La recherche rapide trouve aussi une rubrique (« webhook », « enveloppe »…).
+
 ## Clôturer une semaine
 
 Une fois le délai de dépôt passé, **Tableau de bord → Clôturer la semaine** (ou **Recouvrement → Clôture des semaines**) affiche le bilan de la période puis la verrouille. Une semaine clôturée ne reçoit plus de déclaration, ses déclarations ne peuvent plus être modifiées ni supprimées, et le montant de ses avis est figé. Les encaissements, échéanciers, pénalités et relances restent possibles. Le verrou est posé par la base : il tient même si quelqu’un contourne le site. La Direction peut rouvrir la semaine à tout moment ; le bilan au jour de la clôture reste disponible en image.
@@ -222,7 +238,7 @@ Plus besoin de recharger la page : ce que fait un autre agent apparaît tout seu
 - **Qui est en ligne** : le bouton en haut de page (« 2 autres en ligne ») liste les agents connectés et ce qu’ils consultent ; une fenêtre affiche « Léa consulte aussi ce dossier ». Le **Journal** se remplit en direct.
 - **Pied de page** : « En direct » quand tout va bien. Si le direct décroche (veille, réseau), le site relit le registre toutes les 15 secondes jusqu’à son retour, puis rattrape ce qui a été manqué.
 
-La présence et le journal en direct demandent d’avoir exécuté `supabase/v6_direct.sql`. Sans lui, le reste marche déjà.
+La présence, le journal en direct et le remplacement d’une déclaration par une rectificative saisie par l’Inspection demandent d’avoir exécuté `supabase/v6_direct.sql`. Sans lui, le reste marche déjà.
 
 ## Recherche rapide
 

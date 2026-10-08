@@ -37,7 +37,7 @@ function onOpen() {
 
 function enregistrerCle() {
   const ui = SpreadsheetApp.getUi();
-  const r = ui.prompt("Clé d’export", "Collez la clé créée dans le guichet (Réglages → Suivi dans Google Sheets).", ui.ButtonSet.OK_CANCEL);
+  const r = ui.prompt("Clé d’export", "Collez la clé créée dans le guichet (Réglages → Sauvegardes et export → Suivi dans Google Sheets).", ui.ButtonSet.OK_CANCEL);
   if (r.getSelectedButton() !== ui.Button.OK) return;
   const cle = r.getResponseText().trim();
   if (!cle) { ui.alert("Aucune clé saisie."); return; }
@@ -104,7 +104,7 @@ function actualiser() {
         a && (st === "accordee" || st === "partielle") ? a.montantAccorde : 0, a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : ""];
     }));
 
-  const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif" };
+  const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif", defaut: "Défaut de déclaration (semaine clôturée)" };
   ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le", "Nature"],
     col("penalites").map(r => [no(r.data.type === "redressement" ? "AMR" : "PN", r.id), r.data.entrepriseNom, r.data.motif, r.data.montant, STATUTS_PEN[r.data.statut] || r.data.statut,
       date(r.data.createdAt), date(r.data.paidAt), NATURES_PEN[r.data.type] || "Pénalité"]));
@@ -151,7 +151,9 @@ function actualiser() {
   const QUALIF = { bonne_foi: "Bonne foi", manquement: "Manquement délibéré (40 %)", fraude: "Manœuvres frauduleuses (80 %)", opposition: "Opposition au contrôle (100 %)" };
   ecrire("Contrôles", ["N°", "Entreprise", "Périodes", "Origine", "Inspecteur", "Statut", "Ouvert le", "Qualification", "Droits rappelés", "Majoration", "Total", "Pièces", "Conclusion"],
     col("controles").map(r => { const c = r.data;
-      return [no("CF", r.id), c.entrepriseNom, (c.periodes || []).join(", "), c.origine || "", c.inspecteur || "", CSTAT[c.statut] || c.statut, date(c.ouvertLe), QUALIF[c.qualification] || "",
+      const pen = c.penaliteId ? col("penalites").find(x => x.id === c.penaliteId) : null;
+      const etat = c.statut === "recouvre" && pen && pen.data.statut === "payee" ? "Soldé" : c.statut === "recouvre" && pen && pen.data.statut === "annulee" ? "Dégrevé" : CSTAT[c.statut] || c.statut;
+      return [no("CF", r.id), c.entrepriseNom, (c.periodes || []).join(", "), c.origine || "", c.inspecteur || "", etat, date(c.ouvertLe), QUALIF[c.qualification] || "",
         c.droits || 0, c.majoration || 0, c.total || 0, (c.pieces || []).length, c.conclusion || ""]; }));
 
   ecrire("Clôtures", ["Période", "Clôturée le", "Par", "Déclarations déposées", "Attendues", "Montant des avis", "Encaissé à la clôture", "Reste à recouvrer"],
