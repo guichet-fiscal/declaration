@@ -78,7 +78,7 @@ Si l’écran « Accès pas encore accordé » s’affiche, l’identifiant qu�
 - **Économie** : chiffre d’affaires du serveur, emplois, masse salariale, recettes, secteurs et plus grosses entreprises, avec des graphiques sur 12 périodes au plus, depuis le début du suivi.
 - **Avis en image** : chaque avis d’imposition, décision budgétaire et pénalité peut être copié en image pour être collé sur Discord.
 - **Pénalités et paiement en plusieurs fois** : depuis la fiche d’une entreprise ou le dossier d’une déclaration.
-- **Recouvrement** : les entreprises qui n’ont pas déclaré, et les avis et pénalités non payés après le délai de paiement. Chaque entreprise se relance d’un clic, ou toutes ensemble dans un seul message. Les relances restent inscrites au dossier.
+- **Recouvrement** : les entreprises qui n’ont pas déclaré, et les avis et pénalités non payés après le délai de paiement. La procédure suit celle du droit réel : relance, mise en demeure, puis taxation d’office, saisie ou transmission à la justice (voir plus bas). Chaque acte reste inscrit au dossier.
 - **Publication sur Discord** : les avis, pénalités, décisions budgétaires et relances partent dans le bon salon, avec une mention du patron ou du service.
 - **Exonération des entreprises nouvelles** (Réglages) : pendant ses premières périodes (4 semaines par défaut), une entreprise qui ouvre paie moins d’impôt (−100 % par défaut) et de cotisations (−50 % par défaut), éventuellement de façon dégressive. Une entreprise est nouvelle si son début d’activité est postérieur au début du suivi ; la Direction peut aussi accorder ou refuser l’exonération au cas par cas. La réduction est calculée au dépôt, apparaît sur l’avis et sur la fiche, et son coût figure dans l’onglet Économie.
 - **Quittances** : chaque encaissement (avis, échéance, pénalité) a sa quittance en image, qui prouve le paiement. Elle peut partir toute seule sur Discord.
@@ -135,7 +135,7 @@ Une alerte n’est pas une preuve : c’est une raison de faire un contrôle en 
 
 1. Si ce n’est pas déjà fait, exécutez `supabase/v3_discord.sql` dans **SQL Editor** (voir la mise en place, étape 2).
 2. Dans Discord, pour chaque salon : **Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l’URL du webhook**.
-3. Dans le guichet, **Réglages → Publication sur Discord** : collez l’adresse du salon des entreprises, du salon des services publics et, si vous voulez, d’un salon des relances. Cochez ce qui doit partir tout seul, puis **Enregistrer** et **Envoyer un message d’essai**.
+3. Dans le guichet, **Réglages → Publication sur Discord** : collez l’adresse du salon des entreprises, du salon des services publics et, si vous voulez, d’un salon des relances et d’un salon de la justice (avec le rôle à mentionner, par exemple `<@&ID du rôle des magistrats>`). Cochez ce qui doit partir tout seul, puis **Enregistrer** et **Envoyer un message d’essai**.
 4. Pour mentionner un patron : **Modifier l’entreprise → ID Discord du patron** (clic droit sur le membre → Copier l’identifiant, avec le mode développeur activé).
 5. Pour mentionner un service : **Réglages → Services publics et enveloppes**, colonne « Rôle Discord à mentionner », au format `<@&ID du rôle>` (clic droit sur le rôle → Copier l’identifiant).
 
@@ -145,7 +145,7 @@ Une entreprise est attendue à partir du début du suivi, ou de son **début d�
 
 ## Suivi dans Google Sheets
 
-La feuille contient aussi les relances, les attestations et les semaines clôturées. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
+La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies et les dossiers transmis à la justice. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
@@ -184,6 +184,28 @@ Depuis un dossier, une alerte, la fiche d’une entreprise ou **Recouvrement →
 5. **Mise en recouvrement** (Direction) : l’**avis de mise en recouvrement** crée la somme à payer, suivie comme une pénalité (relances, quittance). Les avis suspendus redeviennent payables. Ou bien **classement sans suite**.
 
 L’Inspection mène le contrôle jusqu’à la proposition ; seule la Direction met en recouvrement et retire une pièce.
+
+## Recouvrement forcé et justice
+
+Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. Les délais et taux se règlent dans **Réglages → Recouvrement et justice**.
+
+**Une entreprise qui ne déclare pas**
+
+1. **Rappel de déclaration** (amiable).
+2. **Mise en demeure de déclarer** : un délai (2 jours par défaut) pour déposer. Dans la réalité, c’est l’article 1728 du CGI : sans dépôt dans les 30 jours suivant la mise en demeure, la majoration passe de 10 % à 40 %.
+3. **Taxation d’office** : une fois le délai écoulé, le bouton ouvre le formulaire de déclaration en mode « taxation d’office ». La Direction saisit les éléments dont elle dispose ; l’avis est émis aussitôt avec la majoration d’office (40 % par défaut). C’est l’article L66 du LPF. Sur une semaine clôturée, il faut d’abord la rouvrir.
+
+**Une entreprise qui ne paie pas**
+
+1. **Relance de paiement** (amiable).
+2. **Mise en demeure de payer** : un délai (2 jours par défaut). Elle vaut commandement de payer (art. L257-0 A et L258 A du LPF).
+3. **Majoration de 10 %** (Direction) sur chaque avis payé en retard, une seule fois, comme l’article 1730 du CGI.
+4. **Saisie** (Direction) : **à tiers détenteur** (la banque, l’employeur ou un client verse à la Direction ce qu’il doit à l’entreprise, sans passer par un juge : art. L262 du LPF) ou **saisie-vente** des biens (véhicules, stocks). L’acte part sur Discord. **Saisie exécutée** encaisse les sommes visées et publie les quittances ; **Mainlevée** l’arrête. Le site demande une mise en demeure expirée, sauf si vous cochez « Saisir quand même ». Pendant une saisie, l’attestation de régularité est refusée.
+5. **Transmission à la justice** (Direction) : depuis Recouvrement ou la fiche. Choisissez les qualifications (défaut de paiement, fraude fiscale, travail dissimulé, opposition au contrôle, organisation d’insolvabilité) et les mesures demandées (saisie des comptes, saisie des biens, fermeture, poursuites, interdiction de gérer). L’exposé des faits est rédigé tout seul et se corrige. Le site produit un **PDF complet** : identité, créances avec leur date d’exigibilité, chronologie de la procédure (avis, relances, mises en demeure, saisies), contrôles fiscaux avec leurs rectifications, historique des déclarations, mesures, signature, rappel des textes et, en annexe, les captures des contrôles. Le PDF part dans le salon de la justice avec la mention du rôle choisi, et se télécharge. Le dossier suit ensuite ses **suites** : saisie effectuée, condamnation, dette réglée, classement.
+
+Quand les droits rappelés par un contrôle dépassent 100 000 € avec une majoration de 80 % ou 100 %, le site signale la **dénonciation obligatoire** au procureur (art. L228 du LPF), comme dans la réalité.
+
+L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; la majoration, la saisie et la transmission à la justice sont réservées à la Direction. Rien de nouveau à exécuter dans Supabase pour cette partie.
 
 ## Clôturer une semaine
 

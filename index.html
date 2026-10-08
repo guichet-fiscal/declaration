@@ -653,7 +653,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
     <div class="panel-head">
       <div>
         <h2>Recouvrement</h2>
-        <p class="sub">Les entreprises qui n’ont pas déclaré ou pas payé à temps. Chaque relance est inscrite à leur dossier et peut partir sur Discord en mentionnant le patron.</p>
+        <p class="sub">Les entreprises qui n’ont pas déclaré ou pas payé à temps. La procédure suit celle du droit réel : relance, mise en demeure, puis taxation d’office, saisie ou transmission à la justice. Chaque acte est inscrit au dossier et peut partir sur Discord.</p>
       </div>
     </div>
     <div class="dash-grid">
@@ -676,6 +676,18 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
           <button class="btn ghost small" type="button" id="rc-impayes-all" hidden>Relancer les impayés</button>
         </div>
         <div id="rc-impayes"><div class="empty">Chargement…</div></div>
+      </div>
+    </div>
+    <div class="dash-grid">
+      <div class="card">
+        <h3>Saisies</h3>
+        <p class="sub">Saisies à tiers détenteur (banque, employeur, clients) et saisies-ventes des biens. Exécutées, elles encaissent les sommes visées.</p>
+        <div id="rc-saisies"><div class="empty">Chargement…</div></div>
+      </div>
+      <div class="card">
+        <h3>Dossiers transmis à la justice</h3>
+        <p class="sub">Chaque dossier part avec un PDF complet : créances, relances, mises en demeure, saisies, contrôles et leurs pièces, mesures sollicitées.</p>
+        <div id="rc-justice"><div class="empty">Chargement…</div></div>
       </div>
     </div>
     <div class="card" style="margin-top:16px">
@@ -776,6 +788,8 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
           <option value="clotures">Clôtures</option>
           <option value="attestations">Attestations</option>
           <option value="controles">Contrôles fiscaux</option>
+          <option value="saisies">Saisies</option>
+          <option value="transmissions">Justice</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1186,6 +1200,25 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
             </div>
           </div>
         </div>
+        <div class="card" id="card-recouv">
+          <h3>Recouvrement et justice</h3>
+          <p class="sub">Dans la réalité, une mise en demeure laisse 30 jours ; adaptez le délai au rythme du serveur.</p>
+          <div class="set-form">
+            <div class="row3" style="align-items:end">
+              <div class="field"><label for="r-med">Délai d’une mise en demeure</label><input id="r-med" type="number" min="1" max="30" step="1"><span class="hint">En jours.</span></div>
+              <div class="field"><label for="r-maj">Majoration pour paiement tardif</label><div class="money" data-cur="%"><input id="r-maj" type="number" min="0" max="100" step="1"></div><span class="hint">Art. 1730 du CGI : 10 %.</span></div>
+              <div class="field"><label for="r-off">Majoration de taxation d’office</label><div class="money" data-cur="%"><input id="r-off" type="number" min="0" max="100" step="1"></div><span class="hint">Art. 1728 du CGI : 40 %.</span></div>
+            </div>
+            <div class="row2">
+              <div class="field"><label for="r-tiers">Tiers détenteur habituel</label><input id="r-tiers" autocomplete="off" placeholder="Ex. : la banque du serveur"><span class="hint">Proposé à chaque saisie à tiers détenteur.</span></div>
+              <div class="field"><label for="r-dest">Destinataire des dossiers de justice</label><input id="r-dest" autocomplete="off"></div>
+            </div>
+            <div class="paste-row">
+              <button class="btn" type="button" id="r-save">Enregistrer</button>
+              <span id="r-msg" class="hint" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
         <div class="card" id="card-discord">
           <h3>Publication sur Discord</h3>
           <p class="sub">Collez l’adresse du webhook de chaque salon. Dans Discord : Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l’URL du webhook. Ces adresses restent privées : seule la Direction les lit.</p>
@@ -1320,6 +1353,7 @@ const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
   budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
   exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
+  delaiMiseEnDemeureJours: 2, majorationImpaye: 10, majorationOffice: 40, tiersDefaut: "", justiceDestinataire: "Procureur de la République près le tribunal judiciaire",
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
   baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
@@ -1328,7 +1362,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1701,7 +1735,7 @@ function applyRole() {
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
-  $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
   $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
@@ -1967,6 +2001,8 @@ function subscribe() {
   col("clotures", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.clotures = o; });
   col("attestations", s => { S.attestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("controles", s => { S.controles = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("saisies", s => { S.saisies = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("transmissions", s => { S.transmissions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -1994,6 +2030,7 @@ function render() {
   renderRecouvrement();
   renderDiscordSettings();
   renderExoSettings();
+  renderRecouvSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
   $("#foot-sync").textContent = S.connected ? (S.loaded.has("declarations") ? "Registre synchronisé" : "Synchronisation…") : "";
 }
@@ -2643,12 +2680,13 @@ function openDem(id) {
 
 /* ---------- Saisie : déclaration ---------- */
 function renderDeclPreview() {
-  const c = cfg();
   const key = $("#d-per").value || defaultKey();
+  const tax = S.taxOffice && S.taxOffice.periode === key;
+  const c = tax ? Object.assign({}, cfg(), { majoration: Number(cfg().majorationOffice) || 0 }) : cfg();
   const ca = numIn($("#d-ca")) || 0, ch = numIn($("#d-ch")) || 0, ms = numIn($("#d-ms")) || 0;
   const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
   const dl = deadline(key);
-  const late = depot.getTime() > dl.getTime();
+  const late = tax || depot.getTime() > dl.getTime();
   const nbV = numIn($("#d-nb")) || 0;
   const r0 = compute(ca, ch, ms, late, c, nbV, salMode() ? readSalaries() : null);
   const r = applyExo(r0, findEnt($("#d-ent").value.trim()), key, c, late);
@@ -2801,9 +2839,10 @@ $("#form-decl").addEventListener("submit", async e => {
     err.textContent = "À compléter : " + bad.map(b => b[1]).join(", ") + ".";
     return;
   }
-  const c = cfg();
+  const tax = S.taxOffice && S.taxOffice.periode === key ? S.taxOffice : null;
+  const c = tax ? Object.assign({}, cfg(), { majoration: Number(cfg().majorationOffice) || 0 }) : cfg();
   const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
-  const late = depot.getTime() > deadline(key).getTime();
+  const late = tax ? true : depot.getTime() > deadline(key).getTime();
   const ent = findEnt(name);
   const r = applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late);
   const editing = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
@@ -2816,6 +2855,7 @@ $("#form-decl").addEventListener("submit", async e => {
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
     bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration,
+    taxationOffice: tax ? { relanceId: tax.relanceId, base: tax.base, majoration: Number(c.majoration) || 0 } : null,
     salaries: sal ? sal.map(x => ({ nom: x.nom, salaire: Math.round(x.salaire) })) : null,
     enRetard: late, rectificative: dup,
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
@@ -2833,6 +2873,13 @@ $("#form-decl").addEventListener("submit", async e => {
     if (dec && Number(dec.montant) === Number(editing.total) && body.total !== editing.total) await write(() => S.db.doc("decisions/" + editing.id).set(Object.assign({}, dec, { montant: body.total })));
     S.editDecl = null;
     editBanner("decl");
+  }
+  if (tax) {
+    // L'imposition d'office est notifiée aussitôt : l'avis est émis sans attendre une validation.
+    S.taxOffice = null;
+    editBanner("decl");
+    const dd = S.declarations.find(x => x.id === ref.id);
+    if (dd) await decide(dd, "validee", body.total, "Imposition établie d’office après une mise en demeure restée sans réponse.");
   }
   const rc = $("#d-receipt");
   rc.className = "receipt";
@@ -3109,7 +3156,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -3647,13 +3694,24 @@ function openFiche(e, opts) {
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
     sec("Historique des déclarations", hist),
     sec("Pénalités et redressements", pens, penForm),
-    ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null
+    ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
+    (() => {
+      const rl = relancesOf(e).slice(0, 6), sa = saisiesOf(e), tj = S.transmissions.filter(t => sameEnt(t, e));
+      if (!rl.length && !sa.length && !tj.length) return null;
+      return sec("Relances, saisies et justice", h("ul", { class: "ent-list" },
+        rl.map(r => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${rlLabel(r)}` }), h("span", { class: "meta", text: `${fmtDate(new Date(r.at))} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · avant le ${fmtDate(new Date(r.echeance))}` })),
+          isMed(r) ? chip(medExpired(r) ? ["Délai expiré", "bad"] : ["Délai en cours", "warn"]) : h("span", {}), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r), reopen), text: "Image" })))),
+        sa.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSaisieDetail(x.id), text: `${dossierNo("SA", x.id)} · ${SAISIE_TYPES[x.type]}` }), h("span", { class: "meta", text: `${fmtDate(new Date(x.at))} · ${money(x.montant)}${x.tiers ? " · " + x.tiers : ""}` })), chip(SSTAT[x.statut] || SSTAT.notifiee), h("span", {}))),
+        tj.map(t => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTransmission(t.id), text: `${dossierNo("TJ", t.id)} · Dossier de justice` }), h("span", { class: "meta", text: `${fmtDate(new Date(t.at))} · ${money(t.montant)}` })), chip(TSTAT[t.statut] || TSTAT.transmis), h("span", {})))));
+    })()
   ];
   const foot = [
     w && !e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const d = sm.ds[0]; if (d) registerFromDecl(d); }, text: "Enregistrer au registre" }) : null,
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e, () => openFiche(S.entreprises.find(x => x.id === e.id) || e)), text: "Modifier l’entreprise" }) : null,
     e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openAttestation(e, reopen), text: "Attestation de régularité" }) : null,
     canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(e), text: "Contrôle fiscal" }) : null,
+    w && unpaidItems(e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisie(e), text: "Saisie" }) : null,
+    w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -3780,7 +3838,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -3818,6 +3876,14 @@ function describe(e) {
       if (x === "suppression") return `a effacé l’arbitrage de ${who}`;
       return ({ accordee: `a accordé ${money(a.montantAccorde)} à ${who}`, partielle: `a accordé ${money(a.montantAccorde)}, en partie, à ${who}`, refusee: `a refusé la demande de ${who}`, etude: `a mis à l’étude la demande de ${who}` })[a.statut] || `a modifié l’arbitrage de ${who}`;
     }
+    case "saisies":
+      if (x === "ajout") return `a notifié une saisie de ${money(v.montant)} à ${v.entrepriseNom}${v.tiers ? " (" + v.tiers + ")" : ""}`;
+      if (x === "suppression") return `a supprimé une saisie de ${v.entrepriseNom}`;
+      return a.statut === "executee" && b.statut !== "executee" ? `a exécuté la saisie de ${a.entrepriseNom} (${money(a.recouvre || 0)} recouvrés)` : a.statut === "levee" && b.statut !== "levee" ? `a donné mainlevée de la saisie de ${a.entrepriseNom}` : `a modifié la saisie de ${a.entrepriseNom}`;
+    case "transmissions":
+      if (x === "ajout") return `a transmis le dossier de ${v.entrepriseNom} à la justice (${money(v.montant)})`;
+      if (x === "suppression") return `a supprimé le dossier de justice de ${v.entrepriseNom}`;
+      return `a enregistré une suite au dossier de justice de ${a.entrepriseNom} : ${((TSTAT[a.statut] || TSTAT.transmis)[0]).toLowerCase()}`;
     case "controles": {
       if (x === "ajout") return `a ouvert le contrôle fiscal de ${v.entrepriseNom} (${(v.periodes || []).map(periodPlain).join(", ")})`;
       if (x === "suppression") return `a supprimé le contrôle fiscal de ${v.entrepriseNom}`;
@@ -3834,6 +3900,7 @@ function describe(e) {
       return x === "suppression" ? `a rouvert ${periodPlain(e.doc_id).toLowerCase()}` : `a clôturé ${periodPlain(e.doc_id).toLowerCase()}`;
     case "relances":
       if (x === "suppression") return `a supprimé une relance de ${v.entrepriseNom}`;
+      if (v.niveau === "mise_en_demeure") return v.type === "declaration" ? `a mis ${v.entrepriseNom} en demeure de déclarer ${(v.periodes || []).map(periodPlain).join(", ").toLowerCase()}` : `a mis ${v.entrepriseNom} en demeure de payer ${money(v.montant)}`;
       return v.type === "declaration" ? `a relancé ${v.entrepriseNom} pour ${(v.periodes || []).map(periodPlain).join(", ")}` : `a relancé ${v.entrepriseNom} pour ${money(v.montant)} d’impayés`;
     case "entreprises":
       if (x === "ajout") return `a ajouté l’entreprise ${v.nom} au registre`;
@@ -3841,7 +3908,7 @@ function describe(e) {
       if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -3862,7 +3929,7 @@ const FIELD_LABEL = {
   resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
-  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
+  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", delaiMiseEnDemeureJours: "Délai des mises en demeure", majorationImpaye: "Majoration pour paiement tardif", majorationOffice: "Majoration de taxation d’office", tiersDefaut: "Tiers détenteur", justiceDestinataire: "Destinataire des dossiers de justice", tiers: "Tiers détenteur", recouvre: "Recouvré", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
   services: "Services", enveloppes: "Enveloppes", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
@@ -4223,6 +4290,7 @@ function editBanner(kind) {
 function cancelEdit(kind) {
   if (kind === "decl") {
     S.editDecl = null;
+    S.taxOffice = null;
     $("#form-decl").reset();
     if (salMode()) setSalaries([]);
     $("#d-date").value = toLocalInput(new Date());
@@ -4242,6 +4310,7 @@ function startEditDecl(d) {
   closeDialog();
   showTab("declaration");
   S.editDecl = d.id;
+  S.taxOffice = null;
   $("#form-decl").reset();
   $("#d-ent").value = d.entrepriseNom || "";
   ensureOption($("#d-per"), d.periode, periodLabel(d.periode));
@@ -4312,6 +4381,8 @@ function editEntreprise(e, back) {
       for (const r of S.relances) if (r.entrepriseId === e.id && r.entrepriseNom !== n) jobs.push(["relances", r.id]);
       for (const a of S.attestations) if (a.entrepriseId === e.id && a.entrepriseNom !== n) jobs.push(["attestations", a.id]);
       for (const ct of S.controles) if (ct.entrepriseId === e.id && ct.entrepriseNom !== n) jobs.push(["controles", ct.id]);
+      for (const sa of S.saisies) if (sa.entrepriseId === e.id && sa.entrepriseNom !== n) jobs.push(["saisies", sa.id]);
+      for (const tj of S.transmissions) if (tj.entrepriseId === e.id && tj.entrepriseNom !== n) jobs.push(["transmissions", tj.id]);
       let done = 0;
       for (const [col, id] of jobs) { await write(() => S.db.doc(col + "/" + id).update({ entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -4388,7 +4459,8 @@ const WEBHOOK_RE = /^https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/(?:
 const DISCORD_CHANNELS = [
   ["entreprises", "Salon des entreprises", "Avis d’imposition et pénalités. Le patron est mentionné quand son ID Discord est connu."],
   ["services", "Salon des services publics", "Décisions sur les demandes de moyens. Le service est mentionné si vous lui avez donné un rôle."],
-  ["relances", "Salon des relances", "Rappels de déclaration et relances des impayés. Laissez vide pour utiliser le salon des entreprises."]
+  ["relances", "Salon des relances", "Rappels, relances et mises en demeure. Laissez vide pour utiliser le salon des entreprises."],
+  ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."]
 ];
 const DISCORD_AUTO = [
   ["avis", "Avis d’imposition, dès qu’il est émis", "entreprises"],
@@ -4396,6 +4468,7 @@ const DISCORD_AUTO = [
   ["quittances", "Quittances, à chaque encaissement", "entreprises"],
   ["attestations", "Attestations de régularité délivrées", "entreprises"],
   ["controles", "Contrôles fiscaux : avis de vérification, proposition, mise en recouvrement", "entreprises"],
+  ["saisies", "Saisies notifiées", "entreprises"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
 ];
 function hookFor(ch) {
@@ -4492,6 +4565,7 @@ function renderDiscordSettings(force) {
   const d = S.discord || {}, w = d.webhooks || {}, a = d.auto || {}, fresh = !d.auto;
   DISCORD_CHANNELS.forEach(([k]) => { $("#dw-" + k).value = w[k] || ""; });
   $("#dw-nom").value = d.nom || "";
+  $("#dw-mjustice").value = d.mentionJustice || "";
   DISCORD_AUTO.forEach(([k]) => { $("#da-" + k).checked = fresh ? true : !!a[k]; });
   S.discordDirty = false;
 }
@@ -4502,7 +4576,9 @@ function buildDiscordForm() {
       h("label", { for: "dw-" + k, text: l }),
       h("input", { id: "dw-" + k, type: "url", class: "mono secret", autocomplete: "off", spellcheck: "false", placeholder: "https://discord.com/api/webhooks/…" }),
       h("span", { class: "hint", text: hint }))),
-    h("div", { class: "field" }, h("label", { for: "dw-nom", text: "Nom affiché dans Discord" }), h("input", { id: "dw-nom", autocomplete: "off", placeholder: "Préfecture de police" })),
+    h("div", { class: "row2" },
+      h("div", { class: "field" }, h("label", { for: "dw-mjustice", text: "Rôle de la justice à mentionner" }), h("input", { id: "dw-mjustice", class: "mono", autocomplete: "off", placeholder: "<@&ID du rôle>" }), h("span", { class: "hint", text: "Prévenu à chaque dossier transmis." })),
+      h("div", { class: "field" }, h("label", { for: "dw-nom", text: "Nom affiché dans Discord" }), h("input", { id: "dw-nom", autocomplete: "off", placeholder: "Préfecture de police" }))),
     h("fieldset", { class: "checks" }, h("legend", { text: "Publier automatiquement" }),
       DISCORD_AUTO.map(([k, l]) => h("label", { class: "switch", for: "da-" + k }, h("input", { type: "checkbox", id: "da-" + k }), l))),
     h("p", { class: "hint", style: "margin:0", text: "Chaque document garde aussi un bouton « Publier sur Discord » pour un envoi à la main." }),
@@ -4521,9 +4597,11 @@ function buildDiscordForm() {
       if (v && !WEBHOOK_RE.test(v)) { $("#dw-msg").textContent = `${l} : collez l’adresse complète du webhook (https://discord.com/api/webhooks/…).`; $("#dw-" + k).focus(); return; }
       if (v) webhooks[k] = v;
     }
+    const mj = $("#dw-mjustice").value.trim();
+    if (mj && !parseMention(mj)) { $("#dw-msg").textContent = "Rôle de la justice : écrivez <@&ID> pour un rôle, ou l’ID d’un membre."; $("#dw-mjustice").focus(); return; }
     const auto = {};
     DISCORD_AUTO.forEach(([k]) => { auto[k] = $("#da-" + k).checked; });
-    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim() };
+    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim(), mentionJustice: normMention(mj) };
     const { error } = await S.sb.from("parametres_prives").upsert({ cle: "discord", valeur, modifie_le: nowISO() }, { onConflict: "cle" });
     if (error) { $("#dw-msg").textContent = "Enregistrement refusé : " + error.message; return; }
     S.discord = valeur; S.discordDirty = false;
@@ -4588,51 +4666,69 @@ function impayes() {
     .filter(x => x.items.length).sort((a, b) => b.total - a.total);
 }
 
-/* ---------- Relances ---------- */
-const RL_KIND = { declaration: "RAPPEL DE DÉCLARATION", paiement: "LETTRE DE RELANCE" };
-const rlLabel = r => (r.type === "declaration" ? "Rappel de déclaration" : "Relance de paiement");
+/* ---------- Relances et mises en demeure ---------- */
+// Comme dans la procédure réelle : une relance amiable, puis une mise en demeure qui ouvre un délai
+// (de payer : art. L257-0 A du LPF ; de déclarer : art. 1728 du CGI), puis les poursuites.
+const RL_KIND = {
+  "declaration:relance": "RAPPEL DE DÉCLARATION",
+  "declaration:mise_en_demeure": "MISE EN DEMEURE DE DÉCLARER",
+  "paiement:relance": "LETTRE DE RELANCE",
+  "paiement:mise_en_demeure": "MISE EN DEMEURE DE PAYER"
+};
+const RL_LABEL = { "declaration:relance": "Rappel de déclaration", "declaration:mise_en_demeure": "Mise en demeure de déclarer", "paiement:relance": "Relance de paiement", "paiement:mise_en_demeure": "Mise en demeure de payer" };
+const rlKey = r => r.type + ":" + (r.niveau || "relance");
+const isMed = r => !!r && r.niveau === "mise_en_demeure";
+const rlLabel = r => RL_LABEL[rlKey(r)] || "Relance";
+const rlNo = r => dossierNo(isMed(r) ? "MED" : "RL", r.id);
 const relancesOf = e => S.relances.filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
-const relanceDelayMs = () => Math.max(1, Number(cfg().delaiPaiementJours) || 2) * 864e5;
+const relanceDelayMs = niveau => (niveau === "mise_en_demeure" ? Math.max(1, Number(cfg().delaiMiseEnDemeureJours) || 2) : Math.max(1, Number(cfg().delaiPaiementJours) || 2)) * 864e5;
+const medExpired = r => isMed(r) && new Date(r.echeance).getTime() < Date.now();
+// Dernière mise en demeure de payer restée sans effet (délai écoulé), ou null.
+const lastMedPaiement = e => relancesOf(e).find(r => r.type === "paiement" && isMed(r)) || null;
 function relanceDoc(r) {
-  const e = entOf(r), lim = longDate(new Date(r.echeance)), decl = r.type === "declaration";
+  const e = entOf(r), c = cfg(), lim = longDate(new Date(r.echeance)), decl = r.type === "declaration", med = isMed(r);
+  const footer = decl
+    ? (med ? `Faute de dépôt avant le ${lim}, l’imposition sera établie d’office à partir des éléments dont dispose la Direction, avec une majoration de ${pct(c.majorationOffice)} (taxation d’office, art. L66 du LPF et 1728 du CGI).`
+           : "Déposez votre déclaration sans attendre sur Discord, avec le modèle habituel. Sans dépôt, une mise en demeure de déclarer vous sera adressée.")
+    : (med ? `Faute de paiement avant le ${lim}, la Direction engagera le recouvrement forcé sans autre avis : saisie des sommes détenues pour l’entreprise par des tiers, comptes bancaires compris (art. L262 du LPF), saisie de ses biens et transmission du dossier à la justice. Cette mise en demeure vaut commandement de payer (art. L257-0 A et L258 A du LPF).`
+           : "Réglez la somme due auprès de la Préfecture de police, Direction des impôts et cotisations. Sans paiement, une mise en demeure de payer vous sera adressée.");
   return {
-    kind: RL_KIND[r.type] || "RELANCE", no: dossierNo("RL", r.id), date: "Envoyée le " + longDate(new Date(r.at)),
+    kind: RL_KIND[rlKey(r)] || "RELANCE", no: rlNo(r), date: "Envoyée le " + longDate(new Date(r.at)),
     meta: [["Entreprise", e.nom || r.entrepriseNom], ["Patron", e.patron || "—"], ["À régulariser avant le", lim], ["Suivi par", r.byNom || "Direction des impôts et cotisations"]],
     lines: decl ? (r.periodes || []).map(k => [periodLabel(k), "non déposée"]) : (r.items || []).map(x => [`${x.label} (${x.ref})`, money(x.montant)]),
     total: decl ? ["Déclarations attendues", String((r.periodes || []).length)] : ["Somme due", money(r.montant)],
-    stamp: ["RELANCE", "warn"],
-    footer: decl
-      ? "Déposez votre déclaration sans attendre sur Discord, avec le modèle habituel. Sans dépôt dans le délai, la Direction pourra infliger une pénalité."
-      : "Réglez la somme due auprès de la Préfecture de police, Direction des impôts et cotisations. Sans paiement dans le délai, des pénalités et des poursuites pourront suivre.",
-    discord: { channel: "relances", mentions: [entMention(e)], text: `**${rlLabel(r)} ${dossierNo("RL", r.id)}** · ${e.nom || r.entrepriseNom} · ${decl ? (r.periodes || []).map(periodPlain).join(", ") + " non déposée" + plural((r.periodes || []).length) : money(r.montant) + " à régler"}, avant le ${lim}.` }
+    stamp: med ? ["MISE EN DEMEURE", "bad"] : ["RELANCE", "warn"], footer,
+    discord: { channel: "relances", mentions: [entMention(e)], text: `**${rlLabel(r)} ${rlNo(r)}** · ${e.nom || r.entrepriseNom} · ${decl ? (r.periodes || []).map(periodPlain).join(", ") + " non déposée" + plural((r.periodes || []).length) : money(r.montant) + " à régler"}, avant le ${lim}.` }
   };
 }
 async function sendRelance(x, type, opts) {
-  const e = x.e;
+  opts = opts || {};
+  const e = x.e, niveau = opts.niveau || "relance";
   const items = type === "paiement" ? x.items.map(i => ({ ref: i.ref, label: i.label, montant: i.montant, kind: i.kind, id: i.id })) : [];
   const periodes = type === "declaration" ? x.keys.slice() : [];
   const ref = S.db.collection("relances").doc();
-  const r = { entrepriseId: e.id || null, entrepriseNom: e.nom, type, niveau: "relance", periodes, items, montant: items.reduce((s, i) => s + i.montant, 0),
-    echeance: new Date(Date.now() + relanceDelayMs()).toISOString(), at: nowISO(), by: S.uid || null, byNom: S.agentName || "", groupee: !!(opts && opts.groupee) };
+  const r = { entrepriseId: e.id || null, entrepriseNom: e.nom, type, niveau, periodes, items, montant: items.reduce((s, i) => s + i.montant, 0),
+    echeance: new Date(Date.now() + relanceDelayMs(niveau)).toISOString(), at: nowISO(), by: S.uid || null, byNom: S.agentName || "", groupee: !!opts.groupee };
   if (!(await write(() => ref.set(r)))) return null;
   return Object.assign({ id: ref.id }, r);
 }
-async function relanceOne(x, type) {
-  const r = await sendRelance(x, type);
+async function relanceOne(x, type, niveau) {
+  const r = await sendRelance(x, type, { niveau });
   if (!r) return;
-  const doc = relanceDoc(r);
-  if (hookFor("relances")) await publishDoc(doc, rlLabel(r) + " enregistré" + (type === "paiement" ? "e." : "."));
-  else { toast(`${rlLabel(r)} enregistré${type === "paiement" ? "e" : ""} : postez l’image sur Discord.`); showDocImage(doc); }
+  const doc = relanceDoc(r), label = rlLabel(r), fem = type === "paiement" || isMed(r);
+  if (hookFor("relances")) await publishDoc(doc, `${label} enregistré${fem ? "e" : ""}.`);
+  else { toast(`${label} enregistré${fem ? "e" : ""} : postez l’image sur Discord.`); showDocImage(doc); }
 }
+
 // Relance groupée : un seul message, chaque patron mentionné. On peut décocher une entreprise avant l'envoi.
 function relanceAll(type) {
   const list = type === "declaration" ? retardataires() : impayes();
   if (!list.length) return;
   const decl = type === "declaration";
-  const lim = longDate(new Date(Date.now() + relanceDelayMs()));
+  const lim = longDate(new Date(Date.now() + relanceDelayMs("relance")));
   const head = decl ? "**Rappel de déclaration**\nLes entreprises suivantes n’ont pas déposé leur déclaration :" : "**Relance des impayés**\nLes entreprises suivantes ont des sommes échues non réglées :";
-  const foot = (decl ? `Déposez-la sans attendre avec le modèle habituel, avant le ${lim}. Sans dépôt, la Direction pourra infliger une pénalité.`
-    : `Réglez ces sommes auprès de la Direction des impôts et cotisations avant le ${lim}. Sans paiement, des pénalités et des poursuites pourront suivre.`) + "\n— Préfecture de police · Direction des impôts et cotisations";
+  const foot = (decl ? `Déposez-la sans attendre avec le modèle habituel, avant le ${lim}. Sans dépôt, une mise en demeure de déclarer suivra.`
+    : `Réglez ces sommes auprès de la Direction des impôts et cotisations avant le ${lim}. Sans paiement, une mise en demeure de payer suivra.`) + "\n— Préfecture de police · Direction des impôts et cotisations";
   const boxes = list.map((x, i) => {
     const cb = h("input", { type: "checkbox", id: "rl-" + i });
     cb.checked = true;
@@ -4684,55 +4780,239 @@ function relanceAll(type) {
 }
 
 /* ---------- Onglet Recouvrement ---------- */
-const rlChip = r => (r ? chip([`Relancée le ${fmtDate(new Date(r.at))}${new Date(r.echeance).getTime() < Date.now() ? " · sans réponse" : ""}`, new Date(r.echeance).getTime() < Date.now() ? "warn" : "muted"]) : chip(["Pas encore relancée", "muted"]));
+const rlChip = r => {
+  if (!r) return chip(["Pas encore relancée", "muted"]);
+  const late = new Date(r.echeance).getTime() < Date.now();
+  return chip([`${isMed(r) ? "Mise en demeure" : "Relancée"} le ${fmtDate(new Date(r.at))}${late ? (isMed(r) ? " · délai expiré" : " · sans réponse") : ""}`, isMed(r) ? (late ? "bad" : "warn") : late ? "warn" : "muted"]);
+};
 const RC_LIMIT = 8;
 function rcMore(key, n) {
   if (n <= RC_LIMIT) return null;
   return h("div", { class: "reg-foot" }, S.rcAll[key] ? `${n} affichées. ` : `${RC_LIMIT} sur ${n} affichées. `,
     h("button", { class: "linkbtn", type: "button", onclick: () => { S.rcAll[key] = !S.rcAll[key]; renderRecouvrement(); }, text: S.rcAll[key] ? "Réduire" : n - RC_LIMIT === 1 ? "Afficher la dernière" : `Afficher les ${n - RC_LIMIT} autres` }));
 }
+const majDone = i => S.penalites.some(p => p.declId === i.id && p.type === "majoration" && p.statut !== "annulee");
 function renderRecouvrement() {
   if (S.tab !== "recouvrement") return;
-  if (!S.connected || !S.loaded.has("declarations")) { ["#rc-retards", "#rc-impayes", "#rc-hist", "#rc-clotures", "#rc-controles"].forEach(s => fill($(s), h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" }))); return; }
-  const w = canAgent();
+  if (!S.connected || !S.loaded.has("declarations")) { ["#rc-retards", "#rc-impayes", "#rc-hist", "#rc-clotures", "#rc-controles", "#rc-saisies", "#rc-justice"].forEach(s => fill($(s), h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" }))); return; }
+  const ag = canAgent(), dir = writer(), c = cfg();
   renderClotures();
   renderControles();
   const rt = retardataires();
   $("#rc-retards-sub").textContent = rt.length
-    ? `${rt.length} entreprise${plural(rt.length)} n’${rt.length > 1 ? "ont" : "a"} pas déposé toutes ${rt.length > 1 ? "leurs" : "ses"} déclarations échues depuis ${periodPlain(cfg().debutSuivi).toLowerCase()}.`
+    ? `${rt.length} entreprise${plural(rt.length)} n’${rt.length > 1 ? "ont" : "a"} pas déposé toutes ${rt.length > 1 ? "leurs" : "ses"} déclarations échues depuis ${periodPlain(c.debutSuivi).toLowerCase()}. Procédure : rappel, mise en demeure de déclarer, puis taxation d’office.`
     : "Toutes les entreprises actives ont déposé leurs déclarations échues.";
-  $("#rc-retards-all").hidden = !w || !rt.length;
+  $("#rc-retards-all").hidden = !ag || !rt.length;
   fill($("#rc-retards"), rt.length ? h("ul", { class: "rc-list" }, rt.slice(0, S.rcAll.rt ? 500 : RC_LIMIT).map(x => {
     const last = relancesOf(x.e).find(r => r.type === "declaration");
+    const med = relancesOf(x.e).find(r => r.type === "declaration" && isMed(r) && medExpired(r) && x.keys.some(k => (r.periodes || []).includes(k)));
+    const toKey = med ? x.keys.find(k => (med.periodes || []).includes(k)) : null;
     return h("li", {},
       h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
         h("div", { class: "rc-keys" }, x.keys.map(k => h("span", { class: "tag bad", text: periodPlain(k) })))),
       h("div", { class: "rc-state" }, rlChip(last)),
-      w ? h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "declaration"), text: "Relancer" })) : null);
+      ag ? h("div", { class: "row-actions" },
+        h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "declaration", "relance"), text: "Relancer" }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "declaration", "mise_en_demeure"), text: "Mettre en demeure" }),
+        h("button", { class: med ? "btn small" : "btn ghost small", type: "button", disabled: !med, title: med ? "" : "Possible après une mise en demeure de déclarer restée sans réponse", onclick: () => startTaxOffice(x.e, toKey, med), text: "Taxer d’office" })) : null);
   })) : h("div", { class: "empty", text: "Aucune déclaration manquante." }), rcMore("rt", rt.length));
 
   const ip = impayes();
   $("#rc-impayes-sub").textContent = ip.length
-    ? `${money(ip.reduce((s, x) => s + x.total, 0))} échus non payés, ${ip.length} entreprise${plural(ip.length)}. Un avis est échu ${Number(cfg().delaiPaiementJours) || 0} jour${plural(Number(cfg().delaiPaiementJours) || 0)} après son émission.`
+    ? `${money(ip.reduce((s, x) => s + x.total, 0))} échus non payés, ${ip.length} entreprise${plural(ip.length)}. Procédure : relance, mise en demeure de payer, puis saisie et transmission à la justice.`
     : "Aucun impayé échu.";
-  $("#rc-impayes-all").hidden = !w || !ip.length;
+  $("#rc-impayes-all").hidden = !ag || !ip.length;
   fill($("#rc-impayes"), ip.length ? h("ul", { class: "rc-list" }, ip.slice(0, S.rcAll.ip ? 500 : RC_LIMIT).map(x => {
     const last = relancesOf(x.e).find(r => r.type === "paiement");
+    const med = lastMedPaiement(x.e), medOk = !!med && medExpired(med);
+    const toMaj = x.items.filter(i => i.kind === "decl" && !majDone(i));
     return h("li", {},
       h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
         h("div", { class: "rc-keys" }, x.items.slice(0, 6).map(i => h("span", { class: "tag", text: `${i.ref} · ${money(i.montant)}` })), x.items.length > 6 ? h("span", { class: "tag", text: `+${x.items.length - 6}` }) : null)),
       h("div", { class: "rc-state" }, h("strong", { class: "mono", text: money(x.total) }), rlChip(last)),
-      w ? h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "paiement"), text: "Relancer" })) : null);
+      ag ? h("div", { class: "row-actions" },
+        h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "paiement", "relance"), text: "Relancer" }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "paiement", "mise_en_demeure"), text: "Mise en demeure" }),
+        dir && toMaj.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => majorerImpayes(x), text: `Majorer de ${pct(c.majorationImpaye)}` }) : null,
+        dir ? h("button", { class: medOk ? "btn small" : "btn ghost small", type: "button", title: medOk ? "" : "Dans la procédure réelle, la saisie suit une mise en demeure de payer restée sans effet", onclick: () => openSaisie(x.e), text: "Saisir" }) : null,
+        dir ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(x.e), text: "Transmettre à la justice" }) : null) : null);
   })) : h("div", { class: "empty", text: "Aucun impayé échu." }), rcMore("ip", ip.length));
+
+  const ss = S.saisies.slice().sort((a, b) => (a.statut !== "notifiee") - (b.statut !== "notifiee") || String(b.at).localeCompare(String(a.at)));
+  fill($("#rc-saisies"), ss.length ? h("ul", { class: "ent-list" }, ss.slice(0, S.rcAll.sa ? 500 : RC_LIMIT).map(s => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSaisieDetail(s.id), text: `${dossierNo("SA", s.id)} · ${s.entrepriseNom}` }),
+      h("span", { class: "meta", text: `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)}${s.tiers ? " · " + s.tiers : ""} · ${fmtDate(new Date(s.at))}` })),
+    chip(SSTAT[s.statut] || SSTAT.notifiee),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisieDetail(s.id), text: "Ouvrir" }))))) : h("div", { class: "empty", text: "Aucune saisie." }), rcMore("sa", ss.length));
+
+  const ts = S.transmissions.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  fill($("#rc-justice"), ts.length ? h("ul", { class: "ent-list" }, ts.slice(0, S.rcAll.tj ? 500 : RC_LIMIT).map(t => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTransmission(t.id), text: `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}` }),
+      h("span", { class: "meta", text: `${money(t.montant)} · transmis le ${fmtDate(new Date(t.at))}${t.byNom ? " par " + t.byNom : ""}` })),
+    chip(TSTAT[t.statut] || TSTAT.transmis),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openTransmission(t.id), text: "Ouvrir" }))))) : h("div", { class: "empty", text: "Aucun dossier transmis à la justice." }), rcMore("tj", ts.length));
 
   const hist = S.relances.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
   fill($("#rc-hist"), hist.length ? h("ul", { class: "ent-list" }, hist.slice(0, S.rcAll.hist ? 500 : RC_LIMIT).map(r => h("li", {},
-    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("RL", r.id)} · ${r.entrepriseNom}` }),
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${r.entrepriseNom}` }),
       h("span", { class: "meta", text: `${rlLabel(r)} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · ${fmtDateTime(new Date(r.at))}${r.byNom ? " · " + r.byNom : ""}${r.groupee ? " · groupée" : ""}` })),
+    isMed(r) ? chip(medExpired(r) ? ["Délai expiré", "bad"] : ["Délai en cours", "warn"]) : h("span", {}),
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Image" }))))) : h("div", { class: "empty", text: "Aucune relance envoyée pour l’instant." }), rcMore("hist", hist.length));
 }
 $("#rc-retards-all").addEventListener("click", () => relanceAll("declaration"));
 $("#rc-impayes-all").addEventListener("click", () => relanceAll("paiement"));
+
+/* ---------- Majoration pour paiement tardif (art. 1730 du CGI) ---------- */
+async function majorerImpayes(x) {
+  const rate = Number(cfg().majorationImpaye) || 10;
+  let n = 0;
+  for (const i of x.items.filter(i => i.kind === "decl" && !majDone(i))) {
+    const ref = S.db.collection("penalites").doc();
+    const ok = await write(() => ref.set({ entrepriseId: x.e.id || null, entrepriseNom: x.e.nom, motif: `Majoration de ${pct(rate)} pour paiement tardif · ${i.ref}`, montant: Math.max(1, Math.round(i.montant * rate / 100)), statut: "due", declId: i.id, type: "majoration", createdAt: nowISO(), by: S.uid || null }));
+    if (ok) { n++; const p = S.penalites.find(y => y.id === ref.id); if (p) autoPublish("penalites", penaltyDoc(p)); }
+  }
+  if (n) toast(`${n} majoration${plural(n)} de ${pct(rate)} appliquée${plural(n)}.`);
+}
+
+/* ---------- Taxation d'office (art. L66 du LPF) ---------- */
+// Après une mise en demeure de déclarer restée sans réponse, la Direction établit elle-même l'imposition,
+// sur la base de la dernière déclaration connue ou de ses constats, avec la majoration de taxation d'office.
+function startTaxOffice(e, key, relance) {
+  if (!key) return;
+  if (isClosed(key)) { toast(closedNote(key) + " : la Direction doit la rouvrir avant d’y établir une imposition.", true); return; }
+  const prev = declsOf(e).filter(d => dStatus(d) !== "rejetee" && d.periode !== key).sort((a, b) => String(b.periode).localeCompare(String(a.periode)))[0];
+  closeDialog();
+  showTab("declaration");
+  S.editDecl = null;
+  S.taxOffice = { entrepriseId: e.id, periode: key, relanceId: relance ? relance.id : null, base: prev ? prev.id : null };
+  $("#form-decl").reset();
+  $("#d-ent").value = e.nom;
+  ensureOption($("#d-per"), key, periodLabel(key));
+  $("#d-ca").value = String(prev ? prev.ca || 0 : 0);
+  $("#d-ch").value = String(prev ? prev.charges || 0 : 0);
+  $("#d-ms").value = String(prev ? prev.masse || 0 : 0);
+  $("#d-nb").value = String(prev ? prev.nbSalaries || 0 : 0);
+  if (salMode()) setSalaries(prev && prev.salaries ? prev.salaries : []);
+  $("#d-decl").value = "Taxation d’office";
+  $("#d-note").value = `Imposition établie d’office après la mise en demeure ${relance ? rlNo(relance) : ""} restée sans réponse${prev ? `, sur la base de la déclaration de ${periodPlain(prev.periode).toLowerCase()}` : ""}.`;
+  $("#d-date").value = toLocalInput(new Date());
+  $("#d-receipt").hidden = true;
+  taxBanner();
+  renderDeclPreview();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function taxBanner() {
+  const box = $("#d-editing");
+  if (!S.taxOffice) return;
+  const e = S.entreprises.find(x => x.id === S.taxOffice.entrepriseId);
+  fill(box,
+    h("div", { style: "flex:1 1 auto;min-width:0" },
+      h("strong", { text: `Taxation d’office · ${e ? e.nom : ""} · ${periodPlain(S.taxOffice.periode)}. ` }),
+      `Les montants reprennent la dernière déclaration connue : corrigez-les d’après vos constats. Majoration de ${pct(cfg().majorationOffice)} au lieu de la majoration de retard ; l’avis est émis aussitôt.`),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => cancelEdit("decl"), text: "Annuler" }));
+  box.hidden = false;
+  $("#d-submit").textContent = "Établir l’imposition d’office";
+}
+
+/* ---------- Saisies (art. L262 du LPF, saisie-vente) ---------- */
+const SAISIE_TYPES = { satd: "Saisie administrative à tiers détenteur", vente: "Saisie-vente des biens" };
+const SSTAT = { notifiee: ["Notifiée", "warn"], executee: ["Exécutée", "ok"], levee: ["Mainlevée", "muted"] };
+const saisiesOf = e => S.saisies.filter(s => sameEnt(s, e)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+function saisieDoc(s) {
+  const e = entOf(s), lim = longDate(new Date(s.echeance)), satd = s.type === "satd";
+  const st = s.statut === "executee" ? ["EXÉCUTÉE", "ok"] : s.statut === "levee" ? ["MAINLEVÉE", "muted"] : ["SAISIE", "bad"];
+  return {
+    kind: satd ? "SAISIE À TIERS DÉTENTEUR" : "PROCÈS-VERBAL DE SAISIE", no: dossierNo("SA", s.id), date: "Notifiée le " + longDate(new Date(s.at)),
+    meta: satd
+      ? [["Redevable", e.nom || s.entrepriseNom], ["Dirigeant", e.patron || "—"], ["Tiers détenteur", s.tiers || "—"], [s.statut === "notifiee" ? "Versement attendu avant le" : "État", s.statut === "notifiee" ? lim : SSTAT[s.statut][0]]]
+      : [["Redevable", e.nom || s.entrepriseNom], ["Dirigeant", e.patron || "—"], ["Lieu", s.tiers || "—"], [s.statut === "notifiee" ? "Vente si non-paiement après le" : "État", s.statut === "notifiee" ? lim : SSTAT[s.statut][0]]],
+    lines: (s.items || []).map(x => [`${x.label} (${x.ref})`, money(x.montant)]),
+    total: [s.statut === "executee" ? "Somme recouvrée" : "Somme saisie", money(s.statut === "executee" ? s.recouvre || s.montant : s.montant)],
+    note: satd ? "" : s.biens || "", noteTitle: "Biens saisis",
+    stamp: st,
+    footer: satd
+      ? `Le tiers détenteur est tenu de verser à la Direction des impôts et cotisations, avant le ${lim}, les sommes qu’il détient ou doit au redevable, dans la limite de la somme saisie (art. L262 du LPF).${s.medNo ? ` Saisie faisant suite à la mise en demeure de payer ${s.medNo} restée sans effet.` : ""}`
+      : `Les biens ci-dessus sont placés sous main de justice : le redevable ne peut ni les vendre ni les déplacer. Ils seront vendus si la dette n’est pas réglée avant le ${lim} (saisie-vente, art. L221-1 du Code des procédures civiles d’exécution).${s.medNo ? ` Mise en demeure préalable : ${s.medNo}.` : ""}`,
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**${SAISIE_TYPES[s.type]} ${dossierNo("SA", s.id)}** · ${e.nom || s.entrepriseNom} · ${money(s.montant)}${s.tiers ? " · " + s.tiers : ""}.` }
+  };
+}
+function openSaisie(e) {
+  if (!writer()) return;
+  const items = unpaidItems(e);
+  if (!items.length) { toast("Aucune somme échue à saisir pour cette entreprise.", true); return; }
+  const med = lastMedPaiement(e), medOk = !!med && medExpired(med), c = cfg();
+  const type = h("select", { id: "sa-type" }, Object.entries(SAISIE_TYPES).map(([v, l]) => h("option", { value: v, text: l })));
+  const tiers = h("input", { id: "sa-tiers", autocomplete: "off", placeholder: "Banque, employeur, client…" });
+  tiers.value = c.tiersDefaut || "";
+  const tiersL = h("label", { for: "sa-tiers", text: "Tiers détenteur" });
+  const biens = h("textarea", { id: "sa-biens", rows: "3", placeholder: "Ex. : Sultan RS immatriculé 12ABC345, stock de pièces détachées…" });
+  const biensF = h("div", { class: "field", hidden: true }, h("label", { for: "sa-biens", text: "Biens saisis" }), biens);
+  type.addEventListener("change", () => { const v = type.value === "vente"; biensF.hidden = !v; tiersL.textContent = v ? "Lieu de la saisie" : "Tiers détenteur"; tiers.placeholder = v ? "Ex. : garage de l’entreprise, 12 rue…" : "Banque, employeur, client…"; });
+  const boxes = items.map((x, i) => { const cb = h("input", { type: "checkbox", id: "sa-" + i }); cb.checked = true; return [x, cb]; });
+  const force = h("input", { type: "checkbox", id: "sa-force" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Notifier la saisie" });
+  go.addEventListener("click", async () => {
+    const chosen = boxes.filter(([, cb]) => cb.checked).map(([x]) => x);
+    if (!chosen.length) { err.textContent = "Cochez au moins une somme."; return; }
+    if (!medOk && !force.checked) { err.textContent = "Dans la procédure réelle, une saisie suit une mise en demeure de payer restée sans effet. Envoyez-en une, ou cochez « Saisir quand même »."; return; }
+    if (type.value === "satd" && !tiers.value.trim()) { err.textContent = "Indiquez le tiers détenteur (la banque de l’entreprise, par exemple)."; tiers.focus(); return; }
+    go.disabled = true;
+    const ref = S.db.collection("saisies").doc();
+    const s = { entrepriseId: e.id || null, entrepriseNom: e.nom, type: type.value, tiers: tiers.value.trim(), biens: biens.value.trim(),
+      items: chosen.map(x => ({ ref: x.ref, label: x.label, montant: x.montant, kind: x.kind, id: x.id })), montant: chosen.reduce((t, x) => t + x.montant, 0),
+      medId: med ? med.id : null, medNo: med ? rlNo(med) : "", echeance: new Date(Date.now() + relanceDelayMs("mise_en_demeure")).toISOString(),
+      statut: "notifiee", at: nowISO(), by: S.uid || null, byNom: S.agentName || "" };
+    if (!(await write(() => ref.set(s)))) { go.disabled = false; return; }
+    const doc = saisieDoc(Object.assign({ id: ref.id }, s));
+    toast(`Saisie ${dossierNo("SA", ref.id)} notifiée.`);
+    autoPublish("saisies", doc, "Saisie notifiée.");
+    showDocImage(doc, () => openSaisieDetail(ref.id));
+  });
+  openDialog({
+    eyebrow: "Recouvrement forcé", title: "Saisie · " + e.nom,
+    body: [
+      h("ul", { class: "checklist" }, h("li", { class: medOk ? "yes" : "no", text: med ? `Mise en demeure de payer ${rlNo(med)} du ${fmtDate(new Date(med.at))} : délai ${medOk ? "expiré" : "en cours jusqu’au " + fmtDateTime(new Date(med.echeance))}` : "Aucune mise en demeure de payer" })),
+      !medOk ? h("label", { class: "switch", for: "sa-force" }, force, "Saisir quand même") : null,
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "sa-type", text: "Nature" }), type), h("div", { class: "field" }, tiersL, tiers)),
+      biensF,
+      sec("Sommes saisies", h("div", { class: "checks-col" }, boxes.map(([x, cb], i) => h("label", { class: "switch", for: "sa-" + i }, cb, `${x.ref} · ${x.label} · ${money(x.montant)}`)))),
+      h("p", { class: "hint", style: "margin:0", text: "Saisie à tiers détenteur : la banque, l’employeur ou un client de l’entreprise verse directement à la Direction ce qu’il lui doit (art. L262 du LPF), sans passer par un juge. Saisie-vente : les biens sont bloqués puis vendus. Quand la saisie est exécutée, les sommes cochées sont encaissées et leurs quittances délivrées." }),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+}
+function openSaisieDetail(id) {
+  const s = S.saisies.find(x => x.id === id);
+  if (!s) return;
+  const dir = writer(), reopen = () => openSaisieDetail(id);
+  const exec = async ev => {
+    ev.currentTarget.disabled = true;
+    let rec = 0;
+    for (const x of s.items || []) {
+      if (x.kind === "decl") { const d = S.declarations.find(y => y.id === x.id); if (d && dStatus(d) === "validee" && await decide(d, "payee", dMontant(d), `Recouvré par la saisie ${dossierNo("SA", id)}`, { quiet: true })) rec += x.montant; }
+      else { const p = S.penalites.find(y => y.id === x.id); if (p && p.statut === "due" && await setPenaltyStatus(p, "payee")) rec += x.montant; }
+    }
+    const body = Object.assign({}, s, { statut: "executee", executeeLe: nowISO(), recouvre: rec }); delete body.id;
+    if (await write(() => S.db.doc("saisies/" + id).set(body))) { toast(`Saisie exécutée : ${money(rec)} recouvrés.`); reopen(); }
+  };
+  const lift = async () => {
+    const body = Object.assign({}, s, { statut: "levee", leveeLe: nowISO() }); delete body.id;
+    if (await write(() => S.db.doc("saisies/" + id).set(body))) { toast("Mainlevée enregistrée."); reopen(); }
+  };
+  openDialog({
+    eyebrow: `${SAISIE_TYPES[s.type]} · notifiée le ${fmtDate(new Date(s.at))}${s.byNom ? " par " + s.byNom : ""}`, title: s.entrepriseNom, stampEl: stamp(SSTAT[s.statut] || SSTAT.notifiee),
+    body: [kv([[s.type === "satd" ? "Tiers détenteur" : "Lieu", s.tiers || "—"], ["Délai", fmtDateTime(new Date(s.echeance))], s.medNo ? ["Mise en demeure préalable", s.medNo] : null,
+      s.statut === "executee" ? ["Recouvré le", fmtDateTime(new Date(s.executeeLe))] : null, ["Somme saisie", money(s.montant), "tot"]]),
+      sec("Sommes visées", h("ul", { class: "access" }, (s.items || []).map(x => h("li", { text: `${x.ref} · ${x.label} · ${money(x.montant)}` })))),
+      s.biens ? sec("Biens saisis", h("p", { class: "prewrap", style: "margin:0", text: s.biens })) : null,
+      s.statut === "notifiee" && dir ? h("p", { class: "hint", style: "margin:0", text: "« Saisie exécutée » encaisse les sommes visées qui sont encore dues et délivre leurs quittances. « Mainlevée » libère les fonds ou les biens sans encaissement." }) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(saisieDoc(s), reopen), text: "Acte en image" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(entOf(s)), text: "Fiche de l’entreprise" }), h("span", { class: "spacer" }),
+      dir && s.statut === "notifiee" ? h("button", { class: "btn ghost small", type: "button", onclick: lift, text: "Mainlevée" }) : null,
+      dir && s.statut === "notifiee" ? h("button", { class: "btn ink small", type: "button", onclick: exec, text: "Saisie exécutée" }) : null].filter(Boolean)
+  });
+}
 
 /* ---------- Clôture des semaines ---------- */
 // Une période clôturée est verrouillée par la base (supabase/v4_inspection_cloture.sql) :
@@ -4780,7 +5060,7 @@ function openCloture(key) {
     c && live.encaisse !== b.encaisse ? h("p", { class: "hint", style: "margin:0", text: `Depuis la clôture : ${money(live.encaisse)} encaissés, ${money(live.reste)} restent à recouvrer.` }) : null,
     b.nonDeclarants.length ? sec("Pas déclarées", h("p", { style: "margin:0", text: b.nonDeclarants.join(", ") })) : null,
     !c && b.aValider ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: `${b.aValider} déclaration${plural(b.aValider)} encore à valider. ` }), "Vous pourrez toujours émettre leurs avis, mais plus changer leurs montants.")) : null,
-    !c && b.nonDeclarants.length ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: `${b.nonDeclarants.length} entreprise${plural(b.nonDeclarants.length)} sans déclaration. ` }), "Une fois la semaine clôturée, plus aucune déclaration n’y sera acceptée. Relancez-les d’abord si besoin.")) : null,
+    !c && b.nonDeclarants.length ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: `${b.nonDeclarants.length} entreprise${plural(b.nonDeclarants.length)} sans déclaration. ` }), "Une fois la semaine clôturée, plus aucune déclaration n’y sera acceptée, pas même une taxation d’office. Mettez-les en demeure et taxez-les d’abord, ou rouvrez la semaine le moment venu.")) : null,
     !ended ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Délai de dépôt pas encore écoulé. " }), `La semaine pourra être clôturée après le ${fmtDateTime(deadline(key))}.`)) : null
   ];
   const close = async () => {
@@ -4823,7 +5103,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -4910,6 +5190,8 @@ function regularite(e) {
   const manques = [];
   if (miss.length) manques.push(`${miss.length} déclaration${plural(miss.length)} non déposée${plural(miss.length)} : ${miss.map(periodPlain).join(", ")}`);
   if (unpaid.length) manques.push(`${money(unpaid.reduce((s, x) => s + x.montant, 0))} échus non payés (${unpaid.map(x => x.ref).join(", ")})`);
+  if (S.saisies.some(x => sameEnt(x, e) && x.statut === "notifiee")) manques.push("Saisie en cours");
+  if (S.transmissions.some(x => sameEnt(x, e) && x.statut === "transmis")) manques.push("Dossier transmis à la justice en cours");
   if (e.actif === false) manques.push("Entreprise inactive");
   if (!e.id) manques.push("Entreprise absente du registre");
   return { ok: !manques.length, manques, attendues: exp.length, deposees: exp.length - miss.length, echeancier: ech, unpaid, miss };
@@ -4966,6 +5248,8 @@ function openAttestation(e, back) {
     h("li", { class: r.miss.length ? "no" : "yes", text: r.attendues ? `Déclarations : ${r.deposees} déposée${plural(r.deposees)} sur ${r.attendues} attendue${plural(r.attendues)}${r.miss.length ? " (manque " + r.miss.map(periodPlain).join(", ") + ")" : ""}` : "Aucune déclaration encore attendue" }),
     h("li", { class: r.unpaid.length ? "no" : "yes", text: r.unpaid.length ? `Échus non payés : ${money(r.unpaid.reduce((s, x) => s + x.montant, 0))} (${r.unpaid.map(x => x.ref).join(", ")})` : "Impôts, cotisations et pénalités échus : payés" }),
     r.echeancier ? h("li", { class: "yes", text: "Paiement en plusieurs fois en cours, échéances respectées" }) : null,
+    S.saisies.some(x => sameEnt(x, e) && x.statut === "notifiee") ? h("li", { class: "no", text: "Saisie en cours" }) : null,
+    S.transmissions.some(x => sameEnt(x, e) && x.statut === "transmis") ? h("li", { class: "no", text: "Dossier transmis à la justice en cours" }) : null,
     e.actif === false ? h("li", { class: "no", text: "Entreprise inactive" }) : null);
   const days = Math.max(1, Number(cfg().attestationJours) || 28);
   const issue = async ev => {
@@ -5501,6 +5785,457 @@ function renderControles() {
   fill(box, cs.length ? h("ul", { class: "ent-list" }, cs.slice(0, S.rcAll.cf ? 500 : RC_LIMIT).map(ctrlListItem)) : h("div", { class: "empty", text: "Aucun contrôle fiscal pour l’instant." }), rcMore("cf", cs.length));
 }
 $("#rc-controle-new").addEventListener("click", () => pickEntreprise("Ouvrir un contrôle fiscal", e => newControle(e)));
+
+/* ---------- Dossier PDF : pages dessinées puis assemblées en PDF ---------- */
+// Chaque page A4 est dessinée sur un canevas (150 dpi), puis rangée en JPEG dans un PDF minimal.
+const canvasJpeg = (cv, q) => new Promise(res => cv.toBlob(res, "image/jpeg", q || 0.88));
+function pdfFromJpegs(pages, title) {
+  const enc = new TextEncoder(), chunks = [], offsets = [];
+  let len = 0;
+  const push = x => { const b = typeof x === "string" ? enc.encode(x) : x; chunks.push(b); len += b.length; };
+  const hex16 = s => "<FEFF" + Array.from(String(s)).map(ch => { const c = ch.codePointAt(0); return c > 0xffff ? "003F" : c.toString(16).padStart(4, "0"); }).join("").toUpperCase() + ">";
+  const W = 595.28, H = 841.89, N = pages.length, total = 4 + 3 * N;
+  push(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, 0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a]));
+  const obj = (n, fn) => { offsets[n] = len; push(`${n} 0 obj\n`); fn(); push("\nendobj\n"); };
+  obj(1, () => push("<< /Type /Catalog /Pages 2 0 R >>"));
+  obj(2, () => push(`<< /Type /Pages /Count ${N} /Kids [${pages.map((_, i) => `${4 + 3 * i} 0 R`).join(" ")}] >>`));
+  obj(3, () => push(`<< /Title ${hex16(title || "Dossier")} /Producer ${hex16("Guichet fiscal · Préfecture de police")} >>`));
+  pages.forEach((p, i) => {
+    const pn = 4 + 3 * i, cn = pn + 1, im = pn + 2, cs = `q ${W} 0 0 ${H} 0 0 cm /Im${i} Do Q`;
+    obj(pn, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im${i} ${im} 0 R >> >> /Contents ${cn} 0 R >>`));
+    obj(cn, () => push(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+    obj(im, () => { push(`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.bytes.length} >>\nstream\n`); push(p.bytes); push("\nendstream"); });
+  });
+  const xref = len;
+  push(`xref\n0 ${total}\n0000000000 65535 f \n`);
+  for (let n = 1; n < total; n++) push(String(offsets[n]).padStart(10, "0") + " 00000 n \n");
+  push(`trailer\n<< /Size ${total} /Root 1 0 R /Info 3 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(chunks, { type: "application/pdf" });
+}
+const PF = { disp: '"Archivo", "Arial Narrow", Arial, sans-serif', body: '"Archivo", Arial, sans-serif', mono: '"IBM Plex Mono", Consolas, monospace' };
+class PageWriter {
+  constructor(no, footer) {
+    this.W = 1240; this.H = 1754; this.M = 104; this.bottom = 120; this.no = no; this.footer = footer || ""; this.pages = [];
+    this.ink = "#122229"; this.ink2 = "#4b5d63"; this.rule = "#d6dfde"; this.accent = "#23408e";
+    this.newPage();
+  }
+  get inner() { return this.W - 2 * this.M; }
+  newPage() {
+    const c = document.createElement("canvas");
+    c.width = this.W; c.height = this.H;
+    const g = c.getContext("2d");
+    g.fillStyle = "#ffffff"; g.fillRect(0, 0, this.W, this.H);
+    this.c = c; this.g = g; this.pages.push(c);
+    this.y = this.M;
+    if (this.pages.length > 1) {
+      g.fillStyle = this.ink2; g.font = `700 17px ${PF.body}`; this.sp("1.5px");
+      g.fillText("PRÉFECTURE DE POLICE · DIRECTION DES IMPÔTS ET COTISATIONS", this.M, this.y);
+      this.sp("0px"); g.textAlign = "right"; g.font = `600 18px ${PF.mono}`; g.fillText(this.no, this.W - this.M, this.y); g.textAlign = "left";
+      this.y += 22; g.fillStyle = this.ink; g.fillRect(this.M, this.y, this.inner, 2); this.y += 40;
+    }
+  }
+  sp(v) { if ("letterSpacing" in this.g) this.g.letterSpacing = v; }
+  ensure(hh) { if (this.y + hh > this.H - this.bottom) this.newPage(); }
+  lines(text, font, maxW) { this.g.font = font; return wrapLines(this.g, String(text == null ? "" : text), maxW); }
+  h1(text) {
+    this.ensure(80);
+    const g = this.g; g.fillStyle = this.ink; g.font = `800 46px ${PF.disp}`;
+    this.lines(text, g.font, this.inner).forEach(l => { g.fillText(l, this.M, this.y + 40); this.y += 54; });
+    this.y += 10;
+  }
+  h2(text) {
+    this.ensure(110);
+    const g = this.g; this.y += 18;
+    g.fillStyle = this.accent; g.font = `700 19px ${PF.body}`; this.sp("2px"); g.fillText(String(text).toUpperCase(), this.M, this.y + 18); this.sp("0px");
+    this.y += 30; g.fillStyle = this.rule; g.fillRect(this.M, this.y, this.inner, 2); this.y += 22;
+  }
+  p(text, o) {
+    o = o || {};
+    const size = o.size || 22, lh = Math.round(size * 1.45), font = `${o.bold ? 700 : 400} ${size}px ${o.mono ? PF.mono : PF.body}`;
+    const x = this.M + (o.indent || 0), w = this.inner - (o.indent || 0);
+    for (const para of String(text || "").split(/\n/)) {
+      for (const l of this.lines(para, font, w)) {
+        this.ensure(lh);
+        const g = this.g; g.font = font; g.fillStyle = o.color || this.ink; g.fillText(l, x, this.y + size);
+        this.y += lh;
+      }
+    }
+    this.y += o.after == null ? 10 : o.after;
+  }
+  bullets(items, o) { for (const t of items) { const sz = (o && o.size) || 22, n = this.lines(t, `${o && o.bold ? 700 : 400} ${sz}px ${PF.body}`, this.inner - 30).length; this.ensure(Math.min(n * Math.round(sz * 1.45), 420)); this.g.fillStyle = this.accent; this.g.fillRect(this.M + 6, this.y + 13, 9, 9); this.p(t, Object.assign({ indent: 30, after: 6 }, o || {})); } this.y += 6; }
+  kv(pairs) {
+    const colW = (this.inner - 40) / 2;
+    for (let i = 0; i < pairs.length; i += 2) {
+      const row = pairs.slice(i, i + 2);
+      const hh = Math.max(...row.map(([, v]) => this.lines(v, `400 22px ${PF.body}`, colW).length)) * 31 + 40;
+      this.ensure(hh);
+      row.forEach(([k, v], ci) => {
+        const x = this.M + ci * (colW + 40), g = this.g;
+        g.fillStyle = this.ink2; g.font = `700 16px ${PF.body}`; this.sp("1.5px"); g.fillText(String(k).toUpperCase(), x, this.y + 16); this.sp("0px");
+        g.fillStyle = this.ink; g.font = `400 22px ${PF.body}`;
+        this.lines(v, g.font, colW).forEach((l, li) => g.fillText(l, x, this.y + 46 + li * 31));
+      });
+      this.y += hh + 6;
+    }
+  }
+  table(cols, rows) {
+    // cols : [{ t: titre, w: part de largeur, num: aligné à droite }]
+    const sum = cols.reduce((s, c) => s + c.w, 0), ws = cols.map(c => c.w / sum * this.inner);
+    const xs = ws.map((_, i) => this.M + ws.slice(0, i).reduce((s, v) => s + v, 0));
+    const head = () => {
+      this.ensure(48);
+      const g = this.g; g.fillStyle = "#f1f4f4"; g.fillRect(this.M, this.y, this.inner, 40);
+      g.fillStyle = this.ink2; g.font = `700 16px ${PF.body}`;
+      cols.forEach((c, i) => { if (c.num) { g.textAlign = "right"; g.fillText(c.t, xs[i] + ws[i] - 10, this.y + 26); g.textAlign = "left"; } else g.fillText(c.t, xs[i] + 10, this.y + 26); });
+      this.y += 40;
+    };
+    head();
+    for (const r of rows) {
+      const cells = r.map((v, i) => this.lines(v, `400 19px ${cols[i].num ? PF.mono : PF.body}`, ws[i] - 20));
+      const hh = Math.max(...cells.map(x => x.length)) * 26 + 18;
+      if (this.y + hh > this.H - this.bottom) { this.newPage(); head(); }
+      const g = this.g;
+      cells.forEach((ls, i) => {
+        g.font = `400 19px ${cols[i].num ? PF.mono : PF.body}`; g.fillStyle = this.ink;
+        ls.forEach((l, li) => { if (cols[i].num) { g.textAlign = "right"; g.fillText(l, xs[i] + ws[i] - 10, this.y + 30 + li * 26); g.textAlign = "left"; } else g.fillText(l, xs[i] + 10, this.y + 30 + li * 26); });
+      });
+      this.y += hh;
+      g.fillStyle = this.rule; g.fillRect(this.M, this.y - 1, this.inner, 1);
+    }
+    this.y += 16;
+  }
+  box(label, value, sub) {
+    this.ensure(150);
+    const g = this.g;
+    g.strokeStyle = this.ink; g.lineWidth = 3; g.strokeRect(this.M + 1.5, this.y + 1.5, this.inner - 3, 120);
+    g.fillStyle = this.ink; g.font = `700 24px ${PF.body}`; g.fillText(label, this.M + 30, this.y + 52);
+    if (sub) { g.fillStyle = this.ink2; g.font = `400 18px ${PF.body}`; g.fillText(sub, this.M + 30, this.y + 86); }
+    g.textAlign = "right"; g.fillStyle = this.ink; g.font = `600 44px ${PF.mono}`; g.fillText(value, this.W - this.M - 30, this.y + 76); g.textAlign = "left";
+    this.y += 146;
+  }
+  image(img, caption) {
+    const maxW = this.inner, maxH = 700, sc = Math.min(maxW / img.width, maxH / img.height, 1.6);
+    const w = Math.round(img.width * sc), hh = Math.round(img.height * sc);
+    this.ensure(hh + 70);
+    const g = this.g; g.drawImage(img, this.M, this.y, w, hh);
+    g.strokeStyle = this.rule; g.lineWidth = 1; g.strokeRect(this.M + 0.5, this.y + 0.5, w - 1, hh - 1);
+    this.y += hh + 12;
+    if (caption) this.p(caption, { size: 18, color: this.ink2, after: 24 });
+  }
+  stamp(label, tone) {
+    const g = this.g; g.save(); g.translate(this.W - this.M - 170, this.y - 60); g.rotate(-0.12); g.globalAlpha = 0.85;
+    g.font = `800 34px ${PF.disp}`; this.sp("4px");
+    const tw = g.measureText(label).width, bw = tw + 50, bh = 70;
+    g.strokeStyle = tone; g.fillStyle = tone; g.lineWidth = 5; g.strokeRect(-bw / 2, -bh / 2, bw, bh); g.lineWidth = 2; g.strokeRect(-bw / 2 + 7, -bh / 2 + 7, bw - 14, bh - 14);
+    g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(label, 2, 2); g.restore(); this.sp("0px");
+  }
+  async finish(title) {
+    const n = this.pages.length, out = [];
+    for (let i = 0; i < n; i++) {
+      const g = this.pages[i].getContext("2d");
+      g.fillStyle = this.rule; g.fillRect(this.M, this.H - 86, this.inner, 1);
+      g.fillStyle = this.ink2; g.font = `400 16px ${PF.body}`; g.textAlign = "left"; g.fillText(this.footer, this.M, this.H - 56);
+      g.textAlign = "right"; g.font = `600 16px ${PF.mono}`; g.fillText(`${this.no} · page ${i + 1}/${n}`, this.W - this.M, this.H - 56); g.textAlign = "left";
+      const blob = await canvasJpeg(this.pages[i], 0.88);
+      out.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: this.W, h: this.H });
+    }
+    return pdfFromJpegs(out, title);
+  }
+}
+
+/* ---------- Transmission à la justice ---------- */
+const TSTAT = { transmis: ["Transmis", "warn"], saisie: ["Saisie effectuée", "ok"], condamnation: ["Condamnation prononcée", "bad"], regle: ["Dette réglée", "ok"], classe: ["Classé sans suite", "muted"] };
+const QUALIFS_J = {
+  impaye: "Défaut de paiement des impôts et cotisations : recouvrement forcé",
+  fraude: "Fraude fiscale : soustraction frauduleuse à l’impôt (art. 1741 du CGI)",
+  travail: "Travail dissimulé (art. L8221-1 du Code du travail)",
+  opposition: "Opposition au contrôle fiscal (art. 1732 et 1746 du CGI)",
+  insolvabilite: "Organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal)"
+};
+const MESURES_J = {
+  saisie_comptes: "Saisie des sommes détenues sur les comptes de l’entreprise, à hauteur de la dette",
+  saisie_biens: "Saisie et vente des biens de l’entreprise : véhicules, stocks, matériel",
+  fermeture: "Fermeture administrative temporaire de l’établissement",
+  poursuites: "Poursuites pénales contre le dirigeant",
+  interdiction: "Interdiction de gérer une entreprise, à titre de peine complémentaire"
+};
+// Repères du droit réel, rappelés en fin de dossier.
+const FONDEMENTS = {
+  base: "Signalement : tout fonctionnaire qui, dans l’exercice de ses fonctions, a connaissance d’un délit en avise sans délai le procureur de la République et lui transmet les renseignements et actes qui s’y rapportent (art. 40 du Code de procédure pénale).",
+  impaye: "Recouvrement forcé : après une lettre de relance ou une mise en demeure de payer restée sans effet (art. L257-0 A du LPF), le comptable public peut, sans juge, faire verser par les tiers (banque, employeur, clients) les sommes qu’ils doivent à l’entreprise (saisie administrative à tiers détenteur, art. L262 du LPF), et faire saisir puis vendre ses biens. Les impôts payés en retard sont majorés de 10 % (art. 1730 du CGI). Pour les cotisations, l’URSSAF adresse une mise en demeure d’un mois (art. L244-2 du CSS) puis une contrainte, signifiée par commissaire de justice, qui a les effets d’un jugement faute d’opposition dans les 15 jours (art. L244-9 du CSS).",
+  fraude: "Fraude fiscale (art. 1741 du CGI) : 5 ans d’emprisonnement et 500 000 € d’amende, montant pouvant être porté au double du produit de la fraude ; 7 ans et 3 000 000 € en bande organisée ou avec de faux documents ; peines complémentaires de privation des droits civiques et d’affichage. La dénonciation au procureur est obligatoire au-delà de 100 000 € de droits rappelés avec une majoration de 80 ou 100 %, ou de 40 % en cas de réitération (art. L228 du LPF).",
+  travail: "Travail dissimulé (art. L8221-1 et L8224-1 du Code du travail) : 3 ans d’emprisonnement et 45 000 € d’amende. L’autorité administrative peut fermer l’établissement jusqu’à trois mois, en informant le procureur (art. L8272-2).",
+  opposition: "Opposition au contrôle fiscal : les droits sont majorés de 100 % (art. 1732 du CGI) ; mettre les agents dans l’impossibilité d’exercer leurs fonctions est un délit (art. 1746 du CGI).",
+  insolvabilite: "Organiser ou aggraver son insolvabilité pour échapper au paiement de l’impôt est réprimé comme une fraude fiscale (art. 1741 du CGI) et comme une organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal)."
+};
+// Dénonciation obligatoire (art. L228 du LPF) : plus de 100 000 € de droits rappelés à 80 ou 100 %,
+// ou à 40 % quand l'entreprise a déjà été sanctionnée.
+function denonciationObligatoire(e) {
+  const cs = S.controles.filter(c => sameEnt(c, e) && (c.statut === "recouvre" || c.statut === "propose"));
+  const heavy = cs.filter(c => ["fraude", "opposition"].includes(c.qualification)).reduce((s, c) => s + (Number(c.droits) || 0), 0);
+  const mid = cs.filter(c => c.qualification === "manquement").reduce((s, c) => s + (Number(c.droits) || 0), 0);
+  const prior = pensOf(e).filter(p => p.statut !== "annulee").length > cs.length;
+  return heavy > 100000 || (mid > 100000 && prior);
+}
+function justiceFacts(e) {
+  const ds = declsOf(e).sort((a, b) => String(a.periode).localeCompare(String(b.periode)));
+  const debts = [];
+  for (const d of ds) if (dStatus(d) === "validee" && dReste(d) > 0) debts.push({ ref: dossierNo("DF", d.id), nature: "Avis d’imposition" + (echOf(d) ? " (échéancier)" : ""), periode: periodPlain(d.periode), at: (S.decisions[d.id] || {}).at, montant: dMontant(d), reste: dReste(d), echu: declEchue(d) });
+  for (const p of pensOf(e)) if (p.statut === "due") debts.push({ ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), nature: p.type === "redressement" ? "Redressement fiscal" : p.type === "majoration" ? "Majoration de retard" : "Pénalité", periode: p.motif || "", at: p.createdAt, montant: Number(p.montant) || 0, reste: Number(p.montant) || 0, echu: penEchue(p) });
+  const ctrls = S.controles.filter(c => sameEnt(c, e));
+  const rls = relancesOf(e).slice().reverse();
+  const sais = saisiesOf(e).slice().reverse();
+  const events = [];
+  for (const d of ds) { const dec = S.decisions[d.id]; if (dec && dec.at && ["validee", "payee", "controle"].includes(dec.statut)) events.push([dec.at, "Avis d’imposition émis", `${dossierNo("DF", d.id)} · ${periodPlain(d.periode)} · ${money(dMontant(d))}`]); if (d.taxationOffice) events.push([d.createdAt, "Taxation d’office", `${periodPlain(d.periode)} · majoration de ${pct(d.majPct)}`]); }
+  for (const r of rls) events.push([r.at, rlLabel(r), `${rlNo(r)} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · à régulariser avant le ${fmtDate(new Date(r.echeance))}${r.byNom ? " · " + r.byNom : ""}`]);
+  for (const p of pensOf(e)) events.push([p.createdAt, p.type === "redressement" ? "Avis de mise en recouvrement" : p.type === "majoration" ? "Majoration pour paiement tardif" : "Pénalité infligée", `${p.motif || ""} · ${money(p.montant)} · ${(PSTAT[p.statut] || PSTAT.due)[0].toLowerCase()}`]);
+  for (const c of ctrls) {
+    events.push([c.ouvertLe, "Avis de vérification", `${dossierNo("CF", c.id)} · ${(c.periodes || []).map(periodPlain).join(", ")}`]);
+    if (c.proposeLe) events.push([c.proposeLe, "Proposition de rectification", `${dossierNo("CF", c.id)} · ${money(c.total)}`]);
+    if (c.reponse && c.reponse.at) events.push([c.reponse.at, "Réponse de l’entreprise", c.reponse.position === "accepte" ? "accepte les rectifications" : c.reponse.position === "conteste" ? "conteste les rectifications" : (c.reponse.texte || "—")]);
+    if (c.recouvreLe) events.push([c.recouvreLe, "Mise en recouvrement", `${dossierNo("CF", c.id)} · ${money(c.total)}`]);
+  }
+  for (const s of sais) {
+    events.push([s.at, SAISIE_TYPES[s.type] || "Saisie", `${dossierNo("SA", s.id)} · ${money(s.montant)}${s.tiers ? " · " + s.tiers : ""}`]);
+    if (s.executeeLe) events.push([s.executeeLe, "Saisie exécutée", `${dossierNo("SA", s.id)} · ${money(s.recouvre || 0)} recouvrés`]);
+    if (s.leveeLe) events.push([s.leveeLe, "Mainlevée de saisie", dossierNo("SA", s.id)]);
+  }
+  events.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  const total = debts.reduce((s, x) => s + x.reste, 0);
+  const lastMed = lastMedPaiement(e);
+  const relanceP = rls.some(r => r.type === "paiement");
+  const paid = ds.reduce((s, d) => s + dEncaisse(d), 0) + pensOf(e).filter(p => p.statut === "payee").reduce((s, p) => s + (Number(p.montant) || 0), 0);
+  return { ds, debts, ctrls, rls, sais, events, total, lastMed, relanceP, paid };
+}
+function autoExpose(e, f, qualifs) {
+  const parts = [];
+  parts.push(`L’entreprise ${e.nom}${e.secteur ? ", du secteur " + e.secteur.toLowerCase() : ""}, dirigée par ${e.patron || "un dirigeant non identifié"}, reste devoir ${money(f.total)} à la Direction des impôts et cotisations.`);
+  if (f.debts.length) parts.push(`Cette somme correspond à ${f.debts.length} créance${plural(f.debts.length)} : ${f.debts.map(x => `${x.ref} (${money(x.reste)})`).join(", ")}.`);
+  const rp = f.rls.filter(r => r.type === "paiement");
+  if (rp.length) parts.push(`Elle a reçu ${rp.length} relance${plural(rp.length)} de paiement${f.lastMed ? `, dont une mise en demeure de payer le ${longDate(new Date(f.lastMed.at))} qui lui laissait jusqu’au ${longDate(new Date(f.lastMed.echeance))} pour régulariser` : ""}, sans effet.`);
+  const rd = f.rls.filter(r => r.type === "declaration");
+  if (rd.length) parts.push(`Elle a été relancée ${rd.length} fois pour des déclarations non déposées.`);
+  for (const c of f.ctrls.filter(c => c.statut === "recouvre" || c.statut === "propose")) parts.push(`Le contrôle fiscal ${dossierNo("CF", c.id)} a établi un rappel de ${money(c.droits)} de droits, majoré de ${(QUALIF[c.qualification] || QUALIF.bonne_foi)[1]} % (${(QUALIF[c.qualification] || QUALIF.bonne_foi)[0].split(" :")[0].toLowerCase()})${c.motif ? ". Constats : " + c.motif.replace(/\.$/, "") : ""}.`);
+  const ex = f.sais.filter(s => s.statut === "executee"), open = f.sais.filter(s => s.statut === "notifiee");
+  if (ex.length || open.length) parts.push(`${ex.length ? `${ex.length} saisie${plural(ex.length)} a permis de recouvrer ${money(ex.reduce((s, x) => s + (x.recouvre || 0), 0))}` : ""}${ex.length && open.length ? ", et " : ""}${open.length ? `${open.length} saisie${plural(open.length)} reste${open.length > 1 ? "nt" : ""} sans effet` : ""}.`);
+  if (qualifs.includes("travail")) parts.push("Des salariés ont été employés sans être déclarés.");
+  if (qualifs.includes("insolvabilite")) parts.push("L’entreprise a organisé son insolvabilité pour échapper au paiement.");
+  parts.push("La Direction sollicite les mesures ci-après pour recouvrer ces sommes et faire cesser les manquements.");
+  return parts.join(" ");
+}
+async function buildJusticePdf(t, e) {
+  try { await Promise.all(['800 46px "Archivo"', '700 22px "Archivo"', '400 22px "Archivo"', '600 22px "IBM Plex Mono"'].map(x => document.fonts.load(x))); } catch (err) { /* polices de secours */ }
+  const f = justiceFacts(e), no = dossierNo("TJ", t.id);
+  const pw = new PageWriter(no, "Préfecture de police · Direction des impôts et cotisations · Dossier de transmission à la justice");
+  const g = pw.g;
+  let logoOk = false;
+  try { await LOGO.decode(); logoOk = LOGO.naturalWidth > 0; } catch (err) { logoOk = false; }
+  if (logoOk) g.drawImage(LOGO, pw.M - 6, pw.y - 10, 130, 130);
+  g.fillStyle = pw.ink2; g.font = `700 18px ${PF.body}`; pw.sp("2px"); g.fillText("PRÉFECTURE DE POLICE", pw.M + 150, pw.y + 30); pw.sp("0px");
+  g.fillStyle = pw.ink; g.font = `600 24px ${PF.body}`; g.fillText("Direction des impôts et cotisations", pw.M + 150, pw.y + 66);
+  g.textAlign = "right"; g.font = `600 24px ${PF.mono}`; g.fillText(`N° ${no}`, pw.W - pw.M, pw.y + 30);
+  g.font = `400 20px ${PF.body}`; g.fillStyle = pw.ink2; g.fillText("Le " + longDate(new Date(t.at)), pw.W - pw.M, pw.y + 62); g.textAlign = "left";
+  pw.y += 160; g.fillStyle = pw.ink; g.fillRect(pw.M, pw.y, pw.inner, 4); pw.y += 40;
+  pw.h1("Dossier de transmission à la justice");
+  pw.kv([["Destinataire", t.destinataire || cfg().justiceDestinataire], ["Objet", `${(t.qualifs || []).some(q => q !== "impaye") ? "Signalement de délits et recouvrement forcé" : "Recouvrement forcé"} · ${e.nom}`]]);
+  pw.box("Somme à recouvrer", money(t.montant), `${(t.items || []).length} créance${plural((t.items || []).length)} · situation au ${longDate(new Date(t.at))}`);
+  if (t.denonciation) pw.p("Dénonciation obligatoire : les rappels de droits et leurs majorations atteignent le seuil de l’article L228 du LPF.", { bold: true, color: "#b3261e" });
+  pw.h2("1. Identité du redevable");
+  pw.kv([["Entreprise", e.nom], ["Secteur", e.secteur || "—"], ["Dirigeant", e.patron || "—"], ["Identifiant Discord", e.discord ? (parseMention(e.discord) || {}).id || "—" : "—"],
+    ["Au registre depuis", e.createdAt ? longDate(new Date(e.createdAt)) : "—"], ["État", e.actif === false ? "Inactive" : "Active"],
+    ["Déjà payé", money(f.paid)], ["Déclarations déposées", String(f.ds.filter(d => dStatus(d) !== "rejetee").length)]]);
+  pw.h2("2. Qualification des faits");
+  pw.bullets((t.qualifs || []).map(q => QUALIFS_J[q]));
+  pw.h2("3. Créances impayées");
+  pw.table([{ t: "Référence", w: 1.1 }, { t: "Nature", w: 1.5 }, { t: "Période ou motif", w: 1.9 }, { t: "Émise le", w: 0.9 }, { t: "Exigible", w: 0.9 }, { t: "Reste dû", w: 1.1, num: true }],
+    (t.items || []).map(x => [x.ref, x.nature, x.periode, x.at ? fmtDate(new Date(x.at)) : "—", x.echu === false ? "à échoir" : "oui", money(x.reste)]).concat([["", "", "Total", "", "", money(t.montant)]]));
+  const aEchoir = (t.items || []).filter(x => x.echu === false).reduce((s, x) => s + (Number(x.reste) || 0), 0);
+  if (aEchoir > 0) pw.p(`Dont ${money(t.montant - aEchoir)} exigibles à ce jour ; ${money(aEchoir)} encore dans le délai de paiement (saisissables à l’échéance).`, { size: 19, color: pw.ink2 });
+  pw.h2("4. Procédure suivie");
+  if (f.events.length) pw.table([{ t: "Date", w: 1 }, { t: "Acte", w: 1.6 }, { t: "Détail", w: 3.4 }], f.events.map(([at, a, d]) => [at ? fmtDate(new Date(at)) : "—", a, d]));
+  else pw.p("Aucun acte enregistré.", { color: pw.ink2 });
+  let sn = 4;
+  for (const c of f.ctrls) {
+    const k = rectifCalc(c);
+    pw.h2(`${++sn}. Contrôle fiscal ${dossierNo("CF", c.id)}`);
+    pw.kv([["Statut", (CSTAT[c.statut] || CSTAT.ouvert)[0]], ["Inspecteur", c.inspecteur || "—"], ["Périodes vérifiées", (c.periodes || []).map(periodPlain).join(", ")], ["Qualification", (QUALIF[c.qualification] || QUALIF.bonne_foi)[0]]]);
+    if (c.motif) pw.p("Constats : " + c.motif);
+    pw.table([{ t: "Période", w: 1 }, { t: "Base déclarée", w: 1.2, num: true }, { t: "Base retenue", w: 1.2, num: true }, { t: "Rappel", w: 1, num: true }, { t: "Motif", w: 2 }],
+      k.lines.map(l => [periodPlain(l.d.periode), money(l.baseDroits), money(l.retenuDroits), money(l.droits), l.motif || "—"]));
+    pw.p(`Droits rappelés ${money(k.droits)} · majoration ${k.taux} % : ${money(k.majoration)} · total ${money(k.total)}.`, { bold: true });
+    if (c.reponse && (c.reponse.texte || c.reponse.position)) pw.p(`Réponse de l’entreprise (${c.reponse.position === "accepte" ? "accepte" : c.reponse.position === "conteste" ? "conteste" : "sans position"}) : ${c.reponse.texte || "—"}`);
+    const notes = (c.notes || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    if (notes.length) { pw.p("Instruction :", { bold: true, after: 4 }); pw.bullets(notes.map(n => `${fmtDate(new Date(n.at))} · ${n.auteur || "—"} : ${n.texte}`), { size: 20 }); }
+  }
+  if (f.sais.length) {
+    pw.h2(`${++sn}. Saisies`);
+    pw.table([{ t: "N°", w: 1 }, { t: "Nature", w: 2 }, { t: "Tiers ou lieu", w: 1.6 }, { t: "Montant", w: 1, num: true }, { t: "État", w: 1.1 }],
+      f.sais.map(s => [dossierNo("SA", s.id), SAISIE_TYPES[s.type] || "Saisie", s.tiers || "—", money(s.montant), (SSTAT[s.statut] || SSTAT.notifiee)[0] + (s.statut === "executee" ? ` (${money(s.recouvre || 0)})` : "")]));
+  }
+  pw.h2(`${++sn}. Historique des déclarations`);
+  pw.table([{ t: "Période", w: 1 }, { t: "Chiffre d’affaires", w: 1.3, num: true }, { t: "Résultat", w: 1.2, num: true }, { t: "Montant dû", w: 1.2, num: true }, { t: "Payé", w: 1.1, num: true }, { t: "Statut", w: 1.3 }],
+    f.ds.map(d => [periodPlain(d.periode) + (d.enRetard ? " (retard)" : ""), money(d.ca), money(d.resultat), money(dMontant(d)), money(dEncaisse(d)), (DSTAT[dStatus(d)] || DSTAT.soumise)[0]]));
+  pw.h2(`${++sn}. Exposé des faits`);
+  pw.p(t.expose);
+  pw.h2(`${++sn}. Mesures sollicitées`);
+  pw.bullets((t.mesures || []).map(m => MESURES_J[m]));
+  pw.ensure(190);
+  pw.y += 30;
+  pw.p(`Fait le ${longDate(new Date(t.at))}, pour la Préfecture de police,`, { after: 2 });
+  pw.p("le Directeur des impôts et cotisations", { after: 2 });
+  pw.p(t.byNom || S.agentName || "", { bold: true, after: 40 });
+  pw.stamp("TRANSMIS", "#b3261e");
+  pw.h2("Annexe · textes de référence (droit français)");
+  pw.p("Repères tirés du droit en vigueur pour qualifier les faits ; la justice saisie applique ses propres règles.", { size: 18, color: pw.ink2 });
+  pw.bullets(["base"].concat(t.qualifs || []).map(q => FONDEMENTS[q]).filter(Boolean), { size: 19 });
+  const pieces = f.ctrls.flatMap(c => (c.pieces || []).map(p => Object.assign({ cf: dossierNo("CF", c.id) }, p)));
+  if (pieces.length) {
+    pw.newPage();
+    pw.h2(`Annexes · pièces des contrôles (${pieces.length})`);
+    for (const p of pieces) {
+      if (p.type === "lien") { pw.p(`${p.cf} · ${p.legende || "Lien"} : ${p.url}`, { size: 19 }); continue; }
+      const u = await pieceBlobUrl(p.path);
+      if (!u) { pw.p(`${p.cf} · ${p.legende || p.nom} : pièce introuvable.`, { size: 19, color: pw.ink2 }); continue; }
+      const img = new Image(); img.src = u;
+      try { await img.decode(); pw.image(img, `${p.cf} · ${p.legende || p.nom || "Pièce"} · ajoutée le ${fmtDate(new Date(p.at))} par ${p.auteur || "—"}`); }
+      catch (err) { pw.p(`${p.cf} · ${p.legende || p.nom} : image illisible.`, { size: 19 }); }
+    }
+  }
+  return pw.finish(`Dossier ${no} · ${e.nom}`);
+}
+const pdfName = (t, e) => `dossier-${dossierNo("TJ", t.id).toLowerCase()}-${norm(e.nom).replace(/\s+/g, "-")}.pdf`;
+function openJustice(e) {
+  if (!writer()) return;
+  const f = justiceFacts(e), c = cfg();
+  const box = (id, label, on) => { const cb = h("input", { type: "checkbox", id }); cb.checked = !!on; return h("label", { class: "switch", for: id }, cb, label); };
+  const fraude = f.ctrls.some(x => ["manquement", "fraude"].includes(x.qualification) && x.statut !== "sans_suite");
+  const travail = f.ctrls.some(x => (x.declIds || []).some(id => { const r = (x.rectifications || {})[id]; const d = S.declarations.find(y => y.id === id); return r && d && Number(r.masse) > Number(d.masse); }));
+  const opposition = f.ctrls.some(x => x.qualification === "opposition");
+  const defaults = { impaye: f.total > 0, fraude, travail, opposition, insolvabilite: false };
+  const denon = denonciationObligatoire(e);
+  const medOk = !!f.lastMed && medExpired(f.lastMed);
+  const checks = h("ul", { class: "checklist" },
+    h("li", { class: f.debts.length ? "yes" : "no", text: f.debts.length ? `${f.debts.length} créance${plural(f.debts.length)} impayée${plural(f.debts.length)} : ${money(f.total)}` : "Aucune créance impayée" }),
+    h("li", { class: f.relanceP ? "yes" : "no", text: f.relanceP ? "Relance de paiement envoyée" : "Aucune relance de paiement" }),
+    h("li", { class: medOk ? "yes" : "no", text: f.lastMed ? `Mise en demeure de payer ${rlNo(f.lastMed)} du ${fmtDate(new Date(f.lastMed.at))}, délai ${medOk ? "expiré" : "en cours jusqu’au " + fmtDateTime(new Date(f.lastMed.echeance))}` : "Aucune mise en demeure de payer" }),
+    f.ctrls.length ? h("li", { class: "yes", text: `${f.ctrls.length} contrôle${plural(f.ctrls.length)} fiscal${f.ctrls.length > 1 ? "aux" : ""} au dossier` }) : null,
+    f.sais.length ? h("li", { class: "yes", text: `${f.sais.length} saisie${plural(f.sais.length)} au dossier` }) : null);
+  const qBoxes = Object.entries(QUALIFS_J).map(([k, l]) => box("jq-" + k, l, defaults[k]));
+  const mBoxes = Object.entries(MESURES_J).map(([k, l]) => box("jm-" + k, l, k === "saisie_comptes" ? f.total > 0 : k === "poursuites" ? fraude || travail || opposition : false));
+  const exp = h("textarea", { id: "j-expose", rows: "6" });
+  exp.value = autoExpose(e, f, Object.keys(defaults).filter(k => defaults[k]));
+  const dest = h("input", { id: "j-dest", autocomplete: "off" });
+  dest.value = c.justiceDestinataire || "";
+  const force = h("input", { type: "checkbox", id: "j-force" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const gather = () => ({
+    entrepriseId: e.id || null, entrepriseNom: e.nom, patron: e.patron || "", at: nowISO(), by: S.uid || null, byNom: S.agentName || "",
+    montant: f.total, items: f.debts, qualifs: Object.keys(QUALIFS_J).filter(k => $("#jq-" + k).checked), mesures: Object.keys(MESURES_J).filter(k => $("#jm-" + k).checked),
+    expose: exp.value.trim(), destinataire: dest.value.trim() || c.justiceDestinataire, statut: "transmis", suites: [], denonciation: denon
+  });
+  const valid = t => {
+    if (!t.qualifs.length) { err.textContent = "Cochez au moins une qualification."; return false; }
+    if (!t.mesures.length) { err.textContent = "Cochez au moins une mesure sollicitée."; return false; }
+    if (!medOk && !force.checked && t.qualifs.length === 1 && t.qualifs[0] === "impaye") { err.textContent = "Dans la procédure réelle, le recouvrement forcé suit une mise en demeure de payer restée sans effet. Envoyez-en une, ou cochez « Transmettre quand même »."; return false; }
+    return true;
+  };
+  const preview = async ev => {
+    const t = Object.assign({ id: "apercu" }, gather());
+    if (!valid(t)) return;
+    const b = ev.currentTarget; b.disabled = true; err.textContent = "Préparation du PDF…";
+    try { const pdf = await buildJusticePdf(t, e); await S.downloads.save({ filename: `dossier-justice-${norm(e.nom).replace(/\s+/g, "-")}-apercu.pdf`, data: pdf }); err.textContent = ""; }
+    catch (x) { err.textContent = "Impossible de créer le PDF dans ce navigateur."; }
+    b.disabled = false;
+  };
+  const send = async ev => {
+    const t = gather();
+    if (!valid(t)) return;
+    const b = ev.currentTarget; b.disabled = true;
+    const ref = S.db.collection("transmissions").doc();
+    if (!(await write(() => ref.set(t)))) { b.disabled = false; return; }
+    const full = Object.assign({ id: ref.id }, t);
+    err.textContent = "Préparation du PDF…";
+    let pdf = null;
+    try { pdf = await buildJusticePdf(full, e); } catch (x) { pdf = null; }
+    const name = pdfName(full, e);
+    const mj = (S.discord && S.discord.mentionJustice) || "";
+    const text = `${mj ? mj + " " : ""}**Dossier transmis à la justice ${dossierNo("TJ", ref.id)}** · ${e.nom}${entMention(e) ? " (" + entMention(e) + ")" : ""}\nSomme à recouvrer : **${money(t.montant)}**\nQualification : ${t.qualifs.map(q => QUALIFS_J[q].split(" :")[0].split(" (")[0].toLowerCase()).join(", ")}\nMesures sollicitées : ${t.mesures.map(m => MESURES_J[m].split(",")[0].toLowerCase()).join(" ; ")}\nLe dossier complet est joint en PDF.\n— Préfecture de police · Direction des impôts et cotisations`;
+    if (hookFor("justice") && pdf) {
+      const r = await postDiscord("justice", { content: text, mentions: [mj, entMention(e)].filter(Boolean), files: [{ blob: pdf, name }] });
+      toast(r.ok ? "Dossier transmis à la justice sur Discord." : "Dossier enregistré, mais Discord a refusé l’envoi : " + r.error, !r.ok);
+    } else toast("Dossier enregistré : le PDF est téléchargé, transmettez-le à la justice.");
+    if (pdf) { try { await S.downloads.save({ filename: name, data: pdf }); } catch (x) { /* téléchargement refusé */ } }
+    openTransmission(ref.id);
+  };
+  openDialog({
+    eyebrow: "Transmission à la justice", title: e.nom, wide: true, stampEl: stamp(["Dossier", "bad"]),
+    body: [
+      denon ? h("div", { class: "notice", style: "margin:0;border-left-color:var(--bad)" }, h("div", {}, h("strong", { text: "Dénonciation obligatoire. " }), "Plus de 100 000 € de droits rappelés avec une majoration de fraude ou d’opposition : dans la réalité, l’administration doit saisir le procureur (art. L228 du LPF).")) : null,
+      sec("Préalables", checks), !medOk ? h("label", { class: "switch", for: "j-force" }, force, "Transmettre quand même (sans mise en demeure expirée)") : null,
+      h("div", { class: "dlg-cols" }, sec("Qualification", h("div", { class: "checks-col" }, qBoxes)), sec("Mesures sollicitées", h("div", { class: "checks-col" }, mBoxes))),
+      h("div", { class: "field" }, h("label", { for: "j-dest", text: "Destinataire" }), dest),
+      h("div", { class: "field" }, h("label", { for: "j-expose", text: "Exposé des faits" }), exp),
+      h("p", { class: "hint", style: "margin:0", text: "Le PDF reprend l’identité de l’entreprise, les créances, chaque relance, mise en demeure et saisie, les contrôles fiscaux avec leurs pièces, l’historique des déclarations, l’exposé, les mesures et les références juridiques." }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: preview, text: "Aperçu du PDF" }),
+      h("button", { class: "btn ink small", type: "button", onclick: send, text: hookFor("justice") ? "Transmettre sur Discord" : "Enregistrer et télécharger" })]
+  });
+}
+function openTransmission(id) {
+  const t = S.transmissions.find(x => x.id === id);
+  if (!t) return;
+  const e = entOf(t), dir = writer();
+  const sel = h("select", { id: "tj-st", disabled: !dir }, Object.entries(TSTAT).map(([v, [l]]) => h("option", { value: v, text: l })));
+  sel.value = t.statut || "transmis";
+  const note = h("input", { id: "tj-note", autocomplete: "off", placeholder: "Ex. : jugement du…, 12 000 € saisis…", disabled: !dir });
+  const suites = (t.suites || []).slice().reverse();
+  openDialog({
+    eyebrow: `Dossier ${dossierNo("TJ", id)} · transmis le ${fmtDate(new Date(t.at))}${t.byNom ? " par " + t.byNom : ""}`, title: t.entrepriseNom, stampEl: stamp(TSTAT[t.statut] || TSTAT.transmis),
+    body: [kv([["Somme à recouvrer", money(t.montant), "tot"], ["Destinataire", t.destinataire || "—"]]),
+      t.denonciation ? h("p", { class: "hint", style: "margin:0", text: "Dénonciation obligatoire (art. L228 du LPF)." }) : null,
+      sec("Qualification", h("ul", { class: "access" }, (t.qualifs || []).map(q => h("li", { text: QUALIFS_J[q] || q })))),
+      sec("Mesures sollicitées", h("ul", { class: "access" }, (t.mesures || []).map(m => h("li", { text: MESURES_J[m] || m })))),
+      sec("Exposé des faits", h("p", { class: "prewrap", style: "margin:0", text: t.expose || "—" })),
+      sec("Suites données", suites.length ? h("ul", { class: "notes" }, suites.map(s => h("li", {}, h("span", { class: "meta", text: `${fmtDateTime(new Date(s.at))} · ${s.auteur || "—"} · ${(TSTAT[s.statut] || TSTAT.transmis)[0]}` }), s.note ? h("p", { class: "prewrap", text: s.note }) : null))) : h("p", { class: "muted", style: "margin:0", text: "Aucune suite enregistrée." }),
+        dir ? h("div", { class: "row2", style: "margin-top:8px" }, h("div", { class: "field" }, h("label", { for: "tj-st", text: "Suite" }), sel), h("div", { class: "field" }, h("label", { for: "tj-note", text: "Précision" }), note)) : null)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(e), text: "Fiche de l’entreprise" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+        const b = ev.currentTarget; b.disabled = true; toast("Préparation du PDF…");
+        try { const pdf = await buildJusticePdf(t, e); await S.downloads.save({ filename: pdfName(t, e), data: pdf }); } catch (x) { toast("Impossible de créer le PDF dans ce navigateur.", true); }
+        b.disabled = false;
+      }, text: "Télécharger le PDF" }),
+      dir ? h("button", { class: "btn ink small", type: "button", onclick: async () => {
+        const body = Object.assign({}, t, { statut: sel.value, suites: (t.suites || []).concat([{ at: nowISO(), statut: sel.value, note: note.value.trim(), auteur: S.agentName || "" }]) });
+        delete body.id;
+        if (await write(() => S.db.doc("transmissions/" + id).set(body))) { toast("Suite enregistrée."); openTransmission(id); }
+      }, text: "Enregistrer la suite" }) : null].filter(Boolean)
+  });
+}
+
+/* Réglages : recouvrement et justice */
+function renderRecouvSettings(force) {
+  const box = $("#card-recouv");
+  if (!force && (S.recDirty || box.contains(document.activeElement))) return;
+  const c = cfg();
+  $("#r-med").value = String(c.delaiMiseEnDemeureJours || 2);
+  $("#r-maj").value = String(c.majorationImpaye ?? 10);
+  $("#r-off").value = String(c.majorationOffice ?? 40);
+  $("#r-tiers").value = c.tiersDefaut || "";
+  $("#r-dest").value = c.justiceDestinataire || "";
+}
+$("#card-recouv").addEventListener("input", () => { S.recDirty = true; $("#r-msg").textContent = "Modifications non enregistrées."; });
+$("#r-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const v = {
+    delaiMiseEnDemeureJours: Math.max(1, Math.min(30, Math.round(Number($("#r-med").value) || 2))),
+    majorationImpaye: Math.min(100, Math.max(0, Number($("#r-maj").value) || 0)),
+    majorationOffice: Math.min(100, Math.max(0, Number($("#r-off").value) || 0)),
+    tiersDefaut: $("#r-tiers").value.trim(),
+    justiceDestinataire: $("#r-dest").value.trim() || DEFAULTS.justiceDestinataire
+  };
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
+  if (ok) { S.recDirty = false; $("#r-msg").textContent = "Réglages du recouvrement enregistrés."; toast("Réglages du recouvrement enregistrés."); renderRecouvSettings(true); }
+});
 
 /* ---------- Onglets ---------- */
 function showTab(name) {

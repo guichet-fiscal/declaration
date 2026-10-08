@@ -104,8 +104,10 @@ function actualiser() {
         a && (st === "accordee" || st === "partielle") ? a.montantAccorde : 0, a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : ""];
     }));
 
-  ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le"],
-    col("penalites").map(r => [no("PN", r.id), r.data.entrepriseNom, r.data.motif, r.data.montant, STATUTS_PEN[r.data.statut] || r.data.statut, date(r.data.createdAt), date(r.data.paidAt)]));
+  const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif" };
+  ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le", "Nature"],
+    col("penalites").map(r => [no(r.data.type === "redressement" ? "AMR" : "PN", r.id), r.data.entrepriseNom, r.data.motif, r.data.montant, STATUTS_PEN[r.data.statut] || r.data.statut,
+      date(r.data.createdAt), date(r.data.paidAt), NATURES_PEN[r.data.type] || "Pénalité"]));
 
   const lignesSal = [];
   col("declarations").forEach(r => {
@@ -118,9 +120,28 @@ function actualiser() {
   col("echeanciers").forEach(r => (r.data.echeances || []).forEach(x => lignesEch.push([no("DF", r.id), r.data.entrepriseNom, x.n + "/" + r.data.echeances.length, date(x.date), x.montant, x.payee ? "Payée" : "À payer", date(x.paidAt)])));
   ecrire("Échéanciers", ["Déclaration", "Entreprise", "Échéance", "Date limite", "Montant", "État", "Payée le"], lignesEch);
 
-  ecrire("Relances", ["N°", "Entreprise", "Type", "Périodes ou somme", "Envoyée le", "Délai", "Par"],
-    col("relances").map(r => [no("RL", r.id), r.data.entrepriseNom, r.data.type === "declaration" ? "Déclaration manquante" : "Impayé",
-      r.data.type === "declaration" ? (r.data.periodes || []).join(", ") : r.data.montant, date(r.data.at), date(r.data.echeance), r.data.byNom || ""]));
+  const NIVEAUX = { "declaration:relance": "Rappel de déclaration", "declaration:mise_en_demeure": "Mise en demeure de déclarer",
+    "paiement:relance": "Relance de paiement", "paiement:mise_en_demeure": "Mise en demeure de payer" };
+  ecrire("Relances", ["N°", "Entreprise", "Type", "Périodes ou somme", "Envoyée le", "Délai", "Par", "Acte"],
+    col("relances").map(r => { const med = r.data.niveau === "mise_en_demeure";
+      return [no(med ? "MED" : "RL", r.id), r.data.entrepriseNom, r.data.type === "declaration" ? "Déclaration manquante" : "Impayé",
+        r.data.type === "declaration" ? (r.data.periodes || []).join(", ") : r.data.montant, date(r.data.at), date(r.data.echeance), r.data.byNom || "",
+        NIVEAUX[r.data.type + ":" + (r.data.niveau || "relance")] || "Relance"]; }));
+
+  const SAISIES = { satd: "Saisie à tiers détenteur", vente: "Saisie-vente des biens" };
+  const STATUTS_SAISIE = { notifiee: "Notifiée", executee: "Exécutée", levee: "Mainlevée" };
+  ecrire("Saisies", ["N°", "Entreprise", "Nature", "Tiers ou biens", "Somme saisie", "État", "Notifiée le", "Versement attendu le", "Exécutée le", "Recouvré", "Mise en demeure", "Par"],
+    col("saisies").map(r => { const x = r.data;
+      return [no("SA", r.id), x.entrepriseNom, SAISIES[x.type] || x.type, x.type === "vente" ? (x.biens || x.tiers || "") : (x.tiers || ""), x.montant,
+        STATUTS_SAISIE[x.statut] || x.statut, date(x.at), date(x.echeance), date(x.executeeLe || x.leveeLe), x.recouvre || 0, x.medNo || "", x.byNom || ""]; }));
+
+  const STATUTS_TJ = { transmis: "Transmis", saisie: "Saisie effectuée", condamnation: "Condamnation prononcée", regle: "Dette réglée", classe: "Classé sans suite" };
+  const QUALIFS = { impaye: "Défaut de paiement", fraude: "Fraude fiscale", travail: "Travail dissimulé", opposition: "Opposition au contrôle", insolvabilite: "Organisation d’insolvabilité" };
+  const MESURES = { saisie_comptes: "Saisie des comptes", saisie_biens: "Saisie des biens", fermeture: "Fermeture administrative", poursuites: "Poursuites pénales", interdiction: "Interdiction de gérer" };
+  ecrire("Justice", ["N°", "Entreprise", "Dirigeant", "Somme à recouvrer", "Qualification", "Mesures sollicitées", "Destinataire", "Transmis le", "Par", "État", "Dernière suite", "Dénonciation obligatoire"],
+    col("transmissions").map(r => { const t = r.data, s = (t.suites || [])[(t.suites || []).length - 1];
+      return [no("TJ", r.id), t.entrepriseNom, t.patron || "", t.montant, (t.qualifs || []).map(q => QUALIFS[q] || q).join(", "), (t.mesures || []).map(m => MESURES[m] || m).join(", "),
+        t.destinataire || "", date(t.at), t.byNom || "", STATUTS_TJ[t.statut] || t.statut, s ? (s.note || STATUTS_TJ[s.statut] || "") : "", t.denonciation ? "Oui" : "Non"]; }));
 
   ecrire("Attestations", ["N°", "Entreprise", "Délivrée le", "Valable jusqu’au", "État", "Par", "Motif de révocation"],
     col("attestations").map(r => { const a = r.data, now = new Date();
@@ -148,7 +169,9 @@ function actualiser() {
     ["Relances", col("relances").length],
     ["Attestations délivrées", col("attestations").length],
     ["Semaines clôturées", col("clotures").length],
-    ["Contrôles fiscaux", col("controles").length]
+    ["Contrôles fiscaux", col("controles").length],
+    ["Saisies", col("saisies").length],
+    ["Dossiers transmis à la justice", col("transmissions").length]
   ]);
 }
 
