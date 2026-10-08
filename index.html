@@ -20,7 +20,7 @@
   --bad:#ae261d; --bad-soft:#fae3e1;
   --info:#22569f; --info-soft:#e2ebf9;
   --muted-soft:#e6eceb;
-  --s1:#2a78d6; --s2:#eb6834;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
   --shadow:0 10px 30px rgba(10,25,30,.14);
   --f-display:"Archivo","Arial Narrow",system-ui,sans-serif;
   --f-body:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -38,7 +38,7 @@
     --bad:#f07b70; --bad-soft:#3a1916;
     --info:#82aaf2; --info-soft:#172745;
     --muted-soft:#1d292d;
-    --s1:#3987e5; --s2:#d95926;
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70;
     --shadow:0 10px 30px rgba(0,0,0,.5);
     color-scheme:dark;
   }
@@ -53,7 +53,7 @@
   --bad:#f07b70; --bad-soft:#3a1916;
   --info:#82aaf2; --info-soft:#172745;
   --muted-soft:#1d292d;
-  --s1:#3987e5; --s2:#d95926;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
   --shadow:0 10px 30px rgba(0,0,0,.5);
   color-scheme:dark;
 }
@@ -275,7 +275,7 @@ dialog::backdrop{background:rgba(8,18,22,.55)}
 .dlg-titles{min-width:0}
 .dlg-title{font-size:20px;margin-top:3px;overflow-wrap:anywhere}
 .dlg-side{display:flex;align-items:center;gap:14px}
-.dlg-body{padding:16px 20px 18px;display:grid;gap:16px;overflow:auto}
+.dlg-body{padding:16px 20px 18px;display:grid;gap:16px;overflow:auto;min-height:0;grid-auto-rows:max-content;align-content:start}
 .dlg-foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;padding:14px 20px;border-top:1px solid var(--rule);background:var(--paper)}
 .dlg-foot .spacer{flex:1 1 auto}
 .dlg-sec{display:grid;gap:4px}
@@ -317,6 +317,64 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
 .idbox{font-family:var(--f-mono);font-size:15px;background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:8px 12px;user-select:all}
 .agent-add{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.9fr) auto}
 @media (max-width:620px){.agent-add{grid-template-columns:minmax(0,1fr)}}
+/* Version 3 : fiches, alertes, enveloppes, économie, journal, documents */
+.btn{text-decoration:none}
+dialog.wide{width:min(1000px,calc(100vw - 32px))}
+.meta-inline{font-size:12.5px;color:var(--ink-3)}
+.tone-text{color:var(--tone)}
+td.tone-text{color:var(--tone)}
+.tag.bad{color:var(--bad);border-color:currentColor}
+.reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.reason{font-size:12px;line-height:1.35;color:var(--bad);background:var(--bad-soft);border-radius:4px;padding:3px 7px;font-weight:600}
+.alert-list{list-style:none;margin:12px 0 0;padding:0}
+.alert-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--rule-2)}
+.env-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:12px}
+.env-list li{display:grid;gap:6px}
+.env-row{display:flex;justify-content:space-between;gap:12px;font-size:14px;flex-wrap:wrap}
+.env-row .mono{font-size:13px;color:var(--ink-2)}
+.env-row .mono.tone-text{color:var(--tone)}
+.meter{height:8px;border-radius:999px;background:var(--muted-soft);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:999px;background:var(--ok)}
+.meter.warn i{background:var(--warn)}
+.meter.bad i{background:var(--bad)}
+.search-row{display:flex;gap:10px 14px;flex-wrap:wrap;align-items:center}
+.search-row input[type=search]{flex:1 1 220px;max-width:340px}
+.search-row select{width:auto}
+.search-row .sort{display:inline-flex;gap:8px;align-items:center}
+.econ-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:16px;align-items:start}
+.econ-grid .span2{grid-column:1/-1}
+@media (max-width:900px){.econ-grid{grid-template-columns:minmax(0,1fr)}}
+.chart .line{fill:none;stroke:var(--s3);stroke-width:2;stroke-linejoin:round;pointer-events:none}
+.chart .area{fill:var(--s3);opacity:.12;pointer-events:none}
+.chart .dot{fill:var(--s3);stroke:var(--sheet);stroke-width:2;pointer-events:none}
+.chart .b3{fill:var(--s3)}
+.hbars{display:grid;gap:9px;margin-top:12px}
+.hbar{display:grid;grid-template-columns:minmax(90px,32%) minmax(0,1fr) auto;gap:12px;align-items:center;font-size:13.5px}
+.hbar .lab{overflow-wrap:anywhere;text-align:left}
+.hbar .track{height:14px;display:block}
+.hbar .track i{display:block;height:100%;border-radius:0 4px 4px 0;background:var(--s1)}
+.hbar .val{font-family:var(--f-mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+@media (max-width:520px){.hbar{grid-template-columns:minmax(0,1fr) auto}.hbar .track{grid-column:1/-1;grid-row:2}}
+.minis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--sheet)}
+.minis .kpi{border-left:1px solid var(--rule-2);border-top:1px solid var(--rule-2);margin:-1px 0 0 -1px}
+.minis .kpi .v{font-size:18px}
+table.compact{min-width:560px;font-size:13.5px}
+table.compact td{padding:8px 10px}
+.pen-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 150px;gap:10px}
+@media (max-width:620px){.pen-grid{grid-template-columns:minmax(0,1fr)}}
+.journal-list{list-style:none;margin:12px 0 0;padding:0}
+.journal-list li{display:grid;grid-template-columns:118px minmax(0,1fr) auto;gap:4px 14px;padding:10px 0;border-top:1px solid var(--rule-2);align-items:baseline;font-size:14px}
+.journal-list time{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-3)}
+.journal-list .jwho{font-weight:700}
+.journal-list details{margin-top:4px;font-size:13px}
+.journal-list summary{cursor:pointer;color:var(--ink-2)}
+.diff{margin:6px 0 0;padding:8px 10px;background:var(--field);border:1px solid var(--rule-2);border-radius:5px;font-family:var(--f-mono);font-size:12px;display:grid;gap:3px;overflow-x:auto}
+@media (max-width:620px){.journal-list li{grid-template-columns:minmax(0,1fr)}}
+.avis-preview{display:block;width:100%;max-width:760px;margin:0 auto;border:1px solid var(--rule);border-radius:6px;background:#fbfaf6}
+.env-editor{display:grid;gap:8px}
+.env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:10px;align-items:center}
+.env-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650;margin-top:6px}
+.env-edit label{font-weight:500}
 </style>
 </head>
 <body data-gate="chargement">
@@ -340,8 +398,11 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
 <nav class="tabs" aria-label="Guichets">
   <div class="wrap" role="tablist">
     <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
     <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-writer>Saisir une déclaration</button>
     <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-writer>Saisir une demande</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-journal" data-tab="journal" aria-selected="false">Journal</button>
     <button class="tab" role="tab" type="button" id="tab-btn-modeles" data-tab="modeles" aria-selected="false">Modèles Discord</button>
     <button class="tab" role="tab" type="button" id="tab-btn-reglages" data-tab="reglages" aria-selected="false" data-writer>Réglages</button>
   </div>
@@ -388,8 +449,8 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
       <div class="card">
         <div class="card-head">
           <div>
-            <h3>Registre des entreprises</h3>
-            <p class="sub" id="reg-sub">Qui a déclaré pour la période choisie.</p>
+            <h3>Entreprises à surveiller</h3>
+            <p class="sub" id="reg-sub">Qui n’a pas déclaré, doit payer ou est en contrôle.</p>
           </div>
         </div>
         <div id="registry"><div class="empty">Chargement du registre…</div></div>
@@ -404,6 +465,27 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
         <div class="legend" id="legend"></div>
         <div class="chart" id="chart"></div>
         <ul class="svc-list" id="svc-list" hidden></ul>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Alertes de fraude possible</h3>
+            <p class="sub">Déclarations des trois dernières périodes qui méritent un contrôle.</p>
+          </div>
+        </div>
+        <div id="alerts"><div class="empty">Chargement…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Enveloppes des services</h3>
+            <p class="sub" id="env-sub">Crédits accordés sur la période choisie.</p>
+          </div>
+        </div>
+        <div id="envs"><div class="empty">Chargement…</div></div>
       </div>
     </div>
 
@@ -430,6 +512,125 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
         </div>
       </div>
       <div id="dem-table"></div>
+    </div>
+  </section>
+
+  <!-- ENTREPRISES -->
+  <section class="panel" id="tab-entreprises" role="tabpanel" aria-labelledby="tab-btn-entreprises" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Entreprises</h2>
+        <p class="sub" id="ent-sub">Recherchez une entreprise pour ouvrir sa fiche : déclarations, paiements, retards, alertes et pénalités.</p>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost" type="button" id="btn-ent-manage" data-writer-only>Gérer la liste</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="search-row">
+        <input type="search" id="ent-q" placeholder="Nom, secteur ou patron" aria-label="Rechercher une entreprise" autocomplete="off">
+        <div class="seg" id="seg-ent" role="group" aria-label="Filtrer les entreprises">
+          <button type="button" data-f="tout" aria-pressed="true">Toutes<span class="count"></span></button>
+          <button type="button" data-f="retard" aria-pressed="false">En retard<span class="count"></span></button>
+          <button type="button" data-f="du" aria-pressed="false">Doivent de l’argent<span class="count"></span></button>
+          <button type="button" data-f="alertes" aria-pressed="false">Alertes<span class="count"></span></button>
+          <button type="button" data-f="controle" aria-pressed="false">En contrôle<span class="count"></span></button>
+          <button type="button" data-f="inactives" aria-pressed="false">Inactives<span class="count"></span></button>
+        </div>
+        <span class="sort"><label for="ent-sort" class="muted" style="font-weight:500">Trier par</label>
+        <select id="ent-sort">
+          <option value="nom">Nom</option>
+          <option value="du">Reste dû</option>
+          <option value="ca">Dernier chiffre d’affaires</option>
+          <option value="retards">Retards</option>
+          <option value="alertes">Alertes</option>
+        </select></span>
+      </div>
+      <div id="ent-table"></div>
+    </div>
+  </section>
+
+  <!-- ÉCONOMIE -->
+  <section class="panel" id="tab-economie" role="tabpanel" aria-labelledby="tab-btn-economie" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Économie du serveur</h2>
+        <p class="sub" id="eco-sub">Calculée à partir des déclarations des entreprises. Une entreprise compte une fois par période, avec sa dernière déclaration.</p>
+      </div>
+      <div class="toolbar">
+        <label for="eco-per" class="muted" style="font-weight:500">Période</label>
+        <select id="eco-per"></select>
+      </div>
+    </div>
+    <div class="ledger" id="eco-kpis">
+      <div class="kpi" id="e-ca"><span class="l">Chiffre d’affaires</span><span class="v">—</span><span class="s">toutes entreprises</span></div>
+      <div class="kpi" id="e-var"><span class="l">Évolution</span><span class="v">—</span><span class="s">par rapport à la période précédente</span></div>
+      <div class="kpi" id="e-emp"><span class="l">Emplois déclarés</span><span class="v">—</span><span class="s">salariés</span></div>
+      <div class="kpi" id="e-mas"><span class="l">Masse salariale</span><span class="v">—</span><span class="s">salaires versés</span></div>
+      <div class="kpi" id="e-rec"><span class="l">Recettes fiscales</span><span class="v">—</span><span class="s">encaissées sur la période</span></div>
+      <div class="kpi" id="e-taux"><span class="l">Recouvrement</span><span class="v">—</span><span class="s">part des avis déjà payée</span></div>
+    </div>
+    <div class="econ-grid">
+      <div class="card">
+        <h3>Chiffre d’affaires déclaré</h3>
+        <p class="sub">Total des entreprises, 12 dernières périodes.</p>
+        <div class="chart" id="ch-ca"></div>
+      </div>
+      <div class="card">
+        <h3>Recettes et crédits</h3>
+        <p class="sub">Ce qui entre dans le Trésor et ce qui en sort, 12 dernières périodes.</p>
+        <div class="legend" id="lg-tr"></div>
+        <div class="chart" id="ch-tr"></div>
+      </div>
+      <div class="card">
+        <h3>Emplois déclarés</h3>
+        <p class="sub">Nombre total de salariés, 12 dernières périodes.</p>
+        <div class="chart" id="ch-emp"></div>
+      </div>
+      <div class="card">
+        <h3>Chiffre d’affaires par secteur</h3>
+        <p class="sub" id="sec-sub">Période choisie.</p>
+        <div id="ch-sec"></div>
+      </div>
+      <div class="card span2">
+        <h3>Plus gros chiffres d’affaires</h3>
+        <p class="sub" id="top-sub">Période choisie, dix premières entreprises.</p>
+        <div id="ch-top"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- JOURNAL -->
+  <section class="panel" id="tab-journal" role="tabpanel" aria-labelledby="tab-btn-journal" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Journal des actions</h2>
+        <p class="sub">Chaque saisie, décision et modification est inscrite automatiquement par la base de données, avec son auteur. Personne ne peut modifier ni effacer ce journal depuis le site.</p>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost" type="button" id="j-refresh">Actualiser</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="search-row">
+        <input type="search" id="j-q" placeholder="Entreprise, service, agent ou n° de dossier" aria-label="Rechercher dans le journal" autocomplete="off">
+        <select id="j-type" aria-label="Type d’action">
+          <option value="">Toutes les actions</option>
+          <option value="declarations">Déclarations</option>
+          <option value="decisions">Avis et paiements</option>
+          <option value="echeanciers">Échéanciers</option>
+          <option value="penalites">Pénalités</option>
+          <option value="demandes">Demandes de moyens</option>
+          <option value="arbitrages">Arbitrages</option>
+          <option value="entreprises">Entreprises</option>
+          <option value="config">Barème et services</option>
+          <option value="agents">Accès au guichet</option>
+          <option value="meta">Sauvegardes</option>
+        </select>
+        <select id="j-agent" aria-label="Agent"><option value="">Tous les agents</option></select>
+      </div>
+      <ul class="journal-list" id="j-list"><li class="muted" style="grid-template-columns:1fr">Ouvrez cet onglet pour charger le journal.</li></ul>
+      <div id="j-more"></div>
     </div>
   </section>
 
@@ -731,6 +932,13 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
                 <input id="s-devise" maxlength="4">
               </div>
             </div>
+            <div class="row2">
+              <div class="field">
+                <label for="s-smin">Salaire minimum par salarié</label>
+                <input id="s-smin" type="number" min="0" step="1" class="mono">
+                <span class="hint">Par période. Un salaire moyen plus bas déclenche une alerte. Mettez 0 pour ne pas vérifier.</span>
+              </div>
+            </div>
             <div class="paste-row">
               <button class="btn" type="submit" id="s-save">Enregistrer le barème</button>
               <span id="s-msg" class="hint" aria-live="polite"></span>
@@ -738,12 +946,13 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
           </form>
         </div>
         <div class="card">
-          <h3>Services publics</h3>
-          <p class="sub">Un service par ligne. Ils sont proposés dans la saisie des demandes.</p>
+          <h3>Services publics et enveloppes</h3>
+          <p class="sub">Un service par ligne. Donnez à chacun un plafond de crédits par période : le tableau de bord montre ce qu’il a déjà consommé. Laissez vide pour ne pas plafonner.</p>
           <div class="set-form">
             <textarea id="s-services" rows="7" aria-label="Services publics, un par ligne"></textarea>
+            <div class="env-editor" id="env-editor"></div>
             <div class="paste-row">
-              <button class="btn" type="button" id="s-svc-save">Enregistrer la liste</button>
+              <button class="btn" type="button" id="s-svc-save">Enregistrer les services</button>
               <span id="s-svc-msg" class="hint" aria-live="polite"></span>
             </div>
           </div>
@@ -775,6 +984,17 @@ body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
             <span class="hint">Les dossiers du fichier remplacent ceux qui portent le même numéro. Les dossiers absents du fichier sont conservés.</span>
             <span id="b-msg" class="err" aria-live="polite"></span>
           </div>
+        </div>
+        <div class="card">
+          <h3>Suivi dans Google Sheets</h3>
+          <p class="sub">Une feuille Google Sheets peut recopier le registre toute seule, chaque heure ou chaque lundi. Les admins la consultent même sans accès au site. La mise en place est expliquée dans le README, section « Suivi dans Google Sheets ».</p>
+          <form class="paste-row" id="form-key" novalidate style="margin-top:14px">
+            <input id="k-nom" autocomplete="off" placeholder="Nom de la clé, ex. : Feuille du staff" aria-label="Nom de la clé d’export" style="flex:1 1 220px;width:auto">
+            <button class="btn" type="submit" id="k-add">Créer une clé d’export</button>
+          </form>
+          <span id="k-msg" class="err" aria-live="polite"></span>
+          <div id="k-new"></div>
+          <ul class="ent-list" id="k-list"></ul>
         </div>
         <div class="card">
           <h3>Accès au guichet</h3>
@@ -861,19 +1081,23 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 /* ---------- État ---------- */
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
-  budgetInitial: 0, devise: "€",
+  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {},
   services: ["Police nationale", "Gendarmerie", "SAMU", "Sapeurs-pompiers", "Mairie", "Justice", "Douane"]
 };
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {},
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
-  setDirty: false, svcDirty: false
+  entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
+  journal: [], journalLoaded: false, journalError: null, journalBusy: false, jLimit: 100,
+  exportKeys: [], keysError: null,
+  setDirty: false, svcDirty: false, envDirty: false
 };
 const cfg = () => {
   const c = Object.assign({}, DEFAULTS, S.config || {});
   if (!Array.isArray(c.services) || !c.services.length) c.services = DEFAULTS.services.slice();
+  if (!c.enveloppes || typeof c.enveloppes !== "object") c.enveloppes = {};
   return c;
 };
 const writer = () => S.connected && !S.readOnly && (S.admin || S.canWrite !== false);
@@ -938,9 +1162,18 @@ function recentKeys(n) {
   return out;
 }
 function defaultKey() {
-  const curK = keyOf(new Date());
-  const prev = prevKey(curK);
-  return Date.now() <= deadline(prev).getTime() ? prev : curK;
+  // La dernière période terminée : c'est celle que les entreprises déclarent.
+  return prevKey(keyOf(new Date()));
+}
+function lastClosedKey() {
+  // La dernière période dont la date limite de dépôt est passée.
+  for (const k of recentKeys(4)) if (Date.now() > deadline(k).getTime()) return k;
+  return defaultKey();
+}
+function keysEnding(k, n) {
+  const out = [k];
+  while (out.length < n) out.push(prevKey(out[out.length - 1]));
+  return out.reverse();
 }
 function periodLabel(key) {
   const b = bounds(key);
@@ -957,7 +1190,7 @@ function periodShort(key) {
 }
 function periodPlain(key) {
   const b = bounds(key);
-  if (!b) return key;
+  if (!b) return key || "—";
   return b.week ? `Semaine ${b.week}` : periodLabel(key);
 }
 
@@ -994,13 +1227,123 @@ function entStatus(e, key) {
 }
 function treasury() {
   let rec = 0, dep = 0;
-  for (const d of S.declarations) if (dStatus(d) === "payee") rec += dMontant(d);
+  for (const d of S.declarations) rec += dEncaisse(d);
+  for (const p of S.penalites) if (p.statut === "payee") rec += Number(p.montant) || 0;
   for (const dm of S.demandes) {
     const a = S.arbitrages[dm.id];
     if (a && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
   }
   const budget = Number(cfg().budgetInitial) || 0;
   return { rec, dep, budget, solde: budget + rec - dep };
+}
+const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
+const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+const echOf = d => { const e = S.echeanciers[d.id]; return e && Array.isArray(e.echeances) && e.echeances.length ? e : null; };
+function dEncaisse(d) {
+  const st = dStatus(d);
+  if (st === "payee") return dMontant(d);
+  if (st !== "validee") return 0;
+  const e = echOf(d);
+  return e ? e.echeances.filter(x => x.payee).reduce((s, x) => s + (Number(x.montant) || 0), 0) : 0;
+}
+const dReste = d => (dStatus(d) === "validee" ? Math.max(0, dMontant(d) - dEncaisse(d)) : 0);
+function dChip(d) {
+  const st = dStatus(d), e = echOf(d);
+  if (e && st === "validee") {
+    const n = e.echeances.length, p = e.echeances.filter(x => x.payee).length;
+    const late = e.echeances.some(x => !x.payee && new Date(x.date).getTime() < Date.now());
+    return chip([`Échéancier ${p}/${n}${late ? " · en retard" : ""}`, late ? "bad" : "warn"]);
+  }
+  return chip(DSTAT[st] || DSTAT.soumise);
+}
+const PSTAT = { due: ["À payer", "warn"], payee: ["Payée", "ok"], annulee: ["Annulée", "muted"] };
+const entKey = d => (d.entrepriseId ? "id:" + d.entrepriseId : "nom:" + norm(d.entrepriseNom));
+const sameEnt = (x, e) => (e.id && x.entrepriseId === e.id) || (!x.entrepriseId && norm(x.entrepriseNom) === norm(e.nom));
+const declsOf = e => S.declarations.filter(d => sameEnt(d, e));
+const pensOf = e => S.penalites.filter(p => sameEnt(p, e));
+const entOf = d => (d.entrepriseId && S.entreprises.find(x => x.id === d.entrepriseId)) || { id: null, nom: d.entrepriseNom || "Sans nom", secteur: "", patron: d.declarant || "" };
+
+/* Alertes : signaux de fraude possible, à vérifier par un contrôle */
+function alertsFor(d) {
+  if (!d || dStatus(d) === "rejetee") return [];
+  const c = cfg(), out = [], k = entKey(d);
+  const hist = S.declarations
+    .filter(x => entKey(x) === k && x.id !== d.id && dStatus(x) !== "rejetee" && String(x.periode) < String(d.periode))
+    .sort((a, b) => String(a.periode).localeCompare(String(b.periode)));
+  const ca = Number(d.ca) || 0, ch = Number(d.charges) || 0, ms = Number(d.masse) || 0, nb = Number(d.nbSalaries) || 0;
+  const prev = hist.slice(-3);
+  if (prev.length) {
+    const avg = prev.reduce((s, x) => s + (Number(x.ca) || 0), 0) / prev.length;
+    if (avg >= 1000 && ca < avg * 0.5) out.push(`Chiffre d’affaires en chute (${Math.round((1 - ca / avg) * 100)} % sous sa moyenne)`);
+  }
+  const last = hist[hist.length - 1];
+  if ((Number(d.resultat) || 0) < 0 && last && (Number(last.resultat) || 0) < 0) out.push("Résultat négatif deux périodes de suite");
+  if (nb > 0 && ms === 0) out.push("Salariés déclarés sans salaires");
+  if (ms > 0 && nb === 0) out.push("Salaires versés sans salarié");
+  const smin = Number(c.salaireMin) || 0;
+  if (smin > 0 && nb > 0 && ms > 0 && ms / nb < smin) out.push(`Salaire moyen sous le minimum (${money(ms / nb)} par salarié)`);
+  if (ca > 0 && ch >= ca * 0.9) out.push("Charges supérieures à 90 % du chiffre d’affaires");
+  if (ca === 0 && nb > 0) out.push("Aucun chiffre d’affaires avec des salariés");
+  if (hist.slice(-3).concat([d]).filter(x => x.enRetard).length >= 2) out.push("Retards répétés");
+  return out;
+}
+
+function entSummary(e, key) {
+  const ds = declsOf(e).sort((a, b) => String(b.periode).localeCompare(String(a.periode)) || byCreatedDesc(a, b));
+  const pens = pensOf(e);
+  const live = ds.filter(d => dStatus(d) !== "rejetee");
+  const last = live[0] || null;
+  const penPaid = pens.filter(p => p.statut === "payee").reduce((s, p) => s + (Number(p.montant) || 0), 0);
+  const penDue = pens.filter(p => p.statut === "due").reduce((s, p) => s + (Number(p.montant) || 0), 0);
+  return {
+    e, ds, pens, last,
+    paid: ds.reduce((s, d) => s + dEncaisse(d), 0) + penPaid,
+    due: ds.reduce((s, d) => s + dReste(d), 0) + penDue,
+    retards: ds.filter(d => d.enRetard).length,
+    controles: ds.filter(d => dStatus(d) === "controle").length,
+    caMoy: live.length ? live.reduce((s, d) => s + (Number(d.ca) || 0), 0) / live.length : 0,
+    alerts: last ? alertsFor(last) : [],
+    cur: e.id ? entStatus(e, key) : { status: "attendue" }
+  };
+}
+const statusChip = cs => (cs.decl ? dChip(cs.decl) : chip(DSTAT[cs.status] || DSTAT.attendue));
+function situation(sm) {
+  if (sm.e.actif === false) return ["Inactive", "muted"];
+  if (sm.cur.status === "retard") return ["En retard", "bad"];
+  if (sm.ds.some(d => dStatus(d) === "controle")) return ["En contrôle", "accent"];
+  if (sm.due > 0) return ["À payer", "warn"];
+  if (sm.ds.some(d => dStatus(d) === "soumise")) return ["À valider", "info"];
+  if (!sm.ds.length) return ["Jamais déclaré", "muted"];
+  return ["À jour", "ok"];
+}
+
+/* Économie : une entreprise compte une fois par période, avec sa dernière déclaration */
+function periodDecls(key) {
+  const m = new Map();
+  for (const d of S.declarations) {
+    if (d.periode !== key || dStatus(d) === "rejetee") continue;
+    const k = entKey(d), p = m.get(k);
+    if (!p || String(d.createdAt || "") > String(p.createdAt || "")) m.set(k, d);
+  }
+  return [...m.values()];
+}
+const secteurOf = d => { const e = d.entrepriseId && S.entreprises.find(x => x.id === d.entrepriseId); return (e && e.secteur && e.secteur.trim()) || "Non renseigné"; };
+
+/* Enveloppes des services publics */
+function envUse(key) {
+  const out = {};
+  for (const dm of S.demandes) {
+    const a = S.arbitrages[dm.id];
+    if (!a || !(a.statut === "accordee" || a.statut === "partielle") || !a.at || keyOf(new Date(a.at)) !== key) continue;
+    const k = norm(dm.service || "Autre");
+    out[k] = (out[k] || 0) + (Number(a.montantAccorde) || 0);
+  }
+  return out;
+}
+function envCap(service) {
+  const env = cfg().enveloppes || {};
+  const k = Object.keys(env).find(x => norm(x) === norm(service));
+  return k ? Number(env[k]) || 0 : 0;
 }
 
 /* ---------- Écritures ---------- */
@@ -1071,6 +1414,7 @@ function applyRole() {
   $("#logout").hidden = !S.sb || !S.uid;
   $$("#d-submit, #m-submit, #s-save, #s-svc-save, #e-add, #d-parse, #m-parse, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
+  $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
   render();
 }
 /* ---------- Stockage Supabase : même interface que l’ancien registre ---------- */
@@ -1255,6 +1599,8 @@ async function init() {
   subscribe();
   store.startLive();
   if (!S.admin) setReadOnly(); else { applyRole(); loadAgents(); }
+  if (S.tab === "journal") loadJournal();
+  if (S.tab === "reglages" && S.admin) loadKeys();
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
 }
 
@@ -1317,6 +1663,8 @@ function subscribe() {
   col("decisions", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.decisions = o; });
   col("demandes", s => { S.demandes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("arbitrages", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.arbitrages = o; });
+  col("penalites", s => { S.penalites = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("echeanciers", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.echeanciers = o; });
 }
 
 /* ---------- Rendu ---------- */
@@ -1335,7 +1683,11 @@ function render() {
   renderBudgetAside();
   renderTemplates();
   renderSettings();
+  renderEnvEditor();
   renderBackupInfo();
+  renderEntreprises();
+  renderEconomie();
+  if (S.tab === "journal" && S.journalLoaded) renderJournal();
   $("#foot-sync").textContent = S.connected ? (S.loaded.has("declarations") ? "Registre synchronisé" : "Synchronisation…") : "";
 }
 function fillSelect(sel, options, preferred) {
@@ -1356,6 +1708,9 @@ function ensureOption(sel, value, label) {
 function renderOptions() {
   const keys = recentKeys(8).map(k => [k, periodLabel(k)]);
   fillSelect($("#dash-per"), keys, S.dashKey || defaultKey());
+  fillSelect($("#eco-per"), keys, S.dashKey || defaultKey());
+  if (S.dashKey && $("#eco-per").value !== S.dashKey && $$("option", $("#eco-per")).some(o => o.value === S.dashKey)) $("#eco-per").value = S.dashKey;
+  if (S.dashKey && $("#dash-per").value !== S.dashKey && $$("option", $("#dash-per")).some(o => o.value === S.dashKey)) $("#dash-per").value = S.dashKey;
   fillSelect($("#d-per"), keys, defaultKey());
   const entSig = activeEnts().map(e => e.nom).join("|");
   const dl = $("#ent-options");
@@ -1378,7 +1733,7 @@ function renderDashboard() {
   const ready = S.connected && S.loaded.has("declarations") && S.loaded.has("entreprises");
   if (!ready) {
     $("#registry").replaceChildren(h("div", { class: "empty", text: S.offline ? "Le registre s’affichera une fois la page ouverte depuis Claude." : "Chargement du registre…" }));
-    renderChart(); renderDeclTable(key); renderDemTable();
+    renderChart(); renderDeclTable(key); renderDemTable(); renderAlerts(); renderEnvelopes(key);
     return;
   }
   const declsP = S.declarations.filter(d => d.periode === key);
@@ -1386,12 +1741,12 @@ function renderDashboard() {
   for (const d of declsP) {
     const st = dStatus(d);
     if (st === "rejetee") continue;
-    const m = dMontant(d);
-    att += m;
-    if (st === "payee") enc += m;
-    else if (st === "validee") reste += m;
-    else if (st === "soumise") aValider++;
+    att += dMontant(d);
+    enc += dEncaisse(d);
+    reste += dReste(d);
+    if (st === "soumise") aValider++;
   }
+  const penDue = S.penalites.filter(p => p.statut === "due" && p.createdAt && keyOf(new Date(p.createdAt)) === key).reduce((sum, p) => sum + (Number(p.montant) || 0), 0);
   const ents = activeEnts();
   const sts = ents.map(e => Object.assign({ e }, entStatus(e, key)));
   const ok = sts.filter(x => ["soumise", "validee", "payee", "controle"].includes(x.status)).length;
@@ -1401,39 +1756,44 @@ function renderDashboard() {
   const t = treasury();
   setKpi("k-att", money(att), `${declsP.length} déclaration${plural(declsP.length)}${aValider ? ` · ${aValider} à valider` : ""}`);
   setKpi("k-enc", money(enc), att ? `${Math.round(enc / att * 100)} % du déclaré` : "sur la période", enc > 0 ? "ok" : "");
-  setKpi("k-reste", money(reste), "avis émis, non payés", reste > 0 ? "warn" : "");
+  setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${ents.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
   setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés`, t.solde < 0 ? "bad" : "");
 
-  // Registre
+  // Entreprises à surveiller
   const reg = $("#registry");
   if (!ents.length) {
-    reg.replaceChildren(h("div", { class: "empty" },
+    fill(reg, h("div", { class: "empty" },
       h("span", { text: "Aucune entreprise enregistrée. Ajoutez celles du serveur pour voir d’un coup d’œil qui a déclaré, qui doit payer et qui est en retard." }),
       writer() ? h("button", { class: "btn ghost small", type: "button", onclick: () => showTab("reglages"), text: "Ajouter des entreprises" }) : null));
   } else {
-    const ORDER = { retard: 0, attendue: 1, soumise: 2, validee: 3, controle: 4, rejetee: 5, encours: 6, payee: 7 };
-    sts.sort((a, b) => (ORDER[a.status] - ORDER[b.status]) || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
-    const list = h("ul", { class: "reg" }, sts.map(x => h("li", {},
-      h("div", { style: "min-width:0" },
-        x.decl ? h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(x.decl.id), text: x.e.nom }) : h("span", { style: "font-weight:600", text: x.e.nom }),
-        h("span", { class: "meta", text: [x.e.secteur, x.e.patron].filter(Boolean).join(" · ") || "—" })),
-      chip(DSTAT[x.status]),
-      h("span", { class: "amt", text: x.decl ? money(dMontant(x.decl)) : "" })
-    )));
-    const orphans = declsP.filter(d => !d.entrepriseId || !S.entreprises.some(e => e.id === d.entrepriseId));
-    reg.replaceChildren(list);
-    if (orphans.length) reg.append(h("div", { class: "reg-foot", text: `+ ${orphans.length} déclaration${plural(orphans.length)} d’entreprise${plural(orphans.length)} non enregistrée${plural(orphans.length)} sur cette période (voir le tableau ci-dessous).` }));
+    const ORDER = { retard: 0, attendue: 1, soumise: 2, validee: 3, controle: 4, dette: 5 };
+    const watch = sts.map(x => Object.assign(x, { due: entSummary(x.e, key).due }))
+      .filter(x => x.status in ORDER || x.due > 0)
+      .map(x => Object.assign(x, { rank: x.status in ORDER ? ORDER[x.status] : ORDER.dette }))
+      .sort((a, b) => (a.rank - b.rank) || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
+    const seeAll = h("button", { class: "linkbtn", type: "button", onclick: () => showTab("entreprises"), text: `Voir les ${ents.length} entreprises` });
+    if (!watch.length) fill(reg, h("div", { class: "empty" }, h("span", { text: "Toutes les entreprises sont à jour pour cette période." }), seeAll));
+    else fill(reg,
+      h("ul", { class: "reg" }, watch.slice(0, 10).map(x => h("li", {},
+        h("div", { style: "min-width:0" },
+          h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }),
+          h("span", { class: "meta", text: [x.e.secteur, x.e.patron].filter(Boolean).join(" · ") || "—" })),
+        x.status in ORDER ? statusChip(x) : chip(["Doit encore payer", "warn"]),
+        h("span", { class: "amt", text: x.due > 0 ? money(x.due) : x.decl ? money(dMontant(x.decl)) : "" })))),
+      h("div", { class: "reg-foot" }, watch.length > 10 ? `+ ${watch.length - 10} autre${plural(watch.length - 10)} à surveiller. ` : "", seeAll));
   }
-  $("#reg-sub").textContent = ents.length ? `${ok} à jour, ${late} en retard sur ${ents.length} entreprise${plural(ents.length)} active${plural(ents.length)}.` : "Qui a déclaré pour la période choisie.";
+  $("#reg-sub").textContent = ents.length ? `${ok} à jour, ${late} en retard sur ${ents.length} entreprise${plural(ents.length)} active${plural(ents.length)}.` : "Qui n’a pas déclaré, doit payer ou est en contrôle.";
 
+  renderAlerts();
+  renderEnvelopes(key);
   renderChart();
   renderDeclTable(key);
   renderDemTable();
 }
 
-/* Graphique du Trésor */
+/* ---------- Graphiques ---------- */
 function niceMax(v) {
   if (v <= 0) return 1000;
   const p = Math.pow(10, Math.floor(Math.log10(v)));
@@ -1445,86 +1805,173 @@ function barPath(x, y0, w, hgt) {
   const r = Math.min(4, hgt, w / 2), yt = y0 - hgt;
   return `M${x},${y0}V${yt + r}Q${x},${yt} ${x + r},${yt}H${x + w - r}Q${x + w},${yt} ${x + w},${yt + r}V${y0}Z`;
 }
-let chartData = null;
-function renderChart() {
-  const box = $("#chart");
-  const keys = recentKeys(8).reverse();
+function bindChart(box) {
+  if (box.dataset.bound) return;
+  box.dataset.bound = "1";
+  box.addEventListener("pointermove", e => {
+    const hit = e.target.closest && e.target.closest(".hit");
+    const tip = box.querySelector(".tip");
+    if (!tip) return;
+    $$(".hit.on", box).forEach(r => { if (r !== hit) r.classList.remove("on"); });
+    const data = box._chart;
+    if (!hit || !data) { tip.hidden = true; return; }
+    hit.classList.add("on");
+    const i = +hit.dataset.i;
+    fill(tip, h("div", { class: "tl", text: data.full[i] }),
+      data.series.map(s => h("div", { class: "tr" }, h("span", { text: s.name }), h("b", { text: data.fmt(s.values[i]) }))));
+    tip.hidden = false;
+    const b = box.getBoundingClientRect(), r = hit.getBoundingClientRect();
+    const left = Math.max(0, Math.min(b.width - tip.offsetWidth, r.left - b.left + r.width / 2 - tip.offsetWidth / 2));
+    tip.style.left = left + "px";
+    tip.style.top = Math.max(-10, r.top - b.top - tip.offsetHeight - 6) + "px";
+  });
+  box.addEventListener("pointerleave", () => { const t = box.querySelector(".tip"); if (t) t.hidden = true; $$(".hit.on", box).forEach(r => r.classList.remove("on")); });
+  if (window.ResizeObserver) {
+    let lastW = -1;
+    new ResizeObserver(en => { const w = Math.round(en[0].contentRect.width); if (Math.abs(w - lastW) > 8) { const first = lastW < 0; lastW = w; if (!first && w > 0) schedule(); } }).observe(box);
+  }
+}
+function frame(box, height) {
+  const W = Math.max(280, Math.round(box.clientWidth || 520)), H = height || 210;
+  const ml = 48, mr = 8, mt = 22, mb = 26;
+  return { W, H, ml, mr, mt, mb, iw: W - ml - mr, ih: H - mt - mb };
+}
+function axis(f, max) {
+  const y = v => f.mt + f.ih - (Math.max(0, v) / max) * f.ih;
+  let s = "";
+  [0, max / 2, max].forEach((v, i) => {
+    s += `<line class="${i ? "grid" : "base"}" x1="${f.ml}" x2="${f.W - f.mr}" y1="${y(v)}" y2="${y(v)}"></line>`;
+    s += `<text x="${f.ml - 6}" y="${y(v) + 4}" text-anchor="end">${compact(v)}</text>`;
+  });
+  return { s, y };
+}
+/* Colonnes groupées : une ou deux séries de même unité, sur un seul axe */
+function drawCols(box, o) {
+  bindChart(box);
+  const f = frame(box, o.height), n = o.short.length, ns = o.series.length;
+  const max = niceMax(Math.max(0, ...o.series.flatMap(s => s.values)));
+  const ax = axis(f, max);
+  const gw = f.iw / n, bw = Math.max(4, Math.min(22, (gw - 10 - (ns - 1) * 2) / ns));
+  const every = Math.max(1, Math.ceil(n * 34 / f.iw));
+  let s = `<svg viewBox="0 0 ${f.W} ${f.H}" width="${f.W}" height="${f.H}" role="img" aria-label="${o.label}">` + ax.s;
+  o.short.forEach((lab, i) => {
+    const gx = f.ml + i * gw, cx = gx + gw / 2, groupW = ns * bw + (ns - 1) * 2, x0 = cx - groupW / 2;
+    s += `<rect class="hit" data-i="${i}" x="${gx + 1}" y="${f.mt - 4}" width="${Math.max(1, gw - 2)}" height="${f.ih + 4}" rx="4"></rect>`;
+    o.series.forEach((se, j) => {
+      const v = se.values[i], hh = (Math.max(0, v) / max) * f.ih, x = x0 + j * (bw + 2);
+      const p = barPath(x, f.mt + f.ih, bw, hh);
+      if (p) s += `<path class="bar ${se.cls}" d="${p}"></path>`;
+      if (i === n - 1 && v > 0) s += `<text class="lbl" x="${x + bw / 2}" y="${f.mt + f.ih - hh - 5}" text-anchor="middle">${compact(v)}</text>`;
+    });
+    if ((n - 1 - i) % every === 0) s += `<text x="${cx}" y="${f.H - 8}" text-anchor="middle"${i === n - 1 ? ' class="lbl"' : ""}>${lab}</text>`;
+  });
+  if (!o.series.some(se => se.values.some(v => v > 0))) s += `<text class="none" x="${f.ml + f.iw / 2}" y="${f.mt + f.ih / 2}" text-anchor="middle">${o.empty || "Aucune donnée sur ces périodes pour l’instant."}</text>`;
+  box.innerHTML = s + "</svg>";
+  box.append(h("div", { class: "tip", hidden: true }));
+  box._chart = { full: o.full, series: o.series, fmt: o.fmt || money };
+}
+/* Courbe : une série, aire légère, dernier point mis en avant */
+function drawLine(box, o) {
+  bindChart(box);
+  const f = frame(box, o.height), n = o.values.length;
+  const max = niceMax(Math.max(0, ...o.values));
+  const ax = axis(f, max);
+  const gw = f.iw / n, xs = i => f.ml + gw * i + gw / 2;
+  const every = Math.max(1, Math.ceil(n * 34 / f.iw));
+  let s = `<svg viewBox="0 0 ${f.W} ${f.H}" width="${f.W}" height="${f.H}" role="img" aria-label="${o.label}">` + ax.s;
+  o.values.forEach((v, i) => { s += `<rect class="hit" data-i="${i}" x="${f.ml + i * gw + 1}" y="${f.mt - 4}" width="${Math.max(1, gw - 2)}" height="${f.ih + 4}" rx="4"></rect>`; });
+  if (o.values.some(v => v > 0)) {
+    const pts = o.values.map((v, i) => `${xs(i)},${ax.y(v)}`);
+    s += `<path class="area" d="M${xs(0)},${f.mt + f.ih}L${pts.join("L")}L${xs(n - 1)},${f.mt + f.ih}Z"></path>`;
+    s += `<path class="line" d="M${pts.join("L")}"></path>`;
+    o.values.forEach((v, i) => { s += `<circle class="dot${i === n - 1 ? " end" : ""}" cx="${xs(i)}" cy="${ax.y(v)}" r="${i === n - 1 ? 5 : 3}"></circle>`; });
+    s += `<text class="lbl" x="${xs(n - 1)}" y="${ax.y(o.values[n - 1]) - 10}" text-anchor="end">${compact(o.values[n - 1])}</text>`;
+  } else s += `<text class="none" x="${f.ml + f.iw / 2}" y="${f.mt + f.ih / 2}" text-anchor="middle">${o.empty || "Aucune donnée sur ces périodes pour l’instant."}</text>`;
+  o.short.forEach((lab, i) => { if ((n - 1 - i) % every === 0) s += `<text x="${xs(i)}" y="${f.H - 8}" text-anchor="middle"${i === n - 1 ? ' class="lbl"' : ""}>${lab}</text>`; });
+  box.innerHTML = s + "</svg>";
+  box.append(h("div", { class: "tip", hidden: true }));
+  box._chart = { full: o.full, series: [{ name: o.name, values: o.values }], fmt: o.fmt || (v => NF.format(v)) };
+}
+/* Barres horizontales en HTML : libellé, barre, valeur écrite */
+function drawHBars(box, rows, empty) {
+  if (!rows.length) { fill(box, h("div", { class: "empty", text: empty })); return; }
+  const max = Math.max(1, ...rows.map(r => r.value));
+  fill(box, h("div", { class: "hbars" }, rows.map(r => h("div", { class: "hbar" },
+    r.open ? h("button", { class: "linkbtn lab", type: "button", onclick: r.open, text: r.label }) : h("span", { class: "lab", text: r.label }),
+    h("span", { class: "track", role: "img", "aria-label": `${r.label} : ${money(r.value)}` }, h("i", { style: `width:${Math.max(1.5, r.value / max * 100)}%` })),
+    h("span", { class: "val", text: money(r.value) + (r.extra ? " · " + r.extra : "") })))));
+}
+
+function treasurySeries(keys) {
   const rec = {}, dep = {};
   keys.forEach(k => { rec[k] = 0; dep[k] = 0; });
-  for (const d of S.declarations) if (dStatus(d) === "payee" && d.periode in rec) rec[d.periode] += dMontant(d);
+  for (const d of S.declarations) if (d.periode in rec) rec[d.periode] += dEncaisse(d);
+  for (const p of S.penalites) if (p.statut === "payee" && p.paidAt) { const k = keyOf(new Date(p.paidAt)); if (k in rec) rec[k] += Number(p.montant) || 0; }
   for (const dm of S.demandes) {
     const a = S.arbitrages[dm.id];
-    if (a && (a.statut === "accordee" || a.statut === "partielle") && a.at) {
-      const k = keyOf(new Date(a.at));
-      if (k in dep) dep[k] += Number(a.montantAccorde) || 0;
-    }
+    if (a && (a.statut === "accordee" || a.statut === "partielle") && a.at) { const k = keyOf(new Date(a.at)); if (k in dep) dep[k] += Number(a.montantAccorde) || 0; }
   }
-  chartData = { keys, rec, dep };
-  const totR = keys.reduce((s, k) => s + rec[k], 0), totD = keys.reduce((s, k) => s + dep[k], 0);
-  $("#legend").replaceChildren(
-    h("span", {}, h("i", { style: "background:var(--s1)" }), "Recettes encaissées ", h("b", { text: money(totR) })),
-    h("span", {}, h("i", { style: "background:var(--s2)" }), "Crédits accordés ", h("b", { text: money(totD) })));
-  const W = Math.max(300, Math.round(box.clientWidth || 520)), H = 210;
-  const ml = 44, mr = 6, mt = 22, mb = 26, iw = W - ml - mr, ih = H - mt - mb;
-  const max = niceMax(Math.max(...keys.map(k => Math.max(rec[k], dep[k]))));
-  const y = v => mt + ih - (v / max) * ih;
-  const gw = iw / keys.length, bw = Math.max(6, Math.min(20, (gw - 12) / 2));
-  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Recettes encaissées et crédits accordés sur les 8 dernières périodes">`;
-  [0, max / 2, max].forEach((v, i) => {
-    s += `<line class="${i ? "grid" : "base"}" x1="${ml}" x2="${W - mr}" y1="${y(v)}" y2="${y(v)}"></line>`;
-    s += `<text x="${ml - 6}" y="${y(v) + 4}" text-anchor="end">${compact(v)}</text>`;
-  });
-  keys.forEach((k, i) => {
-    const gx = ml + i * gw, cx = gx + gw / 2;
-    s += `<rect class="hit" data-i="${i}" x="${gx + 2}" y="${mt - 4}" width="${gw - 4}" height="${ih + 4}" rx="4"></rect>`;
-    const h1 = (rec[k] / max) * ih, h2 = (dep[k] / max) * ih;
-    const p1 = barPath(cx - bw - 1, mt + ih, bw, h1), p2 = barPath(cx + 1, mt + ih, bw, h2);
-    if (p1) s += `<path class="bar b1" d="${p1}"></path>`;
-    if (p2) s += `<path class="bar b2" d="${p2}"></path>`;
-    s += `<text x="${cx}" y="${H - 8}" text-anchor="middle"${i === keys.length - 1 ? ' class="lbl"' : ""}>${periodShort(k)}</text>`;
-    if (i === keys.length - 1) {
-      if (rec[k] > 0) s += `<text class="lbl" x="${cx - bw / 2 - 1}" y="${mt + ih - h1 - 5}" text-anchor="middle">${compact(rec[k])}</text>`;
-      if (dep[k] > 0) s += `<text class="lbl" x="${cx + bw / 2 + 1}" y="${mt + ih - h2 - 5}" text-anchor="middle">${compact(dep[k])}</text>`;
-    }
-  });
-  if (!totR && !totD) s += `<text class="none" x="${ml + iw / 2}" y="${mt + ih / 2}" text-anchor="middle">Aucun mouvement sur ces périodes pour l’instant.</text>`;
-  s += `</svg><div class="tip" id="tip" hidden></div>`;
-  box.innerHTML = s;
-
-  // Crédits par service
-  const bySvc = {};
-  for (const dm of S.demandes) {
-    const a = S.arbitrages[dm.id];
-    if (a && (a.statut === "accordee" || a.statut === "partielle")) bySvc[dm.service || "Autre"] = (bySvc[dm.service || "Autre"] || 0) + (Number(a.montantAccorde) || 0);
-  }
-  const rows = Object.entries(bySvc).sort((a, b) => b[1] - a[1]).slice(0, 6);
-  const ul = $("#svc-list");
-  ul.hidden = !rows.length;
-  ul.replaceChildren(...rows.map(([n, v]) => h("li", {}, h("span", { text: n }), h("span", { class: "mono", text: money(v) }))));
-  if (rows.length) ul.prepend(h("li", {}, h("span", { class: "eyebrow", text: "Crédits accordés par service" }), h("span", {})));
+  return { rec: keys.map(k => rec[k]), dep: keys.map(k => dep[k]) };
 }
-$("#chart").addEventListener("pointermove", e => {
-  const hit = e.target.closest && e.target.closest(".hit");
-  const tip = $("#tip");
-  if (!tip) return;
-  $$(".hit.on", $("#chart")).forEach(r => { if (r !== hit) r.classList.remove("on"); });
-  if (!hit || !chartData) { tip.hidden = true; return; }
-  hit.classList.add("on");
-  const k = chartData.keys[+hit.dataset.i];
-  tip.replaceChildren(
-    h("div", { class: "tl", text: periodLabel(k) }),
-    h("div", { class: "tr" }, h("span", { text: "Recettes encaissées" }), h("b", { text: money(chartData.rec[k]) })),
-    h("div", { class: "tr" }, h("span", { text: "Crédits accordés" }), h("b", { text: money(chartData.dep[k]) })));
-  tip.hidden = false;
-  const box = $("#chart").getBoundingClientRect();
-  const r = hit.getBoundingClientRect();
-  let left = r.left - box.left + r.width / 2 - tip.offsetWidth / 2;
-  left = Math.max(0, Math.min(box.width - tip.offsetWidth, left));
-  tip.style.left = left + "px";
-  tip.style.top = Math.max(-10, r.top - box.top - tip.offsetHeight - 6) + "px";
-});
-$("#chart").addEventListener("pointerleave", () => { const t = $("#tip"); if (t) t.hidden = true; $$(".hit.on").forEach(r => r.classList.remove("on")); });
-if (window.ResizeObserver) { let lastW = 0; new ResizeObserver(en => { const w = Math.round(en[0].contentRect.width); if (Math.abs(w - lastW) > 8) { lastW = w; schedule(); } }).observe($("#chart")); }
+function treasuryChart(box, legend, n, givenKeys) {
+  const keys = givenKeys || recentKeys(n).reverse();
+  const t = treasurySeries(keys);
+  const sum = a => a.reduce((s, v) => s + v, 0);
+  fill(legend,
+    h("span", {}, h("i", { style: "background:var(--s1)" }), "Recettes encaissées ", h("b", { text: money(sum(t.rec)) })),
+    h("span", {}, h("i", { style: "background:var(--s2)" }), "Crédits accordés ", h("b", { text: money(sum(t.dep)) })));
+  drawCols(box, {
+    short: keys.map(periodShort), full: keys.map(periodLabel),
+    series: [{ name: "Recettes encaissées", cls: "b1", values: t.rec }, { name: "Crédits accordés", cls: "b2", values: t.dep }],
+    label: `Recettes encaissées et crédits accordés sur les ${n} dernières périodes`, empty: "Aucun mouvement sur ces périodes pour l’instant."
+  });
+}
+function renderChart() {
+  treasuryChart($("#chart"), $("#legend"), 8);
+  $("#svc-list").hidden = true;
+}
+
+/* Alertes du tableau de bord */
+function renderAlerts() {
+  const box = $("#alerts");
+  if (!S.connected || !S.loaded.has("declarations")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const keys = new Set(recentKeys(3));
+  const rows = S.declarations
+    .filter(d => keys.has(d.periode) && !["controle", "rejetee"].includes(dStatus(d)))
+    .map(d => ({ d, a: alertsFor(d) }))
+    .filter(x => x.a.length)
+    .sort((x, y) => String(y.d.periode).localeCompare(String(x.d.periode)) || byCreatedDesc(x.d, y.d))
+    .filter((x, i, arr) => arr.findIndex(z => entKey(z.d) === entKey(x.d)) === i)
+    .sort((x, y) => y.a.length - x.a.length || String(y.d.periode).localeCompare(String(x.d.periode)));
+  if (!rows.length) { fill(box, h("div", { class: "empty", text: "Aucune anomalie repérée sur les trois dernières périodes." })); return; }
+  const w = writer();
+  fill(box,
+    h("ul", { class: "alert-list" }, rows.slice(0, 8).map(({ d, a }) => h("li", {},
+      h("div", { style: "min-width:0" },
+        h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: d.entrepriseNom || "Sans nom" }),
+        h("span", { class: "meta-inline", text: ` · ${periodShort(d.periode)} · ${dossierNo("DF", d.id)}` }),
+        h("div", { class: "reasons" }, a.map(r => h("span", { class: "reason", text: r })))),
+      w ? h("button", { class: "btn ghost small", type: "button", onclick: () => decide(d, "controle", dMontant(d), "Contrôle déclenché : " + a.join(" ; ")), text: "Contrôler" }) : null))),
+    rows.length > 8 ? h("div", { class: "reg-foot", text: `+ ${rows.length - 8} autre${plural(rows.length - 8)} : onglet Entreprises, filtre Alertes.` }) : null);
+}
+
+/* Enveloppes des services publics */
+function renderEnvelopes(key) {
+  const box = $("#envs");
+  $("#env-sub").textContent = `Crédits accordés · ${periodLabel(key)} · plafonds réglables dans Réglages`;
+  if (!S.connected || !S.loaded.has("arbitrages")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const use = envUse(key);
+  const names = cfg().services.slice();
+  for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && use[norm(dm.service)]) names.push(dm.service);
+  if (!names.length) { fill(box, h("div", { class: "empty", text: "Aucun service public enregistré." })); return; }
+  fill(box, h("ul", { class: "env-list" }, names.map(n => {
+    const used = use[norm(n)] || 0, capV = envCap(n), ratio = capV ? used / capV : 0;
+    const tone = !capV ? "" : ratio > 1 ? "bad" : ratio >= 0.8 ? "warn" : "";
+    return h("li", {},
+      h("div", { class: "env-row" }, h("span", { text: n }), h("span", { class: "mono" + (tone ? " t-" + tone + " tone-text" : ""), text: capV ? `${money(used)} / ${money(capV)}` : `${money(used)} · sans plafond` })),
+      capV ? h("div", { class: "meter " + tone, role: "img", "aria-label": `${Math.round(ratio * 100)} % de l’enveloppe utilisée` }, h("i", { style: `width:${Math.min(100, ratio * 100)}%` })) : null);
+  })));
+}
 
 /* Tableau des déclarations */
 function setSegCounts(seg, counts, active) {
@@ -1556,7 +2003,9 @@ function renderDeclTable(key) {
     const st = dStatus(d);
     const registered = d.entrepriseId && S.entreprises.some(e => e.id === d.entrepriseId);
     let act = null;
-    if (w && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
+    const ec = echOf(d), nx = ec ? nextEcheance(ec) : -1;
+    if (w && st === "validee" && ec && nx >= 0) act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); payEcheance(d, nx); }, text: `Encaisser ${nx + 1}/${ec.echeances.length}` });
+    else if (w && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
     else if (w && st === "validee") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || ""); }, text: "Encaisser" });
     return h("tr", {},
       h("td", { class: "no", text: dossierNo("DF", d.id) }),
@@ -1564,12 +2013,13 @@ function renderDeclTable(key) {
         h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: d.entrepriseNom || "Sans nom" }),
         !registered ? h("span", { class: "tag warn", text: "non enregistrée" }) : null,
         d.rectificative ? h("span", { class: "tag", text: "rectificative" }) : null,
+        alertsFor(d).length && !["controle", "rejetee"].includes(st) ? h("span", { class: "tag bad", text: "alerte" }) : null,
         h("span", { class: "small-meta", text: d.declarant || "" })),
       h("td", { text: periodShort(d.periode), title: periodLabel(d.periode) }),
       h("td", { class: "num", text: money(d.ca) }),
       h("td", { class: "num", text: money(d.resultat) }),
       h("td", { class: "num" }, money(dMontant(d)), d.enRetard ? h("span", { class: "tag warn", text: "retard" }) : null),
-      h("td", {}, chip(DSTAT[st] || DSTAT.soumise)),
+      h("td", {}, dChip(d)),
       h("td", { class: "act" }, act));
   });
   box.replaceChildren(h("div", { class: "tbl-wrap" }, h("table", {},
@@ -1618,7 +2068,8 @@ $("#seg-dem").addEventListener("click", e => { const b = e.target.closest("butto
 
 /* ---------- Fenêtres de décision ---------- */
 const dlg = $("#dlg");
-function openDialog({ eyebrow, title, stampEl, body, foot }) {
+function openDialog({ eyebrow, title, stampEl, body, foot, wide }) {
+  dlg.classList.toggle("wide", !!wide);
   dlg.replaceChildren(...[
     h("div", { class: "dlg-head" },
       h("div", { class: "dlg-titles" }, eyebrow ? h("div", { class: "eyebrow", text: eyebrow }) : null, h("h3", { class: "dlg-title", id: "dlg-title", text: title })),
@@ -1677,9 +2128,16 @@ function openDecl(id) {
       ["Déposée le", d.depotAt ? fmtDateTime(new Date(d.depotAt)) : "—"],
       ["Date limite", fmtDateTime(deadline(d.periode))],
       d.enRetard ? ["Retard", h("span", { class: "chip t-bad", text: "Déposée hors délai" })] : null,
-      d.rectificative ? ["Nature", "Déclaration rectificative"] : null])),
+      d.rectificative ? ["Nature", "Déclaration rectificative"] : null,
+      ["Entreprise", h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(entOf(d)), text: "Ouvrir la fiche" })]])),
     d.note ? sec("Observations de l’entreprise", h("p", { class: "prewrap", text: d.note })) : null
   ];
+  const al = alertsFor(d);
+  if (al.length) body.splice(1, 0, sec("Alertes", h("div", { class: "reasons" }, al.map(r => h("span", { class: "reason", text: r })))));
+  const echSec = echeancierSection(d, () => openDecl(id));
+  if (echSec) body.push(echSec);
+  if (d.enRetard && w) body.push(h("div", { class: "paste-row" }, h("span", { class: "hint", text: "Déclaration déposée hors délai." }),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(entOf(d), { motif: "Retard de déclaration", detail: periodPlain(d.periode), declId: d.id }), text: "Infliger une pénalité" })));
   if (!registered && w) {
     body.push(h("div", { class: "notice", style: "margin:0" }, h("div", {},
       h("strong", { text: "Entreprise non enregistrée. " }), "Ajoutez-la au registre pour suivre ses prochaines déclarations. ",
@@ -1702,7 +2160,8 @@ function openDecl(id) {
     if (!Number.isFinite(m) || m < 0) { mIn.setAttribute("aria-invalid", "true"); mIn.focus(); return; }
     if (await decide(d, statut, m, nIn ? nIn.value.trim() : "")) closeDialog();
   };
-  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(avisText(d), "Avis copié : collez-le en réponse sur Discord."), text: "Copier l’avis" })];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisDoc(d), () => openDecl(id)), text: "Avis en image" }),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(avisText(d), "Avis copié : collez-le en réponse sur Discord."), text: "Copier le texte" })];
   if (w) {
     const delBtn = h("button", { class: "btn danger small", type: "button", text: "Supprimer la saisie" });
     delBtn.addEventListener("click", () => {
@@ -1770,13 +2229,21 @@ function openDem(id) {
     cIn.value = a && a.commentaire ? a.commentaire : "";
     after = h("dd", { class: "num" });
     const already = a && (st === "accordee" || st === "partielle") ? Number(a.montantAccorde) || 0 : 0;
-    const upd = () => { const v = Number(mIn.value) || 0; const s = t.solde + already - v; after.textContent = money(s); after.style.color = s < 0 ? "var(--bad)" : ""; };
+    const nowK = keyOf(new Date()), capV = envCap(dm.service), usedNow = envUse(nowK)[norm(dm.service)] || 0;
+    const alreadyNow = a && (st === "accordee" || st === "partielle") && a.at && keyOf(new Date(a.at)) === nowK ? Number(a.montantAccorde) || 0 : 0;
+    const envDt = h("dt", { text: capV ? `Enveloppe ${dm.service} restante (${periodPlain(nowK).toLowerCase()})` : `Enveloppe ${dm.service}` });
+    const envDd = h("dd", { class: "num" });
+    const upd = () => {
+      const v = Number(mIn.value) || 0; const s = t.solde + already - v; after.textContent = money(s); after.style.color = s < 0 ? "var(--bad)" : "";
+      if (capV) { const r = capV - (usedNow - alreadyNow + v); envDd.textContent = `${money(r)} sur ${money(capV)}`; envDd.style.color = r < 0 ? "var(--bad)" : ""; }
+      else envDd.textContent = "sans plafond";
+    };
     mIn.addEventListener("input", upd);
     body.push(h("div", { class: "decide" },
       h("div", { class: "row2" },
         h("div", { class: "field" }, h("label", { for: "dlg-accorde", text: "Montant accordé" }), h("div", { class: "money", "data-cur": cur() }, mIn), h("span", { class: "hint", text: "Moins que demandé : accord partiel." })),
         h("div", { class: "field" }, h("label", { for: "dlg-motif", text: "Motif communiqué au service" }), cIn)),
-      h("dl", { class: "kv", style: "margin:0" }, h("dt", { text: "Solde du Trésor actuel" }), h("dd", { class: "num", text: money(t.solde) }), h("dt", { text: "Solde après cette décision" }), after)));
+      h("dl", { class: "kv", style: "margin:0" }, h("dt", { text: "Solde du Trésor actuel" }), h("dd", { class: "num", text: money(t.solde) }), h("dt", { text: "Solde après cette décision" }), after, envDt, envDd)));
     upd();
   } else if (a && a.commentaire) body.push(sec("Motif", h("p", { class: "prewrap", text: a.commentaire })));
 
@@ -1790,7 +2257,8 @@ function openDem(id) {
     const ok = await write(() => S.db.doc("arbitrages/" + id).set({ statut, montantAccorde: Math.round(m), commentaire: cIn ? cIn.value.trim() : "", at: nowISO(), by: S.uid || null }));
     if (ok) { toast({ accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut]); closeDialog(); }
   };
-  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(decisionText(dm), "Décision copiée : collez-la en réponse sur Discord."), text: "Copier la décision" })];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(decisionDoc(dm), () => openDem(id)), text: "Décision en image" }),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(decisionText(dm), "Décision copiée : collez-la en réponse sur Discord."), text: "Copier le texte" })];
   if (w) {
     const delBtn = h("button", { class: "btn danger small", type: "button", text: "Supprimer la saisie" });
     delBtn.addEventListener("click", () => {
@@ -2122,6 +2590,7 @@ function renderSettings() {
     $("#s-maj").value = String(c.majoration);
     $("#s-budget").value = String(c.budgetInitial);
     $("#s-devise").value = c.devise;
+    $("#s-smin").value = String(c.salaireMin || 0);
   }
   if (!S.svcDirty) $("#s-services").value = c.services.join("\n");
   const list = $("#ent-admin");
@@ -2154,23 +2623,27 @@ $("#form-set").addEventListener("submit", async e => {
   const v = {
     periodicite: $("#s-per").value,
     delaiJours: Number($("#s-delai").value), tauxIS: Number($("#s-is").value), tauxCot: Number($("#s-cot").value),
-    majoration: Number($("#s-maj").value), budgetInitial: Number($("#s-budget").value), devise: $("#s-devise").value.trim() || "€"
+    majoration: Number($("#s-maj").value), budgetInitial: Number($("#s-budget").value), devise: $("#s-devise").value.trim() || "€",
+    salaireMin: Number($("#s-smin").value) || 0
   };
   const bad = [];
   if (!Number.isFinite(v.delaiJours) || v.delaiJours < 0 || v.delaiJours > 14) bad.push("le délai (0 à 14 jours)");
   for (const [k, l] of [["tauxIS", "l’impôt"], ["tauxCot", "les cotisations"], ["majoration", "la majoration"]]) if (!Number.isFinite(v[k]) || v[k] < 0 || v[k] > 100) bad.push(l + " (0 à 100 %)");
   if (!Number.isFinite(v.budgetInitial) || v.budgetInitial < 0) bad.push("le fonds de départ");
+  if (!Number.isFinite(v.salaireMin) || v.salaireMin < 0) bad.push("le salaire minimum");
   if (bad.length) { $("#s-msg").textContent = "À corriger : " + bad.join(", ") + "."; return; }
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
   if (ok) { S.setDirty = false; $("#s-msg").textContent = "Barème enregistré."; toast("Barème enregistré."); }
 });
-$("#s-services").addEventListener("input", () => { S.svcDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
+$("#s-services").addEventListener("input", () => { S.svcDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; renderEnvEditor(true); });
 $("#s-svc-save").addEventListener("click", async () => {
   if (!writer()) return;
   const list = Array.from(new Set($("#s-services").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)));
   if (!list.length) { $("#s-svc-msg").textContent = "Indiquez au moins un service."; return; }
-  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, updatedAt: nowISO() })));
-  if (ok) { S.svcDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés.`; }
+  const env = {};
+  $$("#env-editor input[data-svc]").forEach(i => { const v = Number(i.value); if (list.includes(i.dataset.svc) && Number.isFinite(v) && v > 0) env[i.dataset.svc] = Math.round(v); });
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, enveloppes: env, updatedAt: nowISO() })));
+  if (ok) { S.svcDirty = false; S.envDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés, ${Object.keys(env).length} avec un plafond.`; renderEnvEditor(true); }
 });
 $("#form-ent").addEventListener("submit", async e => {
   e.preventDefault();
@@ -2192,7 +2665,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -2224,7 +2697,8 @@ function buildBackup() {
     collections: {
       config: S.config && Object.keys(S.config).length ? { main: S.config } : {},
       entreprises: strip(S.entreprises), declarations: strip(S.declarations),
-      decisions: Object.assign({}, S.decisions), demandes: strip(S.demandes), arbitrages: Object.assign({}, S.arbitrages)
+      decisions: Object.assign({}, S.decisions), demandes: strip(S.demandes), arbitrages: Object.assign({}, S.arbitrages),
+      penalites: strip(S.penalites), echeanciers: Object.assign({}, S.echeanciers)
     }
   };
 }
@@ -2316,7 +2790,9 @@ $("#b-file").addEventListener("change", e => {
           ["Déclarations", String(count("declarations")), "num"],
           ["Avis et décisions fiscales", String(count("decisions")), "num"],
           ["Demandes de moyens", String(count("demandes")), "num"],
-          ["Arbitrages", String(count("arbitrages")), "num"]]),
+          ["Arbitrages", String(count("arbitrages")), "num"],
+          ["Pénalités", String(count("penalites")), "num"],
+          ["Échéanciers", String(count("echeanciers")), "num"]]),
         h("p", { class: "sub", style: "margin:0", text: "Les dossiers portant le même numéro sont remplacés par la version du fichier. Rien n’est supprimé." }),
         progress],
       foot: [cancel, go]
@@ -2325,15 +2801,636 @@ $("#b-file").addEventListener("change", e => {
   r.readAsText(f);
 });
 
+/* ---------- Documents en image (avis, décisions, pénalités) ---------- */
+const STAMP_DECL = { soumise: ["EN VÉRIFICATION", "info"], validee: ["À PAYER", "bad"], payee: ["PAYÉ", "ok"], controle: ["EN CONTRÔLE", "accent"], rejetee: ["REJETÉE", "bad"] };
+const STAMP_ARB = { attente: ["EN ATTENTE", "info"], etude: ["À L’ÉTUDE", "accent"], accordee: ["ACCORDÉ", "ok"], partielle: ["ACCORDÉ EN PARTIE", "ok"], refusee: ["REFUSÉ", "bad"] };
+const STAMP_PEN = { due: ["À PAYER", "bad"], payee: ["PAYÉE", "ok"], annulee: ["ANNULÉE", "muted"] };
+const DOC_TONE = { ok: "#1b7044", warn: "#94580a", bad: "#b3261e", info: "#22569f", accent: "#4433a8", muted: "#5d6d72" };
+function wrapLines(ctx, text, maxW) {
+  const out = [];
+  for (const para of String(text || "").split(/\n/)) {
+    const words = para.split(/\s+/).filter(Boolean);
+    let line = "";
+    for (const w of words) {
+      const t = line ? line + " " + w : w;
+      if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t;
+    }
+    out.push(line);
+  }
+  return out.length ? out : [""];
+}
+async function renderDocImage(doc) {
+  try { await Promise.all(['800 40px "Archivo"', '700 18px "Archivo"', '400 17px "Archivo"', '600 17px "IBM Plex Mono"'].map(f => document.fonts.load(f))); } catch (e) { /* polices de secours */ }
+  const W = 1000, P = 64, inner = W - 2 * P, colW = (inner - 32) / 2;
+  const F = { disp: '"Archivo", "Arial Narrow", Arial, sans-serif', body: '"Archivo", Arial, sans-serif', mono: '"IBM Plex Mono", Consolas, monospace' };
+  const ink = "#122229", ink2 = "#4b5d63", rule = "#dfe6e5", violet = "#4433a8";
+  const m = document.createElement("canvas").getContext("2d");
+  m.font = `400 17px ${F.body}`;
+  const metaRows = [];
+  for (let i = 0; i < doc.meta.length; i += 2) metaRows.push(doc.meta.slice(i, i + 2));
+  const metaH = metaRows.map(r => Math.max(...r.map(([, v]) => wrapLines(m, v, colW).length)) * 24 + 40);
+  const noteLines = doc.note ? wrapLines(m, doc.note, inner) : [];
+  m.font = `400 14px ${F.body}`;
+  const footLines = wrapLines(m, doc.footer || "", inner);
+  let H = 200 + metaH.reduce((s, x) => s + x, 0) + 10 + doc.lines.length * 42 + 14 + 112;
+  if (doc.table) H += 40 + 36 + doc.table.rows.length * 36 + 24;
+  if (noteLines.length) H += 34 + noteLines.length * 24 + 20;
+  H += 40 + footLines.length * 20 + 50;
+  const scale = 2, c = document.createElement("canvas");
+  c.width = W * scale; c.height = Math.ceil(H * scale);
+  const ctx = c.getContext("2d");
+  ctx.scale(scale, scale);
+  const spacing = v => { if ("letterSpacing" in ctx) ctx.letterSpacing = v; };
+  ctx.fillStyle = "#fbfaf6"; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = "#cfd9d8"; ctx.lineWidth = 1; ctx.strokeRect(24.5, 24.5, W - 49, H - 49);
+  let y = 66;
+  ctx.strokeStyle = violet; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(P + 36, y + 32, 34, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(P + 36, y + 32, 28, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = violet; ctx.font = `800 17px ${F.disp}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; spacing("1px");
+  ctx.fillText("DIC", P + 36, y + 33);
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = ink2; ctx.font = `700 13px ${F.body}`; spacing("2px");
+  ctx.fillText("DIRECTION DES IMPÔTS & COTISATIONS", P + 92, y + 16);
+  spacing("0px"); ctx.fillStyle = ink; ctx.font = `800 38px ${F.disp}`;
+  ctx.fillText(doc.kind, P + 92, y + 58);
+  ctx.textAlign = "right"; ctx.font = `600 16px ${F.mono}`; ctx.fillText(`N° ${doc.no}`, W - P, y + 16);
+  ctx.font = `400 14px ${F.body}`; ctx.fillStyle = ink2; ctx.fillText(doc.date, W - P, y + 38);
+  ctx.textAlign = "left";
+  y += 100;
+  ctx.fillStyle = ink; ctx.fillRect(P, y, inner, 3);
+  y += 34;
+  metaRows.forEach((row, ri) => {
+    row.forEach(([label, value], ci) => {
+      const x = P + ci * (colW + 32);
+      ctx.fillStyle = ink2; ctx.font = `700 12px ${F.body}`; spacing("1.5px"); ctx.fillText(String(label).toUpperCase(), x, y);
+      spacing("0px"); ctx.fillStyle = ink; ctx.font = `400 17px ${F.body}`;
+      wrapLines(ctx, value, colW).forEach((ln, li) => ctx.fillText(ln, x, y + 26 + li * 24));
+    });
+    y += metaH[ri];
+  });
+  y += 4;
+  doc.lines.forEach(([label, value, strong]) => {
+    ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(P, y + 0.5); ctx.lineTo(W - P, y + 0.5); ctx.stroke();
+    ctx.fillStyle = strong ? ink : ink2; ctx.font = `${strong ? 700 : 400} 17px ${F.body}`; ctx.fillText(label, P, y + 28);
+    ctx.textAlign = "right"; ctx.fillStyle = ink; ctx.font = `${strong ? 600 : 400} 17px ${F.mono}`; ctx.fillText(value, W - P, y + 28); ctx.textAlign = "left";
+    y += 42;
+  });
+  y += 14;
+  const totalY = y;
+  ctx.strokeStyle = ink; ctx.lineWidth = 2; ctx.strokeRect(P + 1, y + 1, inner - 2, 86);
+  ctx.fillStyle = ink; ctx.font = `700 18px ${F.body}`; ctx.fillText(doc.total[0], P + 22, y + 51);
+  ctx.textAlign = "right"; ctx.font = `600 32px ${F.mono}`; ctx.fillText(doc.total[1], W - P - 22, y + 55); ctx.textAlign = "left";
+  y += 112;
+  if (doc.table) {
+    ctx.fillStyle = ink2; ctx.font = `700 12px ${F.body}`; spacing("1.5px"); ctx.fillText(doc.table.title.toUpperCase(), P, y + 10); spacing("0px");
+    y += 40;
+    const cols = [0, 0.18, 0.55, 0.78].map(f => P + f * inner);
+    ctx.font = `700 14px ${F.body}`; ctx.fillStyle = ink2;
+    doc.table.head.forEach((t, i) => ctx.fillText(t, cols[i], y));
+    y += 12;
+    doc.table.rows.forEach(r => {
+      ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(P, y + 0.5); ctx.lineTo(W - P, y + 0.5); ctx.stroke();
+      ctx.fillStyle = ink; ctx.font = `400 16px ${F.body}`;
+      r.forEach((t, i) => { ctx.font = `${i === 2 ? 400 : 400} 16px ${i === 2 ? F.mono : F.body}`; ctx.fillText(t, cols[i], y + 25); });
+      y += 36;
+    });
+    y += 24;
+  }
+  if (noteLines.length) {
+    ctx.fillStyle = ink2; ctx.font = `700 12px ${F.body}`; spacing("1.5px"); ctx.fillText((doc.noteTitle || "Observation de la Direction").toUpperCase(), P, y + 10); spacing("0px");
+    y += 34;
+    ctx.fillStyle = ink; ctx.font = `400 17px ${F.body}`;
+    noteLines.forEach((ln, i) => ctx.fillText(ln, P, y + i * 24 + 6));
+    y += noteLines.length * 24 + 20;
+  }
+  y += 16;
+  ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(P, y + 0.5); ctx.lineTo(W - P, y + 0.5); ctx.stroke();
+  ctx.fillStyle = ink2; ctx.font = `400 14px ${F.body}`;
+  footLines.forEach((ln, i) => ctx.fillText(ln, P, y + 28 + i * 20));
+  if (doc.stamp) {
+    const [label, toneKey] = doc.stamp, tone = DOC_TONE[toneKey] || DOC_TONE.accent;
+    ctx.save();
+    ctx.translate(P + inner * 0.5, totalY + 43);
+    ctx.rotate(-0.12);
+    ctx.globalAlpha = 0.86;
+    let size = 30;
+    ctx.font = `800 ${size}px ${F.disp}`; spacing("4px");
+    while (ctx.measureText(label).width > 270 && size > 16) { size -= 2; ctx.font = `800 ${size}px ${F.disp}`; }
+    const tw = ctx.measureText(label).width, bw = tw + 44, bh = size + 30;
+    ctx.strokeStyle = tone; ctx.fillStyle = tone;
+    ctx.lineWidth = 4; ctx.strokeRect(-bw / 2, -bh / 2, bw, bh);
+    ctx.lineWidth = 1.5; ctx.strokeRect(-bw / 2 + 6, -bh / 2 + 6, bw - 12, bh - 12);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(label, 2, 2);
+    ctx.restore();
+  }
+  return c;
+}
+const capFirst = s => s.charAt(0) + s.slice(1).toLowerCase();
+async function showDocImage(doc, back) {
+  let canvas;
+  try { canvas = await renderDocImage(doc); } catch (e) { toast("Impossible de créer l’image dans ce navigateur.", true); return; }
+  const url = canvas.toDataURL("image/png");
+  const fname = norm(doc.kind + " " + doc.no).replace(/\s+/g, "-");
+  const copyBtn = h("button", { class: "btn ink small", type: "button", text: "Copier l’image" });
+  copyBtn.addEventListener("click", () => {
+    try {
+      const item = new ClipboardItem({ "image/png": new Promise(res => canvas.toBlob(res, "image/png")) });
+      navigator.clipboard.write([item]).then(
+        () => toast("Image copiée : collez-la dans Discord avec Ctrl + V."),
+        () => toast("Le navigateur a refusé la copie : téléchargez l’image à la place.", true));
+    } catch (e) { toast("Ce navigateur ne sait pas copier une image : téléchargez-la à la place.", true); }
+  });
+  const dl = h("a", { class: "btn ghost small", href: url, download: fname + ".png", text: "Télécharger" });
+  openDialog({
+    eyebrow: "Image à poster sur Discord", title: `${capFirst(doc.kind)} ${doc.no}`, wide: true,
+    body: [h("img", { class: "avis-preview", src: url, alt: `${capFirst(doc.kind)} ${doc.no}` })],
+    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour au dossier" }) : null, h("span", { class: "spacer" }), dl, copyBtn].filter(Boolean)
+  });
+}
+function avisDoc(d) {
+  const dec = S.decisions[d.id], st = dStatus(d), e = echOf(d);
+  const lines = [
+    ["Chiffre d’affaires", money(d.ca)], ["Charges hors salaires", money(d.charges)], ["Masse salariale", money(d.masse)],
+    ["Résultat imposable", money(d.resultat), true],
+    [`Impôt sur le résultat (${pct(d.tauxIS)})`, money(d.impot)], [`Cotisations sociales (${pct(d.tauxCot)})`, money(d.cotisations)]];
+  if (d.enRetard) lines.push([`Majoration de retard (${pct(d.majPct)})`, money(d.majoration)]);
+  if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) lines.push(["Montant rectifié après vérification", money(dec.montant), true]);
+  const doc = {
+    kind: "AVIS D’IMPOSITION", no: dossierNo("DF", d.id), date: "Émis le " + longDate(dec && dec.at ? new Date(dec.at) : new Date()),
+    meta: [["Entreprise", d.entrepriseNom || "—"], ["Période", periodLabel(d.periode)], ["Déclarant", d.declarant || "—"], ["Déposée le", d.depotAt ? longDate(new Date(d.depotAt)) : "—"]],
+    lines, total: [st === "payee" ? "Montant réglé" : "Montant à régler", money(dMontant(d))],
+    note: dec && dec.note ? dec.note : "", stamp: STAMP_DECL[st] || STAMP_DECL.soumise,
+    footer: st === "validee" ? "À régler auprès de la Direction des Impôts & Cotisations dès réception de cet avis. Un retard de paiement peut entraîner une pénalité." : "Direction des Impôts & Cotisations."
+  };
+  if (e) doc.table = { title: "Échéancier de paiement", head: ["Échéance", "Date limite", "Montant", "État"], rows: e.echeances.map(x => [`${x.n} / ${e.echeances.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : (new Date(x.date).getTime() < Date.now() ? "En retard" : "À venir")]) };
+  return doc;
+}
+function decisionDoc(dm) {
+  const a = S.arbitrages[dm.id], st = aStatus(dm);
+  const ok = st === "accordee" || st === "partielle";
+  return {
+    kind: "DÉCISION BUDGÉTAIRE", no: dossierNo("DM", dm.id), date: "Émise le " + longDate(a && a.at ? new Date(a.at) : new Date()),
+    meta: [["Service", dm.service || "—"], ["Demandeur", dm.demandeur || "—"], ["Objet", dm.objet || "—"], ["Nature", NATURES[dm.nature] || "—"]],
+    lines: [["Quantité", String(dm.quantite || "—")], ["Montant demandé", money(dm.montant)], ["Reçue le", dm.recueAt ? longDate(new Date(dm.recueAt)) : "—"]],
+    total: ["Crédits accordés", money(ok ? a.montantAccorde : 0)], note: a && a.commentaire ? a.commentaire : "", noteTitle: "Motif de la décision",
+    stamp: STAMP_ARB[st] || STAMP_ARB.attente,
+    footer: ok ? "Les crédits sont mis à disposition du service par la Direction des Impôts & Cotisations." : "Direction des Impôts & Cotisations."
+  };
+}
+function penaltyDoc(p) {
+  return {
+    kind: "AVIS DE PÉNALITÉ", no: dossierNo("PN", p.id), date: "Émis le " + longDate(p.createdAt ? new Date(p.createdAt) : new Date()),
+    meta: [["Entreprise", p.entrepriseNom || "—"], ["Motif", p.motif || "—"]],
+    lines: p.statut === "payee" && p.paidAt ? [["Réglée le", longDate(new Date(p.paidAt))]] : [],
+    total: [p.statut === "payee" ? "Pénalité réglée" : "Pénalité à régler", money(p.montant)],
+    stamp: STAMP_PEN[p.statut] || STAMP_PEN.due,
+    footer: p.statut === "due" ? "À régler auprès de la Direction des Impôts & Cotisations dès réception de cet avis." : "Direction des Impôts & Cotisations."
+  };
+}
+
+/* ---------- Pénalités et échéanciers ---------- */
+async function addPenalty(e, motif, montant, declId) {
+  const ref = S.db.collection("penalites").doc();
+  const ok = await write(() => ref.set({ entrepriseId: e.id || null, entrepriseNom: e.nom, motif, montant: Math.round(montant), statut: "due", declId: declId || null, createdAt: nowISO(), by: S.uid || null }));
+  return ok ? ref.id : null;
+}
+async function setPenaltyStatus(p, statut) {
+  const body = Object.assign({}, p);
+  delete body.id;
+  body.statut = statut;
+  body.paidAt = statut === "payee" ? nowISO() : null;
+  const ok = await write(() => S.db.doc("penalites/" + p.id).set(body));
+  if (ok) toast({ payee: "Pénalité encaissée.", annulee: "Pénalité annulée.", due: "Pénalité remise à payer." }[statut]);
+  return ok;
+}
+async function createEcheancier(d, n) {
+  const total = dMontant(d), step = cfg().periodicite === "mois" ? 30 : 7, base = Math.floor(total / n);
+  const echeances = [];
+  for (let i = 0; i < n; i++) {
+    const dt = new Date();
+    dt.setDate(dt.getDate() + step * i);
+    dt.setHours(23, 59, 0, 0);
+    echeances.push({ n: i + 1, date: dt.toISOString(), montant: i === n - 1 ? total - base * (n - 1) : base, payee: false, paidAt: null });
+  }
+  const ok = await write(() => S.db.doc("echeanciers/" + d.id).set({ declId: d.id, entrepriseId: d.entrepriseId || null, entrepriseNom: d.entrepriseNom, total, echeances, createdAt: nowISO(), by: S.uid || null }));
+  if (ok) toast(`Paiement en ${n} fois accordé.`);
+  return ok;
+}
+async function payEcheance(d, idx) {
+  const e = echOf(d);
+  if (!e) return false;
+  const body = JSON.parse(JSON.stringify(e));
+  delete body.id;
+  body.echeances[idx].payee = true;
+  body.echeances[idx].paidAt = nowISO();
+  const ok = await write(() => S.db.doc("echeanciers/" + d.id).set(body));
+  if (!ok) return false;
+  if (body.echeances.every(x => x.payee)) await decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || "");
+  else toast(`Échéance ${idx + 1}/${body.echeances.length} encaissée.`);
+  return true;
+}
+const nextEcheance = e => e.echeances.findIndex(x => !x.payee);
+function echeancierSection(d, reopen) {
+  const e = echOf(d), st = dStatus(d), w = writer();
+  if (e) {
+    const next = nextEcheance(e);
+    const rows = e.echeances.map((x, i) => {
+      const late = !x.payee && new Date(x.date).getTime() < Date.now();
+      return h("tr", {},
+        h("td", { class: "no", text: `${x.n}/${e.echeances.length}` }),
+        h("td", { text: longDate(new Date(x.date)) }),
+        h("td", { class: "num", text: money(x.montant) }),
+        h("td", {}, chip(x.payee ? [`Payée le ${fmtDate(new Date(x.paidAt))}`, "ok"] : late ? ["En retard", "bad"] : ["À venir", "muted"])),
+        h("td", { class: "act" }, w && i === next && st === "validee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await payEcheance(d, i)) reopen(); }, text: "Encaisser" }) : null));
+    });
+    const canDelete = w && !e.echeances.some(x => x.payee);
+    return sec("Paiement en plusieurs fois",
+      h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" }, h("tbody", {}, rows))),
+      canDelete ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: async () => { if (await write(() => S.db.doc("echeanciers/" + d.id).delete())) { toast("Échéancier supprimé."); reopen(); } }, text: "Supprimer l’échéancier" }) : null);
+  }
+  if (!w || st !== "validee") return null;
+  const sel = h("select", { id: "ech-n", style: "width:auto" }, [2, 3, 4, 5, 6].map(n => h("option", { value: String(n), text: `${n} fois` })));
+  return sec("Paiement en plusieurs fois",
+    h("div", { class: "paste-row" },
+      h("label", { for: "ech-n", class: "hint", text: `Une échéance par ${cfg().periodicite === "mois" ? "mois" : "semaine"}, la première aujourd’hui :` }), sel,
+      h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await createEcheancier(d, Number(sel.value))) reopen(); }, text: "Échelonner le paiement" })));
+}
+
+/* ---------- Fiche entreprise ---------- */
+const PEN_MOTIFS = ["Retard de déclaration", "Défaut de paiement", "Fausse déclaration", "Obstruction à un contrôle", "Travail non déclaré", "Autre"];
+function openFiche(e, opts) {
+  opts = opts || {};
+  const sm = entSummary(e, lastClosedKey());
+  const w = writer();
+  const reopen = () => openFiche(S.entreprises.find(x => x.id === e.id) || e);
+  const minis = h("div", { class: "minis" }, [
+    ["Total payé", money(sm.paid), sm.paid > 0 ? "ok" : ""],
+    ["Reste dû", money(sm.due), sm.due > 0 ? "warn" : ""],
+    ["Déclarations", String(sm.ds.length), ""],
+    ["Retards", String(sm.retards), sm.retards ? "bad" : ""],
+    ["Contrôles", String(sm.controles), ""],
+    ["Chiffre d’affaires moyen", money(sm.caMoy), ""]
+  ].map(([l, v, t]) => h("div", { class: "kpi" + (t ? " " + t : "") }, h("span", { class: "l", text: l }), h("span", { class: "v", text: v }))));
+
+  const chartBox = h("div", { class: "chart", id: "fiche-chart" });
+  const legend = h("div", { class: "legend" },
+    h("span", {}, h("i", { style: "background:var(--s1)" }), "Chiffre d’affaires"),
+    h("span", {}, h("i", { style: "background:var(--s2)" }), "Montant dû"));
+
+  const histRows = sm.ds.map(d => {
+    const a = alertsFor(d);
+    return h("tr", {},
+      h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: periodLabel(d.periode) }), d.rectificative ? h("span", { class: "tag", text: "rectificative" }) : null),
+      h("td", { class: "num", text: money(d.ca) }),
+      h("td", { class: "num", text: money(d.resultat) }),
+      h("td", { class: "num" }, money(dMontant(d)), d.enRetard ? h("span", { class: "tag warn", text: "retard" }) : null),
+      h("td", { class: "num", text: money(dEncaisse(d)) }),
+      h("td", {}, dChip(d), a.length ? h("span", { class: "tag bad", text: `${a.length} alerte${plural(a.length)}` }) : null));
+  });
+  const hist = sm.ds.length
+    ? h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+        h("thead", {}, h("tr", {}, ["Période", "Chiffre d’affaires", "Résultat", "Montant dû", "Encaissé", "Statut"].map((t, i) => h("th", { class: [1, 2, 3, 4].includes(i) ? "num" : null, text: t })))),
+        h("tbody", {}, histRows)))
+    : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune déclaration pour l’instant." });
+
+  const penRows = sm.pens.slice().sort(byCreatedDesc).map(p => h("tr", {},
+    h("td", { text: p.createdAt ? fmtDate(new Date(p.createdAt)) : "—" }),
+    h("td", { text: p.motif || "—" }),
+    h("td", { class: "num", text: money(p.montant) }),
+    h("td", {}, chip(PSTAT[p.statut] || PSTAT.due)),
+    h("td", { class: "act" },
+      h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(penaltyDoc(p), reopen), text: "Image" }),
+      w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "payee")) reopen(); }, text: "Encaisser" }) : null,
+      w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "annulee")) reopen(); }, text: "Annuler" }) : null)));
+  const pens = sm.pens.length
+    ? h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" }, h("tbody", {}, penRows)))
+    : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune pénalité." });
+
+  let penForm = null;
+  if (w) {
+    const motif = h("select", { id: "pen-motif" }, PEN_MOTIFS.map(m => h("option", { value: m, text: m })));
+    const detail = h("input", { id: "pen-detail", autocomplete: "off", placeholder: "Précision : période, dossier…" });
+    const amount = h("input", { id: "pen-montant", type: "number", min: "1", step: "1", inputmode: "numeric", placeholder: "0" });
+    if (opts.motif) motif.value = opts.motif;
+    if (opts.detail) detail.value = opts.detail;
+    const err = h("span", { class: "err", "aria-live": "polite" });
+    penForm = h("form", { class: "decide", novalidate: true },
+      h("div", { class: "pen-grid" },
+        h("div", { class: "field" }, h("label", { for: "pen-motif", text: "Motif" }), motif),
+        h("div", { class: "field" }, h("label", { for: "pen-detail", text: "Précision" }), detail),
+        h("div", { class: "field" }, h("label", { for: "pen-montant", text: "Montant" }), h("div", { class: "money", "data-cur": cur() }, amount))),
+      h("div", { class: "paste-row" }, h("button", { class: "btn small", type: "submit", text: "Infliger la pénalité" }), err));
+    penForm.addEventListener("submit", async ev => {
+      ev.preventDefault();
+      const v = Number(amount.value);
+      if (!Number.isFinite(v) || v <= 0) { amount.setAttribute("aria-invalid", "true"); amount.focus(); err.textContent = "Indiquez un montant supérieur à 0."; return; }
+      const label = motif.value + (detail.value.trim() ? " · " + detail.value.trim() : "");
+      const id = await addPenalty(e, label, v, opts.declId);
+      if (id) { toast("Pénalité infligée."); reopen(); }
+    });
+  }
+
+  const body = [
+    minis,
+    sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r })))) : null,
+    sec("Chiffre d’affaires et montant dû, 12 dernières périodes", legend, chartBox),
+    sec("Historique des déclarations", hist),
+    sec("Pénalités", pens, penForm)
+  ];
+  const foot = [
+    w && !e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const d = sm.ds[0]; if (d) registerFromDecl(d); }, text: "Enregistrer au registre" }) : null,
+    h("span", { class: "spacer" }),
+    h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
+  openDialog({
+    eyebrow: "Fiche entreprise · " + ([e.secteur, e.patron].filter(Boolean).join(" · ") || "secteur non renseigné"),
+    title: e.nom, wide: true,
+    stampEl: e.id ? stamp(situation(sm)) : stamp(["Non enregistrée", "warn"]),
+    body, foot
+  });
+  const keys = keysEnding(defaultKey(), 12);
+  const byKey = {};
+  for (const d of sm.ds) if (dStatus(d) !== "rejetee" && (!byKey[d.periode] || String(d.createdAt) > String(byKey[d.periode].createdAt))) byKey[d.periode] = d;
+  requestAnimationFrame(() => drawCols(chartBox, {
+    short: keys.map(periodShort), full: keys.map(periodLabel), height: 190,
+    series: [{ name: "Chiffre d’affaires", cls: "b1", values: keys.map(k => byKey[k] ? Number(byKey[k].ca) || 0 : 0) },
+             { name: "Montant dû", cls: "b2", values: keys.map(k => byKey[k] ? dMontant(byKey[k]) : 0) }],
+    label: "Chiffre d’affaires et montant dû de l’entreprise", empty: "Aucune déclaration sur ces périodes."
+  }));
+  if (opts.motif && w) setTimeout(() => { const el = $("#pen-montant"); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } }, 80);
+}
+
+/* ---------- Onglet Entreprises ---------- */
+function renderEntreprises() {
+  if (S.tab !== "entreprises") return;
+  const box = $("#ent-table");
+  if (!S.connected || !S.loaded.has("entreprises") || !S.loaded.has("declarations")) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
+  const key = lastClosedKey();
+  const all = S.entreprises.map(e => entSummary(e, key));
+  const active = all.filter(x => x.e.actif !== false);
+  const F = {
+    tout: active,
+    retard: active.filter(x => x.cur.status === "retard"),
+    du: all.filter(x => x.due > 0),
+    alertes: all.filter(x => x.alerts.length),
+    controle: all.filter(x => x.ds.some(d => dStatus(d) === "controle")),
+    inactives: all.filter(x => x.e.actif === false)
+  };
+  setSegCounts($("#seg-ent"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), S.entFilter);
+  $("#ent-sub").textContent = `${active.length} entreprise${plural(active.length)} active${plural(active.length)} · ${F.retard.length} en retard pour ${periodPlain(key).toLowerCase()} · ${F.du.length} doi${F.du.length > 1 ? "ven" : ""}t de l’argent. Cliquez sur un nom pour ouvrir sa fiche.`;
+  if (!all.length) {
+    fill(box, h("div", { class: "empty" }, h("span", { text: "Aucune entreprise enregistrée. Ajoutez celles du serveur dans Réglages pour suivre leurs déclarations." }),
+      writer() ? h("button", { class: "btn ghost small", type: "button", onclick: () => showTab("reglages"), text: "Ajouter des entreprises" }) : null));
+    return;
+  }
+  const q = norm(S.entQ);
+  let list = (F[S.entFilter] || F.tout).filter(x => !q || norm([x.e.nom, x.e.secteur, x.e.patron].join(" ")).includes(q));
+  const by = {
+    nom: (a, b) => String(a.e.nom).localeCompare(String(b.e.nom), "fr"),
+    du: (a, b) => b.due - a.due,
+    ca: (a, b) => (Number(b.last && b.last.ca) || 0) - (Number(a.last && a.last.ca) || 0),
+    retards: (a, b) => b.retards - a.retards,
+    alertes: (a, b) => b.alerts.length - a.alerts.length
+  };
+  list.sort((a, b) => (by[S.entSort] || by.nom)(a, b) || by.nom(a, b));
+  if (!list.length) { fill(box, h("div", { class: "empty", text: q ? `Aucune entreprise ne correspond à « ${S.entQ} ».` : "Aucune entreprise dans ce filtre." })); return; }
+  const shown = list.slice(0, S.entLimit);
+  const rows = shown.map(x => h("tr", {},
+    h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), h("span", { class: "small-meta", text: [x.e.secteur, x.e.patron].filter(Boolean).join(" · ") || "—" })),
+    h("td", {}, chip(situation(x))),
+    h("td", { class: "num", text: x.last ? money(x.last.ca) : "—" }),
+    h("td", { class: "num", text: money(x.paid) }),
+    h("td", { class: "num" + (x.due > 0 ? " t-warn tone-text" : ""), text: money(x.due) }),
+    h("td", { class: "num", text: String(x.retards) }),
+    h("td", {}, x.alerts.length ? h("span", { class: "tag bad", style: "margin-left:0", text: `${x.alerts.length} alerte${plural(x.alerts.length)}`, title: x.alerts.join(" ; ") }) : h("span", { class: "muted", text: "—" }))));
+  fill(box,
+    h("div", { class: "tbl-wrap" }, h("table", {},
+      h("thead", {}, h("tr", {}, ["Entreprise", "Situation", "Dernier chiffre d’affaires", "Total payé", "Reste dû", "Retards", "Alertes"].map((t, i) => h("th", { class: [2, 3, 4, 5].includes(i) ? "num" : null, text: t })))),
+      h("tbody", {}, rows))),
+    list.length > shown.length ? h("div", { class: "reg-foot" }, `${shown.length} sur ${list.length} affichées. `, h("button", { class: "linkbtn", type: "button", onclick: () => { S.entLimit += 50; renderEntreprises(); }, text: "Afficher 50 de plus" })) : null);
+}
+$("#ent-q").addEventListener("input", e => { S.entQ = e.target.value; S.entLimit = 50; renderEntreprises(); });
+$("#seg-ent").addEventListener("click", e => { const b = e.target.closest("button[data-f]"); if (!b) return; S.entFilter = b.dataset.f; S.entLimit = 50; renderEntreprises(); });
+$("#ent-sort").addEventListener("change", e => { S.entSort = e.target.value; renderEntreprises(); });
+$("#btn-ent-manage").addEventListener("click", () => showTab("reglages"));
+
+/* ---------- Onglet Économie ---------- */
+function renderEconomie() {
+  if (S.tab !== "economie") return;
+  if (!S.connected || !S.loaded.has("declarations")) return;
+  const key = S.dashKey || defaultKey();
+  const keys = keysEnding(key, 12);
+  const short = keys.map(periodShort), full = keys.map(periodLabel);
+  const per = keys.map(k => periodDecls(k));
+  const sumOf = (ds, f) => ds.reduce((s, d) => s + (Number(d[f]) || 0), 0);
+  const cur = periodDecls(key), prevK = prevKey(key), prev = periodDecls(prevK);
+  const ca = sumOf(cur, "ca"), caPrev = sumOf(prev, "ca"), emp = sumOf(cur, "nbSalaries"), mas = sumOf(cur, "masse");
+  const allP = S.declarations.filter(d => d.periode === key);
+  const penPaid = S.penalites.filter(p => p.statut === "payee" && p.paidAt && keyOf(new Date(p.paidAt)) === key).reduce((s, p) => s + (Number(p.montant) || 0), 0);
+  const rec = allP.reduce((s, d) => s + dEncaisse(d), 0) + penPaid;
+  const issued = allP.filter(d => ["validee", "payee"].includes(dStatus(d)));
+  const dues = issued.reduce((s, d) => s + dMontant(d), 0), paidPart = issued.reduce((s, d) => s + dEncaisse(d), 0);
+  const varPct = caPrev && cur.length ? (ca - caPrev) / caPrev * 100 : null;
+  setKpi("e-ca", money(ca), `${cur.length} entreprise${plural(cur.length)} déclarante${plural(cur.length)}`);
+  setKpi("e-var", varPct == null ? "—" : `${varPct > 0 ? "+" : ""}${Math.round(varPct)} %`, !cur.length ? "aucune déclaration pour cette période" : caPrev ? `${money(caPrev)} en ${periodPlain(prevK).toLowerCase()}` : "pas de donnée la période précédente", varPct == null ? "" : varPct < 0 ? "bad" : varPct > 0 ? "ok" : "");
+  const empEnts = cur.filter(d => (Number(d.nbSalaries) || 0) > 0).length;
+  setKpi("e-emp", NF.format(emp), emp ? `dans ${empEnts} entreprise${plural(empEnts)}` : "aucun salarié déclaré");
+  setKpi("e-mas", money(mas), emp ? `${money(mas / emp)} par salarié en moyenne` : "aucun salarié déclaré");
+  setKpi("e-rec", money(rec), penPaid ? `dont ${money(penPaid)} de pénalités` : "impôts et cotisations encaissés", rec > 0 ? "ok" : "");
+  setKpi("e-taux", dues ? `${Math.round(paidPart / dues * 100)} %` : "—", dues ? `${money(dues - paidPart)} restent à payer` : "aucun avis émis", dues && paidPart < dues ? "warn" : "");
+  drawCols($("#ch-ca"), { short, full, series: [{ name: "Chiffre d’affaires", cls: "b1", values: per.map(ds => sumOf(ds, "ca")) }], label: "Chiffre d’affaires déclaré, 12 dernières périodes" });
+  treasuryChart($("#ch-tr"), $("#lg-tr"), 12, keys);
+  drawLine($("#ch-emp"), { short, full, values: per.map(ds => sumOf(ds, "nbSalaries")), name: "Salariés déclarés", label: "Emplois déclarés, 12 dernières périodes", fmt: v => NF.format(v) + " salarié" + plural(v) });
+  const bySec = {};
+  for (const d of cur) { const s = secteurOf(d); bySec[s] = bySec[s] || { value: 0, n: 0 }; bySec[s].value += Number(d.ca) || 0; bySec[s].n++; }
+  $("#sec-sub").textContent = periodLabel(key);
+  drawHBars($("#ch-sec"), Object.entries(bySec).sort((a, b) => b[1].value - a[1].value).map(([label, v]) => ({ label, value: v.value, extra: `${v.n} entr.` })), "Aucune déclaration pour cette période.");
+  $("#top-sub").textContent = `${periodLabel(key)} · dix premières entreprises`;
+  drawHBars($("#ch-top"), cur.slice().sort((a, b) => (Number(b.ca) || 0) - (Number(a.ca) || 0)).slice(0, 10).map(d => ({ label: d.entrepriseNom || "Sans nom", value: Number(d.ca) || 0, open: () => openFiche(entOf(d)) })), "Aucune déclaration pour cette période.");
+}
+$("#eco-per").addEventListener("change", e => { S.dashKey = e.target.value; render(); });
+
+/* ---------- Journal des actions ---------- */
+const tableMissing = err => /42P01|PGRST205|PGRST202|does not exist|schema cache|could not find/i.test(((err && err.code) || "") + " " + ((err && err.message) || ""));
+async function loadJournal() {
+  if (!S.sb || !S.connected || S.journalBusy) return;
+  S.journalBusy = true;
+  const { data, error } = await S.sb.from("journal").select("id,at,auteur,discord_id,action,collection,doc_id,avant,apres").order("at", { ascending: false }).limit(1000);
+  S.journalBusy = false;
+  if (error) { S.journalError = tableMissing(error) ? "missing" : (error.message || "erreur"); S.journal = []; }
+  else { S.journalError = null; S.journal = data || []; }
+  S.journalLoaded = true;
+  renderJournal();
+}
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+function describe(e) {
+  const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
+  switch (e.collection) {
+    case "declarations": {
+      const who = `${v.entrepriseNom || "?"} · ${periodPlain(v.periode)}`;
+      if (x === "ajout") return `a saisi la déclaration de ${who} (${money(v.total)})`;
+      if (x === "suppression") return `a supprimé la déclaration de ${who}`;
+      return a.entrepriseId !== b.entrepriseId ? `a rattaché la déclaration de ${who} au registre` : `a modifié la déclaration de ${who}`;
+    }
+    case "decisions": {
+      const d = S.declarations.find(y => y.id === e.doc_id);
+      const who = d ? `${d.entrepriseNom} · ${periodPlain(d.periode)}` : jNo(e);
+      if (x === "suppression") return `a effacé la décision sur ${who}`;
+      const verb = { validee: b.statut === "payee" ? "a annulé l’encaissement de" : "a émis l’avis de", payee: "a encaissé", controle: "a placé en contrôle fiscal", rejetee: "a rejeté la déclaration de" }[a.statut] || "a modifié la décision sur";
+      return `${verb} ${who} (${money(a.montant)})`;
+    }
+    case "echeanciers": {
+      const n = (v.echeances || []).length;
+      if (x === "ajout") return `a accordé un paiement en ${n} fois à ${v.entrepriseNom} (${money(v.total)})`;
+      if (x === "suppression") return `a supprimé l’échéancier de ${v.entrepriseNom}`;
+      const paid = (a.echeances || []).filter(y => y.payee).length, was = (b.echeances || []).filter(y => y.payee).length;
+      return paid > was ? `a encaissé l’échéance ${paid}/${n} de ${a.entrepriseNom}` : `a modifié l’échéancier de ${a.entrepriseNom}`;
+    }
+    case "penalites":
+      if (x === "ajout") return `a infligé une pénalité de ${money(v.montant)} à ${v.entrepriseNom} (${v.motif})`;
+      if (x === "suppression") return `a supprimé une pénalité de ${v.entrepriseNom}`;
+      return ({ payee: `a encaissé la pénalité de ${a.entrepriseNom} (${money(a.montant)})`, annulee: `a annulé la pénalité de ${a.entrepriseNom} (${money(a.montant)})`, due: `a remis à payer la pénalité de ${a.entrepriseNom}` })[a.statut] || `a modifié une pénalité de ${a.entrepriseNom}`;
+    case "demandes":
+      if (x === "ajout") return `a saisi la demande de ${v.service} : ${v.objet} (${money(v.montant)})`;
+      if (x === "suppression") return `a supprimé la demande de ${v.service} : ${v.objet}`;
+      return `a modifié la demande de ${v.service} : ${v.objet}`;
+    case "arbitrages": {
+      const dm = S.demandes.find(y => y.id === e.doc_id);
+      const who = dm ? `${dm.service} (${dm.objet})` : jNo(e);
+      if (x === "suppression") return `a effacé l’arbitrage de ${who}`;
+      return ({ accordee: `a accordé ${money(a.montantAccorde)} à ${who}`, partielle: `a accordé ${money(a.montantAccorde)}, en partie, à ${who}`, refusee: `a refusé la demande de ${who}`, etude: `a mis à l’étude la demande de ${who}` })[a.statut] || `a modifié l’arbitrage de ${who}`;
+    }
+    case "entreprises":
+      if (x === "ajout") return `a ajouté l’entreprise ${v.nom} au registre`;
+      if (x === "suppression") return `a retiré l’entreprise ${v.nom} du registre`;
+      if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
+      return `a modifié l’entreprise ${a.nom}`;
+    case "config": {
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes" };
+      const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
+      return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
+    }
+    case "meta": return "a téléchargé une sauvegarde du registre";
+    case "agents": {
+      const nom = v.nom || v.discord_id, role = v.role === "direction" ? "Direction" : "Lecture seule";
+      if (x === "ajout") return `a donné l’accès ${role} à ${nom}`;
+      if (x === "suppression") return `a retiré l’accès de ${nom}`;
+      return `a changé l’accès de ${nom} en ${role}`;
+    }
+    default: return `${x} · ${e.collection} ${e.doc_id}`;
+  }
+}
+const shortJson = s => (s === undefined ? "—" : s.length > 90 ? s.slice(0, 87) + "…" : s);
+function diffRows(b, a) {
+  const keys = new Set(Object.keys(b || {}).concat(Object.keys(a || {})));
+  const out = [];
+  for (const k of keys) {
+    if (["createdAt", "updatedAt", "by", "saisiPar", "at"].includes(k)) continue;
+    const vb = JSON.stringify((b || {})[k]), va = JSON.stringify((a || {})[k]);
+    if (vb !== va) out.push(`${k} : ${shortJson(vb)} → ${shortJson(va)}`);
+  }
+  return out;
+}
+function renderJournal() {
+  const ul = $("#j-list"), more = $("#j-more");
+  if (S.journalError === "missing") { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: "Le journal n’est pas encore installé dans la base. Exécutez le fichier supabase/v2_journal_export.sql dans le SQL Editor de Supabase (voir le README)." })); fill(more); return; }
+  if (S.journalError) { fill(ul, h("li", { class: "err", style: "grid-template-columns:1fr", text: "Impossible de charger le journal : " + S.journalError })); fill(more); return; }
+  if (!S.journalLoaded) { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: "Chargement du journal…" })); fill(more); return; }
+  const agents = [...new Set(S.journal.map(e => e.auteur || "Sans nom"))].sort((x, y) => x.localeCompare(y, "fr"));
+  const sel = $("#j-agent"), curA = sel.value;
+  if (sel.dataset.sig !== agents.join("|")) { fill(sel, h("option", { value: "", text: "Tous les agents" }), agents.map(n => h("option", { value: n, text: n }))); sel.dataset.sig = agents.join("|"); sel.value = agents.includes(curA) ? curA : ""; }
+  const type = $("#j-type").value, agent = sel.value, q = norm($("#j-q").value);
+  const rows = S.journal.map(e => ({ e, text: describe(e), no: jNo(e), who: e.auteur || "Sans nom" }))
+    .filter(r => (!type || r.e.collection === type) && (!agent || r.who === agent) && (!q || norm(r.who + " " + r.text + " " + r.no).includes(q)));
+  if (!rows.length) { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: S.journal.length ? "Aucune action ne correspond à ces filtres." : "Aucune action enregistrée pour l’instant." })); fill(more); return; }
+  const shown = rows.slice(0, S.jLimit);
+  fill(ul, shown.map(r => {
+    const d = new Date(r.e.at);
+    const diffs = r.e.action === "modification" ? diffRows(r.e.avant, r.e.apres) : [];
+    return h("li", {},
+      h("time", { datetime: r.e.at, text: `${fmtDate(d)} ${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` }),
+      h("div", { style: "min-width:0" }, h("span", { class: "jwho", text: r.who }), " ", r.text, r.no ? h("span", { class: "tag", text: r.no }) : null,
+        diffs.length ? h("details", {}, h("summary", { text: "Détail des changements" }), h("div", { class: "diff" }, diffs.map(t => h("span", { text: t })))) : null),
+      h("span", { class: "chip t-" + ({ ajout: "info", modification: "muted", suppression: "bad" }[r.e.action] || "muted"), text: capFirst(r.e.action) }));
+  }));
+  fill(more, rows.length > shown.length ? h("div", { class: "reg-foot" }, `${shown.length} sur ${rows.length} actions affichées. `, h("button", { class: "linkbtn", type: "button", onclick: () => { S.jLimit += 100; renderJournal(); }, text: "Afficher 100 de plus" })) : null);
+}
+$("#j-refresh").addEventListener("click", loadJournal);
+$("#j-type").addEventListener("change", () => { S.jLimit = 100; renderJournal(); });
+$("#j-agent").addEventListener("change", () => { S.jLimit = 100; renderJournal(); });
+$("#j-q").addEventListener("input", () => { S.jLimit = 100; renderJournal(); });
+setInterval(() => { if (S.tab === "journal" && document.visibilityState === "visible") loadJournal(); }, 60000);
+
+/* ---------- Clés d’export Google Sheets ---------- */
+async function loadKeys() {
+  if (!S.sb || !S.admin) return;
+  const { data, error } = await S.sb.from("cles_export").select("id,nom,cree_le,derniere_utilisation").order("cree_le");
+  S.keysError = error ? (tableMissing(error) ? "missing" : (error.message || "erreur")) : null;
+  S.exportKeys = data || [];
+  renderKeys();
+}
+function renderKeys() {
+  const ul = $("#k-list");
+  $("#k-add").disabled = !S.admin || S.keysError === "missing";
+  if (S.keysError === "missing") { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: "L’export n’est pas encore installé dans la base. Exécutez le fichier supabase/v2_journal_export.sql dans le SQL Editor de Supabase." })); return; }
+  if (S.keysError) { fill(ul, h("li", { class: "err", style: "grid-template-columns:1fr", text: "Impossible de lire les clés : " + S.keysError })); return; }
+  if (!S.exportKeys.length) { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: "Aucune clé d’export pour l’instant." })); return; }
+  fill(ul, S.exportKeys.map(k => h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: k.nom || "Clé sans nom" }),
+      h("span", { class: "meta", text: `Créée le ${fmtDate(new Date(k.cree_le))} · ${k.derniere_utilisation ? "dernière lecture le " + fmtDateTime(new Date(k.derniere_utilisation)) : "jamais utilisée"}` })),
+    h("span", {}),
+    h("button", { class: "btn danger small", type: "button", onclick: async () => {
+      const { error } = await S.sb.from("cles_export").delete().eq("id", k.id);
+      if (error) toast("Révocation refusée : " + error.message, true); else { toast("Clé révoquée : la feuille liée ne pourra plus se mettre à jour."); loadKeys(); }
+    }, text: "Révoquer" }))));
+}
+$("#form-key").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!S.admin) return;
+  const nom = $("#k-nom").value.trim() || "Feuille du staff";
+  const { data, error } = await S.sb.rpc("creer_cle_export", { p_nom: nom });
+  if (error) { $("#k-msg").textContent = tableMissing(error) ? "L’export n’est pas encore installé dans la base (fichier supabase/v2_journal_export.sql)." : "Création refusée : " + error.message; return; }
+  $("#k-msg").textContent = "";
+  $("#k-nom").value = "";
+  const key = String(data || "");
+  fill($("#k-new"), h("div", { class: "notice", style: "margin:12px 0 0;border-left-color:var(--ok)" }, h("div", { style: "display:grid;gap:8px;min-width:0" },
+    h("strong", { text: "Copiez cette clé maintenant : elle ne sera plus affichée." }),
+    h("span", { class: "idbox", style: "overflow-wrap:anywhere", text: key }),
+    h("div", { class: "paste-row" }, h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(key, "Clé copiée."), text: "Copier la clé" }),
+      h("span", { class: "hint", text: "Collez-la dans la feuille : menu Guichet fiscal → Enregistrer la clé d’export." })))));
+  loadKeys();
+});
+
+/* ---------- Enveloppes : édition dans les réglages ---------- */
+const parseServices = () => Array.from(new Set($("#s-services").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)));
+function renderEnvEditor(force) {
+  const box = $("#env-editor");
+  if (!force && (S.envDirty || box.contains(document.activeElement))) return;
+  const names = S.svcDirty ? parseServices() : cfg().services;
+  const env = cfg().enveloppes || {};
+  const prev = {};
+  $$("input[data-svc]", box).forEach(i => { prev[i.dataset.svc] = i.value; });
+  fill(box,
+    h("div", { class: "env-head" }, h("span", { text: "Service" }), h("span", { text: `Plafond par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` })),
+    names.map((n, i) => {
+      const inp = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", id: "env-" + i, "data-svc": n, placeholder: "Sans plafond", "aria-label": "Plafond de " + n });
+      const k = Object.keys(env).find(x => norm(x) === norm(n));
+      inp.value = prev[n] !== undefined ? prev[n] : (k && env[k] ? String(env[k]) : "");
+      return h("div", { class: "env-edit" }, h("label", { for: "env-" + i, text: n }), h("div", { class: "money", "data-cur": cur() }, inp));
+    }));
+}
+$("#env-editor").addEventListener("input", () => { S.envDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
+
 /* ---------- Onglets ---------- */
 function showTab(name) {
-  if (name === "reglages" && S.admin) loadAgents();
+  if (name === "reglages" && S.admin) { loadAgents(); loadKeys(); }
+  if (name === "journal") loadJournal();
   const btn = $(`.tab[data-tab="${name}"]`);
   if (!btn || btn.hidden) name = "dashboard";
   S.tab = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
-  if (name === "dashboard") schedule();
+  if (["dashboard", "entreprises", "economie"].includes(name)) schedule();
 }
 $("nav.tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } } });
 $("nav.tabs").addEventListener("keydown", e => {
@@ -2349,7 +3446,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "declaration", "demande", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();

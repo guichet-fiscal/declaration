@@ -1,0 +1,131 @@
+/**
+ * Guichet fiscal : copie automatique du registre dans Google Sheets.
+ *
+ * Installation (une fois) :
+ *  1. Dans une feuille Google Sheets appartenant au serveur : Extensions → Apps Script.
+ *  2. Remplacez tout le contenu par ce fichier, puis enregistrez.
+ *  3. Rechargez la feuille : un menu « Guichet fiscal » apparaît.
+ *  4. Menu Guichet fiscal → Enregistrer la clé d’export (clé créée dans le guichet, Réglages).
+ *  5. Menu Guichet fiscal → Actualiser maintenant (Google demande alors l’autorisation).
+ *  6. Menu Guichet fiscal → Actualisation automatique : chaque heure, ou chaque lundi.
+ *
+ * La clé d’export reste dans les propriétés du script : elle n’apparaît pas dans la feuille.
+ */
+
+// Adresse et clé publique du projet Supabase (les mêmes que dans config.js du site).
+const SUPABASE_URL = "https://xdmhnymirvozmgddmgir.supabase.co";
+const SUPABASE_KEY = "sb_publishable_nKgcY29nHjw4sc9rccVjYw_jmM08Izt";
+
+const STATUTS_DECL = { soumise: "À valider", validee: "À payer", payee: "Payée", controle: "En contrôle", rejetee: "Rejetée" };
+const STATUTS_DEM = { attente: "En attente", etude: "À l’étude", accordee: "Accordée", partielle: "Accordée en partie", refusee: "Refusée" };
+const STATUTS_PEN = { due: "À payer", payee: "Payée", annulee: "Annulée" };
+const NATURES = { vehicule: "Véhicule", equipement: "Équipement & moyens", salaires: "Budget salaires", fonctionnement: "Fonctionnement", autre: "Autre" };
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu("Guichet fiscal")
+    .addItem("Actualiser maintenant", "actualiser")
+    .addSeparator()
+    .addItem("Enregistrer la clé d’export", "enregistrerCle")
+    .addItem("Actualisation automatique : chaque heure", "planifierChaqueHeure")
+    .addItem("Actualisation automatique : chaque lundi", "planifierChaqueLundi")
+    .addItem("Arrêter l’actualisation automatique", "arreterPlanification")
+    .addToUi();
+}
+
+function enregistrerCle() {
+  const ui = SpreadsheetApp.getUi();
+  const r = ui.prompt("Clé d’export", "Collez la clé créée dans le guichet (Réglages → Suivi dans Google Sheets).", ui.ButtonSet.OK_CANCEL);
+  if (r.getSelectedButton() !== ui.Button.OK) return;
+  const cle = r.getResponseText().trim();
+  if (!cle) { ui.alert("Aucune clé saisie."); return; }
+  PropertiesService.getScriptProperties().setProperty("CLE_EXPORT", cle);
+  ui.alert("Clé enregistrée. Lancez maintenant « Actualiser maintenant ».");
+}
+
+function planifierChaqueHeure() {
+  arreterPlanification();
+  ScriptApp.newTrigger("actualiser").timeBased().everyHours(1).create();
+  SpreadsheetApp.getActive().toast("La feuille se mettra à jour chaque heure.", "Guichet fiscal");
+}
+
+function planifierChaqueLundi() {
+  arreterPlanification();
+  ScriptApp.newTrigger("actualiser").timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(7).create();
+  SpreadsheetApp.getActive().toast("La feuille se mettra à jour chaque lundi vers 7 h.", "Guichet fiscal");
+}
+
+function arreterPlanification() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === "actualiser")
+    .forEach(t => ScriptApp.deleteTrigger(t));
+}
+
+function actualiser() {
+  const cle = PropertiesService.getScriptProperties().getProperty("CLE_EXPORT");
+  if (!cle) throw new Error("Clé d’export manquante : menu Guichet fiscal → Enregistrer la clé d’export.");
+  if (SUPABASE_KEY.indexOf("COLLEZ") === 0) throw new Error("Renseignez SUPABASE_KEY en haut du script (clé publique du projet).");
+  const res = UrlFetchApp.fetch(SUPABASE_URL + "/rest/v1/rpc/export_registre", {
+    method: "post",
+    contentType: "application/json",
+    headers: { apikey: SUPABASE_KEY },
+    payload: JSON.stringify({ p_cle: cle }),
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) throw new Error("Export refusé (" + res.getResponseCode() + ") : " + res.getContentText().slice(0, 300));
+  const data = JSON.parse(res.getContentText());
+  const reg = data.registre || [];
+  const col = name => reg.filter(r => r.collection === name);
+  const map = name => { const o = {}; col(name).forEach(r => { o[r.id] = r.data; }); return o; };
+  const decisions = map("decisions"), arbitrages = map("arbitrages"), echeanciers = map("echeanciers");
+  const no = (p, id) => p + "-" + String(id).replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase();
+  const date = iso => (iso ? new Date(iso) : "");
+
+  const declarations = col("declarations").map(r => {
+    const d = r.data, dec = decisions[r.id], st = dec ? dec.statut : "soumise", e = echeanciers[r.id];
+    const montant = dec && dec.montant != null ? dec.montant : d.total;
+    let encaisse = st === "payee" ? montant : 0;
+    if (st === "validee" && e && e.echeances) encaisse = e.echeances.filter(x => x.payee).reduce((s, x) => s + (x.montant || 0), 0);
+    return [no("DF", r.id), d.entrepriseNom, d.periode, d.ca, d.charges, d.masse, d.nbSalaries, d.resultat, d.impot, d.cotisations, d.majoration, d.total, montant, encaisse,
+      STATUTS_DECL[st] || st, d.enRetard ? "Oui" : "Non", e && e.echeances ? e.echeances.length + " fois" : "", date(d.depotAt), d.declarant || "", dec && dec.note ? dec.note : ""];
+  });
+  ecrire("Déclarations", ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Charges", "Masse salariale", "Salariés", "Résultat", "Impôt", "Cotisations", "Majoration", "Total calculé", "Montant retenu", "Encaissé", "Statut", "Retard", "Échéancier", "Déposée le", "Déclarant", "Observation"], declarations);
+
+  ecrire("Entreprises", ["Nom", "Secteur", "Patron", "Active", "Ajoutée le"],
+    col("entreprises").map(r => [r.data.nom, r.data.secteur || "", r.data.patron || "", r.data.actif === false ? "Non" : "Oui", date(r.data.createdAt)]));
+
+  ecrire("Demandes", ["N°", "Service", "Nature", "Objet", "Quantité", "Demandé", "Urgence", "Statut", "Accordé", "Motif", "Reçue le", "Décidée le"],
+    col("demandes").map(r => {
+      const d = r.data, a = arbitrages[r.id], st = a ? a.statut : "attente";
+      return [no("DM", r.id), d.service, NATURES[d.nature] || d.nature, d.objet, d.quantite || "", d.montant, d.urgence, STATUTS_DEM[st] || st,
+        a && (st === "accordee" || st === "partielle") ? a.montantAccorde : 0, a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : ""];
+    }));
+
+  ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le"],
+    col("penalites").map(r => [no("PN", r.id), r.data.entrepriseNom, r.data.motif, r.data.montant, STATUTS_PEN[r.data.statut] || r.data.statut, date(r.data.createdAt), date(r.data.paidAt)]));
+
+  const lignesEch = [];
+  col("echeanciers").forEach(r => (r.data.echeances || []).forEach(x => lignesEch.push([no("DF", r.id), r.data.entrepriseNom, x.n + "/" + r.data.echeances.length, date(x.date), x.montant, x.payee ? "Payée" : "À payer", date(x.paidAt)])));
+  ecrire("Échéanciers", ["Déclaration", "Entreprise", "Échéance", "Date limite", "Montant", "État", "Payée le"], lignesEch);
+
+  ecrire("Journal", ["Date", "Auteur", "Action", "Type", "Dossier"],
+    (data.journal || []).map(j => [date(j.at), j.auteur || "", j.action, j.collection, j.doc_id]));
+
+  ecrire("Résumé", ["Élément", "Valeur"], [
+    ["Dernière actualisation", new Date(data.genere_le)],
+    ["Entreprises", col("entreprises").length],
+    ["Déclarations", declarations.length],
+    ["Demandes de moyens", col("demandes").length],
+    ["Pénalités", col("penalites").length]
+  ]);
+}
+
+function ecrire(nom, entete, lignes) {
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(nom) || ss.insertSheet(nom);
+  sh.clearContents();
+  const valeurs = [entete].concat(lignes.map(l => l.map(v => (v === null || v === undefined ? "" : v))));
+  sh.getRange(1, 1, valeurs.length, entete.length).setValues(valeurs);
+  sh.getRange(1, 1, 1, entete.length).setFontWeight("bold");
+  sh.setFrozenRows(1);
+}

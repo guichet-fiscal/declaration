@@ -18,6 +18,8 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `index.html` : le site complet
 - `config.js` : l’adresse et la clé publique du projet Supabase
 - `supabase/schema.sql` : les tables et les règles d’accès de la base
+- `supabase/v2_journal_export.sql` : le journal des actions et l’export vers Google Sheets
+- `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
 
@@ -35,7 +37,8 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 2. Collez tout le contenu de `supabase/schema.sql`.
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
-5. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
+5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
+6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
 
@@ -63,6 +66,43 @@ Si l’écran « Accès pas encore accordé » s’affiche, l’identifiant qu�
 2. Dans le nouveau site, ouvrez **Réglages → Sauvegarde et restauration**, choisissez le fichier, puis cliquez **Restaurer**.
 
 ---
+
+## Ce que fait le guichet
+
+- **Tableau de bord** : montants déclarés, encaissés et restant dus, entreprises à surveiller, alertes de fraude possible, enveloppes des services publics et Trésor.
+- **Entreprises** : recherche et filtres (en retard, doivent de l’argent, alertes, en contrôle). Chaque nom ouvre une fiche avec l’historique, le total payé, les retards, les alertes et les pénalités.
+- **Économie** : chiffre d’affaires du serveur, emplois, masse salariale, recettes, secteurs et plus grosses entreprises, avec des graphiques sur 12 périodes.
+- **Avis en image** : chaque avis d’imposition, décision budgétaire et pénalité peut être copié en image pour être collé sur Discord.
+- **Pénalités et paiement en plusieurs fois** : depuis la fiche d’une entreprise ou le dossier d’une déclaration.
+- **Journal** : chaque action est inscrite par la base avec son auteur. Personne ne peut le modifier depuis le site.
+
+### Les alertes
+
+Une déclaration est signalée quand :
+
+- son chiffre d’affaires tombe à moins de la moitié de la moyenne de ses trois déclarations précédentes ;
+- son résultat est négatif deux périodes de suite ;
+- elle déclare des salariés sans salaires, ou des salaires sans salarié ;
+- son salaire moyen est sous le minimum fixé dans les réglages ;
+- ses charges dépassent 90 % du chiffre d’affaires ;
+- elle n’a aucun chiffre d’affaires alors qu’elle a des salariés ;
+- l’entreprise a été en retard au moins deux fois sur ses quatre dernières déclarations.
+
+Une alerte n’est pas une preuve : c’est une raison de faire un contrôle en RP.
+
+## Suivi dans Google Sheets
+
+Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
+
+1. Créez la feuille **avec un compte Google du serveur**, pas un compte personnel.
+2. Dans le guichet, ouvrez **Réglages → Suivi dans Google Sheets**, donnez un nom à la clé et cliquez **Créer une clé d’export**. Copiez la clé : elle ne sera plus affichée.
+3. Dans la feuille, ouvrez **Extensions → Apps Script**. Remplacez tout le contenu par celui de `google-sheets/export.gs` et enregistrez.
+4. Rechargez la feuille. Un menu **Guichet fiscal** apparaît.
+5. **Guichet fiscal → Enregistrer la clé d’export**, puis collez la clé.
+6. **Guichet fiscal → Actualiser maintenant**. Google vous demande d’autoriser le script la première fois.
+7. **Guichet fiscal → Actualisation automatique : chaque heure** (ou **chaque lundi**).
+
+La feuille contient les onglets Déclarations, Entreprises, Demandes, Pénalités, Échéanciers, Journal et Résumé. Pour couper l’accès d’une feuille, révoquez sa clé dans les réglages du guichet.
 
 ## Donner l’accès à quelqu’un
 
