@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "Guichet fiscal · Préfecture de police",
+  "short_name": "Guichet fiscal",
+  "description": "Impôts, cotisations, demandes des services publics, recouvrement, contrôle et justice du serveur Grand Paris RP.",
+  "lang": "fr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#edf1f0",
+  "theme_color": "#ffffff",
+  "categories": ["productivity", "finance"],
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Recouvrement", "url": "./#recouvrement", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Saisir une déclaration", "url": "./#declaration", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Entreprises", "url": "./#entreprises", "icons": [{ "src": "assets/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

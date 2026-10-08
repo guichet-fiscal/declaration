@@ -17,6 +17,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 
 - `index.html` : le site complet
 - `config.js` : l’adresse et la clé publique du projet Supabase
+- `manifest.webmanifest`, `sw.js` et `assets/icon-*.png` : ce qui permet d’installer le guichet comme une application
 - `supabase/schema.sql` : les tables et les règles d’accès de la base
 - `supabase/v2_journal_export.sql` : le journal des actions et l’export vers Google Sheets
 - `supabase/v3_discord.sql` : la table privée des salons Discord
@@ -210,6 +211,19 @@ L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; l
 ## Clôturer une semaine
 
 Une fois le délai de dépôt passé, **Tableau de bord → Clôturer la semaine** (ou **Recouvrement → Clôture des semaines**) affiche le bilan de la période puis la verrouille. Une semaine clôturée ne reçoit plus de déclaration, ses déclarations ne peuvent plus être modifiées ni supprimées, et le montant de ses avis est figé. Les encaissements, échéanciers, pénalités et relances restent possibles. Le verrou est posé par la base : il tient même si quelqu’un contourne le site. La Direction peut rouvrir la semaine à tout moment ; le bilan au jour de la clôture reste disponible en image.
+
+## Recherche rapide
+
+**Rechercher** en haut de page, ou **Ctrl + K** (⌘ + K sur Mac), ou la touche **/** : un seul champ pour retrouver une entreprise (par son nom, son secteur, son patron ou l’identifiant Discord du patron), une semaine, ou n’importe quel dossier par son numéro : déclaration `DF-`, quittance `QT-`, pénalité `PN-`, redressement `AMR-`, contrôle `CF-`, attestation `AT-`, relance `RL-`, mise en demeure `MED-`, saisie `SA-`, dossier de justice `TJ-`, demande `DM-`. Les six derniers caractères du numéro suffisent, les accents et majuscules ne comptent pas. **Entrée** ouvre le premier résultat, les flèches parcourent la liste, **Échap** ferme.
+
+## Installer comme une application
+
+Le guichet s’installe sur un ordinateur ou un téléphone et s’ouvre alors dans sa propre fenêtre, avec son icône, sans barre d’adresse.
+
+- **Chrome ou Edge (ordinateur, Android)** : bouton **Installer l’appli** en haut de page, ou l’icône d’installation dans la barre d’adresse.
+- **iPhone et iPad** : dans Safari, **Partager → Sur l’écran d’accueil**. Le bouton **Installer l’appli** rappelle la marche à suivre. L’application garde sa propre session : il faut s’y connecter une première fois avec Discord.
+
+L’application se met à jour toute seule : la page vient toujours du réseau d’abord. Si elle reste ouverte longtemps, un bandeau signale qu’une nouvelle version est en ligne, avec un bouton **Recharger**. Un autre bandeau prévient quand internet est coupé ; le registre se remet à jour dès le retour du réseau. Les données du registre, les pièces des contrôles et les adresses Discord ne sont jamais gardées par l’application : seuls la page et ses fichiers (icônes, polices) le sont.
 
 ## Restaurer depuis le journal
 

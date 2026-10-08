@@ -7,6 +7,13 @@
 <title>Guichet fiscal · Préfecture de police</title>
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#142024" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Guichet fiscal">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -470,6 +477,22 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
 .rect-table input{min-width:92px;padding:6px 8px;font-size:13.5px}
 .rect-table td:nth-child(6) input{min-width:150px}
 .paste-row textarea{flex:1 1 260px}
+/* v7 : recherche rapide, application installable */
+kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:4px;padding:0 5px;margin-left:8px;color:var(--ink-3);background:var(--paper)}
+@media (max-width:620px){#btn-search kbd{display:none}}
+.netbar{align-items:center}
+.netbar[data-tone="bad"]{border-left-color:var(--bad)}
+.netbar[data-tone="accent"]{border-left-color:var(--accent)}
+#q-in{width:100%}
+.search-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:2px;max-height:min(58vh,520px);overflow:auto}
+.search-list li.muted{padding:8px 4px;font-size:14px;color:var(--ink-3)}
+.search-hit{appearance:none;width:100%;text-align:left;display:grid;grid-template-columns:118px minmax(0,1fr);gap:2px 12px;align-items:baseline;border:0;background:none;padding:9px 10px;border-radius:6px;font:inherit;color:var(--ink);cursor:pointer}
+.search-hit:hover,.search-hit:focus-visible{background:var(--accent-soft);outline:none}
+.search-hit .tag{margin-left:0;grid-row:span 2;align-self:start;margin-top:2px;justify-self:start}
+.search-label{font-weight:600;overflow-wrap:anywhere}
+.search-hit .meta{grid-column:2;font-size:12.5px;color:var(--ink-3)}
+@media (max-width:520px){.search-hit{grid-template-columns:minmax(0,1fr)}.search-hit .tag{grid-row:auto}.search-hit .meta{grid-column:1}}
+@media (display-mode: standalone){header.top .wrap{padding-top:max(14px,env(safe-area-inset-top))}}
 </style>
 </head>
 <body data-gate="chargement">
@@ -484,6 +507,8 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
       </div>
     </div>
     <div class="who">
+      <button class="btn ghost small" type="button" id="btn-install" hidden>Installer l’appli</button>
+      <button class="btn ghost small" type="button" id="btn-search" aria-keyshortcuts="Control+K" title="Rechercher (Ctrl + K ou /)" hidden>Rechercher<kbd>Ctrl K</kbd></button>
       <span class="role" id="role">Connexion au registre…</span>
       <button class="btn ghost small" type="button" id="logout" hidden>Se déconnecter</button>
     </div>
@@ -514,6 +539,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
       <div class="gate-actions" id="gate-actions"></div>
     </div>
   </section>
+  <div class="notice netbar" id="netbar" role="status" hidden></div>
   <div class="notice" id="notice" hidden></div>
 
   <!-- TABLEAU DE BORD -->
@@ -1735,6 +1761,7 @@ function applyRole() {
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
+  $("#btn-search").hidden = !S.connected;
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
@@ -1797,6 +1824,7 @@ function makeStore(sb) {
     } catch (e) { /* le rafraîchissement périodique prend le relais */ }
     setInterval(() => { if (document.visibilityState === "visible") loadAll().catch(() => {}); }, 60000);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadAll().catch(() => {}); });
+    window.addEventListener("online", () => { loadAll().catch(() => {}); });
   }
   function listen(map, key, next, snap) {
     if (!map.has(key)) map.set(key, new Set());
@@ -6236,6 +6264,163 @@ $("#r-save").addEventListener("click", async () => {
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
   if (ok) { S.recDirty = false; $("#r-msg").textContent = "Réglages du recouvrement enregistrés."; toast("Réglages du recouvrement enregistrés."); renderRecouvSettings(true); }
 });
+
+/* ---------- Recherche rapide ---------- */
+// Un seul champ pour retrouver une entreprise, un patron ou n'importe quel numéro de dossier
+// (DF, QT, PN, AMR, CF, AT, RL, MED, SA, TJ, DM). Ctrl + K ou « / » l'ouvre depuis n'importe quel onglet.
+function searchIndex() {
+  const out = [];
+  const push = (t, no, label, sub, words, go, at) => out.push({ t, no: no ? no.replace(/[^a-z0-9]/gi, "").toUpperCase() : "", label, sub, keys: " " + norm([no, label, sub, words].join(" ")) + " ", go, at: at || "" });
+  for (const e of S.entreprises) {
+    const mention = parseMention(e.discord || "");
+    push("Entreprise", "", e.nom, [e.secteur, e.patron, e.actif === false ? "inactive" : ""].filter(Boolean).join(" · "), [mention ? mention.id : "", e.patron].join(" "), () => openFiche(e), "~");
+  }
+  for (const k of recentKeys(104)) {
+    const c = S.clotures[k];
+    push("Semaine", "", periodLabel(k), c ? "Clôturée · bilan" : "Bilan de la semaine", periodPlain(k) + " " + k, () => openCloture(k), "");
+  }
+  for (const d of S.declarations) {
+    const no = dossierNo("DF", d.id);
+    push("Déclaration", no, `${no} · ${d.entrepriseNom}`, `${periodPlain(d.periode)} · ${money(dMontant(d))} · ${(DSTAT[dStatus(d)] || DSTAT.soumise)[0]}`, d.declarant, () => openDecl(d.id), d.createdAt);
+    if (dStatus(d) === "payee") push("Quittance", dossierNo("QT", d.id), `${dossierNo("QT", d.id)} · ${d.entrepriseNom}`, `Paiement · ${periodPlain(d.periode)} · ${money(dMontant(d))}`, "", () => showDocImage(quittanceDeclDoc(d)), (S.decisions[d.id] || {}).paidAt);
+    const ec = echOf(d);
+    if (ec) ec.echeances.forEach((x, i) => { if (x.payee) push("Quittance", dossierNo("QT", d.id) + "-" + x.n, `${dossierNo("QT", d.id)}-${x.n} · ${d.entrepriseNom}`, `Échéance ${x.n}/${ec.echeances.length} · ${money(x.montant)}`, "", () => showDocImage(quittanceEchDoc(d, i)), x.paidAt); });
+  }
+  for (const dm of S.demandes) push("Demande", dossierNo("DM", dm.id), `${dossierNo("DM", dm.id)} · ${dm.service}`, `${dm.objet || "—"} · ${money(dm.montant)}`, dm.demandeur, () => openDem(dm.id), dm.recueAt || dm.createdAt);
+  for (const p of S.penalites) {
+    const pre = p.type === "redressement" ? "AMR" : "PN", nom = p.type === "redressement" ? "Redressement" : p.type === "majoration" ? "Majoration" : "Pénalité";
+    push(nom, dossierNo(pre, p.id), `${dossierNo(pre, p.id)} · ${p.entrepriseNom}`, `${p.motif || "—"} · ${money(p.montant)} · ${(PSTAT[p.statut] || PSTAT.due)[0]}`, "", () => openFiche(entOf(p)), p.createdAt);
+    if (p.statut === "payee") push("Quittance", dossierNo("QT", p.id), `${dossierNo("QT", p.id)} · ${p.entrepriseNom}`, `${p.motif || nom} · ${money(p.montant)}`, "", () => showDocImage(quittancePenDoc(p)), p.paidAt);
+  }
+  for (const c of S.controles) push("Contrôle", dossierNo("CF", c.id), `${dossierNo("CF", c.id)} · ${c.entrepriseNom}`, `${(CSTAT[c.statut] || CSTAT.ouvert)[0]} · ${(c.periodes || []).map(periodPlain).join(", ")}`, c.inspecteur, () => openControle(c.id), c.ouvertLe);
+  for (const a of S.attestations) push("Attestation", dossierNo("AT", a.id), `${dossierNo("AT", a.id)} · ${a.entrepriseNom}`, `${attState(a)[0]} · jusqu’au ${longDate(new Date(a.validUntil))}`, "", () => showDocImage(attestationDoc(a)), a.at);
+  for (const r of S.relances) push(isMed(r) ? "Mise en demeure" : "Relance", rlNo(r), `${rlNo(r)} · ${r.entrepriseNom}`, `${rlLabel(r)} · envoyée le ${fmtDate(new Date(r.at))}`, "", () => showDocImage(relanceDoc(r)), r.at);
+  for (const s of S.saisies) push("Saisie", dossierNo("SA", s.id), `${dossierNo("SA", s.id)} · ${s.entrepriseNom}`, `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)} · ${(SSTAT[s.statut] || SSTAT.notifiee)[0]}`, s.tiers, () => openSaisieDetail(s.id), s.at);
+  for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
+  return out;
+}
+function runSearch(q) {
+  const n = norm(q);
+  if (!n) return { hits: [], total: 0 };
+  const flat = q.replace(/[^a-z0-9]/gi, "").toUpperCase(), words = n.split(" ");
+  const all = searchIndex();
+  // Un numéro complet (« DF-56X4K1 ») ou ses six derniers caractères ouvrent directement le dossier.
+  const exact = flat.length >= 4 ? all.filter(x => x.no && (x.no === flat || (flat.length >= 6 && x.no.endsWith(flat)))) : [];
+  // Chaque mot tapé doit commencer un mot du dossier : « sem » trouve « Semaine », pas « divertissement ».
+  const rest = all.filter(x => !exact.includes(x) && words.every(w => x.keys.includes(" " + w)));
+  const rank = x => (x.t === "Entreprise" ? (x.keys.startsWith(" " + n) ? 0 : 1) : x.t === "Semaine" ? 1 : 2);
+  rest.sort((a, b) => rank(a) - rank(b) || String(b.at).localeCompare(String(a.at)));
+  const hits = exact.concat(rest);
+  return { hits: hits.slice(0, 40), total: hits.length };
+}
+function openSearch() {
+  if (!S.connected) return;
+  if (dlg.open) { const cur = $("#q-in"); if (cur) { cur.focus(); cur.select(); return; } closeDialog(); }
+  const inp = h("input", { id: "q-in", type: "search", autocomplete: "off", spellcheck: "false", enterkeyhint: "go", "aria-label": "Rechercher", "aria-controls": "q-list", placeholder: "Entreprise, patron, semaine ou numéro : DF-…, CF-…, AT-…" });
+  const count = h("p", { class: "hint", id: "q-count", "aria-live": "polite", style: "margin:8px 0 0" });
+  const list = h("ul", { class: "search-list", id: "q-list" });
+  let res = [];
+  const go = r => { closeDialog(); setTimeout(() => r.go(), 0); };
+  const draw = () => {
+    const q = inp.value.trim(), out = runSearch(q);
+    res = out.hits;
+    count.textContent = !q ? "" : !out.total ? "" : out.total > res.length ? `${res.length} premiers résultats sur ${out.total} : précisez la recherche.` : `${out.total} résultat${plural(out.total)}.`;
+    fill(list, !q ? h("li", { class: "muted", text: "Tapez un nom, un patron, une semaine ou un numéro de dossier. Entrée ouvre le premier résultat, les flèches parcourent la liste." })
+      : res.length ? res.map(r => h("li", {}, h("button", { type: "button", class: "search-hit", onclick: () => go(r) },
+          h("span", { class: "tag", text: r.t }), h("span", { class: "search-label", text: r.label }), h("span", { class: "meta", text: r.sub }))))
+      : h("li", { class: "muted", text: "Aucun résultat. Vérifiez l’orthographe, ou tapez seulement les six derniers caractères du numéro." }));
+  };
+  inp.addEventListener("input", draw);
+  inp.addEventListener("keydown", ev => {
+    if (ev.key === "Enter") { ev.preventDefault(); if (res[0]) go(res[0]); }
+    else if (ev.key === "Escape") { ev.preventDefault(); closeDialog(); }
+    else if (ev.key === "ArrowDown") { ev.preventDefault(); const b = $(".search-hit", list); if (b) b.focus(); }
+  });
+  list.addEventListener("keydown", ev => {
+    const hits = $$(".search-hit", list), i = hits.indexOf(document.activeElement);
+    if (ev.key === "ArrowDown" && i < hits.length - 1) { ev.preventDefault(); hits[i + 1].focus(); }
+    else if (ev.key === "ArrowUp") { ev.preventDefault(); (i > 0 ? hits[i - 1] : inp).focus(); }
+  });
+  const fine = window.matchMedia && matchMedia("(pointer: fine)").matches, key = ($("#btn-search kbd") || {}).textContent || "Ctrl K";
+  openDialog({ eyebrow: "Recherche rapide" + (fine ? " · " + key.replace(" ", " + ") : ""), title: "Rechercher dans le registre", body: [inp, count, list] });
+  draw();
+  setTimeout(() => inp.focus(), 20);
+}
+$("#btn-search").addEventListener("click", openSearch);
+if (/Mac|iPhone|iPad/.test(navigator.platform || "")) { $("#btn-search kbd").textContent = "⌘ K"; $("#btn-search").title = "Rechercher (⌘ + K ou /)"; }
+document.addEventListener("keydown", ev => {
+  const el = document.activeElement || {}, typing = /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName || "") || el.isContentEditable;
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && !ev.shiftKey && (ev.key === "k" || ev.key === "K")) {
+    // Pas pendant la saisie d'un formulaire dans une fenêtre : il serait perdu.
+    if (dlg.open && !$("#q-in")) return;
+    ev.preventDefault(); openSearch();
+  } else if (ev.key === "/" && !typing && !dlg.open && !ev.ctrlKey && !ev.metaKey && !ev.altKey) { ev.preventDefault(); openSearch(); }
+});
+
+/* ---------- Application installable ---------- */
+const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let installPrompt = null;
+function showInstallButton() { $("#btn-install").hidden = isStandalone() || !(installPrompt || isIOS()); }
+window.addEventListener("beforeinstallprompt", ev => { ev.preventDefault(); installPrompt = ev; showInstallButton(); });
+window.addEventListener("appinstalled", () => { installPrompt = null; showInstallButton(); toast("Guichet installé : il s’ouvre maintenant comme une application."); });
+$("#btn-install").addEventListener("click", async () => {
+  if (installPrompt) {
+    const p = installPrompt;
+    installPrompt = null;
+    p.prompt();
+    try { await p.userChoice; } catch (e) { /* choix inconnu */ }
+    showInstallButton();
+    return;
+  }
+  openDialog({
+    eyebrow: "Application", title: "Installer le guichet sur l’iPhone ou l’iPad",
+    body: [h("ol", { class: "steps" },
+      h("li", {}, h("span", { text: "Ouvrez le guichet dans Safari." })),
+      h("li", {}, h("span", {}, "Touchez le bouton ", h("strong", { text: "Partager" }), " (le carré avec une flèche vers le haut).")),
+      h("li", {}, h("span", {}, "Choisissez ", h("strong", { text: "Sur l’écran d’accueil" }), ", puis ", h("strong", { text: "Ajouter" }), ".")),
+      h("li", {}, h("span", { text: "Ouvrez le guichet depuis sa nouvelle icône et connectez-vous avec Discord : l’application garde sa propre session, distincte de Safari." })))],
+    foot: [h("button", { class: "btn", type: "button", onclick: closeDialog, text: "Compris" })]
+  });
+});
+showInstallButton();
+if ("serviceWorker" in navigator && (location.protocol === "https:" || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => { /* l'installation reste possible sans */ }); });
+}
+
+/* ---------- Réseau et nouvelle version ---------- */
+// L'appli installée reste souvent ouverte des jours : elle signale une coupure du réseau
+// et la mise en ligne d'une nouvelle version du guichet, sans jamais recharger d'elle-même.
+const net = { offline: !navigator.onLine, update: false, stamp: null, last: 0 };
+function drawNetbar() {
+  const bar = $("#netbar");
+  if (net.offline) {
+    fill(bar, h("div", {}, h("strong", { text: "Pas de connexion internet. " }), "Rien ne peut être enregistré pour l’instant ; le registre se remettra à jour dès le retour du réseau."));
+    bar.dataset.tone = "bad"; bar.hidden = false;
+  } else if (net.update) {
+    fill(bar, h("div", { style: "flex:1" }, h("strong", { text: "Nouvelle version du guichet en ligne. " }), "Rechargez quand vous voulez : rien n’est perdu de ce qui est déjà enregistré."),
+      h("button", { class: "btn small", type: "button", id: "net-reload", onclick: () => location.reload(), text: "Recharger" }));
+    bar.dataset.tone = "accent"; bar.hidden = false;
+  } else { bar.hidden = true; fill(bar); }
+}
+window.addEventListener("offline", () => { net.offline = true; drawNetbar(); });
+window.addEventListener("online", () => { net.offline = false; drawNetbar(); toast("Connexion rétablie."); checkVersion(true); });
+async function checkVersion(force) {
+  if (!navigator.onLine || (!force && Date.now() - net.last < 10 * 60e3)) return;
+  net.last = Date.now();
+  try {
+    const r = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
+    // Last-Modified suit la date de publication ; l'ETag ne sert que s'il manque.
+    const stamp = r.ok ? (r.headers.get("last-modified") || r.headers.get("etag")) : null;
+    if (!stamp) return;
+    if (net.stamp === null) net.stamp = stamp;
+    else if (stamp !== net.stamp && !net.update) { net.update = true; drawNetbar(); }
+  } catch (e) { /* réseau indisponible : on réessaiera */ }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });
+setInterval(() => { if (document.visibilityState === "visible") checkVersion(); }, 15 * 60e3);
+checkVersion(true);
+drawNetbar();
 
 /* ---------- Onglets ---------- */
 function showTab(name) {
