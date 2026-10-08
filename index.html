@@ -1,0 +1,2358 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Guichet Fiscal Grand Paris RP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout : guichet administratif — en-tête sobre, onglets-guichets, formulaires en cases numérotées (liasse), tableau de bord tenu comme un registre */
+:root{
+  --paper:#edf1f0; --sheet:#ffffff; --field:#f6f8f8;
+  --ink:#122229; --ink-2:#465a61; --ink-3:#6a7d83;
+  --rule:#cfd9d8; --rule-2:#e3e9e8;
+  --accent:#4433a8; --accent-ink:#ffffff; --accent-soft:#eceafb;
+  --ok:#1b7044; --ok-soft:#e0f1e7;
+  --warn:#8f5700; --warn-soft:#faeed6;
+  --bad:#ae261d; --bad-soft:#fae3e1;
+  --info:#22569f; --info-soft:#e2ebf9;
+  --muted-soft:#e6eceb;
+  --s1:#2a78d6; --s2:#eb6834;
+  --shadow:0 10px 30px rgba(10,25,30,.14);
+  --f-display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0d1416; --sheet:#142024; --field:#0f191c;
+    --ink:#e1e9e8; --ink-2:#a1b2b4; --ink-3:#7f9295;
+    --rule:#2a3a3f; --rule-2:#1e2b2f;
+    --accent:#a99cff; --accent-ink:#17113a; --accent-soft:#25214a;
+    --ok:#5ac28a; --ok-soft:#14321f;
+    --warn:#e5a83e; --warn-soft:#36290f;
+    --bad:#f07b70; --bad-soft:#3a1916;
+    --info:#82aaf2; --info-soft:#172745;
+    --muted-soft:#1d292d;
+    --s1:#3987e5; --s2:#d95926;
+    --shadow:0 10px 30px rgba(0,0,0,.5);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0d1416; --sheet:#142024; --field:#0f191c;
+  --ink:#e1e9e8; --ink-2:#a1b2b4; --ink-3:#7f9295;
+  --rule:#2a3a3f; --rule-2:#1e2b2f;
+  --accent:#a99cff; --accent-ink:#17113a; --accent-soft:#25214a;
+  --ok:#5ac28a; --ok-soft:#14321f;
+  --warn:#e5a83e; --warn-soft:#36290f;
+  --bad:#f07b70; --bad-soft:#3a1916;
+  --info:#82aaf2; --info-soft:#172745;
+  --muted-soft:#1d292d;
+  --s1:#3987e5; --s2:#d95926;
+  --shadow:0 10px 30px rgba(0,0,0,.5);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin-inline:auto;padding-inline:16px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* En-tête */
+header.top{background:var(--sheet);border-bottom:1px solid var(--rule)}
+header.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px 20px;padding-block:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px;min-width:0}
+.seal{flex:none;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:var(--accent);border:2px solid currentColor;box-shadow:inset 0 0 0 3px var(--sheet),inset 0 0 0 4px currentColor;font-family:var(--f-display);font-stretch:72%;font-weight:800;font-size:14px;letter-spacing:.06em}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-3);font-weight:600}
+h1{font-family:var(--f-display);font-stretch:80%;font-weight:760;font-size:clamp(19px,2.6vw,24px);line-height:1.15;margin:2px 0 0;text-wrap:balance}
+.role{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:999px;background:var(--muted-soft);color:var(--ink-2);white-space:nowrap}
+.role.admin{background:var(--accent-soft);color:var(--accent)}
+
+/* Onglets */
+nav.tabs{background:var(--sheet);border-bottom:1px solid var(--rule);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+nav.tabs .wrap{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.tabs .wrap::-webkit-scrollbar{display:none}
+.tab{appearance:none;border:0;background:none;font:inherit;font-weight:600;font-size:14px;color:var(--ink-2);padding:12px 12px 10px;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab:focus-visible{outline-offset:-3px}
+
+main .wrap{padding-block:22px 64px}
+.notice{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--rule);border-left:4px solid var(--warn);background:var(--sheet);border-radius:var(--r);padding:12px 14px;margin-bottom:18px;font-size:14px;color:var(--ink-2)}
+.notice strong{color:var(--ink)}
+.panel-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 20px;flex-wrap:wrap;margin-bottom:16px}
+h2{font-family:var(--f-display);font-stretch:80%;font-weight:760;font-size:24px;margin:0;line-height:1.15;text-wrap:balance}
+h3{font-family:var(--f-display);font-stretch:85%;font-weight:720;font-size:16.5px;margin:0;line-height:1.25}
+.sub{color:var(--ink-2);font-size:14px;margin:4px 0 0;max-width:68ch}
+.muted{color:var(--ink-3)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* Boutons */
+.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--ink);background:var(--ink);color:var(--sheet);font:inherit;font-weight:600;font-size:14px;line-height:1.2;padding:9px 16px;border-radius:5px;cursor:pointer;white-space:nowrap}
+.btn:hover{filter:brightness(1.18)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--rule)}
+.btn.ghost:hover{border-color:var(--ink-3);filter:none}
+.btn.ink{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{background:transparent;color:var(--bad);border-color:currentColor}
+.btn.danger:hover{background:var(--bad-soft);filter:none}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.icon-btn{appearance:none;border:1px solid var(--rule);background:var(--sheet);color:var(--ink-2);width:32px;height:32px;border-radius:5px;font-size:18px;line-height:1;cursor:pointer;flex:none}
+.icon-btn:hover{color:var(--ink);border-color:var(--ink-3)}
+.linkbtn{appearance:none;border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--ink);text-align:left;cursor:pointer;text-decoration:underline;text-decoration-color:var(--rule);text-underline-offset:3px}
+.linkbtn:hover{text-decoration-color:var(--accent)}
+
+/* Puces d’état */
+.t-ok{--tone:var(--ok);--tone-soft:var(--ok-soft)}
+.t-warn{--tone:var(--warn);--tone-soft:var(--warn-soft)}
+.t-bad{--tone:var(--bad);--tone-soft:var(--bad-soft)}
+.t-info{--tone:var(--info);--tone-soft:var(--info-soft)}
+.t-accent{--tone:var(--accent);--tone-soft:var(--accent-soft)}
+.t-muted{--tone:var(--ink-2);--tone-soft:var(--muted-soft)}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:650;line-height:1.3;padding:3px 9px 3px 8px;border-radius:999px;background:var(--tone-soft);color:var(--tone);white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.tag{display:inline-block;font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;padding:1px 6px;border-radius:3px;border:1px solid var(--rule);color:var(--ink-3);margin-left:6px;vertical-align:1px;white-space:nowrap}
+.tag.warn{color:var(--warn);border-color:currentColor}
+.stamp{display:inline-block;color:var(--tone,var(--accent));font-family:var(--f-display);font-stretch:68%;font-weight:800;font-size:14px;letter-spacing:.12em;text-transform:uppercase;padding:4px 11px 3px;border:2px solid currentColor;border-radius:4px;box-shadow:inset 0 0 0 2px var(--sheet),inset 0 0 0 3px currentColor;transform:rotate(-5deg);white-space:nowrap;opacity:.94}
+
+/* Registre : bandeau de chiffres */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.toolbar select{width:auto;min-width:220px}
+.ledger{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));border:1px solid var(--rule);border-radius:var(--r);background:var(--sheet);overflow:hidden}
+.kpi{padding:14px 16px 15px;border-left:1px solid var(--rule-2);display:grid;gap:3px;align-content:start;min-width:0}
+.kpi:first-child{border-left:0}
+.kpi .l{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
+.kpi .v{font-family:var(--f-mono);font-size:clamp(17px,1.7vw,21px);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;line-height:1.25}
+.kpi .s{font-size:12.5px;color:var(--ink-2)}
+.kpi.warn .v{color:var(--warn)} .kpi.bad .v{color:var(--bad)} .kpi.ok .v{color:var(--ok)}
+@media (max-width:1000px){
+  .ledger{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .kpi:nth-child(4){border-left:0}
+  .kpi:nth-child(n+4){border-top:1px solid var(--rule-2)}
+}
+@media (max-width:560px){
+  .ledger{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi{border-left:1px solid var(--rule-2)!important}
+  .kpi:nth-child(odd){border-left:0!important}
+  .kpi:nth-child(n+3){border-top:1px solid var(--rule-2)}
+}
+
+.dash-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+@media (max-width:900px){.dash-grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:var(--r);padding:16px 18px 18px;min-width:0}
+.card + .card{margin-top:16px}
+.dash-grid > .card{margin-top:0}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap}
+.card-head .sub{margin:2px 0 0;font-size:13px}
+.empty{padding:22px 4px 8px;color:var(--ink-2);font-size:14px;display:grid;gap:10px;justify-items:start;max-width:56ch}
+
+.reg{list-style:none;margin:12px 0 0;padding:0}
+.reg li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 14px;align-items:center;padding:9px 0;border-top:1px solid var(--rule-2)}
+.reg .meta{display:block;font-size:12.5px;color:var(--ink-3);font-weight:400}
+.reg .amt{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink-2);text-align:right;min-width:84px}
+.reg-foot{font-size:13px;color:var(--ink-3);padding-top:10px;border-top:1px solid var(--rule-2)}
+@media (max-width:420px){.reg li{grid-template-columns:minmax(0,1fr) auto}.reg .amt{grid-column:2;min-width:0}}
+
+/* Graphique */
+.legend{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:13px;color:var(--ink-2);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.legend b{font-family:var(--f-mono);font-weight:600;color:var(--ink)}
+.chart{position:relative;margin-top:8px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .grid{stroke:var(--rule-2);stroke-width:1}
+.chart .base{stroke:var(--rule);stroke-width:1}
+.chart text{fill:var(--ink-3);font-family:var(--f-mono);font-size:11px}
+.chart text.lbl{fill:var(--ink-2);font-weight:600}
+.chart text.none{fill:var(--ink-3);font-family:var(--f-body);font-size:13px}
+.chart .b1{fill:var(--s1)} .chart .b2{fill:var(--s2)}
+.chart .bar{pointer-events:none}
+.chart .hit{fill:var(--muted-soft);opacity:0}
+.chart .hit:hover,.chart .hit.on{opacity:.7}
+.tip{position:absolute;pointer-events:none;background:var(--sheet);border:1px solid var(--rule);box-shadow:var(--shadow);border-radius:6px;padding:8px 11px;font-size:12.5px;min-width:190px;z-index:3;display:grid;gap:3px}
+.tip .tl{font-weight:650;color:var(--ink)}
+.tip .tr{display:flex;justify-content:space-between;gap:14px;color:var(--ink-2)}
+.tip .tr b{font-family:var(--f-mono);font-weight:600;color:var(--ink)}
+.svc-list{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px solid var(--rule-2);display:grid;gap:7px;font-size:13.5px}
+.svc-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px}
+.svc-list .mono{color:var(--ink)}
+
+/* Tableaux */
+.seg{display:inline-flex;gap:5px;flex-wrap:wrap}
+.seg button{appearance:none;border:1px solid var(--rule);background:var(--sheet);color:var(--ink-2);font:inherit;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;cursor:pointer}
+.seg button:hover{border-color:var(--ink-3)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--sheet);border-color:var(--ink)}
+.seg .count{font-family:var(--f-mono);font-size:11.5px;margin-left:5px;opacity:.8}
+.tbl-wrap{overflow-x:auto;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:780px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:650;text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--rule-2);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td.no{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+td.act{text-align:right;white-space:nowrap}
+td .small-meta{display:block;font-size:12.5px;color:var(--ink-3)}
+
+/* Formulaires (liasse) */
+.form-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+@media (max-width:920px){.form-grid{grid-template-columns:minmax(0,1fr)}}
+.liasse{background:var(--sheet);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
+.liasse-head{display:flex;justify-content:space-between;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:12px 16px;border-bottom:2px solid var(--ink)}
+.liasse-head .ref{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
+.case{display:grid;grid-template-columns:52px minmax(0,1fr);border-top:1px solid var(--rule)}
+.liasse-head + .case{border-top:0}
+.case-no{font-family:var(--f-mono);font-size:12px;font-weight:600;color:var(--accent);padding:15px 0 0 14px;border-right:1px dashed var(--rule)}
+.case-body{padding:12px 16px 14px;display:grid;gap:6px;min-width:0}
+.row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:620px){.row2,.row3{grid-template-columns:minmax(0,1fr)}}
+.field{display:grid;gap:5px;min-width:0}
+label{font-weight:600;font-size:13.5px}
+.hint{font-size:12.5px;color:var(--ink-3)}
+input,select,textarea{font:inherit;font-size:15px;color:var(--ink);background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:9px 11px;width:100%;min-width:0}
+textarea{resize:vertical;min-height:84px;line-height:1.45}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+input[aria-invalid="true"],textarea[aria-invalid="true"]{border-color:var(--bad)}
+input:disabled,select:disabled,textarea:disabled{opacity:.6}
+.money{position:relative}
+.money input{font-family:var(--f-mono);text-align:right;padding-right:36px;font-variant-numeric:tabular-nums}
+.money::after{content:attr(data-cur);position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-family:var(--f-mono);font-size:14px;pointer-events:none}
+.form-foot{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:14px 16px;border-top:1px solid var(--rule);background:var(--paper)}
+.err{color:var(--bad);font-size:13.5px;font-weight:600}
+.okmsg{color:var(--ok);font-size:13.5px;font-weight:600}
+
+details.paste{border:1px dashed var(--accent);border-radius:var(--r);background:var(--accent-soft);padding:0 14px;margin-bottom:16px}
+details.paste summary{cursor:pointer;padding:12px 0;font-weight:650;list-style-position:inside}
+details.paste .paste-body{display:grid;gap:10px;padding-bottom:14px}
+details.paste textarea{background:var(--sheet);font-family:var(--f-mono);font-size:13px;min-height:150px}
+.paste-row{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap}
+
+.aside{display:grid;gap:16px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 62px)}
+@media (max-width:920px){.aside{position:static}}
+.calc dl,.kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 0;margin:12px 0 0}
+.calc dt,.kv dt{color:var(--ink-2);font-size:14px}
+.calc dd,.kv dd{margin:0;padding-left:14px;font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.calc .tot-dt,.calc .tot-dd{border-top:2px solid var(--ink);padding-top:10px;margin-top:4px;font-weight:700;color:var(--ink)}
+.calc .tot-dd{font-size:20px}
+.calc .neg{color:var(--bad)}
+.calc .due{margin-top:12px;font-size:13px;color:var(--ink-2);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.steps{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:10px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;font-size:13.5px;color:var(--ink-2);counter-increment:s}
+.steps li::before{content:counter(s);width:22px;height:22px;border-radius:50%;border:1.5px solid var(--accent);color:var(--accent);font-family:var(--f-mono);font-size:12px;font-weight:600;display:grid;place-items:center}
+.bareme{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px;font-size:13.5px}
+.bareme li{display:flex;justify-content:space-between;gap:12px;color:var(--ink-2)}
+.bareme b{font-family:var(--f-mono);color:var(--ink);font-weight:600}
+
+/* Modèles Discord */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px;align-items:start}
+pre.tpl{margin:12px 0 0;background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:12px 14px;font-family:var(--f-mono);font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+.tpl-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--ink-3)}
+
+/* Réglages */
+.set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+@media (max-width:900px){.set-grid{grid-template-columns:minmax(0,1fr)}}
+.set-form{display:grid;gap:12px;margin-top:14px}
+.ent-add{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) auto;gap:8px;margin-top:14px;align-items:end}
+@media (max-width:620px){.ent-add{grid-template-columns:minmax(0,1fr)}}
+.ent-list{list-style:none;margin:14px 0 0;padding:0}
+.ent-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--rule-2)}
+.ent-list .meta{display:block;font-size:12.5px;color:var(--ink-3)}
+.switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink-2)}
+.switch input{width:auto}
+.access{margin:10px 0 0;padding:0 0 0 18px;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
+.access b{color:var(--ink)}
+
+/* Fenêtre */
+dialog{border:1px solid var(--rule);border-radius:8px;background:var(--sheet);color:var(--ink);padding:0;width:min(660px,calc(100vw - 32px));max-height:calc(100vh - 40px);box-shadow:var(--shadow)}
+dialog[open]{display:flex;flex-direction:column}
+dialog::backdrop{background:rgba(8,18,22,.55)}
+.dlg-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
+.dlg-titles{min-width:0}
+.dlg-title{font-size:20px;margin-top:3px;overflow-wrap:anywhere}
+.dlg-side{display:flex;align-items:center;gap:14px}
+.dlg-body{padding:16px 20px 18px;display:grid;gap:16px;overflow:auto}
+.dlg-foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;padding:14px 20px;border-top:1px solid var(--rule);background:var(--paper)}
+.dlg-foot .spacer{flex:1 1 auto}
+.dlg-sec{display:grid;gap:4px}
+.dlg-sec h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
+.dlg-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px}
+@media (max-width:560px){.dlg-cols{grid-template-columns:minmax(0,1fr)}}
+.kv{margin-top:6px}
+.kv dd{font-family:var(--f-body);font-variant-numeric:normal;text-align:right;overflow-wrap:anywhere}
+.kv dd.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.kv .tot-dt,.kv .tot-dd{border-top:1px solid var(--ink);padding-top:7px;font-weight:700;color:var(--ink)}
+.prewrap{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;color:var(--ink);background:var(--field);border:1px solid var(--rule-2);border-radius:5px;padding:10px 12px;margin:4px 0 0}
+.decide{display:grid;gap:12px;padding:14px;border:1px solid var(--rule);border-radius:var(--r);background:var(--field)}
+.decide input,.decide textarea{background:var(--sheet)}
+.receipt{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border:1px solid var(--rule);border-left:4px solid var(--ok);border-radius:var(--r);background:var(--sheet);padding:12px 16px;margin-bottom:16px;font-size:14px}
+.receipt .stamp{--tone:var(--ok)}
+
+.restore{display:grid;gap:6px;margin-top:16px;padding-top:14px;border-top:1px solid var(--rule-2)}
+.restore input[type=file]{padding:7px 9px;font-size:14px}
+.progress{font-family:var(--f-mono);font-size:13px;color:var(--ink-2)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;width:max-content;max-width:calc(100vw - 32px)}
+.toast{background:var(--ink);color:var(--sheet);padding:10px 16px;border-radius:6px;font-size:14px;font-weight:550;box-shadow:var(--shadow)}
+.toast.bad{background:var(--bad)}
+footer.foot{border-top:1px solid var(--rule);color:var(--ink-3);font-size:12.5px}
+footer.foot .wrap{padding-block:16px 24px;display:flex;justify-content:space-between;gap:8px 20px;flex-wrap:wrap}
+
+/* Socle de page (fourni auparavant par l’hébergement Claude) */
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Connexion */
+body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
+.who{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gate{display:grid;place-items:center;padding-block:32px}
+.gate-card{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:28px 26px 24px;max-width:500px;width:100%;display:grid;gap:12px;justify-items:start}
+.gate-card .sub{margin:0}
+.gate-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.idbox{font-family:var(--f-mono);font-size:15px;background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:8px 12px;user-select:all}
+.agent-add{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,.9fr) auto}
+@media (max-width:620px){.agent-add{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body data-gate="chargement">
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <div class="seal" aria-hidden="true">DIC</div>
+      <div>
+        <div class="eyebrow">Grand Paris RP · Administration de jeu</div>
+        <h1>Direction des Impôts &amp; Cotisations</h1>
+      </div>
+    </div>
+    <div class="who">
+      <span class="role" id="role">Connexion au registre…</span>
+      <button class="btn ghost small" type="button" id="logout" hidden>Se déconnecter</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Guichets">
+  <div class="wrap" role="tablist">
+    <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-writer>Saisir une déclaration</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-writer>Saisir une demande</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-modeles" data-tab="modeles" aria-selected="false">Modèles Discord</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-reglages" data-tab="reglages" aria-selected="false" data-writer>Réglages</button>
+  </div>
+</nav>
+
+<main>
+<div class="wrap">
+  <section class="gate" id="gate">
+    <div class="gate-card">
+      <div class="seal" aria-hidden="true">DIC</div>
+      <h2 id="gate-title">Connexion au registre…</h2>
+      <p class="sub" id="gate-text">Vérification de votre accès.</p>
+      <div class="gate-actions" id="gate-actions"></div>
+    </div>
+  </section>
+  <div class="notice" id="notice" hidden></div>
+
+  <!-- TABLEAU DE BORD -->
+  <section class="panel" id="tab-dashboard" role="tabpanel" aria-labelledby="tab-btn-dashboard">
+    <div class="panel-head">
+      <div>
+        <h2>Tableau de bord</h2>
+        <p class="sub" id="dash-deadline">Période de collecte en cours.</p>
+        <p class="sub" id="dash-backup"></p>
+      </div>
+      <div class="toolbar">
+        <label for="dash-per" class="muted" style="font-weight:500">Période</label>
+        <select id="dash-per"></select>
+        <button class="btn ghost" type="button" id="btn-recap">Copier le récap pour Discord</button>
+        <button class="btn" type="button" id="btn-backup" disabled>Sauvegarder</button>
+      </div>
+    </div>
+
+    <div class="ledger" id="ledger">
+      <div class="kpi" id="k-att"><span class="l">Montant déclaré</span><span class="v">—</span><span class="s">sur la période</span></div>
+      <div class="kpi" id="k-enc"><span class="l">Encaissé</span><span class="v">—</span><span class="s">sur la période</span></div>
+      <div class="kpi" id="k-reste"><span class="l">Reste à recouvrer</span><span class="v">—</span><span class="s">avis émis, non payés</span></div>
+      <div class="kpi" id="k-conf"><span class="l">Entreprises à jour</span><span class="v">—</span><span class="s">déclaration déposée</span></div>
+      <div class="kpi" id="k-dem"><span class="l">Demandes en attente</span><span class="v">—</span><span class="s">services publics</span></div>
+      <div class="kpi" id="k-solde"><span class="l">Solde du Trésor</span><span class="v">—</span><span class="s">encaissé − accordé</span></div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Registre des entreprises</h3>
+            <p class="sub" id="reg-sub">Qui a déclaré pour la période choisie.</p>
+          </div>
+        </div>
+        <div id="registry"><div class="empty">Chargement du registre…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Trésor</h3>
+            <p class="sub">Recettes encaissées et crédits accordés, 8 dernières périodes.</p>
+          </div>
+        </div>
+        <div class="legend" id="legend"></div>
+        <div class="chart" id="chart"></div>
+        <ul class="svc-list" id="svc-list" hidden></ul>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <h3>Déclarations</h3>
+        <div class="seg" id="seg-decl" role="group" aria-label="Filtrer les déclarations">
+          <button type="button" data-f="atraiter" aria-pressed="true">À valider<span class="count"></span></button>
+          <button type="button" data-f="apayer" aria-pressed="false">À payer<span class="count"></span></button>
+          <button type="button" data-f="periode" aria-pressed="false">Période choisie<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Toutes<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="decl-table"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <h3>Demandes des services publics</h3>
+        <div class="seg" id="seg-dem" role="group" aria-label="Filtrer les demandes">
+          <button type="button" data-f="attente" aria-pressed="true">En attente<span class="count"></span></button>
+          <button type="button" data-f="traitees" aria-pressed="false">Traitées<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Toutes<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="dem-table"></div>
+    </div>
+  </section>
+
+  <!-- SAISIE DÉCLARATION -->
+  <section class="panel" id="tab-declaration" role="tabpanel" aria-labelledby="tab-btn-declaration" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Saisir une déclaration</h2>
+        <p class="sub">Recopiez la déclaration d’une entreprise, ou collez directement son message Discord pour remplir les cases.</p>
+      </div>
+    </div>
+    <div id="d-receipt" hidden></div>
+    <div class="form-grid">
+      <div>
+        <details class="paste" id="d-paste-box" open>
+          <summary>Coller un message Discord</summary>
+          <div class="paste-body">
+            <label for="d-paste" class="hint">Collez ici le modèle rempli par l’entreprise (onglet Modèles Discord).</label>
+            <textarea id="d-paste" spellcheck="false" placeholder="Entreprise : Garage du Port&#10;Période : Semaine 41&#10;Chiffre d’affaires : 48 000&#10;…"></textarea>
+            <div class="paste-row">
+              <button class="btn ink small" type="button" id="d-parse">Remplir les cases</button>
+              <span id="d-parse-msg" class="hint" aria-live="polite"></span>
+            </div>
+          </div>
+        </details>
+
+        <form class="liasse" id="form-decl" novalidate>
+          <div class="liasse-head">
+            <h3>Déclaration périodique de résultat</h3>
+            <span class="ref">Formulaire DIC n° 01</span>
+          </div>
+          <div class="case"><div class="case-no">A</div><div class="case-body">
+            <div class="row2">
+              <div class="field">
+                <label for="d-ent">Entreprise</label>
+                <input id="d-ent" list="ent-options" autocomplete="off" placeholder="Nom de l’entreprise" required>
+                <datalist id="ent-options"></datalist>
+                <span class="hint" id="d-ent-hint">Choisissez dans la liste ou tapez un nouveau nom.</span>
+              </div>
+              <div class="field">
+                <label for="d-per">Période déclarée</label>
+                <select id="d-per"></select>
+                <span class="hint" id="d-per-hint"></span>
+              </div>
+            </div>
+          </div></div>
+          <div class="case"><div class="case-no">01</div><div class="case-body">
+            <label for="d-ca">Chiffre d’affaires</label>
+            <div class="money" data-cur="€"><input id="d-ca" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
+            <span class="hint">Toutes les recettes encaissées sur la période (ventes, prestations, contrats).</span>
+          </div></div>
+          <div class="case"><div class="case-no">02</div><div class="case-body">
+            <label for="d-ch">Charges d’exploitation, hors salaires</label>
+            <div class="money" data-cur="€"><input id="d-ch" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
+            <span class="hint">Achats de stock, matières, loyers, carburant, réparations.</span>
+          </div></div>
+          <div class="case"><div class="case-no">03</div><div class="case-body">
+            <div class="row2">
+              <div class="field">
+                <label for="d-ms">Masse salariale versée</label>
+                <div class="money" data-cur="€"><input id="d-ms" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
+              </div>
+              <div class="field">
+                <label for="d-nb">Nombre de salariés</label>
+                <input id="d-nb" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+              </div>
+            </div>
+            <span class="hint">Base des cotisations sociales.</span>
+          </div></div>
+          <div class="case"><div class="case-no">B</div><div class="case-body">
+            <div class="row2">
+              <div class="field">
+                <label for="d-decl">Déclarant</label>
+                <input id="d-decl" autocomplete="off" placeholder="Nom RP du patron ou gérant">
+              </div>
+              <div class="field">
+                <label for="d-date">Déposée le</label>
+                <input id="d-date" type="datetime-local">
+                <span class="hint">Heure du message Discord : sert à calculer le retard.</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="d-note">Observations <span class="muted" style="font-weight:400">(facultatif)</span></label>
+              <textarea id="d-note" rows="2" placeholder="Ex. : fermeture deux jours pour travaux"></textarea>
+            </div>
+          </div></div>
+          <div class="form-foot">
+            <span id="d-err" class="err" aria-live="polite"></span>
+            <button class="btn" type="submit" id="d-submit">Enregistrer la déclaration</button>
+          </div>
+        </form>
+      </div>
+
+      <aside class="aside">
+        <div class="card calc">
+          <h3>Calcul de l’impôt</h3>
+          <dl>
+            <dt>Résultat (01 − 02 − 03)</dt><dd id="c-res">0 €</dd>
+            <dt id="c-is-l">Impôt sur le résultat</dt><dd id="c-is">0 €</dd>
+            <dt id="c-cot-l">Cotisations sociales</dt><dd id="c-cot">0 €</dd>
+            <dt id="c-maj-l">Majoration de retard</dt><dd id="c-maj">0 €</dd>
+            <dt class="tot-dt">Montant dû</dt><dd class="tot-dd" id="c-tot">0 €</dd>
+          </dl>
+          <div class="due" id="c-due"></div>
+        </div>
+        <div class="card">
+          <h3>Barème en vigueur</h3>
+          <ul class="bareme" id="bareme"></ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- SAISIE DEMANDE -->
+  <section class="panel" id="tab-demande" role="tabpanel" aria-labelledby="tab-btn-demande" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Saisir une demande de moyens</h2>
+        <p class="sub">Véhicules, équipement ou budget salaires réclamés par un service public. La décision se prend ensuite depuis le tableau de bord.</p>
+      </div>
+    </div>
+    <div id="m-receipt" hidden></div>
+    <div class="form-grid">
+      <div>
+        <details class="paste" id="m-paste-box" open>
+          <summary>Coller un message Discord</summary>
+          <div class="paste-body">
+            <label for="m-paste" class="hint">Collez ici le modèle rempli par le chef de service.</label>
+            <textarea id="m-paste" spellcheck="false" placeholder="Service : SAMU&#10;Nature : Véhicule&#10;Objet : 1 ambulance supplémentaire&#10;…"></textarea>
+            <div class="paste-row">
+              <button class="btn ink small" type="button" id="m-parse">Remplir les cases</button>
+              <span id="m-parse-msg" class="hint" aria-live="polite"></span>
+            </div>
+          </div>
+        </details>
+
+        <form class="liasse" id="form-dem" novalidate>
+          <div class="liasse-head">
+            <h3>Demande d’allocation de crédits</h3>
+            <span class="ref">Formulaire DIC n° 02</span>
+          </div>
+          <div class="case"><div class="case-no">A</div><div class="case-body">
+            <div class="row2">
+              <div class="field">
+                <label for="m-service">Service demandeur</label>
+                <input id="m-service" list="svc-options" autocomplete="off" placeholder="Ex. : Police nationale">
+                <datalist id="svc-options"></datalist>
+              </div>
+              <div class="field">
+                <label for="m-nature">Nature de la demande</label>
+                <select id="m-nature">
+                  <option value="vehicule">Véhicule</option>
+                  <option value="equipement">Équipement &amp; moyens</option>
+                  <option value="salaires">Budget salaires</option>
+                  <option value="fonctionnement">Fonctionnement</option>
+                  <option value="autre">Autre</option>
+                </select>
+              </div>
+            </div>
+          </div></div>
+          <div class="case"><div class="case-no">01</div><div class="case-body">
+            <label for="m-objet">Objet</label>
+            <input id="m-objet" autocomplete="off" placeholder="Ex. : 2 véhicules d’intervention sérigraphiés">
+          </div></div>
+          <div class="case"><div class="case-no">02</div><div class="case-body">
+            <div class="row3">
+              <div class="field">
+                <label for="m-qte">Quantité</label>
+                <input id="m-qte" type="number" min="0" step="1" inputmode="numeric" placeholder="1">
+              </div>
+              <div class="field">
+                <label for="m-montant">Montant demandé</label>
+                <div class="money" data-cur="€"><input id="m-montant" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
+              </div>
+              <div class="field">
+                <label for="m-urg">Urgence</label>
+                <select id="m-urg">
+                  <option value="normale">Normale</option>
+                  <option value="prioritaire">Prioritaire</option>
+                  <option value="urgente">Urgente</option>
+                </select>
+              </div>
+            </div>
+          </div></div>
+          <div class="case"><div class="case-no">03</div><div class="case-body">
+            <label for="m-just">Justification</label>
+            <textarea id="m-just" rows="3" placeholder="Usage prévu, nombre d’agents concernés, prix constaté chez le concessionnaire…"></textarea>
+          </div></div>
+          <div class="case"><div class="case-no">B</div><div class="case-body">
+            <div class="row2">
+              <div class="field">
+                <label for="m-dem">Demandeur</label>
+                <input id="m-dem" autocomplete="off" placeholder="Nom RP et grade">
+              </div>
+              <div class="field">
+                <label for="m-date">Reçue le</label>
+                <input id="m-date" type="datetime-local">
+              </div>
+            </div>
+          </div></div>
+          <div class="form-foot">
+            <span id="m-err" class="err" aria-live="polite"></span>
+            <button class="btn" type="submit" id="m-submit">Enregistrer la demande</button>
+          </div>
+        </form>
+      </div>
+      <aside class="aside">
+        <div class="card">
+          <h3>Budget disponible</h3>
+          <dl class="kv" id="m-budget"></dl>
+        </div>
+        <div class="card">
+          <h3>Une demande complète contient</h3>
+          <ul class="bareme">
+            <li>L’usage prévu et le nombre d’agents concernés</li>
+            <li>Le prix constaté en jeu (concession, armurerie)</li>
+            <li>La durée si c’est un budget salaires</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- MODÈLES DISCORD -->
+  <section class="panel" id="tab-modeles" role="tabpanel" aria-labelledby="tab-btn-modeles" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Modèles Discord</h2>
+        <p class="sub">Épinglez ces messages dans vos salons. Les entreprises et les services les copient, les remplissent et les envoient ; vous collez leur réponse dans le guichet de saisie.</p>
+      </div>
+    </div>
+    <div class="tpl-grid">
+      <div class="card">
+        <h3>Déclaration fiscale</h3>
+        <p class="sub">Pour le salon des déclarations, à remplir par chaque patron.</p>
+        <pre class="tpl" id="tpl-decl"></pre>
+        <div class="tpl-foot"><span>Une déclaration par période.</span><button class="btn ghost small" type="button" data-copy="tpl-decl">Copier</button></div>
+      </div>
+      <div class="card">
+        <h3>Demande de moyens</h3>
+        <p class="sub">Pour le salon des services publics, à remplir par le chef de service.</p>
+        <pre class="tpl" id="tpl-dem"></pre>
+        <div class="tpl-foot"><span>Une demande par besoin.</span><button class="btn ghost small" type="button" data-copy="tpl-dem">Copier</button></div>
+      </div>
+      <div class="card">
+        <h3>Annonce du barème</h3>
+        <p class="sub">Généré à partir de vos réglages. À republier quand vous changez un taux.</p>
+        <pre class="tpl" id="tpl-bareme"></pre>
+        <div class="tpl-foot"><span>Suit vos réglages.</span><button class="btn ghost small" type="button" data-copy="tpl-bareme">Copier</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RÉGLAGES -->
+  <section class="panel" id="tab-reglages" role="tabpanel" aria-labelledby="tab-btn-reglages" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Réglages</h2>
+        <p class="sub">Les nouveaux taux s’appliquent aux déclarations saisies après l’enregistrement. Les dossiers existants gardent le taux de leur dépôt.</p>
+      </div>
+    </div>
+    <div class="set-grid">
+      <div>
+        <div class="card">
+          <h3>Barème et calendrier</h3>
+          <form class="set-form" id="form-set" novalidate>
+            <div class="row2">
+              <div class="field">
+                <label for="s-per">Rythme des déclarations</label>
+                <select id="s-per"><option value="semaine">Chaque semaine</option><option value="mois">Chaque mois</option></select>
+              </div>
+              <div class="field">
+                <label for="s-delai">Délai de dépôt après la fin de période</label>
+                <input id="s-delai" type="number" min="0" max="14" step="1"><span class="hint">En jours.</span>
+              </div>
+            </div>
+            <div class="row3">
+              <div class="field">
+                <label for="s-is">Impôt sur le résultat</label>
+                <div class="money" data-cur="%"><input id="s-is" type="number" min="0" max="100" step="0.5"></div>
+              </div>
+              <div class="field">
+                <label for="s-cot">Cotisations sociales</label>
+                <div class="money" data-cur="%"><input id="s-cot" type="number" min="0" max="100" step="0.5"></div>
+              </div>
+              <div class="field">
+                <label for="s-maj">Majoration de retard</label>
+                <div class="money" data-cur="%"><input id="s-maj" type="number" min="0" max="100" step="0.5"></div>
+              </div>
+            </div>
+            <div class="row2">
+              <div class="field">
+                <label for="s-budget">Fonds de départ du Trésor</label>
+                <input id="s-budget" type="number" min="0" step="1" class="mono">
+                <span class="hint">Somme déjà disponible avant les premières recettes.</span>
+              </div>
+              <div class="field">
+                <label for="s-devise">Devise affichée</label>
+                <input id="s-devise" maxlength="4">
+              </div>
+            </div>
+            <div class="paste-row">
+              <button class="btn" type="submit" id="s-save">Enregistrer le barème</button>
+              <span id="s-msg" class="hint" aria-live="polite"></span>
+            </div>
+          </form>
+        </div>
+        <div class="card">
+          <h3>Services publics</h3>
+          <p class="sub">Un service par ligne. Ils sont proposés dans la saisie des demandes.</p>
+          <div class="set-form">
+            <textarea id="s-services" rows="7" aria-label="Services publics, un par ligne"></textarea>
+            <div class="paste-row">
+              <button class="btn" type="button" id="s-svc-save">Enregistrer la liste</button>
+              <span id="s-svc-msg" class="hint" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Entreprises enregistrées</h3>
+          <p class="sub">Les entreprises actives apparaissent dans le registre ; celles qui ne déclarent pas passent en retard.</p>
+          <form class="ent-add" id="form-ent" novalidate>
+            <div class="field"><label for="e-nom">Nom</label><input id="e-nom" autocomplete="off" placeholder="Ex. : Garage du Port"></div>
+            <div class="field"><label for="e-sect">Secteur</label><input id="e-sect" autocomplete="off" placeholder="Mécanique"></div>
+            <div class="field"><label for="e-patron">Patron</label><input id="e-patron" autocomplete="off" placeholder="Nom RP"></div>
+            <button class="btn" type="submit" id="e-add">Ajouter</button>
+          </form>
+          <span id="e-msg" class="err" aria-live="polite"></span>
+          <ul class="ent-list" id="ent-admin"></ul>
+        </div>
+        <div class="card">
+          <h3>Sauvegarde et restauration</h3>
+          <p class="sub">Un clic télécharge tout le registre dans un seul fichier : barème, entreprises, déclarations, avis, demandes et décisions. Déposez une copie dans un salon du staff chaque semaine.</p>
+          <div class="paste-row" style="margin-top:14px">
+            <button class="btn" type="button" id="b-save" disabled>Télécharger une sauvegarde</button>
+            <span class="hint" id="b-last"></span>
+          </div>
+          <div class="restore">
+            <label for="b-file">Restaurer depuis un fichier de sauvegarde</label>
+            <input id="b-file" type="file" accept=".json,application/json">
+            <span class="hint">Les dossiers du fichier remplacent ceux qui portent le même numéro. Les dossiers absents du fichier sont conservés.</span>
+            <span id="b-msg" class="err" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Accès au guichet</h3>
+          <p class="sub">Chaque personne se connecte avec son compte Discord. Ajoutez ici son identifiant Discord : dans Discord, Paramètres → Avancés → Mode développeur, puis clic droit sur son profil → Copier l’identifiant.</p>
+          <form class="ent-add agent-add" id="form-agent" novalidate>
+            <div class="field"><label for="a-id">Identifiant Discord</label><input id="a-id" class="mono" inputmode="numeric" autocomplete="off" placeholder="123456789012345678"></div>
+            <div class="field"><label for="a-nom">Nom</label><input id="a-nom" autocomplete="off" placeholder="Ex. : Inspecteur Martin"></div>
+            <div class="field"><label for="a-role">Rôle</label><select id="a-role"><option value="direction">Direction</option><option value="lecture">Lecture seule</option></select></div>
+            <button class="btn" type="submit" id="a-add">Ajouter</button>
+          </form>
+          <span id="a-msg" class="err" aria-live="polite"></span>
+          <ul class="ent-list" id="agent-list"></ul>
+        </div>
+        <div class="card">
+          <h3>Qui peut faire quoi</h3>
+          <ul class="access">
+            <li><b>Direction</b> : saisit les dossiers, décide et gère les accès ci-dessus.</li>
+            <li><b>Lecture seule</b> : consulte le registre et télécharge les sauvegardes. Idéal pour les administrateurs du serveur.</li>
+            <li><b>Les joueurs</b> n’ont pas besoin d’accès : ils déclarent sur Discord avec les modèles, vous collez leur message ici.</li>
+            <li><b>Les propriétaires</b> de l’organisation GitHub et du projet Supabase gardent la main sur le code et les données, même sans passer par ce site.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Guichet fiscal du serveur Grand Paris RP · document de jeu, montants fictifs.</span>
+    <span id="foot-sync"></span>
+  </div>
+</footer>
+
+<dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+<div id="toast" aria-live="polite"></div>
+
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"></script>
+<script>
+(() => {
+"use strict";
+
+/* ---------- Outils ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : String(v));
+  }
+  for (const kid of kids.flat(Infinity)) {
+    if (kid == null || kid === false) continue;
+    e.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  }
+  return e;
+}
+const pad = n => String(n).padStart(2, "0");
+const plural = n => (n > 1 ? "s" : "");
+const norm = s => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const NF = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
+const cur = () => (cfg().devise || "€");
+const money = n => NF.format(Math.round(Number(n) || 0)) + " " + cur();
+const pct = n => (Number(n) || 0).toLocaleString("fr-FR", { maximumFractionDigits: 2 }) + " %";
+function compact(n) {
+  const a = Math.abs(n);
+  if (a >= 1e6) return (n / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " M";
+  if (a >= 1e3) return (n / 1e3).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " k";
+  return NF.format(n);
+}
+const fmtDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+const fmtDateTime = d => d.toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const toLocalInput = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const dossierNo = (p, id) => p + "-" + String(id || "").replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase();
+const numIn = el => { const v = el.value.trim(); if (v === "") return 0; const x = Number(v); return Number.isFinite(x) ? x : NaN; };
+const nowISO = () => new Date().toISOString();
+const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+
+/* ---------- État ---------- */
+const DEFAULTS = {
+  periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
+  budgetInitial: 0, devise: "€",
+  services: ["Police nationale", "Gendarmerie", "SAMU", "Sapeurs-pompiers", "Mairie", "Justice", "Douane"]
+};
+const S = {
+  db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
+  connected: false, offline: false, readOnly: false, loaded: new Set(),
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {},
+  tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
+  setDirty: false, svcDirty: false
+};
+const cfg = () => {
+  const c = Object.assign({}, DEFAULTS, S.config || {});
+  if (!Array.isArray(c.services) || !c.services.length) c.services = DEFAULTS.services.slice();
+  return c;
+};
+const writer = () => S.connected && !S.readOnly && (S.admin || S.canWrite !== false);
+
+const NATURES = { vehicule: "Véhicule", equipement: "Équipement & moyens", salaires: "Budget salaires", fonctionnement: "Fonctionnement", autre: "Autre" };
+const URG = { normale: ["Normale", "muted"], prioritaire: ["Prioritaire", "warn"], urgente: ["Urgente", "bad"] };
+const DSTAT = {
+  soumise: ["À valider", "info"], validee: ["À payer", "warn"], payee: ["Payée", "ok"],
+  controle: ["En contrôle", "accent"], rejetee: ["Rejetée", "bad"],
+  retard: ["En retard", "bad"], attendue: ["Attendue", "muted"], encours: ["Période en cours", "muted"]
+};
+const ASTAT = {
+  attente: ["En attente", "info"], etude: ["À l’étude", "accent"], accordee: ["Accordée", "ok"],
+  partielle: ["Accordée en partie", "ok"], refusee: ["Refusée", "bad"]
+};
+const chip = ([label, tone]) => h("span", { class: "chip t-" + tone, text: label });
+const stamp = ([label, tone]) => h("span", { class: "stamp t-" + tone, text: label });
+
+/* ---------- Périodes ---------- */
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y = t.getUTCFullYear();
+  const w = Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7);
+  return { y, w };
+}
+function mondayOf(y, w) {
+  const j4 = new Date(y, 0, 4);
+  const dow = (j4.getDay() + 6) % 7;
+  return new Date(y, 0, 4 - dow + (w - 1) * 7);
+}
+function keyOf(date, per) {
+  per = per || cfg().periodicite;
+  if (per === "mois") return `${date.getFullYear()}-${pad(date.getMonth() + 1)}`;
+  const { y, w } = isoWeek(date);
+  return `${y}-S${pad(w)}`;
+}
+function bounds(key) {
+  let m = /^(\d{4})-S(\d{2})$/.exec(key || "");
+  if (m) {
+    const mon = mondayOf(+m[1], +m[2]);
+    return { start: mon, end: new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6, 23, 59, 59, 999), week: +m[2] };
+  }
+  m = /^(\d{4})-(\d{2})$/.exec(key || "");
+  if (m) return { start: new Date(+m[1], +m[2] - 1, 1), end: new Date(+m[1], +m[2], 0, 23, 59, 59, 999) };
+  return null;
+}
+function deadline(key) {
+  const b = bounds(key);
+  return b ? new Date(b.end.getTime() + (Number(cfg().delaiJours) || 0) * 864e5) : new Date(8.64e15);
+}
+function prevKey(key) {
+  const b = bounds(key);
+  const per = /-S\d{2}$/.test(key) ? "semaine" : "mois";
+  return keyOf(new Date(b.start.getTime() - 864e5), per);
+}
+function recentKeys(n) {
+  let k = keyOf(new Date());
+  const out = [k];
+  while (out.length < n) { k = prevKey(k); out.push(k); }
+  return out;
+}
+function defaultKey() {
+  const curK = keyOf(new Date());
+  const prev = prevKey(curK);
+  return Date.now() <= deadline(prev).getTime() ? prev : curK;
+}
+function periodLabel(key) {
+  const b = bounds(key);
+  if (!b) return key || "—";
+  if (b.week) return `Semaine ${b.week} · ${fmtDate(b.start)} – ${fmtDate(b.end)}`;
+  const s = b.start.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function periodShort(key) {
+  const b = bounds(key);
+  if (!b) return key;
+  if (b.week) return "S" + b.week;
+  return b.start.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
+}
+function periodPlain(key) {
+  const b = bounds(key);
+  if (!b) return key;
+  return b.week ? `Semaine ${b.week}` : periodLabel(key);
+}
+
+/* ---------- Calculs ---------- */
+function compute(ca, ch, ms, late, c) {
+  c = c || cfg();
+  const resultat = ca - ch - ms;
+  const impot = Math.round(Math.max(0, resultat) * (Number(c.tauxIS) || 0) / 100);
+  const cotisations = Math.round(ms * (Number(c.tauxCot) || 0) / 100);
+  const majoration = late ? Math.round((impot + cotisations) * (Number(c.majoration) || 0) / 100) : 0;
+  return { resultat, impot, cotisations, majoration, total: impot + cotisations + majoration };
+}
+const dStatus = d => (S.decisions[d.id] ? S.decisions[d.id].statut : "soumise");
+const dMontant = d => { const dec = S.decisions[d.id]; const m = dec && dec.montant != null ? Number(dec.montant) : Number(d.total); return Number.isFinite(m) ? m : 0; };
+const aStatus = dm => (S.arbitrages[dm.id] ? S.arbitrages[dm.id].statut : "attente");
+const activeEnts = () => S.entreprises.filter(e => e.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+function findEnt(name) {
+  const n = norm(name);
+  if (!n) return null;
+  const exact = S.entreprises.find(e => norm(e.nom) === n);
+  if (exact) return exact;
+  if (n.length < 4) return null;
+  const loose = S.entreprises.filter(e => { const en = norm(e.nom); return en.includes(n) || n.includes(en); });
+  return loose.length === 1 ? loose[0] : null;
+}
+function entStatus(e, key) {
+  const ds = S.declarations.filter(d => d.entrepriseId === e.id && d.periode === key).sort(byCreatedDesc);
+  if (ds.length) return { status: dStatus(ds[0]), decl: ds[0] };
+  const b = bounds(key);
+  const now = Date.now();
+  if (b && now > deadline(key).getTime()) return { status: "retard" };
+  if (b && now > b.end.getTime()) return { status: "attendue" };
+  return { status: "encours" };
+}
+function treasury() {
+  let rec = 0, dep = 0;
+  for (const d of S.declarations) if (dStatus(d) === "payee") rec += dMontant(d);
+  for (const dm of S.demandes) {
+    const a = S.arbitrages[dm.id];
+    if (a && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
+  }
+  const budget = Number(cfg().budgetInitial) || 0;
+  return { rec, dep, budget, solde: budget + rec - dep };
+}
+
+/* ---------- Écritures ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function write(fn) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { await fn(); return true; }
+    catch (e) {
+      const code = e && e.code;
+      if (code === "unavailable" && attempt === 0) { await sleep(400 + Math.random() * 600); continue; }
+      if (code === "invalid_argument") { setReadOnly(); toast("Enregistrement refusé : votre accès ne permet que la lecture.", true); }
+      else if (code === "quota_exceeded") toast("Le registre est plein : supprimez d’anciens dossiers avant d’en ajouter.", true);
+      else if (code === "revoked") { setOffline(); toast("Votre accès à ce guichet a changé. Rechargez la page.", true); }
+      else toast("L’enregistrement a échoué. Vérifiez votre connexion puis réessayez.", true);
+      return false;
+    }
+  }
+  return false;
+}
+let toastTimer = 0;
+function toast(msg, bad) {
+  const box = $("#toast");
+  box.replaceChildren(h("div", { class: "toast" + (bad ? " bad" : ""), text: msg }));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => box.replaceChildren(), bad ? 6000 : 3500);
+}
+async function copyText(text, okMsg) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(okMsg || "Copié dans le presse-papiers.");
+  } catch (e) {
+    const ta = h("textarea", { class: "prewrap", rows: "12", readonly: true, id: "copy-fallback", "aria-label": "Texte à copier" });
+    ta.value = text;
+    openDialog({ eyebrow: "Copie manuelle", title: "Sélectionnez puis copiez ce texte", body: [ta], foot: [h("button", { class: "btn", type: "button", onclick: closeDialog, text: "Fermer" })] });
+    setTimeout(() => { ta.focus(); ta.select(); }, 30);
+  }
+}
+
+/* ---------- Connexion ---------- */
+function setNotice(html) {
+  const n = $("#notice");
+  if (!html) { n.hidden = true; n.replaceChildren(); return; }
+  n.replaceChildren(...html);
+  n.hidden = false;
+}
+function setOffline() {
+  S.offline = true; S.connected = false;
+  setNotice([h("div", {}, h("strong", { text: "Connexion au registre perdue. " }), "Rechargez la page pour vous reconnecter.")]);
+  applyRole();
+}
+function setReadOnly() {
+  if (S.readOnly) return;
+  S.readOnly = true;
+  setNotice([h("div", {}, h("strong", { text: "Lecture seule. " }), "Vous consultez le registre et pouvez télécharger les sauvegardes. Seule la Direction saisit et décide.")]);
+  applyRole();
+}
+function applyRole() {
+  const role = $("#role");
+  role.className = "role";
+  if (S.offline) role.textContent = "Hors ligne";
+  else if (!S.connected) role.textContent = "Connexion au registre…";
+  else if (S.readOnly || !writer()) role.textContent = "Lecture seule" + (S.agentName ? " · " + S.agentName : "");
+  else if (S.admin) { role.textContent = "Direction" + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
+  else role.textContent = "Agent";
+  const w = writer();
+  $$(".tab[data-writer]").forEach(b => { b.hidden = !w && (S.connected || S.offline); });
+  if (!w && (S.connected || S.offline) && ["declaration", "demande", "reglages"].includes(S.tab)) showTab("dashboard");
+  $("#logout").hidden = !S.sb || !S.uid;
+  $$("#d-submit, #m-submit, #s-save, #s-svc-save, #e-add, #d-parse, #m-parse, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
+  render();
+}
+/* ---------- Stockage Supabase : même interface que l’ancien registre ---------- */
+function makeStore(sb) {
+  const cache = new Map();
+  const docL = new Map(), colL = new Map();
+  let ready = false;
+  const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const newId = () => { const a = new Uint8Array(16); crypto.getRandomValues(a); return Array.from(a, b => ALPHA[b % 62]).join(""); };
+  const docSnap = path => { const v = cache.get(path); return { id: path.split("/")[1], exists: v !== undefined, data: () => v, metadata: { fromCache: false, hasPendingWrites: false } }; };
+  const colSnap = col => {
+    const docs = [];
+    for (const [k, v] of cache) { const i = k.indexOf("/"); if (k.slice(0, i) === col) docs.push({ id: k.slice(i + 1), exists: true, data: () => v, metadata: {} }); }
+    return { docs, size: docs.length, empty: !docs.length, metadata: {} };
+  };
+  function notify(paths) {
+    const cols = new Set(paths.map(p => p.split("/")[0]));
+    for (const p of paths) (docL.get(p) || new Set()).forEach(fn => fn(docSnap(p)));
+    for (const c of cols) (colL.get(c) || new Set()).forEach(fn => fn(colSnap(c)));
+  }
+  function notifyAll() {
+    for (const [p, set] of docL) set.forEach(fn => fn(docSnap(p)));
+    for (const [c, set] of colL) set.forEach(fn => fn(colSnap(c)));
+  }
+  const mapErr = e => {
+    const code = (e && e.code) || "", msg = (e && e.message) || "";
+    if (code === "42501" || /row-level security|permission denied/i.test(msg)) return { code: "invalid_argument", message: msg };
+    if (code === "PGRST301" || /jwt/i.test(msg)) return { code: "revoked", message: msg };
+    return { code: "unavailable", message: msg || "Erreur réseau" };
+  };
+  async function loadAll() {
+    const rows = [], step = 1000;
+    for (let from = 0; ; from += step) {
+      const { data, error } = await sb.from("registre").select("collection,id,data").order("collection").order("id").range(from, from + step - 1);
+      if (error) throw mapErr(error);
+      rows.push(...(data || []));
+      if (!data || data.length < step) break;
+    }
+    cache.clear();
+    for (const r of rows) cache.set(r.collection + "/" + r.id, r.data || {});
+    ready = true;
+    notifyAll();
+  }
+  function startLive() {
+    try {
+      sb.channel("registre-direct").on("postgres_changes", { event: "*", schema: "public", table: "registre" }, payload => {
+        if (payload.eventType === "DELETE") {
+          const o = payload.old || {};
+          if (o.collection && o.id) { cache.delete(o.collection + "/" + o.id); notify([o.collection + "/" + o.id]); }
+        } else {
+          const n = payload.new || {};
+          if (n.collection && n.id) { cache.set(n.collection + "/" + n.id, n.data || {}); notify([n.collection + "/" + n.id]); }
+        }
+      }).subscribe();
+    } catch (e) { /* le rafraîchissement périodique prend le relais */ }
+    setInterval(() => { if (document.visibilityState === "visible") loadAll().catch(() => {}); }, 60000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadAll().catch(() => {}); });
+  }
+  function listen(map, key, next, snap) {
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(next);
+    if (ready) setTimeout(() => next(snap(key)), 0);
+    return () => map.get(key).delete(next);
+  }
+  function docRef(path) {
+    const parts = path.split("/");
+    if (parts.length !== 2 || !parts[0] || !parts[1]) throw new TypeError("Chemin invalide : " + path);
+    const [col, id] = parts;
+    const ref = {
+      id, path,
+      async get() { return docSnap(path); },
+      onSnapshot(next) { return listen(docL, path, next, docSnap); },
+      async set(data) {
+        const body = JSON.parse(JSON.stringify(data));
+        const { error } = await sb.from("registre").upsert({ collection: col, id, data: body }, { onConflict: "collection,id" });
+        if (error) throw mapErr(error);
+        cache.set(path, body); notify([path]);
+      },
+      async update(partial) {
+        if (!cache.has(path)) throw { code: "invalid_argument", message: "Document absent" };
+        return ref.set(Object.assign({}, cache.get(path), JSON.parse(JSON.stringify(partial))));
+      },
+      async delete() {
+        const { data, error } = await sb.from("registre").delete().eq("collection", col).eq("id", id).select("id");
+        if (error) throw mapErr(error);
+        if (cache.has(path) && (!data || !data.length)) throw { code: "invalid_argument", message: "Suppression refusée" };
+        cache.delete(path); notify([path]);
+      },
+      collection() { throw new TypeError("Sous-collections non prises en charge"); }
+    };
+    return ref;
+  }
+  function colRef(col) {
+    if (!col || col.includes("/")) throw new TypeError("Collection invalide : " + col);
+    return {
+      path: col,
+      doc(id) { return docRef(col + "/" + (id || newId())); },
+      onSnapshot(next) { return listen(colL, col, next, colSnap); },
+      async add(data) { const r = docRef(col + "/" + newId()); await r.set(data); return r; }
+    };
+  }
+  return { doc: docRef, collection: colRef, loadAll, startLive };
+}
+
+/* ---------- Téléchargements (navigateur classique) ---------- */
+const browserDownloads = {
+  async save({ filename, data }) {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; a.style.display = "none";
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return { status: "saved" };
+  }
+};
+
+/* ---------- Connexion Discord ---------- */
+function showGate(state, detail) {
+  document.body.dataset.gate = state;
+  $("#gate").hidden = false;
+  const t = $("#gate-title"), p = $("#gate-text"), a = $("#gate-actions");
+  a.replaceChildren();
+  if (state === "config") {
+    t.textContent = "Site pas encore relié à sa base";
+    p.textContent = "Renseignez l’adresse et la clé publique du projet Supabase dans le fichier config.js, comme expliqué dans le README du dépôt.";
+  } else if (state === "login") {
+    t.textContent = "Guichet réservé à la Direction";
+    p.textContent = "Connectez-vous avec votre compte Discord. Seuls les agents enregistrés par la Direction accèdent au registre.";
+    a.append(h("button", { class: "btn", type: "button", onclick: login, text: "Se connecter avec Discord" }));
+  } else if (state === "refuse") {
+    t.textContent = "Accès pas encore accordé";
+    p.textContent = "Votre compte Discord est reconnu, mais il n’est pas dans la liste des agents. Transmettez cet identifiant à la Direction :";
+    const id = S.discordId || "inconnu";
+    a.append(h("span", { class: "idbox", text: id }),
+      h("button", { class: "btn ghost", type: "button", onclick: () => copyText(id, "Identifiant copié."), text: "Copier" }),
+      h("button", { class: "btn ghost", type: "button", onclick: logout, text: "Se déconnecter" }));
+  } else {
+    t.textContent = "Connexion impossible";
+    p.textContent = "Le registre ne répond pas" + (detail ? ` (${detail})` : "") + ". Vérifiez votre connexion puis réessayez.";
+    a.append(h("button", { class: "btn", type: "button", onclick: () => location.reload(), text: "Réessayer" }));
+    if (S.sb) a.append(h("button", { class: "btn ghost", type: "button", onclick: logout, text: "Se déconnecter" }));
+  }
+  $("#role").textContent = state === "login" || state === "config" ? "Non connecté" : "Accès limité";
+}
+function hideGate() { delete document.body.dataset.gate; $("#gate").hidden = true; }
+async function login() {
+  const { error } = await S.sb.auth.signInWithOAuth({ provider: "discord", options: { redirectTo: location.origin + location.pathname } });
+  if (error) showGate("erreur", error.message);
+}
+async function logout() {
+  try { await S.sb.auth.signOut(); } catch (e) { /* session déjà close */ }
+  location.replace(location.origin + location.pathname);
+}
+$("#logout").addEventListener("click", logout);
+
+async function init() {
+  const conf = window.GUICHET_CONFIG || {};
+  if (!window.supabase || !conf.supabaseUrl || !conf.supabaseKey || /VOTRE|XXXX/.test(conf.supabaseUrl + conf.supabaseKey)) { showGate("config"); return; }
+  const params = new URLSearchParams(location.search);
+  const oauthError = params.get("error_description");
+  const sb = window.supabase.createClient(conf.supabaseUrl, conf.supabaseKey, { auth: { flowType: "pkce", persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  S.sb = sb;
+  S.downloads = browserDownloads;
+  let session = null;
+  try { ({ data: { session } } = await sb.auth.getSession()); } catch (e) { session = null; }
+  if (location.search) { try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* adresse inchangée */ } }
+  if (!session) { if (oauthError) showGate("erreur", oauthError); else showGate("login"); return; }
+  S.uid = session.user.id;
+  const { data: acces, error } = await sb.rpc("mon_acces");
+  if (error) { showGate("erreur", error.message); return; }
+  S.discordId = acces && acces.discord_id;
+  S.agentName = (acces && acces.nom) || (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || "";
+  if (!acces || !acces.role) { showGate("refuse"); return; }
+  S.admin = acces.role === "direction";
+  S.canWrite = S.admin;
+  const store = makeStore(sb);
+  S.db = store;
+  try { await store.loadAll(); } catch (e) { showGate("erreur", e.message); return; }
+  hideGate();
+  S.connected = true;
+  subscribe();
+  store.startLive();
+  if (!S.admin) setReadOnly(); else { applyRole(); loadAgents(); }
+  sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
+}
+
+/* ---------- Gestion des accès ---------- */
+async function loadAgents() {
+  if (!S.sb || !S.admin) return;
+  const { data, error } = await S.sb.from("agents").select("discord_id,nom,role,ajoute_le").order("nom");
+  if (error) { $("#a-msg").textContent = "Impossible de charger la liste des accès."; return; }
+  S.agents = data || [];
+  renderAgents();
+}
+function renderAgents() {
+  const list = $("#agent-list");
+  if (!S.agents.length) { list.replaceChildren(h("li", { class: "muted", style: "grid-template-columns:1fr", text: "Aucun agent enregistré." })); return; }
+  list.replaceChildren(...S.agents.map(a => {
+    const me = a.discord_id === S.discordId;
+    const sel = h("select", { id: "role-" + a.discord_id, "aria-label": "Rôle de " + (a.nom || a.discord_id), style: "width:auto" },
+      h("option", { value: "direction", text: "Direction" }), h("option", { value: "lecture", text: "Lecture seule" }));
+    sel.value = a.role;
+    sel.disabled = me;
+    sel.addEventListener("change", async () => {
+      const { error } = await S.sb.from("agents").update({ role: sel.value }).eq("discord_id", a.discord_id);
+      if (error) { toast("Modification refusée.", true); sel.value = a.role; } else { a.role = sel.value; toast("Rôle mis à jour."); }
+    });
+    const rm = h("button", { class: "btn danger small", type: "button", text: me ? "Vous" : "Retirer", disabled: me });
+    rm.addEventListener("click", async () => {
+      const { error } = await S.sb.from("agents").delete().eq("discord_id", a.discord_id);
+      if (error) toast("Suppression refusée.", true); else { toast("Accès retiré."); loadAgents(); }
+    });
+    return h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: a.nom || "Sans nom" }), h("span", { class: "meta mono", text: a.discord_id })),
+      sel, rm);
+  }));
+}
+$("#form-agent").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!S.admin) return;
+  const msg = $("#a-msg");
+  msg.textContent = "";
+  const id = $("#a-id").value.replace(/\s/g, ""), nom = $("#a-nom").value.trim(), role = $("#a-role").value;
+  if (!/^\d{15,21}$/.test(id)) { $("#a-id").setAttribute("aria-invalid", "true"); $("#a-id").focus(); msg.textContent = "Un identifiant Discord compte 17 à 20 chiffres."; return; }
+  $("#a-id").removeAttribute("aria-invalid");
+  const { error } = await S.sb.from("agents").insert({ discord_id: id, nom, role });
+  if (error) { msg.textContent = error.code === "23505" ? "Cet identifiant a déjà accès." : "Ajout refusé : " + error.message; return; }
+  $("#form-agent").reset();
+  toast(`${nom || "Agent"} ajouté.`);
+  loadAgents();
+});
+
+function onDbError(e) {
+  if (e && e.code === "revoked") setOffline();
+}
+function subscribe() {
+  const db = S.db;
+  db.doc("config/main").onSnapshot(s => { S.config = s.exists ? (s.data() || {}) : {}; S.loaded.add("config"); schedule(); }, onDbError);
+  db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
+  const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
+  col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("declarations", s => { S.declarations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("decisions", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.decisions = o; });
+  col("demandes", s => { S.demandes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("arbitrages", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.arbitrages = o; });
+}
+
+/* ---------- Rendu ---------- */
+let raf = 0;
+function schedule() {
+  if (raf) return;
+  raf = requestAnimationFrame(() => { raf = 0; render(); });
+  setTimeout(() => { if (raf) { cancelAnimationFrame(raf); raf = 0; render(); } }, 250);
+}
+function render() {
+  const c = cfg();
+  $$(".money[data-cur]").forEach(m => { if (m.dataset.cur !== "%") m.dataset.cur = c.devise || "€"; });
+  renderOptions();
+  renderDashboard();
+  renderDeclPreview();
+  renderBudgetAside();
+  renderTemplates();
+  renderSettings();
+  renderBackupInfo();
+  $("#foot-sync").textContent = S.connected ? (S.loaded.has("declarations") ? "Registre synchronisé" : "Synchronisation…") : "";
+}
+function fillSelect(sel, options, preferred) {
+  const curV = sel.value;
+  const sig = JSON.stringify(options);
+  if (sel.dataset.sig !== sig) {
+    const keep = curV && !options.some(o => o[0] === curV) ? [[curV, sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : curV]] : [];
+    sel.replaceChildren(...options.concat(keep).map(([v, l]) => h("option", { value: v, text: l })));
+    sel.dataset.sig = sig;
+  }
+  if (curV && $$("option", sel).some(o => o.value === curV)) sel.value = curV;
+  else if (preferred && $$("option", sel).some(o => o.value === preferred)) sel.value = preferred;
+}
+function ensureOption(sel, value, label) {
+  if (!$$("option", sel).some(o => o.value === value)) sel.append(h("option", { value, text: label }));
+  sel.value = value;
+}
+function renderOptions() {
+  const keys = recentKeys(8).map(k => [k, periodLabel(k)]);
+  fillSelect($("#dash-per"), keys, S.dashKey || defaultKey());
+  fillSelect($("#d-per"), keys, defaultKey());
+  const entSig = activeEnts().map(e => e.nom).join("|");
+  const dl = $("#ent-options");
+  if (dl.dataset.sig !== entSig) { dl.replaceChildren(...activeEnts().map(e => h("option", { value: e.nom }))); dl.dataset.sig = entSig; }
+  const svc = cfg().services;
+  const sl = $("#svc-options");
+  if (sl.dataset.sig !== svc.join("|")) { sl.replaceChildren(...svc.map(s => h("option", { value: s }))); sl.dataset.sig = svc.join("|"); }
+}
+function setKpi(id, value, sub, tone) {
+  const k = $("#" + id);
+  k.className = "kpi" + (tone ? " " + tone : "");
+  $(".v", k).textContent = value;
+  $(".s", k).textContent = sub;
+}
+
+function renderDashboard() {
+  const key = S.dashKey = $("#dash-per").value || defaultKey();
+  const dl = deadline(key);
+  $("#dash-deadline").textContent = `${periodLabel(key)} · dépôt avant le ${fmtDateTime(dl)}${Date.now() > dl.getTime() ? " (délai dépassé)" : ""}.`;
+  const ready = S.connected && S.loaded.has("declarations") && S.loaded.has("entreprises");
+  if (!ready) {
+    $("#registry").replaceChildren(h("div", { class: "empty", text: S.offline ? "Le registre s’affichera une fois la page ouverte depuis Claude." : "Chargement du registre…" }));
+    renderChart(); renderDeclTable(key); renderDemTable();
+    return;
+  }
+  const declsP = S.declarations.filter(d => d.periode === key);
+  let att = 0, enc = 0, reste = 0, aValider = 0;
+  for (const d of declsP) {
+    const st = dStatus(d);
+    if (st === "rejetee") continue;
+    const m = dMontant(d);
+    att += m;
+    if (st === "payee") enc += m;
+    else if (st === "validee") reste += m;
+    else if (st === "soumise") aValider++;
+  }
+  const ents = activeEnts();
+  const sts = ents.map(e => Object.assign({ e }, entStatus(e, key)));
+  const ok = sts.filter(x => ["soumise", "validee", "payee", "controle"].includes(x.status)).length;
+  const late = sts.filter(x => x.status === "retard").length;
+  const pend = S.demandes.filter(dm => ["attente", "etude"].includes(aStatus(dm)));
+  const pendSum = pend.reduce((s, dm) => s + (Number(dm.montant) || 0), 0);
+  const t = treasury();
+  setKpi("k-att", money(att), `${declsP.length} déclaration${plural(declsP.length)}${aValider ? ` · ${aValider} à valider` : ""}`);
+  setKpi("k-enc", money(enc), att ? `${Math.round(enc / att * 100)} % du déclaré` : "sur la période", enc > 0 ? "ok" : "");
+  setKpi("k-reste", money(reste), "avis émis, non payés", reste > 0 ? "warn" : "");
+  setKpi("k-conf", ents.length ? `${ok} / ${ents.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
+  setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
+  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés`, t.solde < 0 ? "bad" : "");
+
+  // Registre
+  const reg = $("#registry");
+  if (!ents.length) {
+    reg.replaceChildren(h("div", { class: "empty" },
+      h("span", { text: "Aucune entreprise enregistrée. Ajoutez celles du serveur pour voir d’un coup d’œil qui a déclaré, qui doit payer et qui est en retard." }),
+      writer() ? h("button", { class: "btn ghost small", type: "button", onclick: () => showTab("reglages"), text: "Ajouter des entreprises" }) : null));
+  } else {
+    const ORDER = { retard: 0, attendue: 1, soumise: 2, validee: 3, controle: 4, rejetee: 5, encours: 6, payee: 7 };
+    sts.sort((a, b) => (ORDER[a.status] - ORDER[b.status]) || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
+    const list = h("ul", { class: "reg" }, sts.map(x => h("li", {},
+      h("div", { style: "min-width:0" },
+        x.decl ? h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(x.decl.id), text: x.e.nom }) : h("span", { style: "font-weight:600", text: x.e.nom }),
+        h("span", { class: "meta", text: [x.e.secteur, x.e.patron].filter(Boolean).join(" · ") || "—" })),
+      chip(DSTAT[x.status]),
+      h("span", { class: "amt", text: x.decl ? money(dMontant(x.decl)) : "" })
+    )));
+    const orphans = declsP.filter(d => !d.entrepriseId || !S.entreprises.some(e => e.id === d.entrepriseId));
+    reg.replaceChildren(list);
+    if (orphans.length) reg.append(h("div", { class: "reg-foot", text: `+ ${orphans.length} déclaration${plural(orphans.length)} d’entreprise${plural(orphans.length)} non enregistrée${plural(orphans.length)} sur cette période (voir le tableau ci-dessous).` }));
+  }
+  $("#reg-sub").textContent = ents.length ? `${ok} à jour, ${late} en retard sur ${ents.length} entreprise${plural(ents.length)} active${plural(ents.length)}.` : "Qui a déclaré pour la période choisie.";
+
+  renderChart();
+  renderDeclTable(key);
+  renderDemTable();
+}
+
+/* Graphique du Trésor */
+function niceMax(v) {
+  if (v <= 0) return 1000;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const m = v / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+}
+function barPath(x, y0, w, hgt) {
+  if (hgt <= 0.5) return "";
+  const r = Math.min(4, hgt, w / 2), yt = y0 - hgt;
+  return `M${x},${y0}V${yt + r}Q${x},${yt} ${x + r},${yt}H${x + w - r}Q${x + w},${yt} ${x + w},${yt + r}V${y0}Z`;
+}
+let chartData = null;
+function renderChart() {
+  const box = $("#chart");
+  const keys = recentKeys(8).reverse();
+  const rec = {}, dep = {};
+  keys.forEach(k => { rec[k] = 0; dep[k] = 0; });
+  for (const d of S.declarations) if (dStatus(d) === "payee" && d.periode in rec) rec[d.periode] += dMontant(d);
+  for (const dm of S.demandes) {
+    const a = S.arbitrages[dm.id];
+    if (a && (a.statut === "accordee" || a.statut === "partielle") && a.at) {
+      const k = keyOf(new Date(a.at));
+      if (k in dep) dep[k] += Number(a.montantAccorde) || 0;
+    }
+  }
+  chartData = { keys, rec, dep };
+  const totR = keys.reduce((s, k) => s + rec[k], 0), totD = keys.reduce((s, k) => s + dep[k], 0);
+  $("#legend").replaceChildren(
+    h("span", {}, h("i", { style: "background:var(--s1)" }), "Recettes encaissées ", h("b", { text: money(totR) })),
+    h("span", {}, h("i", { style: "background:var(--s2)" }), "Crédits accordés ", h("b", { text: money(totD) })));
+  const W = Math.max(300, Math.round(box.clientWidth || 520)), H = 210;
+  const ml = 44, mr = 6, mt = 22, mb = 26, iw = W - ml - mr, ih = H - mt - mb;
+  const max = niceMax(Math.max(...keys.map(k => Math.max(rec[k], dep[k]))));
+  const y = v => mt + ih - (v / max) * ih;
+  const gw = iw / keys.length, bw = Math.max(6, Math.min(20, (gw - 12) / 2));
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Recettes encaissées et crédits accordés sur les 8 dernières périodes">`;
+  [0, max / 2, max].forEach((v, i) => {
+    s += `<line class="${i ? "grid" : "base"}" x1="${ml}" x2="${W - mr}" y1="${y(v)}" y2="${y(v)}"></line>`;
+    s += `<text x="${ml - 6}" y="${y(v) + 4}" text-anchor="end">${compact(v)}</text>`;
+  });
+  keys.forEach((k, i) => {
+    const gx = ml + i * gw, cx = gx + gw / 2;
+    s += `<rect class="hit" data-i="${i}" x="${gx + 2}" y="${mt - 4}" width="${gw - 4}" height="${ih + 4}" rx="4"></rect>`;
+    const h1 = (rec[k] / max) * ih, h2 = (dep[k] / max) * ih;
+    const p1 = barPath(cx - bw - 1, mt + ih, bw, h1), p2 = barPath(cx + 1, mt + ih, bw, h2);
+    if (p1) s += `<path class="bar b1" d="${p1}"></path>`;
+    if (p2) s += `<path class="bar b2" d="${p2}"></path>`;
+    s += `<text x="${cx}" y="${H - 8}" text-anchor="middle"${i === keys.length - 1 ? ' class="lbl"' : ""}>${periodShort(k)}</text>`;
+    if (i === keys.length - 1) {
+      if (rec[k] > 0) s += `<text class="lbl" x="${cx - bw / 2 - 1}" y="${mt + ih - h1 - 5}" text-anchor="middle">${compact(rec[k])}</text>`;
+      if (dep[k] > 0) s += `<text class="lbl" x="${cx + bw / 2 + 1}" y="${mt + ih - h2 - 5}" text-anchor="middle">${compact(dep[k])}</text>`;
+    }
+  });
+  if (!totR && !totD) s += `<text class="none" x="${ml + iw / 2}" y="${mt + ih / 2}" text-anchor="middle">Aucun mouvement sur ces périodes pour l’instant.</text>`;
+  s += `</svg><div class="tip" id="tip" hidden></div>`;
+  box.innerHTML = s;
+
+  // Crédits par service
+  const bySvc = {};
+  for (const dm of S.demandes) {
+    const a = S.arbitrages[dm.id];
+    if (a && (a.statut === "accordee" || a.statut === "partielle")) bySvc[dm.service || "Autre"] = (bySvc[dm.service || "Autre"] || 0) + (Number(a.montantAccorde) || 0);
+  }
+  const rows = Object.entries(bySvc).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const ul = $("#svc-list");
+  ul.hidden = !rows.length;
+  ul.replaceChildren(...rows.map(([n, v]) => h("li", {}, h("span", { text: n }), h("span", { class: "mono", text: money(v) }))));
+  if (rows.length) ul.prepend(h("li", {}, h("span", { class: "eyebrow", text: "Crédits accordés par service" }), h("span", {})));
+}
+$("#chart").addEventListener("pointermove", e => {
+  const hit = e.target.closest && e.target.closest(".hit");
+  const tip = $("#tip");
+  if (!tip) return;
+  $$(".hit.on", $("#chart")).forEach(r => { if (r !== hit) r.classList.remove("on"); });
+  if (!hit || !chartData) { tip.hidden = true; return; }
+  hit.classList.add("on");
+  const k = chartData.keys[+hit.dataset.i];
+  tip.replaceChildren(
+    h("div", { class: "tl", text: periodLabel(k) }),
+    h("div", { class: "tr" }, h("span", { text: "Recettes encaissées" }), h("b", { text: money(chartData.rec[k]) })),
+    h("div", { class: "tr" }, h("span", { text: "Crédits accordés" }), h("b", { text: money(chartData.dep[k]) })));
+  tip.hidden = false;
+  const box = $("#chart").getBoundingClientRect();
+  const r = hit.getBoundingClientRect();
+  let left = r.left - box.left + r.width / 2 - tip.offsetWidth / 2;
+  left = Math.max(0, Math.min(box.width - tip.offsetWidth, left));
+  tip.style.left = left + "px";
+  tip.style.top = Math.max(-10, r.top - box.top - tip.offsetHeight - 6) + "px";
+});
+$("#chart").addEventListener("pointerleave", () => { const t = $("#tip"); if (t) t.hidden = true; $$(".hit.on").forEach(r => r.classList.remove("on")); });
+if (window.ResizeObserver) { let lastW = 0; new ResizeObserver(en => { const w = Math.round(en[0].contentRect.width); if (Math.abs(w - lastW) > 8) { lastW = w; schedule(); } }).observe($("#chart")); }
+
+/* Tableau des déclarations */
+function setSegCounts(seg, counts, active) {
+  $$("button", seg).forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.f === active));
+    const c = counts[b.dataset.f];
+    $(".count", b).textContent = c == null ? "" : String(c);
+  });
+}
+function renderDeclTable(key) {
+  const box = $("#decl-table");
+  const all = S.declarations.slice().sort(byCreatedDesc);
+  const F = {
+    atraiter: all.filter(d => dStatus(d) === "soumise"),
+    apayer: all.filter(d => dStatus(d) === "validee"),
+    periode: all.filter(d => d.periode === key),
+    tout: all
+  };
+  setSegCounts($("#seg-decl"), { atraiter: F.atraiter.length, apayer: F.apayer.length, periode: F.periode.length, tout: all.length }, S.declFilter);
+  const list = F[S.declFilter] || all;
+  if (!S.connected || !S.loaded.has("declarations")) { box.replaceChildren(h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
+  if (!list.length) {
+    const msg = { atraiter: "Aucune déclaration à valider.", apayer: "Aucun avis en attente de paiement.", periode: "Aucune déclaration pour cette période.", tout: "Aucune déclaration enregistrée. Saisissez la première depuis l’onglet Saisir une déclaration, en collant le message Discord de l’entreprise." }[S.declFilter];
+    box.replaceChildren(h("div", { class: "empty", text: msg }));
+    return;
+  }
+  const w = writer();
+  const rows = list.map(d => {
+    const st = dStatus(d);
+    const registered = d.entrepriseId && S.entreprises.some(e => e.id === d.entrepriseId);
+    let act = null;
+    if (w && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
+    else if (w && st === "validee") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || ""); }, text: "Encaisser" });
+    return h("tr", {},
+      h("td", { class: "no", text: dossierNo("DF", d.id) }),
+      h("td", {},
+        h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: d.entrepriseNom || "Sans nom" }),
+        !registered ? h("span", { class: "tag warn", text: "non enregistrée" }) : null,
+        d.rectificative ? h("span", { class: "tag", text: "rectificative" }) : null,
+        h("span", { class: "small-meta", text: d.declarant || "" })),
+      h("td", { text: periodShort(d.periode), title: periodLabel(d.periode) }),
+      h("td", { class: "num", text: money(d.ca) }),
+      h("td", { class: "num", text: money(d.resultat) }),
+      h("td", { class: "num" }, money(dMontant(d)), d.enRetard ? h("span", { class: "tag warn", text: "retard" }) : null),
+      h("td", {}, chip(DSTAT[st] || DSTAT.soumise)),
+      h("td", { class: "act" }, act));
+  });
+  box.replaceChildren(h("div", { class: "tbl-wrap" }, h("table", {},
+    h("thead", {}, h("tr", {}, ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Résultat", "Montant dû", "Statut", ""].map((t, i) => h("th", { class: [3, 4, 5].includes(i) ? "num" : null, text: t })))),
+    h("tbody", {}, rows))));
+}
+$("#seg-decl").addEventListener("click", e => { const b = e.target.closest("button[data-f]"); if (!b) return; S.declFilter = b.dataset.f; render(); });
+
+/* Tableau des demandes */
+function renderDemTable() {
+  const box = $("#dem-table");
+  const all = S.demandes.slice().sort((a, b) => {
+    const ua = { urgente: 0, prioritaire: 1, normale: 2 }, pa = ["attente", "etude"].includes(aStatus(a)) ? 0 : 1, pb = ["attente", "etude"].includes(aStatus(b)) ? 0 : 1;
+    return (pa - pb) || (pa === 0 ? ((ua[a.urgence] ?? 2) - (ua[b.urgence] ?? 2)) : 0) || byCreatedDesc(a, b);
+  });
+  const F = {
+    attente: all.filter(dm => ["attente", "etude"].includes(aStatus(dm))),
+    traitees: all.filter(dm => !["attente", "etude"].includes(aStatus(dm))),
+    tout: all
+  };
+  setSegCounts($("#seg-dem"), { attente: F.attente.length, traitees: F.traitees.length, tout: all.length }, S.demFilter);
+  if (!S.connected || !S.loaded.has("demandes")) { box.replaceChildren(h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
+  const list = F[S.demFilter] || all;
+  if (!list.length) {
+    const msg = { attente: "Aucune demande en attente d’arbitrage.", traitees: "Aucune demande traitée pour l’instant.", tout: "Aucune demande enregistrée. Les chefs de service utilisent le modèle « Demande de moyens » sur Discord ; saisissez-la depuis l’onglet Saisir une demande." }[S.demFilter];
+    box.replaceChildren(h("div", { class: "empty", text: msg }));
+    return;
+  }
+  const rows = list.map(dm => {
+    const st = aStatus(dm), a = S.arbitrages[dm.id];
+    return h("tr", {},
+      h("td", { class: "no", text: dossierNo("DM", dm.id) }),
+      h("td", {}, h("span", { style: "font-weight:600", text: dm.service || "—" }), h("span", { class: "small-meta", text: dm.demandeur || "" })),
+      h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openDem(dm.id), text: dm.objet || NATURES[dm.nature] || "Demande" }), h("span", { class: "small-meta", text: NATURES[dm.nature] || "" })),
+      h("td", {}, chip(URG[dm.urgence] || URG.normale)),
+      h("td", { class: "num", text: money(dm.montant) }),
+      h("td", { class: "num", text: a && a.montantAccorde != null && st !== "refusee" && st !== "etude" ? money(a.montantAccorde) : "—" }),
+      h("td", {}, chip(ASTAT[st] || ASTAT.attente)),
+      h("td", { class: "act" }, writer() && ["attente", "etude"].includes(st) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openDem(dm.id), text: "Arbitrer" }) : null));
+  });
+  box.replaceChildren(h("div", { class: "tbl-wrap" }, h("table", {},
+    h("thead", {}, h("tr", {}, ["N°", "Service", "Objet", "Urgence", "Demandé", "Accordé", "Statut", ""].map((t, i) => h("th", { class: [4, 5].includes(i) ? "num" : null, text: t })))),
+    h("tbody", {}, rows))));
+}
+$("#seg-dem").addEventListener("click", e => { const b = e.target.closest("button[data-f]"); if (!b) return; S.demFilter = b.dataset.f; render(); });
+
+/* ---------- Fenêtres de décision ---------- */
+const dlg = $("#dlg");
+function openDialog({ eyebrow, title, stampEl, body, foot }) {
+  dlg.replaceChildren(...[
+    h("div", { class: "dlg-head" },
+      h("div", { class: "dlg-titles" }, eyebrow ? h("div", { class: "eyebrow", text: eyebrow }) : null, h("h3", { class: "dlg-title", id: "dlg-title", text: title })),
+      h("div", { class: "dlg-side" }, stampEl || null, h("button", { class: "icon-btn", type: "button", "aria-label": "Fermer", onclick: closeDialog, text: "×" }))),
+    h("div", { class: "dlg-body" }, body),
+    foot && foot.length ? h("div", { class: "dlg-foot" }, foot) : null].filter(Boolean));
+  if (!dlg.open) { try { dlg.showModal(); } catch (e) { dlg.setAttribute("open", ""); } }
+}
+function closeDialog() { try { dlg.close(); } catch (e) { dlg.removeAttribute("open"); } }
+dlg.addEventListener("click", e => { if (e.target === dlg) closeDialog(); });
+const kv = pairs => h("dl", { class: "kv" }, pairs.filter(Boolean).flatMap(([k, v, cls]) => [h("dt", { class: cls === "tot" ? "tot-dt" : null, text: k }), h("dd", { class: cls === "tot" ? "tot-dd num" : (cls || null) }, v)]));
+const sec = (title, ...kids) => h("div", { class: "dlg-sec" }, h("h4", { text: title }), kids);
+
+async function decide(d, statut, montant, note) {
+  const prev = S.decisions[d.id] || {};
+  const body = { statut, montant: Math.round(Number(montant) || 0), note: note || "", at: prev.at && statut === "payee" ? prev.at : nowISO(), by: S.uid || null };
+  if (statut === "payee") body.paidAt = nowISO();
+  const ok = await write(() => S.db.doc("decisions/" + d.id).set(body));
+  if (ok) toast({ validee: "Avis émis : montant à payer.", payee: "Paiement encaissé.", controle: "Dossier placé en contrôle.", rejetee: "Déclaration rejetée.", soumise: "Décision annulée." }[statut] || "Enregistré.");
+  return ok;
+}
+function avisText(d) {
+  const dec = S.decisions[d.id], st = dStatus(d), m = dMontant(d);
+  const L = [`**Avis d’imposition ${dossierNo("DF", d.id)}**`, `Entreprise : ${d.entrepriseNom}`, `Période : ${periodLabel(d.periode)}`,
+    `Résultat déclaré : ${money(d.resultat)}`,
+    `Impôt sur le résultat (${pct(d.tauxIS)}) : ${money(d.impot)}`,
+    `Cotisations sociales (${pct(d.tauxCot)}) : ${money(d.cotisations)}`];
+  if (d.enRetard) L.push(`Majoration de retard (${pct(d.majPct)}) : ${money(d.majoration)}`);
+  if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) L.push(`Montant rectifié après vérification : ${money(dec.montant)}`);
+  L.push(`**Montant à régler : ${money(m)}**`, `Statut : ${(DSTAT[st] || DSTAT.soumise)[0]}`);
+  if (dec && dec.note) L.push(`Observation : ${dec.note}`);
+  L.push("— Direction des Impôts & Cotisations");
+  return L.join("\n");
+}
+function openDecl(id) {
+  const d = S.declarations.find(x => x.id === id);
+  if (!d) return;
+  const dec = S.decisions[id] || null, st = dStatus(d);
+  const registered = d.entrepriseId && S.entreprises.some(e => e.id === d.entrepriseId);
+  const w = writer();
+  const body = [
+    h("div", { class: "dlg-cols" },
+      sec("Cases déclarées", kv([
+        ["01 · Chiffre d’affaires", money(d.ca), "num"],
+        ["02 · Charges hors salaires", money(d.charges), "num"],
+        ["03 · Masse salariale", money(d.masse), "num"],
+        ["Salariés", String(d.nbSalaries ?? 0), "num"],
+        ["Résultat", money(d.resultat), "tot"]])),
+      sec("Calcul au dépôt", kv([
+        [`Impôt (${pct(d.tauxIS)})`, money(d.impot), "num"],
+        [`Cotisations (${pct(d.tauxCot)})`, money(d.cotisations), "num"],
+        d.enRetard ? [`Majoration (${pct(d.majPct)})`, money(d.majoration), "num"] : null,
+        ["Total calculé", money(d.total), "tot"]]))),
+    sec("Dépôt", kv([
+      ["Déclarant", d.declarant || "—"],
+      ["Déposée le", d.depotAt ? fmtDateTime(new Date(d.depotAt)) : "—"],
+      ["Date limite", fmtDateTime(deadline(d.periode))],
+      d.enRetard ? ["Retard", h("span", { class: "chip t-bad", text: "Déposée hors délai" })] : null,
+      d.rectificative ? ["Nature", "Déclaration rectificative"] : null])),
+    d.note ? sec("Observations de l’entreprise", h("p", { class: "prewrap", text: d.note })) : null
+  ];
+  if (!registered && w) {
+    body.push(h("div", { class: "notice", style: "margin:0" }, h("div", {},
+      h("strong", { text: "Entreprise non enregistrée. " }), "Ajoutez-la au registre pour suivre ses prochaines déclarations. ",
+      h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => registerFromDecl(d), text: "Enregistrer « " + d.entrepriseNom + " »" }))));
+  }
+  let mIn = null, nIn = null;
+  if (w) {
+    mIn = h("input", { id: "dlg-montant", type: "number", min: "0", step: "1", inputmode: "numeric" });
+    mIn.value = String(dec && dec.montant != null ? dec.montant : d.total);
+    nIn = h("textarea", { id: "dlg-note", rows: "2", placeholder: "Motif d’un redressement, d’un contrôle ou d’un rejet" });
+    nIn.value = dec && dec.note ? dec.note : "";
+    body.push(h("div", { class: "decide" },
+      h("div", { class: "row2" },
+        h("div", { class: "field" }, h("label", { for: "dlg-montant", text: "Montant retenu" }), h("div", { class: "money", "data-cur": cur() }, mIn), h("span", { class: "hint", text: "Modifiez-le pour un redressement." })),
+        h("div", { class: "field" }, h("label", { for: "dlg-note", text: "Observation de la Direction" }), nIn))));
+  } else if (dec && dec.note) body.push(sec("Observation de la Direction", h("p", { class: "prewrap", text: dec.note })));
+
+  const go = async statut => {
+    const m = mIn ? Number(mIn.value) : dMontant(d);
+    if (!Number.isFinite(m) || m < 0) { mIn.setAttribute("aria-invalid", "true"); mIn.focus(); return; }
+    if (await decide(d, statut, m, nIn ? nIn.value.trim() : "")) closeDialog();
+  };
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(avisText(d), "Avis copié : collez-le en réponse sur Discord."), text: "Copier l’avis" })];
+  if (w) {
+    const delBtn = h("button", { class: "btn danger small", type: "button", text: "Supprimer la saisie" });
+    delBtn.addEventListener("click", () => {
+      const f = $(".dlg-foot", dlg);
+      f.replaceChildren(h("span", { text: "Supprimer définitivement cette déclaration ?" }), h("span", { class: "spacer" }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(id), text: "Annuler" }),
+        h("button", { class: "btn danger small", type: "button", onclick: async () => {
+          const ok = await write(async () => { await S.db.doc("declarations/" + id).delete(); await S.db.doc("decisions/" + id).delete(); });
+          if (ok) { closeDialog(); toast("Déclaration supprimée."); }
+        }, text: "Supprimer" }));
+    });
+    foot.push(delBtn, h("span", { class: "spacer" }));
+    if (st !== "controle") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("controle"), text: "Contrôle fiscal" }));
+    if (st !== "rejetee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("rejetee"), text: "Rejeter" }));
+    if (st !== "validee" && st !== "payee") foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
+    if (st !== "payee") foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => go("payee"), text: "Encaisser" }));
+    else foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("validee"), text: "Annuler l’encaissement" }));
+  }
+  openDialog({ eyebrow: `Déclaration ${dossierNo("DF", id)} · ${periodLabel(d.periode)}`, title: d.entrepriseNom || "Sans nom", stampEl: stamp(DSTAT[st] || DSTAT.soumise), body, foot });
+}
+async function registerFromDecl(d) {
+  const ref = S.db.collection("entreprises").doc();
+  const ok = await write(() => ref.set({ nom: d.entrepriseNom, secteur: "", patron: d.declarant || "", actif: true, createdAt: nowISO() }));
+  if (!ok) return;
+  const n = norm(d.entrepriseNom);
+  for (const x of S.declarations.filter(x => (!x.entrepriseId || !S.entreprises.some(e => e.id === x.entrepriseId)) && norm(x.entrepriseNom) === n)) {
+    await write(() => S.db.doc("declarations/" + x.id).update({ entrepriseId: ref.id }));
+  }
+  toast("Entreprise ajoutée au registre.");
+  closeDialog();
+}
+
+function decisionText(dm) {
+  const a = S.arbitrages[dm.id], st = aStatus(dm);
+  const L = [`**Décision budgétaire ${dossierNo("DM", dm.id)}**`, `Service : ${dm.service}`, `Objet : ${dm.objet}`, `Montant demandé : ${money(dm.montant)}`, `Décision : ${(ASTAT[st] || ASTAT.attente)[0]}`];
+  if (a && (st === "accordee" || st === "partielle")) L.push(`**Crédits accordés : ${money(a.montantAccorde)}**`);
+  if (a && a.commentaire) L.push(`Motif : ${a.commentaire}`);
+  L.push("— Direction des Impôts & Cotisations");
+  return L.join("\n");
+}
+function openDem(id) {
+  const dm = S.demandes.find(x => x.id === id);
+  if (!dm) return;
+  const a = S.arbitrages[id] || null, st = aStatus(dm), w = writer();
+  const t = treasury();
+  const body = [
+    h("div", { class: "dlg-cols" },
+      sec("Demande", kv([
+        ["Service", dm.service || "—"],
+        ["Nature", NATURES[dm.nature] || "—"],
+        ["Quantité", String(dm.quantite || "—")],
+        ["Urgence", chip(URG[dm.urgence] || URG.normale)],
+        ["Montant demandé", money(dm.montant), "tot"]])),
+      sec("Dépôt", kv([
+        ["Demandeur", dm.demandeur || "—"],
+        ["Reçue le", dm.recueAt ? fmtDateTime(new Date(dm.recueAt)) : "—"],
+        a && a.at && st !== "attente" ? ["Décidée le", fmtDateTime(new Date(a.at))] : null]))),
+    dm.justification ? sec("Justification", h("p", { class: "prewrap", text: dm.justification })) : null
+  ];
+  let mIn = null, cIn = null, after = null;
+  if (w) {
+    mIn = h("input", { id: "dlg-accorde", type: "number", min: "0", step: "1", inputmode: "numeric" });
+    mIn.value = String(a && a.montantAccorde != null ? a.montantAccorde : (dm.montant || 0));
+    cIn = h("textarea", { id: "dlg-motif", rows: "2", placeholder: "Conditions, motif d’un refus ou d’un accord partiel" });
+    cIn.value = a && a.commentaire ? a.commentaire : "";
+    after = h("dd", { class: "num" });
+    const already = a && (st === "accordee" || st === "partielle") ? Number(a.montantAccorde) || 0 : 0;
+    const upd = () => { const v = Number(mIn.value) || 0; const s = t.solde + already - v; after.textContent = money(s); after.style.color = s < 0 ? "var(--bad)" : ""; };
+    mIn.addEventListener("input", upd);
+    body.push(h("div", { class: "decide" },
+      h("div", { class: "row2" },
+        h("div", { class: "field" }, h("label", { for: "dlg-accorde", text: "Montant accordé" }), h("div", { class: "money", "data-cur": cur() }, mIn), h("span", { class: "hint", text: "Moins que demandé : accord partiel." })),
+        h("div", { class: "field" }, h("label", { for: "dlg-motif", text: "Motif communiqué au service" }), cIn)),
+      h("dl", { class: "kv", style: "margin:0" }, h("dt", { text: "Solde du Trésor actuel" }), h("dd", { class: "num", text: money(t.solde) }), h("dt", { text: "Solde après cette décision" }), after)));
+    upd();
+  } else if (a && a.commentaire) body.push(sec("Motif", h("p", { class: "prewrap", text: a.commentaire })));
+
+  const save = async statut => {
+    let m = mIn ? Number(mIn.value) : 0;
+    if (statut === "accorder") {
+      if (!Number.isFinite(m) || m <= 0) { mIn.setAttribute("aria-invalid", "true"); mIn.focus(); toast("Indiquez un montant supérieur à 0, ou refusez la demande.", true); return; }
+      statut = m >= (Number(dm.montant) || 0) ? "accordee" : "partielle";
+    }
+    if (statut === "refusee" || statut === "etude") m = 0;
+    const ok = await write(() => S.db.doc("arbitrages/" + id).set({ statut, montantAccorde: Math.round(m), commentaire: cIn ? cIn.value.trim() : "", at: nowISO(), by: S.uid || null }));
+    if (ok) { toast({ accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut]); closeDialog(); }
+  };
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(decisionText(dm), "Décision copiée : collez-la en réponse sur Discord."), text: "Copier la décision" })];
+  if (w) {
+    const delBtn = h("button", { class: "btn danger small", type: "button", text: "Supprimer la saisie" });
+    delBtn.addEventListener("click", () => {
+      const f = $(".dlg-foot", dlg);
+      f.replaceChildren(h("span", { text: "Supprimer définitivement cette demande ?" }), h("span", { class: "spacer" }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => openDem(id), text: "Annuler" }),
+        h("button", { class: "btn danger small", type: "button", onclick: async () => {
+          const ok = await write(async () => { await S.db.doc("demandes/" + id).delete(); await S.db.doc("arbitrages/" + id).delete(); });
+          if (ok) { closeDialog(); toast("Demande supprimée."); }
+        }, text: "Supprimer" }));
+    });
+    foot.push(delBtn, h("span", { class: "spacer" }));
+    if (st !== "etude") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => save("etude"), text: "Mettre à l’étude" }));
+    if (st !== "refusee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => save("refusee"), text: "Refuser" }));
+    foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => save("accorder"), text: st === "accordee" || st === "partielle" ? "Modifier l’accord" : "Accorder" }));
+  }
+  openDialog({ eyebrow: `Demande ${dossierNo("DM", id)} · ${NATURES[dm.nature] || "Demande"}`, title: dm.objet || "Demande de moyens", stampEl: stamp(ASTAT[st] || ASTAT.attente), body, foot });
+}
+
+/* ---------- Saisie : déclaration ---------- */
+function renderDeclPreview() {
+  const c = cfg();
+  const key = $("#d-per").value || defaultKey();
+  const ca = numIn($("#d-ca")) || 0, ch = numIn($("#d-ch")) || 0, ms = numIn($("#d-ms")) || 0;
+  const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
+  const dl = deadline(key);
+  const late = depot.getTime() > dl.getTime();
+  const r = compute(ca, ch, ms, late, c);
+  $("#c-res").textContent = money(r.resultat);
+  $("#c-res").className = r.resultat < 0 ? "neg" : "";
+  $("#c-is-l").textContent = `Impôt sur le résultat (${pct(c.tauxIS)})`;
+  $("#c-is").textContent = money(r.impot);
+  $("#c-cot-l").textContent = `Cotisations sociales (${pct(c.tauxCot)})`;
+  $("#c-cot").textContent = money(r.cotisations);
+  $("#c-maj-l").textContent = `Majoration de retard (${pct(c.majoration)})`;
+  $("#c-maj").textContent = late ? money(r.majoration) : "—";
+  $("#c-tot").textContent = money(r.total);
+  $("#d-per-hint").textContent = `Dépôt avant le ${fmtDateTime(dl)}.`;
+  $("#c-due").replaceChildren(late ? chip(["Déposée hors délai : majoration appliquée", "bad"]) : chip(["Dans les délais", "ok"]));
+  const name = $("#d-ent").value.trim();
+  const ent = findEnt(name);
+  $("#d-ent-hint").textContent = !name ? "Choisissez dans la liste ou tapez un nouveau nom." : ent ? `Rattachée à « ${ent.nom} » du registre.` : "Nouvelle entreprise : elle sera marquée « non enregistrée ».";
+  $("#bareme").replaceChildren(
+    h("li", {}, h("span", { text: "Impôt sur le résultat" }), h("b", { text: pct(c.tauxIS) })),
+    h("li", {}, h("span", { text: "Cotisations, sur la masse salariale" }), h("b", { text: pct(c.tauxCot) })),
+    h("li", {}, h("span", { text: "Majoration de retard" }), h("b", { text: pct(c.majoration) })),
+    h("li", {}, h("span", { text: "Délai après fin de " + (c.periodicite === "mois" ? "mois" : "semaine") }), h("b", { text: `${c.delaiJours} j` })));
+}
+$("#form-decl").addEventListener("input", renderDeclPreview);
+$("#form-decl").addEventListener("change", renderDeclPreview);
+
+function parseAmount(txt) {
+  let s = String(txt || "").toLowerCase().replace(/euros?|eur|dollars?|[\s  €$]/g, "");
+  let mult = 1;
+  if (/k$/.test(s)) { mult = 1e3; s = s.slice(0, -1); }
+  else if (/m$/.test(s)) { mult = 1e6; s = s.slice(0, -1); }
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, "");
+  s = s.replace(",", ".");
+  const m = /-?\d+(\.\d+)?/.exec(s);
+  return m ? Math.round(parseFloat(m[0]) * mult) : null;
+}
+function parseTemplate(text, keymap, multi) {
+  const out = {};
+  let last = null;
+  for (const raw of String(text || "").split(/\r?\n/)) {
+    const line = raw.replace(/[*_`>~|]/g, "").trim();
+    if (!line) continue;
+    const i = line.indexOf(":");
+    if (i > 0) {
+      const field = keymap(norm(line.slice(0, i)));
+      if (field) { out[field] = line.slice(i + 1).trim(); last = field; continue; }
+    }
+    if (last && multi.includes(last)) out[last] = (out[last] ? out[last] + "\n" : "") + line;
+  }
+  return out;
+}
+function parsePeriode(txt) {
+  const t = norm(txt), now = new Date(), wk = isoWeek(now);
+  let m = /(?:semaine|sem|s)\s*(\d{1,2})(?:\s+(\d{4}))?/.exec(t) || /^(\d{1,2})$/.exec(t);
+  if (m) {
+    const w = +m[1];
+    let y = m[2] ? +m[2] : wk.y;
+    if (!m[2] && w > wk.w + 1) y -= 1;
+    if (w >= 1 && w <= 53) return `${y}-S${pad(w)}`;
+  }
+  const months = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
+  for (let i = 0; i < 12; i++) if (t.includes(months[i])) {
+    const ym = /(\d{4})/.exec(t);
+    let y = ym ? +ym[1] : now.getFullYear();
+    if (!ym && i > now.getMonth()) y -= 1;
+    return `${y}-${pad(i + 1)}`;
+  }
+  return null;
+}
+const declKeys = k =>
+  /^(entreprise|societe|raison sociale|commerce)/.test(k) ? "entreprise" :
+  /^(periode|semaine|mois)/.test(k) ? "periode" :
+  /^(chiffre|ca\b|recette)/.test(k) ? "ca" :
+  /^(charge|depense|frais|achat)/.test(k) ? "charges" :
+  /^(masse|salaires?\b)/.test(k) ? "masse" :
+  /^(nombre|nb|effectif|salaries)/.test(k) ? "nb" :
+  /^(declarant|patron|gerant|nom)/.test(k) ? "declarant" :
+  /^(observation|note|remarque|commentaire)/.test(k) ? "note" : null;
+function parseDecl() {
+  const p = parseTemplate($("#d-paste").value, declKeys, ["note"]);
+  let n = 0;
+  if (p.entreprise) { const e = findEnt(p.entreprise); $("#d-ent").value = e ? e.nom : p.entreprise; n++; }
+  if (p.periode) { const k = parsePeriode(p.periode); if (k) { ensureOption($("#d-per"), k, periodLabel(k)); n++; } }
+  for (const [f, id] of [["ca", "d-ca"], ["charges", "d-ch"], ["masse", "d-ms"], ["nb", "d-nb"]]) {
+    if (p[f] != null) { const v = parseAmount(p[f]); if (v != null) { $("#" + id).value = String(Math.max(0, v)); n++; } }
+  }
+  if (p.declarant) { $("#d-decl").value = p.declarant; n++; }
+  if (p.note) { $("#d-note").value = p.note; n++; }
+  $("#d-parse-msg").textContent = n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez l’heure de dépôt puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Déclaration fiscale ».";
+  renderDeclPreview();
+}
+$("#d-parse").addEventListener("click", parseDecl);
+$("#d-paste").addEventListener("paste", () => setTimeout(parseDecl, 0));
+
+$("#form-decl").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!writer()) return;
+  const err = $("#d-err");
+  err.textContent = "";
+  $$("#form-decl [aria-invalid]").forEach(x => x.removeAttribute("aria-invalid"));
+  const name = $("#d-ent").value.trim();
+  const key = $("#d-per").value;
+  const ca = numIn($("#d-ca")), ch = numIn($("#d-ch")), ms = numIn($("#d-ms")), nb = numIn($("#d-nb"));
+  const bad = [];
+  if (!name) bad.push(["d-ent", "le nom de l’entreprise"]);
+  if (!Number.isFinite(ca) || ca < 0) bad.push(["d-ca", "le chiffre d’affaires"]);
+  if (!Number.isFinite(ch) || ch < 0) bad.push(["d-ch", "les charges"]);
+  if (!Number.isFinite(ms) || ms < 0) bad.push(["d-ms", "la masse salariale"]);
+  if (!Number.isFinite(nb) || nb < 0) bad.push(["d-nb", "le nombre de salariés"]);
+  if (bad.length) {
+    bad.forEach(([id]) => $("#" + id).setAttribute("aria-invalid", "true"));
+    $("#" + bad[0][0]).focus();
+    err.textContent = "À compléter : " + bad.map(b => b[1]).join(", ") + ".";
+    return;
+  }
+  const c = cfg();
+  const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
+  const late = depot.getTime() > deadline(key).getTime();
+  const r = compute(ca, ch, ms, late, c);
+  const ent = findEnt(name);
+  const dup = S.declarations.some(d => d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
+  const body = {
+    entrepriseId: ent ? ent.id : null, entrepriseNom: ent ? ent.nom : name, periode: key,
+    ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
+    declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
+    tauxIS: Number(c.tauxIS) || 0, tauxCot: Number(c.tauxCot) || 0, majPct: late ? Number(c.majoration) || 0 : 0,
+    enRetard: late, rectificative: dup,
+    resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
+    depotAt: depot.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
+  };
+  const btn = $("#d-submit");
+  btn.disabled = true;
+  const ref = S.db.collection("declarations").doc();
+  const ok = await write(() => ref.set(body));
+  btn.disabled = !writer();
+  if (!ok) return;
+  const rc = $("#d-receipt");
+  rc.className = "receipt";
+  rc.replaceChildren(stamp(["Enregistrée", "ok"]),
+    h("div", { style: "min-width:0;flex:1 1 260px" },
+      h("strong", { text: `${dossierNo("DF", ref.id)} · ${body.entrepriseNom}` }),
+      h("div", { class: "muted", text: `${periodLabel(key)} · montant calculé ${money(body.total)}${late ? " (majoré)" : ""}${dup ? " · rectificative" : ""}` })),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(ref.id), text: "Ouvrir le dossier" }));
+  rc.hidden = false;
+  $("#form-decl").reset();
+  $("#d-paste").value = "";
+  $("#d-parse-msg").textContent = "";
+  $("#d-date").value = toLocalInput(new Date());
+  $("#d-per").value = defaultKey();
+  renderDeclPreview();
+  toast("Déclaration enregistrée.");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+/* ---------- Saisie : demande ---------- */
+function renderBudgetAside() {
+  const t = treasury();
+  const pend = S.demandes.filter(dm => ["attente", "etude"].includes(aStatus(dm))).reduce((s, dm) => s + (Number(dm.montant) || 0), 0);
+  $("#m-budget").replaceChildren(
+    h("dt", { text: "Solde du Trésor" }), h("dd", { class: "num", text: S.connected ? money(t.solde) : "—" }),
+    h("dt", { text: "Déjà demandé, en attente" }), h("dd", { class: "num", text: S.connected ? money(pend) : "—" }),
+    h("dt", { class: "tot-dt", text: "Marge si tout est accordé" }), h("dd", { class: "tot-dd num", text: S.connected ? money(t.solde - pend) : "—" }));
+}
+const demKeys = k =>
+  /^service/.test(k) ? "service" :
+  /^(nature|type)/.test(k) ? "nature" :
+  /^(objet|besoin)/.test(k) ? "objet" :
+  /^(quantite|qte|nombre)/.test(k) ? "quantite" :
+  /^(montant|budget|cout|prix|somme)/.test(k) ? "montant" :
+  /^(urgence|priorite)/.test(k) ? "urgence" :
+  /^(justification|motif|raison)/.test(k) ? "justification" :
+  /^(demandeur|nom|grade|agent)/.test(k) ? "demandeur" : null;
+function parseDem() {
+  const p = parseTemplate($("#m-paste").value, demKeys, ["justification"]);
+  let n = 0;
+  if (p.service) { const sv = cfg().services.find(s => norm(s) === norm(p.service) || norm(p.service).includes(norm(s))); $("#m-service").value = sv || p.service; n++; }
+  if (p.nature) {
+    const t = norm(p.nature);
+    $("#m-nature").value = /vehic|voiture|moto|ambulance|camion|helico/.test(t) ? "vehicule" : /equip|moyen|materiel|arme|radio|gilet/.test(t) ? "equipement" : /salair|paie|prime|remuner/.test(t) ? "salaires" : /fonction/.test(t) ? "fonctionnement" : "autre";
+    n++;
+  }
+  if (p.objet) { $("#m-objet").value = p.objet; n++; }
+  if (p.quantite != null) { const v = parseAmount(p.quantite); if (v != null) { $("#m-qte").value = String(Math.max(0, v)); n++; } }
+  if (p.montant != null) { const v = parseAmount(p.montant); if (v != null) { $("#m-montant").value = String(Math.max(0, v)); n++; } }
+  if (p.urgence) { const t = norm(p.urgence); $("#m-urg").value = /urgent/.test(t) ? "urgente" : /priorit|haute/.test(t) ? "prioritaire" : "normale"; n++; }
+  if (p.justification) { $("#m-just").value = p.justification; n++; }
+  if (p.demandeur) { $("#m-dem").value = p.demandeur; n++; }
+  $("#m-parse-msg").textContent = n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Demande de moyens ».";
+}
+$("#m-parse").addEventListener("click", parseDem);
+$("#m-paste").addEventListener("paste", () => setTimeout(parseDem, 0));
+
+$("#form-dem").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!writer()) return;
+  const err = $("#m-err");
+  err.textContent = "";
+  $$("#form-dem [aria-invalid]").forEach(x => x.removeAttribute("aria-invalid"));
+  const service = $("#m-service").value.trim(), objet = $("#m-objet").value.trim();
+  const montant = numIn($("#m-montant")), qte = numIn($("#m-qte"));
+  const bad = [];
+  if (!service) bad.push(["m-service", "le service"]);
+  if (!objet) bad.push(["m-objet", "l’objet"]);
+  if (!Number.isFinite(montant) || montant <= 0) bad.push(["m-montant", "le montant demandé"]);
+  if (!Number.isFinite(qte) || qte < 0) bad.push(["m-qte", "la quantité"]);
+  if (bad.length) {
+    bad.forEach(([id]) => $("#" + id).setAttribute("aria-invalid", "true"));
+    $("#" + bad[0][0]).focus();
+    err.textContent = "À compléter : " + bad.map(b => b[1]).join(", ") + ".";
+    return;
+  }
+  const recue = $("#m-date").value ? new Date($("#m-date").value) : new Date();
+  const body = {
+    service, nature: $("#m-nature").value, objet, quantite: Math.round(qte) || null, montant: Math.round(montant),
+    urgence: $("#m-urg").value, justification: $("#m-just").value.trim(), demandeur: $("#m-dem").value.trim(),
+    recueAt: recue.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
+  };
+  const btn = $("#m-submit");
+  btn.disabled = true;
+  const ref = S.db.collection("demandes").doc();
+  const ok = await write(() => ref.set(body));
+  btn.disabled = !writer();
+  if (!ok) return;
+  const rc = $("#m-receipt");
+  rc.className = "receipt";
+  rc.replaceChildren(stamp(["Enregistrée", "ok"]),
+    h("div", { style: "min-width:0;flex:1 1 260px" },
+      h("strong", { text: `${dossierNo("DM", ref.id)} · ${service}` }),
+      h("div", { class: "muted", text: `${objet} · ${money(body.montant)} demandés` })),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => openDem(ref.id), text: "Arbitrer maintenant" }));
+  rc.hidden = false;
+  $("#form-dem").reset();
+  $("#m-paste").value = "";
+  $("#m-parse-msg").textContent = "";
+  $("#m-date").value = toLocalInput(new Date());
+  toast("Demande enregistrée.");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+/* ---------- Modèles Discord ---------- */
+function renderTemplates() {
+  const c = cfg();
+  const per = c.periodicite === "mois" ? "mois" : "semaine";
+  $("#tpl-decl").textContent = [
+    "**DÉCLARATION FISCALE**",
+    "Entreprise : ",
+    `Période : ${periodPlain(defaultKey())}`,
+    "Chiffre d’affaires : ",
+    "Charges (hors salaires) : ",
+    "Masse salariale : ",
+    "Nombre de salariés : ",
+    "Déclarant (nom, fonction) : ",
+    "Observations : "].join("\n");
+  $("#tpl-dem").textContent = [
+    "**DEMANDE DE MOYENS**",
+    "Service : ",
+    "Nature (véhicule / équipement / salaires / fonctionnement / autre) : ",
+    "Objet : ",
+    "Quantité : ",
+    "Montant demandé : ",
+    "Urgence (normale / prioritaire / urgente) : ",
+    "Justification : ",
+    "Demandeur (nom, grade) : "].join("\n");
+  $("#tpl-bareme").textContent = [
+    "**BARÈME FISCAL EN VIGUEUR**",
+    `• Impôt sur le résultat : ${pct(c.tauxIS)} du bénéfice (chiffre d’affaires − charges − salaires)`,
+    `• Cotisations sociales : ${pct(c.tauxCot)} de la masse salariale`,
+    `• Déclaration : chaque ${per}, au plus tard ${c.delaiJours} jour${plural(c.delaiJours)} après la fin de la ${per === "mois" ? "période" : "semaine"}`,
+    `• Retard : majoration de ${pct(c.majoration)} du montant dû`,
+    "• Paiement : auprès de la Direction, dès réception de l’avis d’imposition",
+    "• Contrôles fiscaux possibles à tout moment : gardez vos justificatifs",
+    "",
+    "— Direction des Impôts & Cotisations"].join("\n");
+}
+$("#tab-modeles").addEventListener("click", e => {
+  const b = e.target.closest("[data-copy]");
+  if (b) copyText($("#" + b.dataset.copy).textContent, "Modèle copié : collez-le dans votre salon Discord.");
+});
+$("#btn-recap").addEventListener("click", () => {
+  const key = S.dashKey || defaultKey();
+  const sts = activeEnts().map(e => Object.assign({ e }, entStatus(e, key)));
+  const g = (...st) => sts.filter(x => st.includes(x.status));
+  const names = arr => arr.map(x => x.e.nom).join(", ");
+  const enc = S.declarations.filter(d => d.periode === key && dStatus(d) === "payee").reduce((s, d) => s + dMontant(d), 0);
+  const L = [`**Direction des Impôts & Cotisations · ${periodLabel(key)}**`, `Date limite de dépôt : ${fmtDateTime(deadline(key))}`, ""];
+  if (g("payee").length) L.push(`✅ À jour et payé : ${names(g("payee"))}`);
+  if (g("soumise", "controle").length) L.push(`📝 Déclaré, en vérification : ${names(g("soumise", "controle"))}`);
+  if (g("validee").length) L.push(`💶 À payer : ${g("validee").map(x => `${x.e.nom} (${money(dMontant(x.decl))})`).join(", ")}`);
+  if (g("retard").length) L.push(`❌ En retard, majoration de ${pct(cfg().majoration)} : ${names(g("retard"))}`);
+  if (g("attendue", "encours").length) L.push(`⏳ Pas encore déclaré : ${names(g("attendue", "encours"))}`);
+  if (!sts.length) L.push("Aucune entreprise enregistrée au registre.");
+  L.push("", `Recettes encaissées sur la période : ${money(enc)}`);
+  copyText(L.join("\n"), "Récap copié : collez-le dans votre salon Discord.");
+});
+
+/* ---------- Réglages ---------- */
+function renderSettings() {
+  const c = cfg();
+  if (!S.setDirty) {
+    $("#s-per").value = c.periodicite === "mois" ? "mois" : "semaine";
+    $("#s-delai").value = String(c.delaiJours);
+    $("#s-is").value = String(c.tauxIS);
+    $("#s-cot").value = String(c.tauxCot);
+    $("#s-maj").value = String(c.majoration);
+    $("#s-budget").value = String(c.budgetInitial);
+    $("#s-devise").value = c.devise;
+  }
+  if (!S.svcDirty) $("#s-services").value = c.services.join("\n");
+  const list = $("#ent-admin");
+  const ents = S.entreprises.slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  if (!S.connected) { list.replaceChildren(); return; }
+  if (!ents.length) { list.replaceChildren(h("li", { class: "muted", style: "grid-template-columns:1fr", text: "Aucune entreprise pour l’instant. Ajoutez la première avec le formulaire ci-dessus." })); return; }
+  list.replaceChildren(...ents.map(e => {
+    const cb = h("input", { type: "checkbox", id: "act-" + e.id });
+    cb.checked = e.actif !== false;
+    cb.disabled = !writer();
+    cb.addEventListener("change", async () => { const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ actif: cb.checked })); if (!ok) cb.checked = !cb.checked; });
+    const rm = h("button", { class: "btn danger small", type: "button", text: "Retirer", disabled: !writer() });
+    rm.addEventListener("click", () => {
+      const nDecl = S.declarations.filter(d => d.entrepriseId === e.id).length;
+      openDialog({ eyebrow: "Registre des entreprises", title: `Retirer « ${e.nom} » ?`,
+        body: [h("p", { style: "margin:0", text: nDecl ? `Ses ${nDecl} déclaration${plural(nDecl)} restent dans l’historique, marquée${plural(nDecl)} « non enregistrée ». Pour une entreprise fermée temporairement, décochez plutôt « Active ».` : "Elle n’a encore aucune déclaration." })],
+        foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }),
+          h("button", { class: "btn danger small", type: "button", onclick: async () => { if (await write(() => S.db.doc("entreprises/" + e.id).delete())) { closeDialog(); toast("Entreprise retirée."); } }, text: "Retirer" })] });
+    });
+    return h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), h("span", { class: "meta", text: [e.secteur, e.patron].filter(Boolean).join(" · ") || "—" })),
+      h("label", { class: "switch", for: "act-" + e.id }, cb, "Active"),
+      rm);
+  }));
+}
+$("#form-set").addEventListener("input", () => { S.setDirty = true; $("#s-msg").textContent = "Modifications non enregistrées."; });
+$("#form-set").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!writer()) return;
+  const v = {
+    periodicite: $("#s-per").value,
+    delaiJours: Number($("#s-delai").value), tauxIS: Number($("#s-is").value), tauxCot: Number($("#s-cot").value),
+    majoration: Number($("#s-maj").value), budgetInitial: Number($("#s-budget").value), devise: $("#s-devise").value.trim() || "€"
+  };
+  const bad = [];
+  if (!Number.isFinite(v.delaiJours) || v.delaiJours < 0 || v.delaiJours > 14) bad.push("le délai (0 à 14 jours)");
+  for (const [k, l] of [["tauxIS", "l’impôt"], ["tauxCot", "les cotisations"], ["majoration", "la majoration"]]) if (!Number.isFinite(v[k]) || v[k] < 0 || v[k] > 100) bad.push(l + " (0 à 100 %)");
+  if (!Number.isFinite(v.budgetInitial) || v.budgetInitial < 0) bad.push("le fonds de départ");
+  if (bad.length) { $("#s-msg").textContent = "À corriger : " + bad.join(", ") + "."; return; }
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
+  if (ok) { S.setDirty = false; $("#s-msg").textContent = "Barème enregistré."; toast("Barème enregistré."); }
+});
+$("#s-services").addEventListener("input", () => { S.svcDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
+$("#s-svc-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const list = Array.from(new Set($("#s-services").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)));
+  if (!list.length) { $("#s-svc-msg").textContent = "Indiquez au moins un service."; return; }
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, updatedAt: nowISO() })));
+  if (ok) { S.svcDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés.`; }
+});
+$("#form-ent").addEventListener("submit", async e => {
+  e.preventDefault();
+  if (!writer()) return;
+  const nom = $("#e-nom").value.trim();
+  const msg = $("#e-msg");
+  msg.textContent = "";
+  if (!nom) { $("#e-nom").setAttribute("aria-invalid", "true"); $("#e-nom").focus(); msg.textContent = "Indiquez le nom de l’entreprise."; return; }
+  $("#e-nom").removeAttribute("aria-invalid");
+  if (S.entreprises.some(x => norm(x.nom) === norm(nom))) { msg.textContent = `« ${nom} » est déjà au registre.`; return; }
+  const ref = S.db.collection("entreprises").doc();
+  const ok = await write(() => ref.set({ nom, secteur: $("#e-sect").value.trim(), patron: $("#e-patron").value.trim(), actif: true, createdAt: nowISO() }));
+  if (!ok) return;
+  const n = norm(nom);
+  for (const x of S.declarations.filter(x => !x.entrepriseId && norm(x.entrepriseNom) === n)) await write(() => S.db.doc("declarations/" + x.id).update({ entrepriseId: ref.id }));
+  $("#form-ent").reset();
+  $("#e-nom").focus();
+  toast(`« ${nom} » ajoutée au registre.`);
+});
+
+/* ---------- Sauvegarde ---------- */
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages"];
+const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
+function since(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const days = Math.floor((Date.now() - d.getTime()) / 864e5);
+  const hm = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return { days, text: days <= 0 ? `aujourd’hui à ${hm}` : days === 1 ? `hier à ${hm}` : `il y a ${days} jours (${fmtDate(d)})` };
+}
+function renderBackupInfo() {
+  const box = $("#dash-backup"), last = $("#b-last");
+  if (!S.connected) { box.replaceChildren(); last.textContent = ""; return; }
+  const m = S.backupMeta && S.backupMeta.at ? since(S.backupMeta.at) : null;
+  if (!m) {
+    box.replaceChildren(chip(["Aucune sauvegarde enregistrée", "warn"]));
+    last.textContent = "Aucune sauvegarde pour l’instant.";
+  } else if (m.days > 7) {
+    box.replaceChildren(chip([`Dernière sauvegarde ${m.text}`, "warn"]));
+    last.textContent = `Dernière : ${m.text}.`;
+  } else {
+    box.textContent = `Dernière sauvegarde ${m.text}.`;
+    last.textContent = `Dernière : ${m.text}.`;
+  }
+}
+function buildBackup() {
+  const strip = arr => Object.fromEntries(arr.map(x => { const o = Object.assign({}, x); delete o.id; return [x.id, o]; }));
+  return {
+    format: "guichet-fiscal-sauvegarde", version: 1, exportedAt: nowISO(),
+    totaux: { entreprises: S.entreprises.length, declarations: S.declarations.length, demandes: S.demandes.length },
+    collections: {
+      config: S.config && Object.keys(S.config).length ? { main: S.config } : {},
+      entreprises: strip(S.entreprises), declarations: strip(S.declarations),
+      decisions: Object.assign({}, S.decisions), demandes: strip(S.demandes), arbitrages: Object.assign({}, S.arbitrages)
+    }
+  };
+}
+async function doBackup() {
+  if (!S.connected) return;
+  if (!["config"].concat(BACKUP_COLS).every(n => S.loaded.has(n))) { toast("Le registre se synchronise encore. Réessayez dans un instant.", true); return; }
+  const b = buildBackup();
+  const json = JSON.stringify(b, null, 2);
+  const d = new Date();
+  const filename = `guichet-fiscal-sauvegarde-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}h${pad(d.getMinutes())}.json`;
+  if (!S.downloads) { copyText(json, "Sauvegarde copiée : collez-la dans un fichier texte nommé " + filename + "."); return; }
+  try {
+    await S.downloads.save({ filename, data: new Blob([json], { type: "application/json" }) });
+    toast(`Sauvegarde téléchargée : ${b.totaux.declarations} déclarations, ${b.totaux.demandes} demandes.`);
+    if (writer()) {
+      try { await S.db.doc("meta/sauvegarde").set({ at: b.exportedAt, by: S.uid || null, entreprises: b.totaux.entreprises, declarations: b.totaux.declarations, demandes: b.totaux.demandes }); } catch (e) { /* le fichier est déjà enregistré */ }
+    }
+  } catch (e) {
+    const code = e && e.code;
+    if (code === "declined") toast("Sauvegarde annulée.");
+    else if (code === "rate_limited") toast("Une fenêtre d’enregistrement est déjà ouverte.", true);
+    else copyText(json, "Sauvegarde copiée : collez-la dans un fichier texte nommé " + filename + ".");
+  }
+}
+$("#btn-backup").addEventListener("click", doBackup);
+$("#b-save").addEventListener("click", doBackup);
+
+function planRestore(b) {
+  if (!b || b.format !== "guichet-fiscal-sauvegarde" || !b.collections || typeof b.collections !== "object") return null;
+  const writes = [];
+  const add = (c, id, body) => { if (ID_RE.test(id) && body && typeof body === "object" && !Array.isArray(body)) writes.push([c, id, body]); };
+  const cfgDoc = b.collections.config && b.collections.config.main;
+  if (cfgDoc) add("config", "main", cfgDoc);
+  for (const c of BACKUP_COLS) {
+    const docs = b.collections[c];
+    if (docs && typeof docs === "object") for (const [id, body] of Object.entries(docs)) add(c, id, body);
+  }
+  return writes;
+}
+$("#b-file").addEventListener("change", e => {
+  const input = e.target, f = input.files && input.files[0];
+  const msg = $("#b-msg");
+  msg.textContent = "";
+  if (!f || !writer()) return;
+  const r = new FileReader();
+  r.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
+  r.onload = () => {
+    input.value = "";
+    let data = null;
+    try { data = JSON.parse(String(r.result)); } catch (err) { data = null; }
+    const writes = planRestore(data);
+    if (!writes) { msg.textContent = "Ce fichier n’est pas une sauvegarde du guichet fiscal."; return; }
+    if (!writes.length) { msg.textContent = "Cette sauvegarde est vide : rien à restaurer."; return; }
+    const count = c => writes.filter(w => w[0] === c).length;
+    const ed = data.exportedAt ? new Date(data.exportedAt) : null;
+    const when = ed && !isNaN(ed) ? `${fmtDate(ed)} à ${ed.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "date inconnue";
+    const progress = h("p", { class: "progress", id: "restore-progress", text: "" });
+    const go = h("button", { class: "btn ink small", type: "button", text: `Restaurer ${writes.length} éléments` });
+    const cancel = h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" });
+    go.addEventListener("click", async () => {
+      go.disabled = true; cancel.disabled = true;
+      let done = 0, failed = 0;
+      for (const [c, id, body] of writes) {
+        let ok = false;
+        for (let attempt = 0; attempt < 4 && !ok; attempt++) {
+          try { await S.db.doc(c + "/" + id).set(body); ok = true; }
+          catch (err) {
+            const code = err && err.code;
+            if (code === "resource_exhausted" || code === "unavailable") { await sleep(700 * (attempt + 1)); continue; }
+            if (code === "revoked") { setOffline(); }
+            break;
+          }
+        }
+        done++;
+        if (!ok) failed++;
+        progress.textContent = `${done} / ${writes.length} restaurés${failed ? ` · ${failed} en échec` : ""}`;
+        if (S.offline) break;
+      }
+      closeDialog();
+      if (failed) toast(`Restauration terminée avec ${failed} élément${plural(failed)} en échec. Relancez-la avec le même fichier.`, true);
+      else toast("Restauration terminée : le registre est à jour.");
+    });
+    openDialog({
+      eyebrow: "Restauration", title: "Restaurer la sauvegarde du " + when + " ?",
+      body: [
+        kv([
+          ["Barème et services", count("config") ? "inclus" : "absent"],
+          ["Entreprises", String(count("entreprises")), "num"],
+          ["Déclarations", String(count("declarations")), "num"],
+          ["Avis et décisions fiscales", String(count("decisions")), "num"],
+          ["Demandes de moyens", String(count("demandes")), "num"],
+          ["Arbitrages", String(count("arbitrages")), "num"]]),
+        h("p", { class: "sub", style: "margin:0", text: "Les dossiers portant le même numéro sont remplacés par la version du fichier. Rien n’est supprimé." }),
+        progress],
+      foot: [cancel, go]
+    });
+  };
+  r.readAsText(f);
+});
+
+/* ---------- Onglets ---------- */
+function showTab(name) {
+  if (name === "reglages" && S.admin) loadAgents();
+  const btn = $(`.tab[data-tab="${name}"]`);
+  if (!btn || btn.hidden) name = "dashboard";
+  S.tab = name;
+  $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
+  $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
+  if (name === "dashboard") schedule();
+}
+$("nav.tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } } });
+$("nav.tabs").addEventListener("keydown", e => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const tabs = $$(".tab").filter(t => !t.hidden);
+  const i = tabs.findIndex(t => t.dataset.tab === S.tab);
+  const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+  showTab(next.dataset.tab); next.focus();
+});
+$("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; render(); });
+
+/* ---------- Démarrage ---------- */
+$("#d-date").value = toLocalInput(new Date());
+$("#m-date").value = toLocalInput(new Date());
+const startTab = (location.hash || "").replace("#", "");
+showTab(["dashboard", "declaration", "demande", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+render();
+init();
+})();
+</script>
+</body>
+</html>
