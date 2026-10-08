@@ -19,6 +19,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `config.js` : l’adresse et la clé publique du projet Supabase
 - `supabase/schema.sql` : les tables et les règles d’accès de la base
 - `supabase/v2_journal_export.sql` : le journal des actions et l’export vers Google Sheets
+- `supabase/v3_discord.sql` : la table privée des salons Discord
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -38,6 +39,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
+5 bis. Faites de même avec `supabase/v3_discord.sql` : il crée la table privée où sont gardées les adresses des salons Discord.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -74,6 +76,8 @@ Si l’écran « Accès pas encore accordé » s’affiche, l’identifiant qu�
 - **Économie** : chiffre d’affaires du serveur, emplois, masse salariale, recettes, secteurs et plus grosses entreprises, avec des graphiques sur 12 périodes au plus, depuis le début du suivi.
 - **Avis en image** : chaque avis d’imposition, décision budgétaire et pénalité peut être copié en image pour être collé sur Discord.
 - **Pénalités et paiement en plusieurs fois** : depuis la fiche d’une entreprise ou le dossier d’une déclaration.
+- **Recouvrement** : les entreprises qui n’ont pas déclaré, et les avis et pénalités non payés après le délai de paiement. Chaque entreprise se relance d’un clic, ou toutes ensemble dans un seul message. Les relances restent inscrites au dossier.
+- **Publication sur Discord** : les avis, pénalités, décisions budgétaires et relances partent dans le bon salon, avec une mention du patron ou du service.
 - **Journal** : chaque action est inscrite par la base avec son auteur. Personne ne peut le modifier depuis le site.
 - **Corriger une erreur** : une déclaration, une demande, une entreprise (nom, secteur, patron), une pénalité ou le nom d’un agent se modifient sans créer de doublon. Un accord, un refus, un avis émis ou un encaissement (impôt, échéance, pénalité) peut être annulé. Tout reste tracé dans le journal.
 - **Début du suivi** (Réglages) : les périodes plus anciennes ne sont plus proposées ni affichées dans les graphiques. Chaque nouvelle semaine s’ajoute toute seule.
@@ -121,6 +125,18 @@ Une déclaration est signalée quand :
 - l’entreprise a été en retard au moins deux fois sur ses quatre dernières déclarations.
 
 Une alerte n’est pas une preuve : c’est une raison de faire un contrôle en RP.
+
+## Publication sur Discord
+
+1. Si ce n’est pas déjà fait, exécutez `supabase/v3_discord.sql` dans **SQL Editor** (voir la mise en place, étape 2).
+2. Dans Discord, pour chaque salon : **Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l’URL du webhook**.
+3. Dans le guichet, **Réglages → Publication sur Discord** : collez l’adresse du salon des entreprises, du salon des services publics et, si vous voulez, d’un salon des relances. Cochez ce qui doit partir tout seul, puis **Enregistrer** et **Envoyer un message d’essai**.
+4. Pour mentionner un patron : **Modifier l’entreprise → ID Discord du patron** (clic droit sur le membre → Copier l’identifiant, avec le mode développeur activé).
+5. Pour mentionner un service : **Réglages → Services publics et enveloppes**, colonne « Rôle Discord à mentionner », au format `<@&ID du rôle>` (clic droit sur le rôle → Copier l’identifiant).
+
+Le guichet ne mentionne jamais `@everyone` ni `@here` : seuls le patron ou le rôle du service concerné sont notifiés. Les adresses des webhooks ne sont lisibles que par la Direction : elles n’apparaissent ni dans le journal, ni dans les sauvegardes, ni dans Google Sheets. Si une adresse fuite, supprimez le webhook dans Discord et collez-en un nouveau.
+
+Une entreprise est attendue à partir du début du suivi, ou de son **début d’activité** s’il est plus récent (Modifier l’entreprise). Une entreprise ajoutée au registre est attendue à partir de la période en cours : elle n’est jamais relancée pour une semaine où elle n’existait pas.
 
 ## Suivi dans Google Sheets
 

@@ -387,7 +387,8 @@ table.compact td{padding:8px 10px}
 @media (max-width:620px){.journal-list li{grid-template-columns:minmax(0,1fr)}}
 .avis-preview{display:block;width:100%;max-width:760px;margin:0 auto;border:1px solid var(--rule);border-radius:6px;background:#fbfaf6}
 .env-editor{display:grid;gap:8px}
-.env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:10px;align-items:center}
+.env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 150px 170px;gap:10px;align-items:center}
+@media (max-width:620px){.env-head{display:none}.env-edit{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.env-edit label{grid-column:1/-1}}
 .env-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650;margin-top:6px}
 .env-edit label{font-weight:500}
 /* Préfecture de police : logo et barèmes */
@@ -419,6 +420,29 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
 /* Modifications */
 .row-actions{display:inline-flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .edit-banner{border-left-color:var(--accent);align-items:center;flex-wrap:wrap}
+.tag.ok{color:var(--ok);border-color:currentColor}
+.rc-list{list-style:none;margin:0;padding:0;display:grid}
+.rc-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;padding:12px 0;border-bottom:1px solid var(--rule-2);align-items:center}
+.rc-list li:last-child{border-bottom:0}
+.rc-list .row-actions{grid-column:1/-1;justify-content:flex-start}
+.rc-main{min-width:0}
+.rc-keys{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.rc-keys .tag{margin-left:0}
+.rc-state{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:620px){.rc-list li{grid-template-columns:minmax(0,1fr)}.rc-state{justify-content:flex-start}}
+.rl-pick{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:260px;overflow:auto;border:1px solid var(--rule);border-radius:var(--r);padding:10px 12px}
+.rl-pick li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.rl-pick .meta{flex-basis:100%;font-size:12.5px;color:var(--ink-3);padding-left:22px}
+.discord-preview{margin:0;max-height:240px;overflow:auto;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r);padding:10px 12px;font-family:var(--f-mono);font-size:12.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+fieldset.checks{border:1px solid var(--rule);border-radius:var(--r);padding:10px 14px 12px;margin:0;display:grid;gap:8px}
+fieldset.checks legend{font-size:13px;font-weight:650;color:var(--ink-2);padding:0 6px}
+fieldset.checks .switch{align-items:flex-start;line-height:1.4}
+fieldset.checks .switch input{margin-top:3px;flex:none}
+#discord-form input.secret{-webkit-text-security:disc}
+#discord-form.show-secret input.secret{-webkit-text-security:none}
+.ent-add.ent-add2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ent-add.ent-add2 .btn{justify-self:start}
+@media (max-width:620px){.ent-add.ent-add2{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body data-gate="chargement">
@@ -443,6 +467,7 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
   <div class="wrap" role="tablist">
     <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
     <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
     <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-writer>Saisir une déclaration</button>
     <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-writer>Saisir une demande</button>
@@ -595,6 +620,42 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
   </section>
 
   <!-- ÉCONOMIE -->
+  <section class="panel" id="tab-recouvrement" role="tabpanel" aria-labelledby="tab-btn-recouvrement" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Recouvrement</h2>
+        <p class="sub">Les entreprises qui n’ont pas déclaré ou pas payé à temps. Chaque relance est inscrite à leur dossier et peut partir sur Discord en mentionnant le patron.</p>
+      </div>
+    </div>
+    <div class="dash-grid">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Déclarations manquantes</h3>
+            <p class="sub" id="rc-retards-sub">Entreprises qui n’ont pas déclaré.</p>
+          </div>
+          <button class="btn ghost small" type="button" id="rc-retards-all" hidden>Relancer les retardataires</button>
+        </div>
+        <div id="rc-retards"><div class="empty">Chargement…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Impayés échus</h3>
+            <p class="sub" id="rc-impayes-sub">Avis, échéances et pénalités non payés après le délai.</p>
+          </div>
+          <button class="btn ghost small" type="button" id="rc-impayes-all" hidden>Relancer les impayés</button>
+        </div>
+        <div id="rc-impayes"><div class="empty">Chargement…</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Relances envoyées</h3>
+      <p class="sub">Les plus récentes en premier.</p>
+      <div id="rc-hist"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
   <section class="panel" id="tab-economie" role="tabpanel" aria-labelledby="tab-btn-economie" hidden>
     <div class="panel-head">
       <div>
@@ -667,6 +728,7 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
           <option value="demandes">Demandes de moyens</option>
           <option value="arbitrages">Arbitrages</option>
           <option value="entreprises">Entreprises</option>
+          <option value="relances">Relances</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -991,6 +1053,11 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
                 <select id="s-debut"></select>
                 <span class="hint">Les périodes plus anciennes ne sont plus affichées. Les suivantes s’ajoutent toutes seules.</span>
               </div>
+              <div class="field">
+                <label for="s-paydelai">Délai de paiement d’un avis</label>
+                <input id="s-paydelai" type="number" min="0" max="30" step="1">
+                <span class="hint">En jours après l’émission. Passé ce délai, l’avis apparaît dans les impayés à relancer.</span>
+              </div>
             </div>
             <div class="row2">
               <div class="field">
@@ -1040,17 +1107,25 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
             </div>
           </div>
         </div>
+        <div class="card" id="card-discord">
+          <h3>Publication sur Discord</h3>
+          <p class="sub">Collez l’adresse du webhook de chaque salon. Dans Discord : Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l’URL du webhook. Ces adresses restent privées : seule la Direction les lit.</p>
+          <p class="hint" id="dw-state" aria-live="polite"></p>
+          <div class="set-form" id="discord-form" hidden></div>
+        </div>
       </div>
       <div>
         <div class="card">
           <h3>Entreprises enregistrées</h3>
           <p class="sub">Les entreprises actives apparaissent dans le registre ; celles qui ne déclarent pas passent en retard.</p>
-          <form class="ent-add" id="form-ent" novalidate>
+          <form class="ent-add ent-add2" id="form-ent" novalidate>
             <div class="field"><label for="e-nom">Nom</label><input id="e-nom" autocomplete="off" placeholder="Ex. : Garage du Port"></div>
             <div class="field"><label for="e-sect">Secteur</label><input id="e-sect" autocomplete="off" placeholder="Mécanique"></div>
             <div class="field"><label for="e-patron">Patron</label><input id="e-patron" autocomplete="off" placeholder="Nom RP"></div>
+            <div class="field"><label for="e-discord">ID Discord du patron</label><input id="e-discord" class="mono" inputmode="numeric" autocomplete="off" placeholder="Pour le mentionner (facultatif)"></div>
             <button class="btn" type="submit" id="e-add">Ajouter</button>
           </form>
+          <p class="hint" style="margin:8px 0 0">L’ID Discord se copie avec un clic droit sur le membre → Copier l’identifiant (mode développeur activé dans Discord). Une nouvelle entreprise est attendue à partir de la période en cours ; changez son début d’activité avec « Modifier ».</p>
           <span id="e-msg" class="err" aria-live="polite"></span>
           <ul class="ent-list" id="ent-admin"></ul>
         </div>
@@ -1164,7 +1239,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 /* ---------- État ---------- */
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
-  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {},
+  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {},
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
   baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
@@ -1173,7 +1248,8 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {},
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [],
+  discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
   journal: [], journalLoaded: false, journalError: null, journalBusy: false, jLimit: 100,
@@ -1193,7 +1269,7 @@ const URG = { normale: ["Normale", "muted"], prioritaire: ["Prioritaire", "warn"
 const DSTAT = {
   soumise: ["À valider", "info"], validee: ["À payer", "warn"], payee: ["Payée", "ok"],
   controle: ["En contrôle", "accent"], rejetee: ["Rejetée", "bad"],
-  retard: ["En retard", "bad"], attendue: ["Attendue", "muted"], encours: ["Période en cours", "muted"]
+  retard: ["En retard", "bad"], attendue: ["Attendue", "muted"], encours: ["Période en cours", "muted"], avant: ["Pas encore ouverte", "muted"]
 };
 const ASTAT = {
   attente: ["En attente", "info"], etude: ["À l’étude", "accent"], accordee: ["Accordée", "ok"],
@@ -1341,6 +1417,7 @@ function findEnt(name) {
 function entStatus(e, key) {
   const ds = S.declarations.filter(d => d.entrepriseId === e.id && d.periode === key).sort(byCreatedDesc);
   if (ds.length) return { status: dStatus(ds[0]), decl: ds[0] };
+  if (keyStart(key) < entStartTime(e)) return { status: "avant" };
   const b = bounds(key);
   const now = Date.now();
   if (b && now > deadline(key).getTime()) return { status: "retard" };
@@ -1723,7 +1800,7 @@ async function init() {
   S.connected = true;
   subscribe();
   store.startLive();
-  if (!S.admin) setReadOnly(); else { applyRole(); loadAgents(); }
+  if (!S.admin) setReadOnly(); else { applyRole(); loadAgents(); loadPrivate(); }
   if (S.tab === "journal") loadJournal();
   if (S.tab === "reglages" && S.admin) loadKeys();
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
@@ -1790,6 +1867,7 @@ function subscribe() {
   col("arbitrages", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.arbitrages = o; });
   col("penalites", s => { S.penalites = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("echeanciers", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.echeanciers = o; });
+  col("relances", s => { S.relances = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -1814,6 +1892,8 @@ function render() {
   renderBackupInfo();
   renderEntreprises();
   renderEconomie();
+  renderRecouvrement();
+  renderDiscordSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
   $("#foot-sync").textContent = S.connected ? (S.loaded.has("declarations") ? "Registre synchronisé" : "Synchronisation…") : "";
 }
@@ -1876,7 +1956,7 @@ function renderDashboard() {
   }
   const penDue = S.penalites.filter(p => p.statut === "due" && p.createdAt && keyOf(new Date(p.createdAt)) === key).reduce((sum, p) => sum + (Number(p.montant) || 0), 0);
   const ents = activeEnts();
-  const sts = ents.map(e => Object.assign({ e }, entStatus(e, key)));
+  const sts = ents.map(e => Object.assign({ e }, entStatus(e, key))).filter(x => x.status !== "avant");
   const ok = sts.filter(x => ["soumise", "validee", "payee", "controle"].includes(x.status)).length;
   const late = sts.filter(x => x.status === "retard").length;
   const pend = S.demandes.filter(dm => ["attente", "etude"].includes(aStatus(dm)));
@@ -1885,7 +1965,7 @@ function renderDashboard() {
   setKpi("k-att", money(att), `${declsP.length} déclaration${plural(declsP.length)}${aValider ? ` · ${aValider} à valider` : ""}`);
   setKpi("k-enc", money(enc), att ? `${Math.round(enc / att * 100)} % du déclaré` : "sur la période", enc > 0 ? "ok" : "");
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
-  setKpi("k-conf", ents.length ? `${ok} / ${ents.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
+  setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
   setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés`, t.solde < 0 ? "bad" : "");
 
@@ -2219,6 +2299,7 @@ async function decide(d, statut, montant, note) {
   if (statut === "payee") body.paidAt = nowISO();
   const ok = await write(() => S.db.doc("decisions/" + d.id).set(body));
   if (ok) toast({ validee: "Avis émis : montant à payer.", payee: "Paiement encaissé.", controle: "Dossier placé en contrôle.", rejetee: "Déclaration rejetée.", soumise: "Décision annulée." }[statut] || "Enregistré.");
+  if (ok && statut === "validee" && prev.statut !== "validee" && prev.statut !== "payee") autoPublish("avis", avisDoc(d), "Avis émis.");
   return ok;
 }
 function avisText(d) {
@@ -2327,7 +2408,7 @@ function openDecl(id) {
 }
 async function registerFromDecl(d) {
   const ref = S.db.collection("entreprises").doc();
-  const ok = await write(() => ref.set({ nom: d.entrepriseNom, secteur: "", patron: d.declarant || "", actif: true, createdAt: nowISO() }));
+  const ok = await write(() => ref.set({ nom: d.entrepriseNom, secteur: "", patron: d.declarant || "", discord: "", debutActivite: d.periode || keyOf(new Date()), actif: true, createdAt: nowISO() }));
   if (!ok) return;
   const n = norm(d.entrepriseNom);
   for (const x of S.declarations.filter(x => (!x.entrepriseId || !S.entreprises.some(e => e.id === x.entrepriseId)) && norm(x.entrepriseNom) === n)) {
@@ -2404,7 +2485,11 @@ function openDem(id) {
     if (statut === "refusee" || statut === "etude") m = 0;
     const keepAt = !!(a && a.at && ["accordee", "partielle"].includes(st) && ["accordee", "partielle"].includes(statut));
     const ok = await write(() => S.db.doc("arbitrages/" + id).set({ statut, montantAccorde: Math.round(m), commentaire: cIn ? cIn.value.trim() : "", at: keepAt ? a.at : nowISO(), modifieLe: keepAt ? nowISO() : null, by: S.uid || null }));
-    if (ok) { toast(keepAt ? `Accord modifié : ${money(m)}.` : { accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut]); closeDialog(); }
+    if (ok) {
+      const msg = keepAt ? `Accord modifié : ${money(m)}.` : { accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut];
+      toast(msg); closeDialog();
+      if (statut !== "etude") autoPublish("decisions", decisionDoc(dm), msg);
+    }
   };
   const resetDecision = async () => {
     if (await write(() => S.db.doc("arbitrages/" + id).delete())) { toast(st === "refusee" ? "Refus annulé : la demande est de nouveau en attente." : st === "etude" ? "La demande est de nouveau en attente." : "Accord annulé : les crédits reviennent au Trésor et la demande est de nouveau en attente."); openDem(id); }
@@ -2771,7 +2856,7 @@ $("#tab-modeles").addEventListener("click", e => {
 });
 $("#btn-recap").addEventListener("click", () => {
   const key = S.dashKey || defaultKey();
-  const sts = activeEnts().map(e => Object.assign({ e }, entStatus(e, key)));
+  const sts = activeEnts().map(e => Object.assign({ e }, entStatus(e, key))).filter(x => x.status !== "avant");
   const g = (...st) => sts.filter(x => st.includes(x.status));
   const names = arr => arr.map(x => x.e.nom).join(", ");
   const enc = S.declarations.filter(d => d.periode === key && dStatus(d) === "payee").reduce((s, d) => s + dMontant(d), 0);
@@ -2798,6 +2883,7 @@ function renderSettings() {
     $("#s-budget").value = String(c.budgetInitial);
     $("#s-devise").value = c.devise;
     $("#s-smin").value = String(c.salaireMin || 0);
+    $("#s-paydelai").value = String(c.delaiPaiementJours ?? 2);
     const opts = [];
     let kk = keyOf(new Date());
     for (let i = 0; i < 30; i++) { opts.push([kk, periodLabel(kk)]); kk = prevKey(kk); }
@@ -2825,7 +2911,7 @@ function renderSettings() {
           h("button", { class: "btn danger small", type: "button", onclick: async () => { if (await write(() => S.db.doc("entreprises/" + e.id).delete())) { closeDialog(); toast("Entreprise retirée."); } }, text: "Retirer" })] });
     });
     return h("li", {},
-      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), h("span", { class: "meta", text: [e.secteur, e.patron].filter(Boolean).join(" · ") || "—" })),
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), " ", pingTag(e), h("span", { class: "meta", text: [e.secteur, e.patron, e.debutActivite && keyStart(e.debutActivite) > startTime() ? "depuis " + periodPlain(e.debutActivite).toLowerCase() : ""].filter(Boolean).join(" · ") || "—" })),
       h("label", { class: "switch", for: "act-" + e.id }, cb, "Active"),
       h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e), text: "Modifier", disabled: !writer() }), rm));
   }));
@@ -2839,6 +2925,7 @@ $("#form-set").addEventListener("submit", async e => {
     delaiJours: Number($("#s-delai").value), tauxIS: Number($("#s-is").value), tauxCot: Number($("#s-cot").value),
     majoration: Number($("#s-maj").value), budgetInitial: Number($("#s-budget").value), devise: $("#s-devise").value.trim() || "€",
     salaireMin: Number($("#s-smin").value) || 0,
+    delaiPaiementJours: Math.max(0, Math.min(30, Math.round(Number($("#s-paydelai").value) || 0))),
     debutSuivi: $("#s-debut").value || DEFAULTS.debutSuivi
   };
   const bad = [];
@@ -2857,7 +2944,14 @@ $("#s-svc-save").addEventListener("click", async () => {
   if (!list.length) { $("#s-svc-msg").textContent = "Indiquez au moins un service."; return; }
   const env = {};
   $$("#env-editor input[data-svc]").forEach(i => { const v = Number(i.value); if (list.includes(i.dataset.svc) && Number.isFinite(v) && v > 0) env[i.dataset.svc] = Math.round(v); });
-  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, enveloppes: env, updatedAt: nowISO() })));
+  const ments = {};
+  for (const i of $$("#env-editor input[data-svc-m]")) {
+    const v = i.value.trim();
+    if (!v || !list.includes(i.dataset.svcM)) continue;
+    if (!parseMention(v)) { $("#s-svc-msg").textContent = `${i.dataset.svcM} : mention Discord invalide. Écrivez <@&ID> pour un rôle, ou l’ID d’un membre.`; i.focus(); return; }
+    ments[i.dataset.svcM] = normMention(v);
+  }
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, enveloppes: env, servicesMentions: ments, updatedAt: nowISO() })));
   if (ok) { S.svcDirty = false; S.envDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés, ${Object.keys(env).length} avec un plafond.`; renderEnvEditor(true); }
 });
 $("#form-ent").addEventListener("submit", async e => {
@@ -2869,8 +2963,11 @@ $("#form-ent").addEventListener("submit", async e => {
   if (!nom) { $("#e-nom").setAttribute("aria-invalid", "true"); $("#e-nom").focus(); msg.textContent = "Indiquez le nom de l’entreprise."; return; }
   $("#e-nom").removeAttribute("aria-invalid");
   if (S.entreprises.some(x => norm(x.nom) === norm(nom))) { msg.textContent = `« ${nom} » est déjà au registre.`; return; }
+  const disc = $("#e-discord").value.trim();
+  if (disc && !parseMention(disc)) { $("#e-discord").setAttribute("aria-invalid", "true"); $("#e-discord").focus(); msg.textContent = "ID Discord : 17 à 20 chiffres (clic droit sur le membre → Copier l’identifiant)."; return; }
+  $("#e-discord").removeAttribute("aria-invalid");
   const ref = S.db.collection("entreprises").doc();
-  const ok = await write(() => ref.set({ nom, secteur: $("#e-sect").value.trim(), patron: $("#e-patron").value.trim(), actif: true, createdAt: nowISO() }));
+  const ok = await write(() => ref.set({ nom, secteur: $("#e-sect").value.trim(), patron: $("#e-patron").value.trim(), discord: normMention(disc), debutActivite: keyOf(new Date()), actif: true, createdAt: nowISO() }));
   if (!ok) return;
   const n = norm(nom);
   for (const x of S.declarations.filter(x => !x.entrepriseId && norm(x.entrepriseNom) === n)) await write(() => S.db.doc("declarations/" + x.id).update({ entrepriseId: ref.id }));
@@ -2880,7 +2977,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -3165,7 +3262,9 @@ async function showDocImage(doc, back) {
   openDialog({
     eyebrow: "Image à poster sur Discord", title: `${capFirst(doc.kind)} ${doc.no}`, wide: true,
     body: [h("img", { class: "avis-preview", src: url, alt: `${capFirst(doc.kind)} ${doc.no}` })],
-    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour au dossier" }) : null, h("span", { class: "spacer" }), dl, copyBtn].filter(Boolean)
+    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour au dossier" }) : null, h("span", { class: "spacer" }),
+      writer() && doc.discord && hookFor(doc.discord.channel) ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (!(await publishDoc(doc))) b.disabled = false; else b.textContent = "Publié sur Discord"; }, text: "Publier sur Discord" }) : null,
+      dl, copyBtn].filter(Boolean)
   });
 }
 function avisDoc(d) {
@@ -3185,12 +3284,14 @@ function avisDoc(d) {
   } else lines.push([`Impôt sur le résultat (${pct(d.tauxIS)})`, money(d.impot)], [`Cotisations sociales (${pct(d.tauxCot)})`, money(d.cotisations)]);
   if (d.enRetard) lines.push([`Majoration de retard (${pct(d.majPct)})`, money(d.majoration)]);
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) lines.push(["Montant rectifié après vérification", money(dec.montant), true]);
+  const due = st === "validee" && !e ? payDue(d) : null;
   const doc = {
     kind: "AVIS D’IMPOSITION", no: dossierNo("DF", d.id), date: "Émis le " + longDate(dec && dec.at ? new Date(dec.at) : new Date()),
     meta: [["Entreprise", d.entrepriseNom || "—"], ["Période", periodLabel(d.periode)], ["Déclarant", d.declarant || "—"], ["Déposée le", d.depotAt ? longDate(new Date(d.depotAt)) : "—"]],
     lines, total: [st === "payee" ? "Montant réglé" : "Montant à régler", money(dMontant(d))],
     note: dec && dec.note ? dec.note : "", stamp: STAMP_DECL[st] || STAMP_DECL.soumise,
-    footer: st === "validee" ? "À régler auprès de la Préfecture de police, Direction des impôts et cotisations, dès réception de cet avis. Un retard de paiement peut entraîner une pénalité." : "Préfecture de police · Direction des impôts et cotisations."
+    footer: st === "validee" ? `À régler auprès de la Préfecture de police, Direction des impôts et cotisations, ${due ? "avant le " + longDate(due) : e ? "selon l’échéancier ci-dessous" : "dès réception de cet avis"}. Un retard de paiement peut entraîner une pénalité.` : "Préfecture de police · Direction des impôts et cotisations.",
+    discord: { channel: "entreprises", mentions: [entMention(entOf(d))], text: `**Avis d’imposition ${dossierNo("DF", d.id)}** · ${d.entrepriseNom} · ${periodPlain(d.periode)} : ${money(dMontant(d))} ${st === "payee" ? "réglés" : st === "validee" ? "à régler" + (due ? " avant le " + longDate(due) : e ? " selon l’échéancier" : "") : "(" + (DSTAT[st] || DSTAT.soumise)[0].toLowerCase() + ")"}.` }
   };
   if (e) doc.table = { title: "Échéancier de paiement", head: ["Échéance", "Date limite", "Montant", "État"], rows: e.echeances.map(x => [`${x.n} / ${e.echeances.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : (new Date(x.date).getTime() < Date.now() ? "En retard" : "À venir")]) };
   return doc;
@@ -3204,7 +3305,8 @@ function decisionDoc(dm) {
     lines: [["Quantité", String(dm.quantite || "—")], ["Montant demandé", money(dm.montant)], ["Reçue le", dm.recueAt ? longDate(new Date(dm.recueAt)) : "—"]],
     total: ["Crédits accordés", money(ok ? a.montantAccorde : 0)], note: a && a.commentaire ? a.commentaire : "", noteTitle: "Motif de la décision",
     stamp: STAMP_ARB[st] || STAMP_ARB.attente,
-    footer: ok ? "Les crédits sont mis à disposition du service par la Préfecture de police, Direction des impôts et cotisations." : "Préfecture de police · Direction des impôts et cotisations."
+    footer: ok ? "Les crédits sont mis à disposition du service par la Préfecture de police, Direction des impôts et cotisations." : "Préfecture de police · Direction des impôts et cotisations.",
+    discord: { channel: "services", mentions: [svcMention(dm.service)], text: `**Décision budgétaire ${dossierNo("DM", dm.id)}** · ${dm.service} · ${dm.objet} : ${(ASTAT[st] || ASTAT.attente)[0].toLowerCase()}${ok ? ", " + money(a.montantAccorde) + " accordés" : ""}.` }
   };
 }
 function penaltyDoc(p) {
@@ -3214,7 +3316,8 @@ function penaltyDoc(p) {
     lines: p.statut === "payee" && p.paidAt ? [["Réglée le", longDate(new Date(p.paidAt))]] : [],
     total: [p.statut === "payee" ? "Pénalité réglée" : "Pénalité à régler", money(p.montant)],
     stamp: STAMP_PEN[p.statut] || STAMP_PEN.due,
-    footer: p.statut === "due" ? "À régler auprès de la Préfecture de police, Direction des impôts et cotisations, dès réception de cet avis." : "Préfecture de police · Direction des impôts et cotisations."
+    footer: p.statut === "due" ? "À régler auprès de la Préfecture de police, Direction des impôts et cotisations, dès réception de cet avis." : "Préfecture de police · Direction des impôts et cotisations.",
+    discord: { channel: "entreprises", mentions: [entMention(entOf(p))], text: `**Avis de pénalité ${dossierNo("PN", p.id)}** · ${p.entrepriseNom} · ${p.motif || "pénalité"} : ${money(p.montant)} ${p.statut === "payee" ? "réglés" : p.statut === "annulee" ? "(annulée)" : "à régler"}.` }
   };
 }
 
@@ -3222,6 +3325,7 @@ function penaltyDoc(p) {
 async function addPenalty(e, motif, montant, declId) {
   const ref = S.db.collection("penalites").doc();
   const ok = await write(() => ref.set({ entrepriseId: e.id || null, entrepriseNom: e.nom, motif, montant: Math.round(montant), statut: "due", declId: declId || null, createdAt: nowISO(), by: S.uid || null }));
+  if (ok) { const p = S.penalites.find(x => x.id === ref.id); if (p) autoPublish("penalites", penaltyDoc(p), "Pénalité infligée."); }
   return ok ? ref.id : null;
 }
 async function setPenaltyStatus(p, statut) {
@@ -3394,7 +3498,7 @@ function openFiche(e, opts) {
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
-    eyebrow: "Fiche entreprise · " + ([e.secteur, e.patron].filter(Boolean).join(" · ") || "secteur non renseigné"),
+    eyebrow: "Fiche entreprise · " + ([e.secteur, e.patron].filter(Boolean).join(" · ") || "secteur non renseigné") + (entMention(e) ? " · ping Discord" : ""),
     title: e.nom, wide: true,
     stampEl: e.id ? stamp(situation(sm)) : stamp(["Non enregistrée", "warn"]),
     body, foot
@@ -3516,7 +3620,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -3554,13 +3658,16 @@ function describe(e) {
       if (x === "suppression") return `a effacé l’arbitrage de ${who}`;
       return ({ accordee: `a accordé ${money(a.montantAccorde)} à ${who}`, partielle: `a accordé ${money(a.montantAccorde)}, en partie, à ${who}`, refusee: `a refusé la demande de ${who}`, etude: `a mis à l’étude la demande de ${who}` })[a.statut] || `a modifié l’arbitrage de ${who}`;
     }
+    case "relances":
+      if (x === "suppression") return `a supprimé une relance de ${v.entrepriseNom}`;
+      return v.type === "declaration" ? `a relancé ${v.entrepriseNom} pour ${(v.periodes || []).map(periodPlain).join(", ")}` : `a relancé ${v.entrepriseNom} pour ${money(v.montant)} d’impayés`;
     case "entreprises":
       if (x === "ajout") return `a ajouté l’entreprise ${v.nom} au registre`;
       if (x === "suppression") return `a retiré l’entreprise ${v.nom} du registre`;
       if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes" };
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -3664,13 +3771,17 @@ function renderEnvEditor(force) {
   const env = cfg().enveloppes || {};
   const prev = {};
   $$("input[data-svc]", box).forEach(i => { prev[i.dataset.svc] = i.value; });
+  const prevM = {};
+  $$("input[data-svc-m]", box).forEach(i => { prevM[i.dataset.svcM] = i.value; });
   fill(box,
-    h("div", { class: "env-head" }, h("span", { text: "Service" }), h("span", { text: `Plafond par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` })),
+    h("div", { class: "env-head" }, h("span", { text: "Service" }), h("span", { text: `Plafond par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` }), h("span", { text: "Rôle Discord à mentionner" })),
     names.map((n, i) => {
       const inp = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", id: "env-" + i, "data-svc": n, placeholder: "Sans plafond", "aria-label": "Plafond de " + n });
       const k = Object.keys(env).find(x => norm(x) === norm(n));
       inp.value = prev[n] !== undefined ? prev[n] : (k && env[k] ? String(env[k]) : "");
-      return h("div", { class: "env-edit" }, h("label", { for: "env-" + i, text: n }), h("div", { class: "money", "data-cur": cur() }, inp));
+      const men = h("input", { class: "mono", autocomplete: "off", "data-svc-m": n, placeholder: "<@&ID du rôle>", "aria-label": "Rôle Discord de " + n });
+      men.value = prevM[n] !== undefined ? prevM[n] : svcMention(n);
+      return h("div", { class: "env-edit" }, h("label", { for: "env-" + i, text: n }), h("div", { class: "money", "data-cur": cur() }, inp), men);
     }));
 }
 $("#env-editor").addEventListener("input", () => { S.envDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
@@ -3971,6 +4082,13 @@ function field(id, label, input) { input.id = id; return h("div", { class: "fiel
 function editEntreprise(e, back) {
   const nom = h("input", { autocomplete: "off" }), sect = h("input", { autocomplete: "off" }), patron = h("input", { autocomplete: "off" });
   nom.value = e.nom || ""; sect.value = e.secteur || ""; patron.value = e.patron || "";
+  const disc = h("input", { class: "mono", inputmode: "numeric", autocomplete: "off", placeholder: "17 à 20 chiffres" });
+  disc.value = e.discord ? (parseMention(e.discord) || {}).id || "" : "";
+  const debut = h("select", {});
+  const keys = recentKeys(40);
+  fill(debut, h("option", { value: "", text: `Depuis le début du suivi (${periodPlain(cfg().debutSuivi).toLowerCase()})` }), keys.slice().reverse().map(k => h("option", { value: k, text: periodLabel(k) })));
+  if (e.debutActivite && !keys.includes(e.debutActivite) && keyStart(e.debutActivite) > startTime()) debut.append(h("option", { value: e.debutActivite, text: periodLabel(e.debutActivite) }));
+  debut.value = e.debutActivite && keyStart(e.debutActivite) > startTime() ? e.debutActivite : "";
   const err = h("span", { class: "err", "aria-live": "polite" });
   const progress = h("span", { class: "hint" });
   const save = h("button", { class: "btn small", type: "button", text: "Enregistrer" });
@@ -3978,14 +4096,16 @@ function editEntreprise(e, back) {
     const n = nom.value.trim();
     if (!n) { err.textContent = "Indiquez le nom de l’entreprise."; nom.focus(); return; }
     if (S.entreprises.some(x => x.id !== e.id && norm(x.nom) === norm(n))) { err.textContent = `« ${n} » existe déjà au registre.`; return; }
+    if (disc.value.trim() && !parseMention(disc.value.trim())) { err.textContent = "ID Discord : 17 à 20 chiffres (clic droit sur le membre → Copier l’identifiant)."; disc.focus(); return; }
     save.disabled = true;
-    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim() }));
+    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || null }));
     if (!ok) { save.disabled = false; return; }
     if (n !== e.nom) {
       const jobs = [];
       for (const d of S.declarations) if (d.entrepriseId === e.id && d.entrepriseNom !== n) jobs.push(["declarations", d.id]);
       for (const p of S.penalites) if (p.entrepriseId === e.id && p.entrepriseNom !== n) jobs.push(["penalites", p.id]);
       for (const [id, ec] of Object.entries(S.echeanciers)) if (ec.entrepriseId === e.id && ec.entrepriseNom !== n) jobs.push(["echeanciers", id]);
+      for (const r of S.relances) if (r.entrepriseId === e.id && r.entrepriseNom !== n) jobs.push(["relances", r.id]);
       let done = 0;
       for (const [col, id] of jobs) { await write(() => S.db.doc(col + "/" + id).update({ entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -3995,7 +4115,10 @@ function editEntreprise(e, back) {
   openDialog({
     eyebrow: "Registre des entreprises", title: `Modifier « ${e.nom} »`,
     body: [h("div", { class: "row3" }, field("ee-nom", "Nom", nom), field("ee-sect", "Secteur", sect), field("ee-patron", "Patron", patron)),
-      h("p", { class: "hint", style: "margin:0", text: "Un changement de nom est reporté sur toutes ses déclarations, pénalités et échéanciers." }), err, progress],
+      h("div", { class: "row2" },
+        h("div", { class: "field" }, h("label", { for: "ee-discord", text: "ID Discord du patron" }), Object.assign(disc, { id: "ee-discord" }), h("span", { class: "hint", text: "Pour le mentionner dans les avis et relances publiés. Clic droit sur le membre → Copier l’identifiant." })),
+        h("div", { class: "field" }, h("label", { for: "ee-debut", text: "Début d’activité" }), Object.assign(debut, { id: "ee-debut" }), h("span", { class: "hint", text: "Avant cette période, l’entreprise n’est pas attendue et n’est jamais relancée." }))),
+      h("p", { class: "hint", style: "margin:0", text: "Un changement de nom est reporté sur toutes ses déclarations, pénalités, échéanciers et relances." }), err, progress],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour à la fiche" : "Annuler" }), h("span", { class: "spacer" }), save]
   });
   setTimeout(() => nom.focus(), 30);
@@ -4033,6 +4156,371 @@ function renameAgent(a) {
   setTimeout(() => nom.focus(), 30);
 }
 
+/* ---------- Discord : mentions, salons, publication ---------- */
+// Une mention s'écrit <@ID> pour un membre et <@&ID> pour un rôle.
+function parseMention(s) {
+  s = String(s || "").trim();
+  let m = /^<@&(\d{15,21})>$/.exec(s) || /^&(\d{15,21})$/.exec(s);
+  if (m) return { type: "role", id: m[1] };
+  m = /^<@!?(\d{15,21})>$/.exec(s) || /^(\d{15,21})$/.exec(s);
+  if (m) return { type: "user", id: m[1] };
+  return null;
+}
+const normMention = s => { const p = parseMention(s); return p ? (p.type === "role" ? `<@&${p.id}>` : `<@${p.id}>`) : ""; };
+const entMention = e => (e && e.discord ? normMention(e.discord) : "");
+function svcMention(name) {
+  const m = cfg().servicesMentions || {};
+  const k = Object.keys(m).find(x => norm(x) === norm(name));
+  return k ? normMention(m[k]) : "";
+}
+const pingTag = e => (entMention(e)
+  ? h("span", { class: "tag ok", title: "Le patron est mentionné sur Discord", text: "ping" })
+  : h("span", { class: "tag", title: "Ajoutez l’ID Discord du patron (Modifier l’entreprise) pour le mentionner", text: "sans ping" }));
+const WEBHOOK_RE = /^https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d{15,21}\/[\w-]{20,}$/;
+const DISCORD_CHANNELS = [
+  ["entreprises", "Salon des entreprises", "Avis d’imposition et pénalités. Le patron est mentionné quand son ID Discord est connu."],
+  ["services", "Salon des services publics", "Décisions sur les demandes de moyens. Le service est mentionné si vous lui avez donné un rôle."],
+  ["relances", "Salon des relances", "Rappels de déclaration et relances des impayés. Laissez vide pour utiliser le salon des entreprises."]
+];
+const DISCORD_AUTO = [
+  ["avis", "Avis d’imposition, dès qu’il est émis", "entreprises"],
+  ["penalites", "Pénalités, dès qu’elles sont infligées", "entreprises"],
+  ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
+];
+function hookFor(ch) {
+  const w = (S.discord && S.discord.webhooks) || {};
+  return w[ch] || (ch === "relances" ? w.entreprises || "" : "");
+}
+const autoOn = k => { const a = (S.discord && S.discord.auto) || {}; const def = DISCORD_AUTO.find(x => x[0] === k); return !!a[k] && !!def && !!hookFor(def[2]); };
+
+// Les adresses des salons sont dans une table que seule la Direction lit (supabase/v3_discord.sql).
+async function loadPrivate() {
+  if (!S.sb || !writer()) return;
+  const { data, error } = await S.sb.from("parametres_prives").select("cle,valeur");
+  if (error) { S.discordState = tableMissing(error) ? "missing" : "error"; S.discord = null; }
+  else { S.discordState = "ok"; const row = (data || []).find(r => r.cle === "discord"); S.discord = (row && row.valeur) || {}; }
+  renderDiscordSettings(true);
+  schedule();
+}
+
+async function postDiscord(ch, { content, mentions, files }) {
+  const url = hookFor(ch);
+  if (!url) return { ok: false, error: "aucun salon configuré" };
+  const users = [], roles = [];
+  for (const m of mentions || []) { const p = parseMention(m); if (p) (p.type === "role" ? roles : users).push(p.id); }
+  const payload = {
+    content: String(content || "").slice(0, 2000),
+    username: (S.discord && S.discord.nom) || "Préfecture de police",
+    avatar_url: new URL("assets/logo-prefecture.png", location.href).href,
+    // Seules les personnes et rôles listés sont notifiés : jamais @everyone ni @here.
+    allowed_mentions: { parse: [], users: [...new Set(users)].slice(0, 100), roles: [...new Set(roles)].slice(0, 100) }
+  };
+  const fd = new FormData();
+  (files || []).forEach((f, i) => { fd.append(`files[${i}]`, f.blob, f.name); });
+  if (files && files.length) payload.attachments = files.map((f, i) => ({ id: i, filename: f.name }));
+  fd.append("payload_json", JSON.stringify(payload));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let r;
+    try { r = await fetch(url + (url.includes("?") ? "&" : "?") + "wait=true", { method: "POST", body: fd }); }
+    catch (e) { return { ok: false, error: "Discord injoignable depuis ce navigateur (réseau ou bloqueur de publicité)" }; }
+    if (r.ok) return { ok: true };
+    if (r.status === 429 && attempt === 0) {
+      let wait = 2000;
+      try { const j = await r.json(); if (j && j.retry_after) wait = Math.min(10000, Number(j.retry_after) * 1000 + 250); } catch (e) { /* délai par défaut */ }
+      await sleep(wait);
+      continue;
+    }
+    let msg = "erreur " + r.status;
+    try { const j = await r.json(); if (j && j.message) msg += " · " + j.message; } catch (e) { /* réponse vide */ }
+    if (r.status === 404 || r.status === 401) msg = "adresse du salon invalide ou webhook supprimé";
+    return { ok: false, error: msg };
+  }
+  return { ok: false, error: "Discord limite les envois, réessayez dans un instant" };
+}
+// Découpe un long message en morceaux de moins de 2 000 caractères, ligne par ligne.
+function splitMessage(lines, head, foot) {
+  const out = [];
+  let cur = head || "";
+  for (const l of lines) {
+    if (cur && (cur + "\n" + l).length > 1900) { out.push(cur); cur = head ? head.split("\n")[0] + " (suite)" : ""; }
+    cur += (cur ? "\n" : "") + l;
+  }
+  if (foot) { if ((cur + "\n" + foot).length > 1900) { out.push(cur); cur = foot; } else cur += (cur ? "\n" : "") + foot; }
+  if (cur) out.push(cur);
+  return out;
+}
+const canvasBlob = canvas => new Promise(res => canvas.toBlob(res, "image/png"));
+const docFileName = doc => norm(doc.kind + " " + doc.no).replace(/\s+/g, "-") + ".png";
+async function publishDoc(doc, label) {
+  const dd = doc.discord || {};
+  if (!hookFor(dd.channel)) { toast("Aucun salon Discord n’est configuré pour ce document (Réglages → Publication sur Discord).", true); return false; }
+  let blob = null;
+  try { blob = await canvasBlob(await renderDocImage(doc)); } catch (e) { blob = null; }
+  const mentions = (dd.mentions || []).filter(Boolean);
+  const res = await postDiscord(dd.channel, { content: [mentions.join(" "), dd.text].filter(Boolean).join("\n"), mentions, files: blob ? [{ blob, name: docFileName(doc) }] : [] });
+  const pre = label ? label + " " : "";
+  if (res.ok) toast(pre + "Publié sur Discord.");
+  else toast(pre + "Discord a refusé l’envoi : " + res.error + ".", true);
+  return res.ok;
+}
+async function autoPublish(kind, doc, label) {
+  if (!doc || !autoOn(kind) || !writer()) return false;
+  return publishDoc(doc, label);
+}
+
+/* Réglages : salons Discord */
+function renderDiscordSettings(force) {
+  const box = $("#discord-form");
+  const st = $("#dw-state");
+  if (!S.connected || !writer()) { box.hidden = true; st.textContent = S.connected ? "Réservé à la Direction." : ""; return; }
+  if (S.discordState === "missing") { box.hidden = true; st.textContent = "Exécutez d’abord supabase/v3_discord.sql dans Supabase (README, section « Publication sur Discord ») : les adresses des salons sont gardées dans une table privée."; return; }
+  if (S.discordState !== "ok") { box.hidden = true; st.textContent = S.discordState === "error" ? "Impossible de lire les réglages Discord." : "Chargement…"; return; }
+  box.hidden = false;
+  st.textContent = "";
+  if (!force && (S.discordDirty || box.contains(document.activeElement))) return;
+  const d = S.discord || {}, w = d.webhooks || {}, a = d.auto || {}, fresh = !d.auto;
+  DISCORD_CHANNELS.forEach(([k]) => { $("#dw-" + k).value = w[k] || ""; });
+  $("#dw-nom").value = d.nom || "";
+  DISCORD_AUTO.forEach(([k]) => { $("#da-" + k).checked = fresh ? true : !!a[k]; });
+  S.discordDirty = false;
+}
+function buildDiscordForm() {
+  const box = $("#discord-form");
+  fill(box,
+    DISCORD_CHANNELS.map(([k, l, hint]) => h("div", { class: "field" },
+      h("label", { for: "dw-" + k, text: l }),
+      h("input", { id: "dw-" + k, type: "url", class: "mono secret", autocomplete: "off", spellcheck: "false", placeholder: "https://discord.com/api/webhooks/…" }),
+      h("span", { class: "hint", text: hint }))),
+    h("div", { class: "field" }, h("label", { for: "dw-nom", text: "Nom affiché dans Discord" }), h("input", { id: "dw-nom", autocomplete: "off", placeholder: "Préfecture de police" })),
+    h("fieldset", { class: "checks" }, h("legend", { text: "Publier automatiquement" }),
+      DISCORD_AUTO.map(([k, l]) => h("label", { class: "switch", for: "da-" + k }, h("input", { type: "checkbox", id: "da-" + k }), l))),
+    h("p", { class: "hint", style: "margin:0", text: "Chaque document garde aussi un bouton « Publier sur Discord » pour un envoi à la main." }),
+    h("div", { class: "paste-row" },
+      h("button", { class: "btn", type: "button", id: "dw-save", text: "Enregistrer" }),
+      h("button", { class: "btn ghost", type: "button", id: "dw-test", text: "Envoyer un message d’essai" }),
+      h("button", { class: "btn ghost", type: "button", id: "dw-show", text: "Afficher les adresses" }),
+      h("span", { id: "dw-msg", class: "hint", "aria-live": "polite" })));
+  box.addEventListener("input", () => { S.discordDirty = true; $("#dw-msg").textContent = "Modifications non enregistrées."; });
+  $("#dw-show").addEventListener("click", () => { const on = box.classList.toggle("show-secret"); $("#dw-show").textContent = on ? "Masquer les adresses" : "Afficher les adresses"; });
+  $("#dw-save").addEventListener("click", async () => {
+    if (!writer()) return;
+    const webhooks = {};
+    for (const [k, l] of DISCORD_CHANNELS) {
+      const v = $("#dw-" + k).value.trim();
+      if (v && !WEBHOOK_RE.test(v)) { $("#dw-msg").textContent = `${l} : collez l’adresse complète du webhook (https://discord.com/api/webhooks/…).`; $("#dw-" + k).focus(); return; }
+      if (v) webhooks[k] = v;
+    }
+    const auto = {};
+    DISCORD_AUTO.forEach(([k]) => { auto[k] = $("#da-" + k).checked; });
+    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim() };
+    const { error } = await S.sb.from("parametres_prives").upsert({ cle: "discord", valeur, modifie_le: nowISO() }, { onConflict: "cle" });
+    if (error) { $("#dw-msg").textContent = "Enregistrement refusé : " + error.message; return; }
+    S.discord = valeur; S.discordDirty = false;
+    const n = Object.keys(webhooks).length;
+    $("#dw-msg").textContent = `${n} salon${plural(n)} enregistré${plural(n)}.`;
+    toast("Réglages Discord enregistrés.");
+    render();
+  });
+  $("#dw-test").addEventListener("click", async () => {
+    if (S.discordDirty) { $("#dw-msg").textContent = "Enregistrez d’abord les adresses."; return; }
+    const done = [];
+    for (const [k, l] of DISCORD_CHANNELS) {
+      if (!(S.discord && S.discord.webhooks && S.discord.webhooks[k])) continue;
+      const r = await postDiscord(k, { content: `Message d’essai du guichet fiscal : ce salon recevra « ${l.replace(/^Salon (des? )?/, "")} ».` });
+      done.push(`${l} : ${r.ok ? "reçu" : r.error}`);
+    }
+    $("#dw-msg").textContent = done.length ? done.join(" · ") : "Aucun salon enregistré.";
+  });
+}
+buildDiscordForm();
+
+/* ---------- Début d'activité, déclarations manquantes, impayés ---------- */
+// Une entreprise est attendue à partir du début du suivi, ou de son début d'activité s'il est plus récent.
+const entStartTime = e => {
+  const b = e && e.debutActivite ? bounds(e.debutActivite) : null;
+  if (!b) return -Infinity;
+  const bb = bounds(keyOf(b.start, cfg().periodicite));
+  return bb ? bb.start.getTime() : -Infinity;
+};
+function expectedKeys(e) {
+  const st = Math.max(startTime(), entStartTime(e));
+  return keysEnding(lastClosedKey(), 80).filter(k => keyStart(k) >= st && Date.now() > deadline(k).getTime());
+}
+function missingKeys(e) {
+  return expectedKeys(e).filter(k => !S.declarations.some(d => sameEnt(d, e) && d.periode === k && dStatus(d) !== "rejetee"));
+}
+const payDelayMs = () => (Number(cfg().delaiPaiementJours) || 0) * 864e5;
+const payDue = d => { const dec = S.decisions[d.id]; return dec && dec.at ? new Date(new Date(dec.at).getTime() + payDelayMs()) : null; };
+function declEchue(d) {
+  const dec = S.decisions[d.id];
+  if (!dec || dec.statut !== "validee" || dReste(d) <= 0) return false;
+  const ec = echOf(d);
+  if (ec) return ec.echeances.some(x => !x.payee && new Date(x.date).getTime() < Date.now());
+  return payDue(d).getTime() < Date.now();
+}
+const penEchue = p => p.statut === "due" && new Date(p.createdAt || 0).getTime() + payDelayMs() < Date.now();
+function unpaidItems(e) {
+  const out = [];
+  for (const d of declsOf(e)) if (declEchue(d)) {
+    const ec = echOf(d);
+    out.push({ kind: "decl", id: d.id, ref: dossierNo("DF", d.id), label: `Avis d’imposition · ${periodPlain(d.periode)}${ec ? " · échéancier en retard" : ""}`, montant: dReste(d), since: (S.decisions[d.id] || {}).at });
+  }
+  for (const p of pensOf(e)) if (penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo("PN", p.id), label: `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt });
+  return out.sort((a, b) => String(a.since || "").localeCompare(String(b.since || "")));
+}
+function retardataires() {
+  return activeEnts().map(e => ({ e, keys: missingKeys(e) })).filter(x => x.keys.length)
+    .sort((a, b) => b.keys.length - a.keys.length || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
+}
+function impayes() {
+  return S.entreprises.map(e => { const items = unpaidItems(e); return { e, items, total: items.reduce((s, x) => s + x.montant, 0) }; })
+    .filter(x => x.items.length).sort((a, b) => b.total - a.total);
+}
+
+/* ---------- Relances ---------- */
+const RL_KIND = { declaration: "RAPPEL DE DÉCLARATION", paiement: "LETTRE DE RELANCE" };
+const rlLabel = r => (r.type === "declaration" ? "Rappel de déclaration" : "Relance de paiement");
+const relancesOf = e => S.relances.filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+const relanceDelayMs = () => Math.max(1, Number(cfg().delaiPaiementJours) || 2) * 864e5;
+function relanceDoc(r) {
+  const e = entOf(r), lim = longDate(new Date(r.echeance)), decl = r.type === "declaration";
+  return {
+    kind: RL_KIND[r.type] || "RELANCE", no: dossierNo("RL", r.id), date: "Envoyée le " + longDate(new Date(r.at)),
+    meta: [["Entreprise", e.nom || r.entrepriseNom], ["Patron", e.patron || "—"], ["À régulariser avant le", lim], ["Suivi par", r.byNom || "Direction des impôts et cotisations"]],
+    lines: decl ? (r.periodes || []).map(k => [periodLabel(k), "non déposée"]) : (r.items || []).map(x => [`${x.label} (${x.ref})`, money(x.montant)]),
+    total: decl ? ["Déclarations attendues", String((r.periodes || []).length)] : ["Somme due", money(r.montant)],
+    stamp: ["RELANCE", "warn"],
+    footer: decl
+      ? "Déposez votre déclaration sans attendre sur Discord, avec le modèle habituel. Sans dépôt dans le délai, la Direction pourra infliger une pénalité."
+      : "Réglez la somme due auprès de la Préfecture de police, Direction des impôts et cotisations. Sans paiement dans le délai, des pénalités et des poursuites pourront suivre.",
+    discord: { channel: "relances", mentions: [entMention(e)], text: `**${rlLabel(r)} ${dossierNo("RL", r.id)}** · ${e.nom || r.entrepriseNom} · ${decl ? (r.periodes || []).map(periodPlain).join(", ") + " non déposée" + plural((r.periodes || []).length) : money(r.montant) + " à régler"}, avant le ${lim}.` }
+  };
+}
+async function sendRelance(x, type, opts) {
+  const e = x.e;
+  const items = type === "paiement" ? x.items.map(i => ({ ref: i.ref, label: i.label, montant: i.montant, kind: i.kind, id: i.id })) : [];
+  const periodes = type === "declaration" ? x.keys.slice() : [];
+  const ref = S.db.collection("relances").doc();
+  const r = { entrepriseId: e.id || null, entrepriseNom: e.nom, type, niveau: "relance", periodes, items, montant: items.reduce((s, i) => s + i.montant, 0),
+    echeance: new Date(Date.now() + relanceDelayMs()).toISOString(), at: nowISO(), by: S.uid || null, byNom: S.agentName || "", groupee: !!(opts && opts.groupee) };
+  if (!(await write(() => ref.set(r)))) return null;
+  return Object.assign({ id: ref.id }, r);
+}
+async function relanceOne(x, type) {
+  const r = await sendRelance(x, type);
+  if (!r) return;
+  const doc = relanceDoc(r);
+  if (hookFor("relances")) await publishDoc(doc, rlLabel(r) + " enregistré" + (type === "paiement" ? "e." : "."));
+  else { toast(`${rlLabel(r)} enregistré${type === "paiement" ? "e" : ""} : postez l’image sur Discord.`); showDocImage(doc); }
+}
+// Relance groupée : un seul message, chaque patron mentionné. On peut décocher une entreprise avant l'envoi.
+function relanceAll(type) {
+  const list = type === "declaration" ? retardataires() : impayes();
+  if (!list.length) return;
+  const decl = type === "declaration";
+  const lim = longDate(new Date(Date.now() + relanceDelayMs()));
+  const head = decl ? "**Rappel de déclaration**\nLes entreprises suivantes n’ont pas déposé leur déclaration :" : "**Relance des impayés**\nLes entreprises suivantes ont des sommes échues non réglées :";
+  const foot = (decl ? `Déposez-la sans attendre avec le modèle habituel, avant le ${lim}. Sans dépôt, la Direction pourra infliger une pénalité.`
+    : `Réglez ces sommes auprès de la Direction des impôts et cotisations avant le ${lim}. Sans paiement, des pénalités et des poursuites pourront suivre.`) + "\n— Préfecture de police · Direction des impôts et cotisations";
+  const boxes = list.map((x, i) => {
+    const cb = h("input", { type: "checkbox", id: "rl-" + i });
+    cb.checked = true;
+    return [x, cb];
+  });
+  const pre = h("pre", { class: "discord-preview", id: "rl-preview" });
+  const count = h("span", { class: "hint" });
+  const chosen = () => boxes.filter(([, cb]) => cb.checked).map(([x]) => x);
+  const parts = () => {
+    const lines = chosen().map(x => { const m = entMention(x.e); return `• **${x.e.nom}** ${m || "(sans ping)"} : ${decl ? x.keys.map(periodPlain).join(", ") : money(x.total)}`; });
+    return lines.length ? splitMessage(lines, head, foot) : [];
+  };
+  const refresh = () => {
+    const p = parts(), n = chosen().length;
+    pre.textContent = p.length ? p.join("\n\n— — —\n\n") : "Aucune entreprise cochée.";
+    count.textContent = `${n} entreprise${plural(n)} cochée${plural(n)}${p.length > 1 ? ` · ${p.length} messages` : ""}`;
+    copyBtn.disabled = !n; if (sendBtn) sendBtn.disabled = !n;
+  };
+  const commit = async () => { let n = 0; for (const x of chosen()) if (await sendRelance(x, type, { groupee: true })) n++; return n; };
+  const copyBtn = h("button", { class: "btn ghost small", type: "button", text: "Enregistrer et copier le message" });
+  const sendBtn = hookFor("relances") ? h("button", { class: "btn ink small", type: "button", text: "Enregistrer et publier sur Discord" }) : null;
+  copyBtn.addEventListener("click", async () => {
+    copyBtn.disabled = true;
+    const text = parts().join("\n\n"), n = await commit();
+    closeDialog();
+    copyText(text, `${n} relance${plural(n)} enregistrée${plural(n)} : message copié pour Discord.`);
+  });
+  if (sendBtn) sendBtn.addEventListener("click", async () => {
+    sendBtn.disabled = true; copyBtn.disabled = true;
+    const ps = parts(), mentions = chosen().map(x => entMention(x.e)).filter(Boolean);
+    const n = await commit();
+    let ok = true;
+    for (const p of ps) { const r = await postDiscord("relances", { content: p, mentions }); if (!r.ok) { ok = false; toast("Relances enregistrées, mais Discord a refusé l’envoi : " + r.error + ".", true); break; } }
+    closeDialog();
+    if (ok) toast(`${n} relance${plural(n)} enregistrée${plural(n)} et publiée${plural(n)} sur Discord.`);
+  });
+  openDialog({
+    eyebrow: "Recouvrement", title: decl ? "Relancer les retardataires" : "Relancer les impayés", wide: true,
+    body: [
+      h("p", { style: "margin:0", text: "Décochez une entreprise pour la laisser de côté. Chaque relance est inscrite à son dossier ; le message mentionne chaque patron dont l’ID Discord est connu." }),
+      h("ul", { class: "rl-pick" }, boxes.map(([x, cb], i) => h("li", {},
+        h("label", { class: "switch", for: "rl-" + i }, cb, h("strong", { text: x.e.nom })), " ", pingTag(x.e),
+        h("span", { class: "meta", text: decl ? x.keys.map(periodPlain).join(", ") : `${money(x.total)} · ${x.items.map(i => i.ref).join(", ")}` })))),
+      sec("Aperçu du message", pre)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), count, h("span", { class: "spacer" }), copyBtn, sendBtn].filter(Boolean)
+  });
+  boxes.forEach(([, cb]) => cb.addEventListener("change", refresh));
+  refresh();
+}
+
+/* ---------- Onglet Recouvrement ---------- */
+const rlChip = r => (r ? chip([`Relancée le ${fmtDate(new Date(r.at))}${new Date(r.echeance).getTime() < Date.now() ? " · sans réponse" : ""}`, new Date(r.echeance).getTime() < Date.now() ? "warn" : "muted"]) : chip(["Pas encore relancée", "muted"]));
+const RC_LIMIT = 8;
+function rcMore(key, n) {
+  if (n <= RC_LIMIT) return null;
+  return h("div", { class: "reg-foot" }, S.rcAll[key] ? `${n} affichées. ` : `${RC_LIMIT} sur ${n} affichées. `,
+    h("button", { class: "linkbtn", type: "button", onclick: () => { S.rcAll[key] = !S.rcAll[key]; renderRecouvrement(); }, text: S.rcAll[key] ? "Réduire" : n - RC_LIMIT === 1 ? "Afficher la dernière" : `Afficher les ${n - RC_LIMIT} autres` }));
+}
+function renderRecouvrement() {
+  if (S.tab !== "recouvrement") return;
+  if (!S.connected || !S.loaded.has("declarations")) { ["#rc-retards", "#rc-impayes", "#rc-hist"].forEach(s => fill($(s), h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" }))); return; }
+  const w = writer();
+  const rt = retardataires();
+  $("#rc-retards-sub").textContent = rt.length
+    ? `${rt.length} entreprise${plural(rt.length)} n’${rt.length > 1 ? "ont" : "a"} pas déposé toutes ${rt.length > 1 ? "leurs" : "ses"} déclarations échues depuis ${periodPlain(cfg().debutSuivi).toLowerCase()}.`
+    : "Toutes les entreprises actives ont déposé leurs déclarations échues.";
+  $("#rc-retards-all").hidden = !w || !rt.length;
+  fill($("#rc-retards"), rt.length ? h("ul", { class: "rc-list" }, rt.slice(0, S.rcAll.rt ? 500 : RC_LIMIT).map(x => {
+    const last = relancesOf(x.e).find(r => r.type === "declaration");
+    return h("li", {},
+      h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
+        h("div", { class: "rc-keys" }, x.keys.map(k => h("span", { class: "tag bad", text: periodPlain(k) })))),
+      h("div", { class: "rc-state" }, rlChip(last)),
+      w ? h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "declaration"), text: "Relancer" })) : null);
+  })) : h("div", { class: "empty", text: "Aucune déclaration manquante." }), rcMore("rt", rt.length));
+
+  const ip = impayes();
+  $("#rc-impayes-sub").textContent = ip.length
+    ? `${money(ip.reduce((s, x) => s + x.total, 0))} échus non payés, ${ip.length} entreprise${plural(ip.length)}. Un avis est échu ${Number(cfg().delaiPaiementJours) || 0} jour${plural(Number(cfg().delaiPaiementJours) || 0)} après son émission.`
+    : "Aucun impayé échu.";
+  $("#rc-impayes-all").hidden = !w || !ip.length;
+  fill($("#rc-impayes"), ip.length ? h("ul", { class: "rc-list" }, ip.slice(0, S.rcAll.ip ? 500 : RC_LIMIT).map(x => {
+    const last = relancesOf(x.e).find(r => r.type === "paiement");
+    return h("li", {},
+      h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
+        h("div", { class: "rc-keys" }, x.items.slice(0, 6).map(i => h("span", { class: "tag", text: `${i.ref} · ${money(i.montant)}` })), x.items.length > 6 ? h("span", { class: "tag", text: `+${x.items.length - 6}` }) : null)),
+      h("div", { class: "rc-state" }, h("strong", { class: "mono", text: money(x.total) }), rlChip(last)),
+      w ? h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "paiement"), text: "Relancer" })) : null);
+  })) : h("div", { class: "empty", text: "Aucun impayé échu." }), rcMore("ip", ip.length));
+
+  const hist = S.relances.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  fill($("#rc-hist"), hist.length ? h("ul", { class: "ent-list" }, hist.slice(0, S.rcAll.hist ? 500 : RC_LIMIT).map(r => h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("RL", r.id)} · ${r.entrepriseNom}` }),
+      h("span", { class: "meta", text: `${rlLabel(r)} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · ${fmtDateTime(new Date(r.at))}${r.byNom ? " · " + r.byNom : ""}${r.groupee ? " · groupée" : ""}` })),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Image" }))))) : h("div", { class: "empty", text: "Aucune relance envoyée pour l’instant." }), rcMore("hist", hist.length));
+}
+$("#rc-retards-all").addEventListener("click", () => relanceAll("declaration"));
+$("#rc-impayes-all").addEventListener("click", () => relanceAll("paiement"));
+
 /* ---------- Onglets ---------- */
 function showTab(name) {
   if (name === "reglages" && S.admin) { loadAgents(); loadKeys(); }
@@ -4042,7 +4530,7 @@ function showTab(name) {
   S.tab = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
-  if (["dashboard", "entreprises", "economie"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement"].includes(name)) schedule();
 }
 $("nav.tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } } });
 $("nav.tabs").addEventListener("keydown", e => {
@@ -4058,7 +4546,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();
