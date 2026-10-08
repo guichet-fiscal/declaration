@@ -448,6 +448,12 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
 .checks-col .switch input{margin-top:3px;flex:none}
 .notice.lock{border-left-color:var(--accent)}
 .jrestore{margin-left:8px}
+.checklist{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:14px}
+.checklist li{display:flex;gap:9px;align-items:flex-start}
+.checklist li::before{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;margin-top:1px}
+.checklist li.yes::before{content:"✓";background:var(--ok-soft);color:var(--ok)}
+.checklist li.no::before{content:"✕";background:var(--bad-soft);color:var(--bad)}
+.att-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
 </style>
 </head>
 <body data-gate="chargement">
@@ -598,6 +604,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
         <p class="sub" id="ent-sub">Recherchez une entreprise pour ouvrir sa fiche : déclarations, paiements, retards, alertes et pénalités.</p>
       </div>
       <div class="toolbar">
+        <button class="btn ghost" type="button" id="btn-att-verify">Vérifier une attestation</button>
         <button class="btn ghost" type="button" id="btn-ent-manage" data-writer-only>Gérer la liste</button>
       </div>
     </div>
@@ -741,6 +748,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
           <option value="entreprises">Entreprises</option>
           <option value="relances">Relances</option>
           <option value="clotures">Clôtures</option>
+          <option value="attestations">Attestations</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1077,6 +1085,11 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
                 <input id="s-smin" type="number" min="0" step="1" class="mono">
                 <span class="hint">Par période. Un salaire moyen plus bas déclenche une alerte. Mettez 0 pour ne pas vérifier.</span>
               </div>
+              <div class="field">
+                <label for="s-attjours">Validité d’une attestation de régularité</label>
+                <input id="s-attjours" type="number" min="1" max="365" step="1">
+                <span class="hint">En jours après sa délivrance.</span>
+              </div>
             </div>
             <div class="paste-row">
               <button class="btn" type="submit" id="s-save">Enregistrer le barème</button>
@@ -1251,7 +1264,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 /* ---------- État ---------- */
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
-  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {},
+  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28,
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
   baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
@@ -1260,7 +1273,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1897,6 +1910,7 @@ function subscribe() {
   col("echeanciers", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.echeanciers = o; });
   col("relances", s => { S.relances = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("clotures", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.clotures = o; });
+  col("attestations", s => { S.attestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2328,10 +2342,12 @@ const sec = (title, ...kids) => h("div", { class: "dlg-sec" }, h("h4", { text: t
 async function decide(d, statut, montant, note) {
   const prev = S.decisions[d.id] || {};
   const body = { statut, montant: Math.round(Number(montant) || 0), note: note || "", at: prev.at && statut === "payee" ? prev.at : nowISO(), by: S.uid || null };
-  if (statut === "payee") body.paidAt = nowISO();
+  if (statut === "payee") { body.paidAt = nowISO(); body.paidByNom = S.agentName || ""; }
   const ok = await write(() => S.db.doc("decisions/" + d.id).set(body));
   if (ok) toast({ validee: "Avis émis : montant à payer.", payee: "Paiement encaissé.", controle: "Dossier placé en contrôle.", rejetee: "Déclaration rejetée.", soumise: "Décision annulée." }[statut] || "Enregistré.");
   if (ok && statut === "validee" && prev.statut !== "validee" && prev.statut !== "payee") autoPublish("avis", avisDoc(d), "Avis émis.");
+  // Paiement en plusieurs fois : chaque échéance a déjà sa quittance.
+  if (ok && statut === "payee" && prev.statut !== "payee" && !echOf(d)) autoPublish("quittances", quittanceDeclDoc(d), "Paiement encaissé.");
   return ok;
 }
 function avisText(d) {
@@ -2419,6 +2435,7 @@ function openDecl(id) {
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisDoc(d), () => openDecl(id)), text: "Avis en image" }),
     h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(avisText(d), "Avis copié : collez-le en réponse sur Discord."), text: "Copier le texte" })];
   const ecd = echOf(d);
+  if (st === "payee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittanceDeclDoc(d), () => openDecl(id)), text: "Quittance" }));
   if (ag && !locked && (w || st !== "payee")) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => startEditDecl(d), text: "Modifier" }));
   if (w && !locked) {
     const delBtn = h("button", { class: "btn danger small", type: "button", text: "Supprimer la saisie" });
@@ -2927,6 +2944,7 @@ function renderSettings() {
     $("#s-devise").value = c.devise;
     $("#s-smin").value = String(c.salaireMin || 0);
     $("#s-paydelai").value = String(c.delaiPaiementJours ?? 2);
+    $("#s-attjours").value = String(c.attestationJours || 28);
     const opts = [];
     let kk = keyOf(new Date());
     for (let i = 0; i < 30; i++) { opts.push([kk, periodLabel(kk)]); kk = prevKey(kk); }
@@ -2969,6 +2987,7 @@ $("#form-set").addEventListener("submit", async e => {
     majoration: Number($("#s-maj").value), budgetInitial: Number($("#s-budget").value), devise: $("#s-devise").value.trim() || "€",
     salaireMin: Number($("#s-smin").value) || 0,
     delaiPaiementJours: Math.max(0, Math.min(30, Math.round(Number($("#s-paydelai").value) || 0))),
+    attestationJours: Math.max(1, Math.min(365, Math.round(Number($("#s-attjours").value) || 28))),
     debutSuivi: $("#s-debut").value || DEFAULTS.debutSuivi
   };
   const bad = [];
@@ -3020,7 +3039,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -3211,7 +3230,10 @@ async function renderDocImage(doc) {
   }
   ctx.fillStyle = ink2; ctx.font = `700 13px ${F.body}`; spacing("1.5px");
   ctx.fillText("PRÉFECTURE DE POLICE · IMPÔTS ET COTISATIONS", P + 92, y + 16);
-  spacing("0px"); ctx.fillStyle = ink; ctx.font = `800 38px ${F.disp}`;
+  spacing("0px"); ctx.fillStyle = ink;
+  let kindSize = 38;
+  ctx.font = `800 ${kindSize}px ${F.disp}`;
+  while (ctx.measureText(doc.kind).width > inner - 92 - 230 && kindSize > 24) { kindSize -= 2; ctx.font = `800 ${kindSize}px ${F.disp}`; }
   ctx.fillText(doc.kind, P + 92, y + 58);
   ctx.textAlign = "right"; ctx.font = `600 16px ${F.mono}`; ctx.fillText(`N° ${doc.no}`, W - P, y + 16);
   ctx.font = `400 14px ${F.body}`; ctx.fillStyle = ink2; ctx.fillText(doc.date, W - P, y + 38);
@@ -3269,13 +3291,18 @@ async function renderDocImage(doc) {
   footLines.forEach((ln, i) => ctx.fillText(ln, P, y + 28 + i * 20));
   if (doc.stamp) {
     const [label, toneKey] = doc.stamp, tone = DOC_TONE[toneKey] || DOC_TONE.accent;
+    // Le tampon se place entre le libellé et le montant du cadre, sans les chevaucher.
+    ctx.font = `700 18px ${F.body}`; const lw = ctx.measureText(doc.total[0]).width;
+    ctx.font = `600 32px ${F.mono}`; const vw = ctx.measureText(doc.total[1]).width;
+    const left = P + 22 + lw + 18, right = W - P - 22 - vw - 18, room = Math.max(120, right - left);
     ctx.save();
-    ctx.translate(P + inner * 0.5, totalY + 43);
-    ctx.rotate(-0.12);
-    ctx.globalAlpha = 0.86;
     let size = 30;
     ctx.font = `800 ${size}px ${F.disp}`; spacing("4px");
-    while (ctx.measureText(label).width > 270 && size > 16) { size -= 2; ctx.font = `800 ${size}px ${F.disp}`; }
+    while ((ctx.measureText(label).width > 270 || ctx.measureText(label).width + 56 > room) && size > 14) { size -= 2; ctx.font = `800 ${size}px ${F.disp}`; }
+    const cx = right - left >= 120 ? Math.min(Math.max(P + inner * 0.5, left + (ctx.measureText(label).width + 56) / 2), right - (ctx.measureText(label).width + 56) / 2) : P + inner * 0.5;
+    ctx.translate(cx, totalY + 43);
+    ctx.rotate(-0.12);
+    ctx.globalAlpha = 0.86;
     const tw = ctx.measureText(label).width, bw = tw + 44, bh = size + 30;
     ctx.strokeStyle = tone; ctx.fillStyle = tone;
     ctx.lineWidth = 4; ctx.strokeRect(-bw / 2, -bh / 2, bw, bh);
@@ -3376,7 +3403,9 @@ async function setPenaltyStatus(p, statut) {
   delete body.id;
   body.statut = statut;
   body.paidAt = statut === "payee" ? nowISO() : null;
+  body.paidByNom = statut === "payee" ? S.agentName || "" : null;
   const ok = await write(() => S.db.doc("penalites/" + p.id).set(body));
+  if (ok && statut === "payee") { const p2 = S.penalites.find(x => x.id === p.id); if (p2) autoPublish("quittances", quittancePenDoc(p2), "Pénalité encaissée."); }
   if (ok) toast({ payee: "Pénalité encaissée.", annulee: "Pénalité annulée.", due: p.statut === "payee" ? "Encaissement annulé : la pénalité est de nouveau à payer." : "Pénalité rétablie : elle est de nouveau à payer." }[statut]);
   return ok;
 }
@@ -3400,8 +3429,10 @@ async function payEcheance(d, idx) {
   delete body.id;
   body.echeances[idx].payee = true;
   body.echeances[idx].paidAt = nowISO();
+  body.echeances[idx].paidByNom = S.agentName || "";
   const ok = await write(() => S.db.doc("echeanciers/" + d.id).set(body));
   if (!ok) return false;
+  autoPublish("quittances", quittanceEchDoc(d, idx), `Échéance ${idx + 1}/${body.echeances.length} encaissée.`);
   if (body.echeances.every(x => x.payee)) await decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || "");
   else toast(`Échéance ${idx + 1}/${body.echeances.length} encaissée.`);
   return true;
@@ -3435,6 +3466,7 @@ function echeancierSection(d, reopen) {
         h("td", { class: "num", text: money(x.montant) }),
         h("td", {}, chip(x.payee ? [`Payée le ${fmtDate(new Date(x.paidAt))}`, "ok"] : late ? ["En retard", "bad"] : ["À venir", "muted"])),
         h("td", { class: "act" },
+          x.payee ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittanceEchDoc(d, i), reopen), text: "Quittance" }) : null,
           w && i === next && st === "validee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await payEcheance(d, i)) reopen(); }, text: "Encaisser" }) : null,
           w && i === lastPaid && (st === "validee" || st === "payee") ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await unpayEcheance(d, i)) reopen(); }, text: "Annuler l’encaissement" }) : null));
     });
@@ -3495,6 +3527,7 @@ function openFiche(e, opts) {
     h("td", {}, chip(PSTAT[p.statut] || PSTAT.due)),
     h("td", { class: "act" },
       h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(penaltyDoc(p), reopen), text: "Image" }),
+      p.statut === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittancePenDoc(p), reopen), text: "Quittance" }) : null,
       w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: () => editPenalty(p, reopen), text: "Modifier" }) : null,
       w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "payee")) reopen(); }, text: "Encaisser" }) : null,
       w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "annulee")) reopen(); }, text: "Annuler" }) : null,
@@ -3530,6 +3563,13 @@ function openFiche(e, opts) {
 
   const body = [
     minis,
+    e.id ? (() => {
+      const att = attsOf(e)[0];
+      return h("div", { class: "att-line" }, h("strong", { text: "Attestation de régularité :" }),
+        att ? chip(attState(att)) : chip(["Jamais délivrée", "muted"]),
+        att ? h("span", { class: "muted", text: `${dossierNo("AT", att.id)} · ${att.revoqueeLe ? "révoquée le " + fmtDate(new Date(att.revoqueeLe)) : (attValid(att) ? "jusqu’au " : "expirée le ") + fmtDate(new Date(att.validUntil))}` }) : null,
+        h("button", { class: "linkbtn", type: "button", onclick: () => openAttestation(e, reopen), text: canAgent() ? "Vérifier et délivrer" : "Voir" }));
+    })() : null,
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r })))) : null,
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
     sec("Historique des déclarations", hist),
@@ -3538,6 +3578,7 @@ function openFiche(e, opts) {
   const foot = [
     w && !e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const d = sm.ds[0]; if (d) registerFromDecl(d); }, text: "Enregistrer au registre" }) : null,
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e, () => openFiche(S.entreprises.find(x => x.id === e.id) || e)), text: "Modifier l’entreprise" }) : null,
+    e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openAttestation(e, reopen), text: "Attestation de régularité" }) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -3663,7 +3704,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -3701,6 +3742,10 @@ function describe(e) {
       if (x === "suppression") return `a effacé l’arbitrage de ${who}`;
       return ({ accordee: `a accordé ${money(a.montantAccorde)} à ${who}`, partielle: `a accordé ${money(a.montantAccorde)}, en partie, à ${who}`, refusee: `a refusé la demande de ${who}`, etude: `a mis à l’étude la demande de ${who}` })[a.statut] || `a modifié l’arbitrage de ${who}`;
     }
+    case "attestations":
+      if (x === "suppression") return `a supprimé une attestation de ${v.entrepriseNom}`;
+      if (x === "ajout") return `a délivré une attestation de régularité à ${v.entrepriseNom} (jusqu’au ${fmtDate(new Date(v.validUntil))})`;
+      return a.revoqueeLe && !b.revoqueeLe ? `a révoqué l’attestation de ${a.entrepriseNom}` : `a modifié l’attestation de ${a.entrepriseNom}`;
     case "clotures":
       return x === "suppression" ? `a rouvert ${periodPlain(e.doc_id).toLowerCase()}` : `a clôturé ${periodPlain(e.doc_id).toLowerCase()}`;
     case "relances":
@@ -3712,7 +3757,7 @@ function describe(e) {
       if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -3733,7 +3778,7 @@ const FIELD_LABEL = {
   resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
-  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement",
+  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations",
   services: "Services", enveloppes: "Enveloppes", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
@@ -4179,6 +4224,7 @@ function editEntreprise(e, back) {
       for (const p of S.penalites) if (p.entrepriseId === e.id && p.entrepriseNom !== n) jobs.push(["penalites", p.id]);
       for (const [id, ec] of Object.entries(S.echeanciers)) if (ec.entrepriseId === e.id && ec.entrepriseNom !== n) jobs.push(["echeanciers", id]);
       for (const r of S.relances) if (r.entrepriseId === e.id && r.entrepriseNom !== n) jobs.push(["relances", r.id]);
+      for (const a of S.attestations) if (a.entrepriseId === e.id && a.entrepriseNom !== n) jobs.push(["attestations", a.id]);
       let done = 0;
       for (const [col, id] of jobs) { await write(() => S.db.doc(col + "/" + id).update({ entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -4258,6 +4304,8 @@ const DISCORD_CHANNELS = [
 const DISCORD_AUTO = [
   ["avis", "Avis d’imposition, dès qu’il est émis", "entreprises"],
   ["penalites", "Pénalités, dès qu’elles sont infligées", "entreprises"],
+  ["quittances", "Quittances, à chaque encaissement", "entreprises"],
+  ["attestations", "Attestations de régularité délivrées", "entreprises"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
 ];
 function hookFor(ch) {
@@ -4684,7 +4732,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -4724,6 +4772,172 @@ function openRestore(e) {
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
   });
 }
+
+/* ---------- Quittances ---------- */
+// Une quittance prouve un paiement : elle est délivrée à chaque encaissement (avis, échéance, pénalité).
+function quittanceDoc({ no, ent, objet, ref, montant, paidAt, paidByNom, detail, table }) {
+  ent = ent || {};
+  const doc = {
+    kind: "QUITTANCE", no, date: "Délivrée le " + longDate(paidAt ? new Date(paidAt) : new Date()),
+    meta: [["Entreprise", ent.nom || "—"], ["Patron", ent.patron || "—"], ["Objet", objet || "—"], ["Référence", ref || "—"]],
+    lines: [["Date du paiement", paidAt ? fmtDateTime(new Date(paidAt)) : "—"], ["Encaissé par", paidByNom || "Direction des impôts et cotisations"]].concat(detail || []),
+    total: ["Somme reçue", money(montant)], stamp: ["ACQUITTÉ", "ok"],
+    footer: "Pour acquit. La Préfecture de police, Direction des impôts et cotisations, reconnaît avoir reçu la somme ci-dessus. Conservez cette quittance : elle prouve le paiement.",
+    discord: { channel: "entreprises", mentions: [entMention(ent)], text: `**Quittance ${no}** · ${ent.nom || "—"} · ${objet} : ${money(montant)} reçus.` }
+  };
+  if (table) doc.table = table;
+  return doc;
+}
+function quittanceDeclDoc(d) {
+  const dec = S.decisions[d.id] || {}, ec = echOf(d);
+  return quittanceDoc({
+    no: dossierNo("QT", d.id), ent: entOf(d), objet: `Impôt et cotisations · ${periodPlain(d.periode)}`, ref: dossierNo("DF", d.id),
+    montant: dMontant(d), paidAt: dec.paidAt, paidByNom: dec.paidByNom,
+    table: ec ? { title: "Réglé en plusieurs fois", head: ["Échéance", "Payée le", "Montant", ""], rows: ec.echeances.map(x => [`${x.n} / ${ec.echeances.length}`, x.paidAt ? longDate(new Date(x.paidAt)) : "—", money(x.montant), ""]) } : null
+  });
+}
+function quittanceEchDoc(d, i) {
+  const ec = echOf(d);
+  if (!ec || !ec.echeances[i] || !ec.echeances[i].payee) return null;
+  const x = ec.echeances[i], reste = ec.echeances.filter(y => !y.payee).reduce((s, y) => s + (Number(y.montant) || 0), 0);
+  return quittanceDoc({
+    no: dossierNo("QT", d.id) + "-" + x.n, ent: entOf(d), objet: `Échéance ${x.n}/${ec.echeances.length} · ${periodPlain(d.periode)}`, ref: dossierNo("DF", d.id),
+    montant: x.montant, paidAt: x.paidAt, paidByNom: x.paidByNom, detail: [["Reste à payer sur l’échéancier", money(reste), true]]
+  });
+}
+function quittancePenDoc(p) {
+  return quittanceDoc({ no: dossierNo("QT", p.id), ent: entOf(p), objet: p.motif || "Pénalité", ref: dossierNo("PN", p.id), montant: p.montant, paidAt: p.paidAt, paidByNom: p.paidByNom });
+}
+
+/* ---------- Attestation de régularité fiscale et sociale ---------- */
+// Sur le modèle de l'attestation de régularité fiscale et de l'attestation de vigilance de l'URSSAF :
+// toutes les déclarations échues déposées, les impôts, cotisations et pénalités échus payés,
+// un paiement en plusieurs fois accepté s'il est respecté.
+function regularite(e) {
+  const exp = expectedKeys(e), miss = missingKeys(e), unpaid = unpaidItems(e);
+  const ech = declsOf(e).some(d => echOf(d) && dReste(d) > 0);
+  const manques = [];
+  if (miss.length) manques.push(`${miss.length} déclaration${plural(miss.length)} non déposée${plural(miss.length)} : ${miss.map(periodPlain).join(", ")}`);
+  if (unpaid.length) manques.push(`${money(unpaid.reduce((s, x) => s + x.montant, 0))} échus non payés (${unpaid.map(x => x.ref).join(", ")})`);
+  if (e.actif === false) manques.push("Entreprise inactive");
+  if (!e.id) manques.push("Entreprise absente du registre");
+  return { ok: !manques.length, manques, attendues: exp.length, deposees: exp.length - miss.length, echeancier: ech, unpaid, miss };
+}
+const attValid = a => !a.revoqueeLe && new Date(a.validUntil).getTime() > Date.now();
+const attState = a => (a.revoqueeLe ? ["Révoquée", "bad"] : attValid(a) ? ["Valable", "ok"] : ["Expirée", "muted"]);
+const attsOf = e => S.attestations.filter(a => sameEnt(a, e)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+function attestationDoc(a, e) {
+  e = e || entOf(a);
+  const revoked = !!a.revoqueeLe, expired = !revoked && !attValid(a);
+  const lines = [
+    ["Déclarations déposées", a.attendues ? `${a.deposees} sur ${a.attendues} période${plural(a.attendues)}` : "aucune encore attendue"],
+    ["Impôts et cotisations échus", "payés"],
+    ["Pénalités échues", "payées"]];
+  if (a.echeancier) lines.push(["Paiement en plusieurs fois en cours", "respecté"]);
+  return {
+    kind: "ATTESTATION DE RÉGULARITÉ", no: dossierNo("AT", a.id), date: "Délivrée le " + longDate(new Date(a.at)),
+    meta: [["Entreprise", e.nom || a.entrepriseNom], ["Patron", e.patron || "—"], ["Secteur", e.secteur || "—"], ["Délivrée par", a.byNom || "Direction des impôts et cotisations"]],
+    lines,
+    total: [revoked ? "Révoquée le" : expired ? "Expirée le" : "Valable jusqu’au", longDate(new Date(revoked ? a.revoqueeLe : a.validUntil))],
+    note: `La Direction des impôts et cotisations atteste qu’à la date de délivrance, l’entreprise ${e.nom || a.entrepriseNom} a déposé toutes ses déclarations fiscales et sociales échues et a payé les impôts, cotisations et pénalités exigibles.${revoked && a.motifRevocation ? " Motif de la révocation : " + a.motifRevocation + "." : ""}`,
+    noteTitle: "Attestation",
+    stamp: revoked ? ["RÉVOQUÉE", "bad"] : expired ? ["EXPIRÉE", "muted"] : ["EN RÈGLE", "ok"],
+    footer: `Pour vérifier cette attestation, donnez son numéro ${dossierNo("AT", a.id)} à la Préfecture de police, Direction des impôts et cotisations.`,
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Attestation de régularité ${dossierNo("AT", a.id)}** · ${e.nom || a.entrepriseNom} : en règle, valable jusqu’au ${longDate(new Date(a.validUntil))}.` }
+  };
+}
+function situationDoc(e, r) {
+  return {
+    kind: "SITUATION FISCALE", no: dossierNo("SF", e.id || norm(e.nom)), date: "Établie le " + longDate(new Date()),
+    meta: [["Entreprise", e.nom], ["Patron", e.patron || "—"]],
+    lines: [
+      r.miss.length ? ["Déclarations non déposées", r.miss.length > 3 ? `${r.miss.length} périodes` : r.miss.map(periodPlain).join(", ")] : ["Déclarations", "à jour"],
+      r.unpaid.length ? ["Sommes échues non payées", money(r.unpaid.reduce((s, x) => s + x.montant, 0)), true] : ["Paiements échus", "à jour"]]
+      .concat(e.actif === false ? [["Entreprise", "inactive"]] : []),
+    total: ["Situation fiscale et sociale", "À régulariser"], stamp: ["PAS EN RÈGLE", "bad"],
+    footer: "L’entreprise n’est pas à jour de ses obligations fiscales et sociales : aucune attestation de régularité ne peut lui être délivrée avant leur régularisation.",
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Situation fiscale** · ${e.nom} : pas en règle, attestation de régularité refusée.` }
+  };
+}
+function openAttestation(e, back) {
+  const reopen = () => openAttestation(S.entreprises.find(x => x.id === e.id) || e, back);
+  const r = regularite(e), ag = canAgent(), w = writer();
+  const list = attsOf(e);
+  const rows = list.map(a => h("tr", {},
+    h("td", { class: "no", text: dossierNo("AT", a.id) }),
+    h("td", { text: fmtDate(new Date(a.at)) }),
+    h("td", { text: a.revoqueeLe ? "révoquée le " + fmtDate(new Date(a.revoqueeLe)) : "jusqu’au " + fmtDate(new Date(a.validUntil)) }),
+    h("td", {}, chip(attState(a))),
+    h("td", { class: "act" },
+      h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(attestationDoc(a, e), reopen), text: "Image" }),
+      w && attValid(a) ? h("button", { class: "btn ghost small", type: "button", onclick: () => revokeAttestation(a, reopen), text: "Révoquer" }) : null)));
+  const checks = h("ul", { class: "checklist" },
+    h("li", { class: r.miss.length ? "no" : "yes", text: r.attendues ? `Déclarations : ${r.deposees} déposée${plural(r.deposees)} sur ${r.attendues} attendue${plural(r.attendues)}${r.miss.length ? " (manque " + r.miss.map(periodPlain).join(", ") + ")" : ""}` : "Aucune déclaration encore attendue" }),
+    h("li", { class: r.unpaid.length ? "no" : "yes", text: r.unpaid.length ? `Échus non payés : ${money(r.unpaid.reduce((s, x) => s + x.montant, 0))} (${r.unpaid.map(x => x.ref).join(", ")})` : "Impôts, cotisations et pénalités échus : payés" }),
+    r.echeancier ? h("li", { class: "yes", text: "Paiement en plusieurs fois en cours, échéances respectées" }) : null,
+    e.actif === false ? h("li", { class: "no", text: "Entreprise inactive" }) : null);
+  const days = Math.max(1, Number(cfg().attestationJours) || 28);
+  const issue = async ev => {
+    ev.currentTarget.disabled = true;
+    const ref = S.db.collection("attestations").doc();
+    const a = { entrepriseId: e.id, entrepriseNom: e.nom, at: nowISO(), validUntil: new Date(Date.now() + days * 864e5).toISOString(), attendues: r.attendues, deposees: r.deposees, echeancier: r.echeancier, by: S.uid || null, byNom: S.agentName || "" };
+    if (!(await write(() => ref.set(a)))) { reopen(); return; }
+    const doc = attestationDoc(Object.assign({ id: ref.id }, a), e);
+    toast(`Attestation ${dossierNo("AT", ref.id)} délivrée.`);
+    autoPublish("attestations", doc, "Attestation délivrée.");
+    showDocImage(doc, reopen);
+  };
+  openDialog({
+    eyebrow: "Attestation de régularité fiscale et sociale", title: e.nom, stampEl: stamp(r.ok ? ["En règle", "ok"] : ["Pas en règle", "bad"]),
+    body: [
+      sec("Vérification", checks, h("p", { class: "hint", style: "margin:4px 0 0", text: `L’attestation est valable ${days} jours. Elle n’est délivrée qu’à une entreprise à jour de ses déclarations et de ses paiements échus. La Direction peut la révoquer si la situation change.` })),
+      list.length ? sec("Attestations délivrées", h("div", { class: "tbl-wrap" }, h("table", { class: "compact" }, h("tbody", {}, rows)))) : null],
+    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour à la fiche" }) : null,
+      !r.ok ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(situationDoc(e, r), reopen), text: "Situation en image" }) : null,
+      h("span", { class: "spacer" }),
+      ag && r.ok ? h("button", { class: "btn ink small", type: "button", onclick: issue, text: "Délivrer l’attestation" }) : null].filter(Boolean)
+  });
+}
+function revokeAttestation(a, back) {
+  const motif = h("input", { id: "at-motif", autocomplete: "off", placeholder: "Ex. : déclaration de la semaine 42 non déposée" });
+  const go = h("button", { class: "btn danger small", type: "button", text: "Révoquer l’attestation" });
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    const body = Object.assign({}, a); delete body.id;
+    Object.assign(body, { revoqueeLe: nowISO(), revoqueePar: S.agentName || "", motifRevocation: motif.value.trim() });
+    if (await write(() => S.db.doc("attestations/" + a.id).set(body))) { toast(`Attestation ${dossierNo("AT", a.id)} révoquée.`); back(); } else go.disabled = false;
+  });
+  openDialog({
+    eyebrow: `Attestation ${dossierNo("AT", a.id)} · ${a.entrepriseNom}`, title: "Révoquer l’attestation",
+    body: [h("p", { style: "margin:0", text: "L’attestation sera affichée comme révoquée à toute vérification de son numéro." }), h("div", { class: "field" }, h("label", { for: "at-motif", text: "Motif (facultatif)" }), motif)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }), h("span", { class: "spacer" }), go]
+  });
+  setTimeout(() => motif.focus(), 30);
+}
+// Vérifier une attestation présentée par une entreprise (mairie, partenaire, marché public).
+function openVerifyAttestation() {
+  const inp = h("input", { id: "va-no", class: "mono", autocomplete: "off", placeholder: "AT-XXXXXX", style: "text-transform:uppercase" });
+  const out = h("div", { "aria-live": "polite" });
+  const check = () => {
+    const q = inp.value.trim().toUpperCase().replace(/\s+/g, "");
+    if (!q) { fill(out); return; }
+    const want = q.startsWith("AT-") ? q : "AT-" + q;
+    const a = S.attestations.find(x => dossierNo("AT", x.id) === want);
+    if (!a) { fill(out, h("div", { class: "notice", style: "margin:0;border-left-color:var(--bad)" }, h("div", {}, h("strong", { text: "Aucune attestation ne porte ce numéro. " }), "Le document présenté n’a pas été délivré par la Direction."))); return; }
+    const st = attState(a);
+    fill(out, sec("Résultat", kv([
+      ["Entreprise", a.entrepriseNom], ["Délivrée le", fmtDateTime(new Date(a.at))], ["Par", a.byNom || "—"],
+      [a.revoqueeLe ? "Révoquée le" : "Valable jusqu’au", longDate(new Date(a.revoqueeLe || a.validUntil))],
+      a.motifRevocation ? ["Motif", a.motifRevocation] : null,
+      ["État", chip(st)]])),
+      h("button", { class: "btn ghost small", type: "button", style: "justify-self:start", onclick: () => showDocImage(attestationDoc(a), openVerifyAttestation), text: "Voir l’attestation" }));
+  };
+  inp.addEventListener("input", check);
+  openDialog({ eyebrow: "Registre des attestations", title: "Vérifier une attestation", body: [h("div", { class: "field" }, h("label", { for: "va-no", text: "Numéro de l’attestation" }), inp), out],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+  setTimeout(() => inp.focus(), 30);
+}
+$("#btn-att-verify").addEventListener("click", openVerifyAttestation);
 
 /* ---------- Onglets ---------- */
 function showTab(name) {

@@ -8,7 +8,8 @@
 -- 1. Rôle « inspecteur » -------------------------------------------------
 -- Direction : tout.
 -- Inspection : saisit les déclarations et les demandes, émet les avis,
--- place un dossier en contrôle et relance les entreprises. Elle
+-- place un dossier en contrôle, relance les entreprises et délivre les
+-- attestations de régularité (sans pouvoir les révoquer). Elle
 -- n'encaisse pas, n'annule pas, ne supprime pas, n'arbitre pas les
 -- demandes et ne touche ni aux réglages ni aux accès.
 -- Lecture seule : consulte.
@@ -41,6 +42,7 @@ as $$
     when 'direction' then true
     when 'inspecteur' then
       p_collection in ('demandes', 'relances')
+      or (p_collection = 'attestations' and p_data->>'revoqueeLe' is null)
       or (p_collection = 'decisions' and coalesce(p_data->>'statut', '') in ('validee', 'controle'))
       or (p_collection = 'declarations' and not exists (
             select 1 from public.registre r

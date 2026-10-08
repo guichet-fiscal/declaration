@@ -9,6 +9,8 @@
  *  5. Menu Guichet fiscal → Actualiser maintenant (Google demande alors l’autorisation).
  *  6. Menu Guichet fiscal → Actualisation automatique : chaque heure, ou chaque lundi.
  *
+ * Après une mise à jour de ce fichier dans le dépôt, recollez-le dans Apps Script puis enregistrez.
+ *
  * La clé d’export reste dans les propriétés du script : elle n’apparaît pas dans la feuille.
  */
 
@@ -115,6 +117,17 @@ function actualiser() {
   col("echeanciers").forEach(r => (r.data.echeances || []).forEach(x => lignesEch.push([no("DF", r.id), r.data.entrepriseNom, x.n + "/" + r.data.echeances.length, date(x.date), x.montant, x.payee ? "Payée" : "À payer", date(x.paidAt)])));
   ecrire("Échéanciers", ["Déclaration", "Entreprise", "Échéance", "Date limite", "Montant", "État", "Payée le"], lignesEch);
 
+  ecrire("Relances", ["N°", "Entreprise", "Type", "Périodes ou somme", "Envoyée le", "Délai", "Par"],
+    col("relances").map(r => [no("RL", r.id), r.data.entrepriseNom, r.data.type === "declaration" ? "Déclaration manquante" : "Impayé",
+      r.data.type === "declaration" ? (r.data.periodes || []).join(", ") : r.data.montant, date(r.data.at), date(r.data.echeance), r.data.byNom || ""]));
+
+  ecrire("Attestations", ["N°", "Entreprise", "Délivrée le", "Valable jusqu’au", "État", "Par", "Motif de révocation"],
+    col("attestations").map(r => { const a = r.data, now = new Date();
+      return [no("AT", r.id), a.entrepriseNom, date(a.at), date(a.validUntil), a.revoqueeLe ? "Révoquée" : new Date(a.validUntil) > now ? "Valable" : "Expirée", a.byNom || "", a.motifRevocation || ""]; }));
+
+  ecrire("Clôtures", ["Période", "Clôturée le", "Par", "Déclarations déposées", "Attendues", "Montant des avis", "Encaissé à la clôture", "Reste à recouvrer"],
+    col("clotures").map(r => { const b = r.data.bilan || {}; return [r.id, date(r.data.at), r.data.byNom || "", b.deposees, b.attendues, b.declare, b.encaisse, b.reste]; }));
+
   ecrire("Journal", ["Date", "Auteur", "Action", "Type", "Dossier"],
     (data.journal || []).map(j => [date(j.at), j.auteur || "", j.action, j.collection, j.doc_id]));
 
@@ -123,7 +136,10 @@ function actualiser() {
     ["Entreprises", col("entreprises").length],
     ["Déclarations", declarations.length],
     ["Demandes de moyens", col("demandes").length],
-    ["Pénalités", col("penalites").length]
+    ["Pénalités", col("penalites").length],
+    ["Relances", col("relances").length],
+    ["Attestations délivrées", col("attestations").length],
+    ["Semaines clôturées", col("clotures").length]
   ]);
 }
 

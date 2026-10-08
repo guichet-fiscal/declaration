@@ -79,6 +79,8 @@ Si l’écran « Accès pas encore accordé » s’affiche, l’identifiant qu�
 - **Pénalités et paiement en plusieurs fois** : depuis la fiche d’une entreprise ou le dossier d’une déclaration.
 - **Recouvrement** : les entreprises qui n’ont pas déclaré, et les avis et pénalités non payés après le délai de paiement. Chaque entreprise se relance d’un clic, ou toutes ensemble dans un seul message. Les relances restent inscrites au dossier.
 - **Publication sur Discord** : les avis, pénalités, décisions budgétaires et relances partent dans le bon salon, avec une mention du patron ou du service.
+- **Quittances** : chaque encaissement (avis, échéance, pénalité) a sa quittance en image, qui prouve le paiement. Elle peut partir toute seule sur Discord.
+- **Attestation de régularité fiscale et sociale** : depuis la fiche d’une entreprise. Elle n’est délivrée qu’à une entreprise qui a déposé toutes ses déclarations échues et payé ce qu’elle doit (un paiement en plusieurs fois respecté est accepté). Elle a un numéro, une date de fin de validité (réglable), et la Direction peut la révoquer. **Entreprises → Vérifier une attestation** contrôle un numéro présenté par une entreprise. Sinon, le site produit l’image de sa situation fiscale à régulariser.
 - **Journal** : chaque action est inscrite par la base avec son auteur. Personne ne peut le modifier depuis le site.
 - **Corriger une erreur** : une déclaration, une demande, une entreprise (nom, secteur, patron), une pénalité ou le nom d’un agent se modifient sans créer de doublon. Un accord, un refus, un avis émis ou un encaissement (impôt, échéance, pénalité) peut être annulé. Tout reste tracé dans le journal.
 - **Début du suivi** (Réglages) : les périodes plus anciennes ne sont plus proposées ni affichées dans les graphiques. Chaque nouvelle semaine s’ajoute toute seule.
@@ -140,6 +142,8 @@ Le guichet ne mentionne jamais `@everyone` ni `@here` : seuls le patron ou le r�
 Une entreprise est attendue à partir du début du suivi, ou de son **début d’activité** s’il est plus récent (Modifier l’entreprise). Une entreprise ajoutée au registre est attendue à partir de la période en cours : elle n’est jamais relancée pour une semaine où elle n’existait pas.
 
 ## Suivi dans Google Sheets
+
+La feuille contient aussi les relances, les attestations et les semaines clôturées. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
