@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>Guichet Fiscal Grand Paris RP</title>
+<title>Guichet fiscal · Préfecture de police</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -14,7 +16,7 @@
   --paper:#edf1f0; --sheet:#ffffff; --field:#f6f8f8;
   --ink:#122229; --ink-2:#465a61; --ink-3:#6a7d83;
   --rule:#cfd9d8; --rule-2:#e3e9e8;
-  --accent:#4433a8; --accent-ink:#ffffff; --accent-soft:#eceafb;
+  --accent:#23408e; --accent-ink:#ffffff; --accent-soft:#e7ecf8;
   --ok:#1b7044; --ok-soft:#e0f1e7;
   --warn:#8f5700; --warn-soft:#faeed6;
   --bad:#ae261d; --bad-soft:#fae3e1;
@@ -32,7 +34,7 @@
     --paper:#0d1416; --sheet:#142024; --field:#0f191c;
     --ink:#e1e9e8; --ink-2:#a1b2b4; --ink-3:#7f9295;
     --rule:#2a3a3f; --rule-2:#1e2b2f;
-    --accent:#a99cff; --accent-ink:#17113a; --accent-soft:#25214a;
+    --accent:#91a7ff; --accent-ink:#0f1733; --accent-soft:#1d2748;
     --ok:#5ac28a; --ok-soft:#14321f;
     --warn:#e5a83e; --warn-soft:#36290f;
     --bad:#f07b70; --bad-soft:#3a1916;
@@ -47,7 +49,7 @@
   --paper:#0d1416; --sheet:#142024; --field:#0f191c;
   --ink:#e1e9e8; --ink-2:#a1b2b4; --ink-3:#7f9295;
   --rule:#2a3a3f; --rule-2:#1e2b2f;
-  --accent:#a99cff; --accent-ink:#17113a; --accent-soft:#25214a;
+  --accent:#91a7ff; --accent-ink:#0f1733; --accent-soft:#1d2748;
   --ok:#5ac28a; --ok-soft:#14321f;
   --warn:#e5a83e; --warn-soft:#36290f;
   --bad:#f07b70; --bad-soft:#3a1916;
@@ -247,6 +249,7 @@ details.paste textarea{background:var(--sheet);font-family:var(--f-mono);font-si
 .bareme{margin:10px 0 0;padding:0;list-style:none;display:grid;gap:6px;font-size:13.5px}
 .bareme li{display:flex;justify-content:space-between;gap:12px;color:var(--ink-2)}
 .bareme b{font-family:var(--f-mono);color:var(--ink);font-weight:600}
+.bareme .br-cap{margin-top:6px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
 
 /* Modèles Discord */
 .tpl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px;align-items:start}
@@ -375,6 +378,22 @@ table.compact td{padding:8px 10px}
 .env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:10px;align-items:center}
 .env-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650;margin-top:6px}
 .env-edit label{font-weight:500}
+/* Préfecture de police : logo et barèmes */
+.logo{flex:none;width:52px;height:52px;border-radius:50%;display:block}
+.gate-card .logo{width:64px;height:64px}
+.br-title{margin:14px 0 0;font-size:14px;font-family:var(--f-display);font-stretch:85%;font-weight:720}
+.br-head,.br-row{display:grid;grid-template-columns:110px minmax(0,1fr) 110px minmax(0,1.2fr) 32px;gap:8px;align-items:center}
+.br-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
+.br-rows{display:grid;gap:6px;margin-top:6px}
+.br-from{font-size:13px;color:var(--ink-2)}
+.br-row input{padding:7px 9px;font-size:14px}
+.br-row [data-k=jusqua]{font-family:var(--f-mono);text-align:right}
+.br-row .money input{padding-right:30px}
+@media (max-width:620px){.br-head{display:none}.br-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px;padding:8px 0;border-top:1px solid var(--rule-2)}.br-row .br-from{grid-column:1/-1}.br-row [data-k=libelle]{grid-column:1/3}}
+.calc-detail{margin:10px 0 0;padding:10px 0 0;border-top:1px dashed var(--rule);display:grid;gap:4px;font-size:12.5px;color:var(--ink-2)}
+.calc-detail .row{display:flex;justify-content:space-between;gap:10px}
+.calc-detail .row b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
+.calc-detail h4{margin:4px 0 0;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
 </style>
 </head>
 <body data-gate="chargement">
@@ -382,10 +401,10 @@ table.compact td{padding:8px 10px}
 <header class="top">
   <div class="wrap">
     <div class="brand">
-      <div class="seal" aria-hidden="true">DIC</div>
+      <img class="logo" src="assets/logo-prefecture.png" alt="" width="52" height="52">
       <div>
-        <div class="eyebrow">Grand Paris RP · Administration de jeu</div>
-        <h1>Direction des Impôts &amp; Cotisations</h1>
+        <div class="eyebrow">Grand Paris · Direction des impôts et cotisations</div>
+        <h1>Préfecture de police</h1>
       </div>
     </div>
     <div class="who">
@@ -412,7 +431,7 @@ table.compact td{padding:8px 10px}
 <div class="wrap">
   <section class="gate" id="gate">
     <div class="gate-card">
-      <div class="seal" aria-hidden="true">DIC</div>
+      <img class="logo" src="assets/logo-prefecture.png" alt="" width="64" height="64">
       <h2 id="gate-title">Connexion au registre…</h2>
       <p class="sub" id="gate-text">Vérification de votre accès.</p>
       <div class="gate-actions" id="gate-actions"></div>
@@ -660,7 +679,7 @@ table.compact td{padding:8px 10px}
         <form class="liasse" id="form-decl" novalidate>
           <div class="liasse-head">
             <h3>Déclaration périodique de résultat</h3>
-            <span class="ref">Formulaire DIC n° 01</span>
+            <span class="ref">Formulaire PP n° 01</span>
           </div>
           <div class="case"><div class="case-no">A</div><div class="case-body">
             <div class="row2">
@@ -735,9 +754,10 @@ table.compact td{padding:8px 10px}
             <dt class="tot-dt">Montant dû</dt><dd class="tot-dd" id="c-tot">0 €</dd>
           </dl>
           <div class="due" id="c-due"></div>
+          <div class="calc-detail" id="c-detail" hidden></div>
         </div>
         <div class="card">
-          <h3>Barème en vigueur</h3>
+          <h3 id="bareme-title">Barème en vigueur</h3>
           <ul class="bareme" id="bareme"></ul>
         </div>
       </aside>
@@ -770,7 +790,7 @@ table.compact td{padding:8px 10px}
         <form class="liasse" id="form-dem" novalidate>
           <div class="liasse-head">
             <h3>Demande d’allocation de crédits</h3>
-            <span class="ref">Formulaire DIC n° 02</span>
+            <span class="ref">Formulaire PP n° 02</span>
           </div>
           <div class="case"><div class="case-no">A</div><div class="case-body">
             <div class="row2">
@@ -908,12 +928,12 @@ table.compact td{padding:8px 10px}
               </div>
             </div>
             <div class="row3">
-              <div class="field">
-                <label for="s-is">Impôt sur le résultat</label>
+              <div class="field flat-rate">
+                <label for="s-is">Impôt sur le résultat (taux unique)</label>
                 <div class="money" data-cur="%"><input id="s-is" type="number" min="0" max="100" step="0.5"></div>
               </div>
-              <div class="field">
-                <label for="s-cot">Cotisations sociales</label>
+              <div class="field flat-rate">
+                <label for="s-cot">Cotisations sociales (taux unique)</label>
                 <div class="money" data-cur="%"><input id="s-cot" type="number" min="0" max="100" step="0.5"></div>
               </div>
               <div class="field">
@@ -944,6 +964,28 @@ table.compact td{padding:8px 10px}
               <span id="s-msg" class="hint" aria-live="polite"></span>
             </div>
           </form>
+        </div>
+        <div class="card" id="card-baremes">
+          <h3>Barèmes par tranches</h3>
+          <p class="sub">Chaque tranche est taxée à son propre taux : une petite entreprise ne paie que les premières tranches, et seule la part qui dépasse un seuil paie le taux supérieur. La dernière tranche s’applique à tout ce qui dépasse.</p>
+          <div class="row2" style="margin-top:12px">
+            <div class="field">
+              <label for="s-mode">Mode de calcul</label>
+              <select id="s-mode"><option value="progressif">Progressif par tranches</option><option value="unique">Taux unique</option></select>
+            </div>
+            <div class="field">
+              <label for="s-cotbase">Base du barème des salaires</label>
+              <select id="s-cotbase"><option value="masse">Masse salariale totale</option><option value="salarie">Salaire moyen par salarié</option></select>
+            </div>
+          </div>
+          <div id="bareme-editors">
+            <div id="bareme-is"></div>
+            <div id="bareme-cot"></div>
+          </div>
+          <div class="paste-row" style="margin-top:14px">
+            <button class="btn" type="button" id="s-bar-save">Enregistrer les barèmes</button>
+            <span id="s-bar-msg" class="hint" aria-live="polite"></span>
+          </div>
         </div>
         <div class="card">
           <h3>Services publics et enveloppes</h3>
@@ -1025,7 +1067,7 @@ table.compact td{padding:8px 10px}
 
 <footer class="foot">
   <div class="wrap">
-    <span>Guichet fiscal du serveur Grand Paris RP · document de jeu, montants fictifs.</span>
+    <span>Guichet fiscal de la Préfecture de police · serveur Grand Paris RP · document de jeu, montants fictifs.</span>
     <span id="foot-sync"></span>
   </div>
 </footer>
@@ -1082,6 +1124,9 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
   budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {},
+  baremeMode: "progressif", baremeCotBase: "masse",
+  baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
+  baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
   services: ["Police nationale", "Gendarmerie", "SAMU", "Sapeurs-pompiers", "Mairie", "Justice", "Douane"]
 };
 const S = {
@@ -1092,7 +1137,7 @@ const S = {
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
   journal: [], journalLoaded: false, journalError: null, journalBusy: false, jLimit: 100,
   exportKeys: [], keysError: null,
-  setDirty: false, svcDirty: false, envDirty: false
+  setDirty: false, svcDirty: false, envDirty: false, barDirty: false
 };
 const cfg = () => {
   const c = Object.assign({}, DEFAULTS, S.config || {});
@@ -1195,13 +1240,31 @@ function periodPlain(key) {
 }
 
 /* ---------- Calculs ---------- */
-function compute(ca, ch, ms, late, c) {
+function compute(ca, ch, ms, late, c, nb) {
   c = c || cfg();
   const resultat = ca - ch - ms;
-  const impot = Math.round(Math.max(0, resultat) * (Number(c.tauxIS) || 0) / 100);
-  const cotisations = Math.round(ms * (Number(c.tauxCot) || 0) / 100);
+  let impot, cotisations, detail = null;
+  if (c.baremeMode !== "unique") {
+    const is = progressive(Math.max(0, resultat), c.baremeIS);
+    let cot;
+    if (c.baremeCotBase === "salarie" && nb > 0) {
+      const per = progressive(ms / nb, c.baremeCot);
+      const tr = per.tranches.map(t => Object.assign({}, t, { base: Math.round(t.base * nb), montant: Math.round(t.montant * nb) }));
+      cot = { total: tr.reduce((x, t) => x + t.montant, 0), tranches: tr };
+    } else cot = progressive(ms, c.baremeCot);
+    impot = is.total;
+    cotisations = cot.total;
+    detail = { is: is.tranches, cot: cot.tranches, cotBase: c.baremeCotBase === "salarie" && nb > 0 ? "salarie" : "masse" };
+  } else {
+    impot = Math.round(Math.max(0, resultat) * (Number(c.tauxIS) || 0) / 100);
+    cotisations = Math.round(ms * (Number(c.tauxCot) || 0) / 100);
+  }
   const majoration = late ? Math.round((impot + cotisations) * (Number(c.majoration) || 0) / 100) : 0;
-  return { resultat, impot, cotisations, majoration, total: impot + cotisations + majoration };
+  return {
+    resultat, impot, cotisations, majoration, total: impot + cotisations + majoration, detail,
+    tauxIS: detail ? effRate(impot, Math.max(0, resultat)) : Number(c.tauxIS) || 0,
+    tauxCot: detail ? effRate(cotisations, ms) : Number(c.tauxCot) || 0
+  };
 }
 const dStatus = d => (S.decisions[d.id] ? S.decisions[d.id].statut : "soumise");
 const dMontant = d => { const dec = S.decisions[d.id]; const m = dec && dec.montant != null ? Number(dec.montant) : Number(d.total); return Number.isFinite(m) ? m : 0; };
@@ -1285,6 +1348,7 @@ function alertsFor(d) {
   if (ca > 0 && ch >= ca * 0.9) out.push("Charges supérieures à 90 % du chiffre d’affaires");
   if (ca === 0 && nb > 0) out.push("Aucun chiffre d’affaires avec des salariés");
   if (hist.slice(-3).concat([d]).filter(x => x.enRetard).length >= 2) out.push("Retards répétés");
+  if (d.detail) for (const t of (d.detail.cot || []).concat(d.detail.is || [])) if (t.libelle && t.base > 0) out.push(`${t.libelle} : au-delà de ${money(t.de)}`);
   return out;
 }
 
@@ -1412,7 +1476,7 @@ function applyRole() {
   $$(".tab[data-writer]").forEach(b => { b.hidden = !w && (S.connected || S.offline); });
   if (!w && (S.connected || S.offline) && ["declaration", "demande", "reglages"].includes(S.tab)) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
-  $$("#d-submit, #m-submit, #s-save, #s-svc-save, #e-add, #d-parse, #m-parse, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#d-submit, #m-submit, #s-save, #s-svc-save, #s-bar-save, #e-add, #d-parse, #m-parse, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
   $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
   render();
@@ -1542,12 +1606,12 @@ function showGate(state, detail) {
     t.textContent = "Site pas encore relié à sa base";
     p.textContent = "Renseignez l’adresse et la clé publique du projet Supabase dans le fichier config.js, comme expliqué dans le README du dépôt.";
   } else if (state === "login") {
-    t.textContent = "Guichet réservé à la Direction";
-    p.textContent = "Connectez-vous avec votre compte Discord. Seuls les agents enregistrés par la Direction accèdent au registre.";
+    t.textContent = "Guichet réservé aux agents habilités";
+    p.textContent = "Connectez-vous avec votre compte Discord. Seuls les agents habilités par la Préfecture de police accèdent au registre.";
     a.append(h("button", { class: "btn", type: "button", onclick: login, text: "Se connecter avec Discord" }));
   } else if (state === "refuse") {
     t.textContent = "Accès pas encore accordé";
-    p.textContent = "Votre compte Discord est reconnu, mais il n’est pas dans la liste des agents. Transmettez cet identifiant à la Direction :";
+    p.textContent = "Votre compte Discord est reconnu, mais il n’est pas dans la liste des agents habilités. Transmettez cet identifiant à la Direction des impôts et cotisations :";
     const id = S.discordId || "inconnu";
     a.append(h("span", { class: "idbox", text: id }),
       h("button", { class: "btn ghost", type: "button", onclick: () => copyText(id, "Identifiant copié."), text: "Copier" }),
@@ -1684,6 +1748,7 @@ function render() {
   renderTemplates();
   renderSettings();
   renderEnvEditor();
+  renderBaremes();
   renderBackupInfo();
   renderEntreprises();
   renderEconomie();
@@ -1956,9 +2021,10 @@ function renderAlerts() {
 }
 
 /* Enveloppes des services publics */
-function renderEnvelopes(key) {
+function renderEnvelopes() {
+  const key = keyOf(new Date());
   const box = $("#envs");
-  $("#env-sub").textContent = `Crédits accordés · ${periodLabel(key)} · plafonds réglables dans Réglages`;
+  $("#env-sub").textContent = `Crédits accordés pendant la période en cours (${periodLabel(key)}). Plafonds réglables dans Réglages.`;
   if (!S.connected || !S.loaded.has("arbitrages")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
   const use = envUse(key);
   const names = cfg().services.slice();
@@ -2095,13 +2161,13 @@ function avisText(d) {
   const dec = S.decisions[d.id], st = dStatus(d), m = dMontant(d);
   const L = [`**Avis d’imposition ${dossierNo("DF", d.id)}**`, `Entreprise : ${d.entrepriseNom}`, `Période : ${periodLabel(d.periode)}`,
     `Résultat déclaré : ${money(d.resultat)}`,
-    `Impôt sur le résultat (${pct(d.tauxIS)}) : ${money(d.impot)}`,
-    `Cotisations sociales (${pct(d.tauxCot)}) : ${money(d.cotisations)}`];
+    `${isLabel(d)} : ${money(d.impot)}`,
+    `${cotLabel(d)} : ${money(d.cotisations)}`];
   if (d.enRetard) L.push(`Majoration de retard (${pct(d.majPct)}) : ${money(d.majoration)}`);
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) L.push(`Montant rectifié après vérification : ${money(dec.montant)}`);
   L.push(`**Montant à régler : ${money(m)}**`, `Statut : ${(DSTAT[st] || DSTAT.soumise)[0]}`);
   if (dec && dec.note) L.push(`Observation : ${dec.note}`);
-  L.push("— Direction des Impôts & Cotisations");
+  L.push("— Préfecture de police · Direction des impôts et cotisations");
   return L.join("\n");
 }
 function openDecl(id) {
@@ -2119,8 +2185,8 @@ function openDecl(id) {
         ["Salariés", String(d.nbSalaries ?? 0), "num"],
         ["Résultat", money(d.resultat), "tot"]])),
       sec("Calcul au dépôt", kv([
-        [`Impôt (${pct(d.tauxIS)})`, money(d.impot), "num"],
-        [`Cotisations (${pct(d.tauxCot)})`, money(d.cotisations), "num"],
+        [d.bareme === "progressif" ? `Impôt (barème, ${pct(d.tauxIS)} effectif)` : `Impôt (${pct(d.tauxIS)})`, money(d.impot), "num"],
+        [d.bareme === "progressif" ? `Cotisations (barème, ${pct(d.tauxCot)} effectif)` : `Cotisations (${pct(d.tauxCot)})`, money(d.cotisations), "num"],
         d.enRetard ? [`Majoration (${pct(d.majPct)})`, money(d.majoration), "num"] : null,
         ["Total calculé", money(d.total), "tot"]]))),
     sec("Dépôt", kv([
@@ -2134,6 +2200,11 @@ function openDecl(id) {
   ];
   const al = alertsFor(d);
   if (al.length) body.splice(1, 0, sec("Alertes", h("div", { class: "reasons" }, al.map(r => h("span", { class: "reason", text: r })))));
+  if (d.detail && d.detail.is) {
+    body.push(h("div", { class: "dlg-cols" },
+      trancheTable("Impôt sur le bénéfice, par tranche", d.detail.is.length ? d.detail.is : [{ de: 0, a: null, taux: 0, base: 0, montant: 0 }]),
+      trancheTable(d.detail.cotBase === "salarie" ? "Cotisations, par tranche (salaire moyen × salariés)" : "Cotisations sur les salaires, par tranche", d.detail.cot.length ? d.detail.cot : [{ de: 0, a: null, taux: 0, base: 0, montant: 0 }])));
+  }
   const echSec = echeancierSection(d, () => openDecl(id));
   if (echSec) body.push(echSec);
   if (d.enRetard && w) body.push(h("div", { class: "paste-row" }, h("span", { class: "hint", text: "Déclaration déposée hors délai." }),
@@ -2199,7 +2270,7 @@ function decisionText(dm) {
   const L = [`**Décision budgétaire ${dossierNo("DM", dm.id)}**`, `Service : ${dm.service}`, `Objet : ${dm.objet}`, `Montant demandé : ${money(dm.montant)}`, `Décision : ${(ASTAT[st] || ASTAT.attente)[0]}`];
   if (a && (st === "accordee" || st === "partielle")) L.push(`**Crédits accordés : ${money(a.montantAccorde)}**`);
   if (a && a.commentaire) L.push(`Motif : ${a.commentaire}`);
-  L.push("— Direction des Impôts & Cotisations");
+  L.push("— Préfecture de police · Direction des impôts et cotisations");
   return L.join("\n");
 }
 function openDem(id) {
@@ -2286,26 +2357,36 @@ function renderDeclPreview() {
   const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
   const dl = deadline(key);
   const late = depot.getTime() > dl.getTime();
-  const r = compute(ca, ch, ms, late, c);
+  const nbV = numIn($("#d-nb")) || 0;
+  const r = compute(ca, ch, ms, late, c, nbV);
   $("#c-res").textContent = money(r.resultat);
   $("#c-res").className = r.resultat < 0 ? "neg" : "";
-  $("#c-is-l").textContent = `Impôt sur le résultat (${pct(c.tauxIS)})`;
+  $("#c-is-l").textContent = r.detail ? `Impôt sur le bénéfice (${pct(r.tauxIS)} effectif)` : `Impôt sur le résultat (${pct(c.tauxIS)})`;
   $("#c-is").textContent = money(r.impot);
-  $("#c-cot-l").textContent = `Cotisations sociales (${pct(c.tauxCot)})`;
+  $("#c-cot-l").textContent = r.detail ? `Cotisations sur les salaires (${pct(r.tauxCot)} effectif)` : `Cotisations sociales (${pct(c.tauxCot)})`;
   $("#c-cot").textContent = money(r.cotisations);
   $("#c-maj-l").textContent = `Majoration de retard (${pct(c.majoration)})`;
   $("#c-maj").textContent = late ? money(r.majoration) : "—";
   $("#c-tot").textContent = money(r.total);
+  const det = $("#c-detail");
+  if (r.detail && (ca || ms)) {
+    const rows = (title, tr) => [h("h4", { text: title }), tr.map(t => h("div", { class: "row" }, h("span", { text: `${capFirst(trancheLabel(t))} · ${pct(t.taux)}` }), h("b", { text: money(t.montant) })))];
+    fill(det, rows("Impôt, par tranche", r.detail.is.length ? r.detail.is : [{ de: 0, a: null, taux: 0, montant: 0 }]), rows(r.detail.cotBase === "salarie" ? "Cotisations, par tranche (salaire moyen)" : "Cotisations, par tranche", r.detail.cot.length ? r.detail.cot : [{ de: 0, a: null, taux: 0, montant: 0 }]));
+    det.hidden = false;
+  } else { fill(det); det.hidden = true; }
   $("#d-per-hint").textContent = `Dépôt avant le ${fmtDateTime(dl)}.`;
   $("#c-due").replaceChildren(late ? chip(["Déposée hors délai : majoration appliquée", "bad"]) : chip(["Dans les délais", "ok"]));
   const name = $("#d-ent").value.trim();
   const ent = findEnt(name);
   $("#d-ent-hint").textContent = !name ? "Choisissez dans la liste ou tapez un nouveau nom." : ent ? `Rattachée à « ${ent.nom} » du registre.` : "Nouvelle entreprise : elle sera marquée « non enregistrée ».";
-  $("#bareme").replaceChildren(
-    h("li", {}, h("span", { text: "Impôt sur le résultat" }), h("b", { text: pct(c.tauxIS) })),
-    h("li", {}, h("span", { text: "Cotisations, sur la masse salariale" }), h("b", { text: pct(c.tauxCot) })),
+  const brLi = (list) => normBrackets(list).map((b, i, arr) => h("li", {}, h("span", { text: capFirst(trancheLabel({ de: i ? arr[i - 1].jusqua : 0, a: b.jusqua })) }), h("b", { text: pct(b.taux) })));
+  fill($("#bareme"),
+    c.baremeMode !== "unique"
+      ? [h("li", { class: "br-cap" }, h("span", { text: "Impôt sur les bénéfices" })), brLi(c.baremeIS), h("li", { class: "br-cap" }, h("span", { text: c.baremeCotBase === "salarie" ? "Cotisations, par salaire moyen" : "Cotisations sur les salaires" })), brLi(c.baremeCot)]
+      : [h("li", {}, h("span", { text: "Impôt sur le résultat" }), h("b", { text: pct(c.tauxIS) })), h("li", {}, h("span", { text: "Cotisations, sur la masse salariale" }), h("b", { text: pct(c.tauxCot) }))],
     h("li", {}, h("span", { text: "Majoration de retard" }), h("b", { text: pct(c.majoration) })),
     h("li", {}, h("span", { text: "Délai après fin de " + (c.periodicite === "mois" ? "mois" : "semaine") }), h("b", { text: `${c.delaiJours} j` })));
+  $("#bareme-title").textContent = c.baremeMode !== "unique" ? "Barème par tranches en vigueur" : "Barème en vigueur";
 }
 $("#form-decl").addEventListener("input", renderDeclPreview);
 $("#form-decl").addEventListener("change", renderDeclPreview);
@@ -2402,14 +2483,15 @@ $("#form-decl").addEventListener("submit", async e => {
   const c = cfg();
   const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
   const late = depot.getTime() > deadline(key).getTime();
-  const r = compute(ca, ch, ms, late, c);
+  const r = compute(ca, ch, ms, late, c, nb);
   const ent = findEnt(name);
   const dup = S.declarations.some(d => d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
   const body = {
     entrepriseId: ent ? ent.id : null, entrepriseNom: ent ? ent.nom : name, periode: key,
     ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
-    tauxIS: Number(c.tauxIS) || 0, tauxCot: Number(c.tauxCot) || 0, majPct: late ? Number(c.majoration) || 0 : 0,
+    tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
+    bareme: r.detail ? "progressif" : "unique", detail: r.detail,
     enRetard: late, rectificative: dup,
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
     depotAt: depot.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
@@ -2549,14 +2631,17 @@ function renderTemplates() {
     "Demandeur (nom, grade) : "].join("\n");
   $("#tpl-bareme").textContent = [
     "**BARÈME FISCAL EN VIGUEUR**",
-    `• Impôt sur le résultat : ${pct(c.tauxIS)} du bénéfice (chiffre d’affaires − charges − salaires)`,
-    `• Cotisations sociales : ${pct(c.tauxCot)} de la masse salariale`,
+    ...(c.baremeMode !== "unique"
+      ? ["Impôt sur les bénéfices nets (chiffre d’affaires − charges − salaires), par tranche :", ...baremeLines(c.baremeIS), "",
+         `Cotisations sur les salaires (${c.baremeCotBase === "salarie" ? "par salarié, sur le salaire moyen" : "sur la masse salariale"}), par tranche :`, ...baremeLines(c.baremeCot), "",
+         "Chaque tranche est taxée à son propre taux : seule la part qui dépasse un seuil paie le taux supérieur.", ""]
+      : [`• Impôt sur le résultat : ${pct(c.tauxIS)} du bénéfice (chiffre d’affaires − charges − salaires)`, `• Cotisations sociales : ${pct(c.tauxCot)} de la masse salariale`]),
     `• Déclaration : chaque ${per}, au plus tard ${c.delaiJours} jour${plural(c.delaiJours)} après la fin de la ${per === "mois" ? "période" : "semaine"}`,
     `• Retard : majoration de ${pct(c.majoration)} du montant dû`,
-    "• Paiement : auprès de la Direction, dès réception de l’avis d’imposition",
+    "• Paiement : auprès de la Préfecture de police, dès réception de l’avis d’imposition",
     "• Contrôles fiscaux possibles à tout moment : gardez vos justificatifs",
     "",
-    "— Direction des Impôts & Cotisations"].join("\n");
+    "— Préfecture de police · Direction des impôts et cotisations"].join("\n");
 }
 $("#tab-modeles").addEventListener("click", e => {
   const b = e.target.closest("[data-copy]");
@@ -2568,7 +2653,7 @@ $("#btn-recap").addEventListener("click", () => {
   const g = (...st) => sts.filter(x => st.includes(x.status));
   const names = arr => arr.map(x => x.e.nom).join(", ");
   const enc = S.declarations.filter(d => d.periode === key && dStatus(d) === "payee").reduce((s, d) => s + dMontant(d), 0);
-  const L = [`**Direction des Impôts & Cotisations · ${periodLabel(key)}**`, `Date limite de dépôt : ${fmtDateTime(deadline(key))}`, ""];
+  const L = [`**Préfecture de police · Impôts et cotisations · ${periodLabel(key)}**`, `Date limite de dépôt : ${fmtDateTime(deadline(key))}`, ""];
   if (g("payee").length) L.push(`✅ À jour et payé : ${names(g("payee"))}`);
   if (g("soumise", "controle").length) L.push(`📝 Déclaré, en vérification : ${names(g("soumise", "controle"))}`);
   if (g("validee").length) L.push(`💶 À payer : ${g("validee").map(x => `${x.e.nom} (${money(dMontant(x.decl))})`).join(", ")}`);
@@ -2805,7 +2890,9 @@ $("#b-file").addEventListener("change", e => {
 const STAMP_DECL = { soumise: ["EN VÉRIFICATION", "info"], validee: ["À PAYER", "bad"], payee: ["PAYÉ", "ok"], controle: ["EN CONTRÔLE", "accent"], rejetee: ["REJETÉE", "bad"] };
 const STAMP_ARB = { attente: ["EN ATTENTE", "info"], etude: ["À L’ÉTUDE", "accent"], accordee: ["ACCORDÉ", "ok"], partielle: ["ACCORDÉ EN PARTIE", "ok"], refusee: ["REFUSÉ", "bad"] };
 const STAMP_PEN = { due: ["À PAYER", "bad"], payee: ["PAYÉE", "ok"], annulee: ["ANNULÉE", "muted"] };
-const DOC_TONE = { ok: "#1b7044", warn: "#94580a", bad: "#b3261e", info: "#22569f", accent: "#4433a8", muted: "#5d6d72" };
+const DOC_TONE = { ok: "#1b7044", warn: "#94580a", bad: "#b3261e", info: "#22569f", accent: "#23408e", muted: "#5d6d72" };
+const LOGO = new Image();
+LOGO.src = "assets/logo-prefecture.png";
 function wrapLines(ctx, text, maxW) {
   const out = [];
   for (const para of String(text || "").split(/\n/)) {
@@ -2823,7 +2910,9 @@ async function renderDocImage(doc) {
   try { await Promise.all(['800 40px "Archivo"', '700 18px "Archivo"', '400 17px "Archivo"', '600 17px "IBM Plex Mono"'].map(f => document.fonts.load(f))); } catch (e) { /* polices de secours */ }
   const W = 1000, P = 64, inner = W - 2 * P, colW = (inner - 32) / 2;
   const F = { disp: '"Archivo", "Arial Narrow", Arial, sans-serif', body: '"Archivo", Arial, sans-serif', mono: '"IBM Plex Mono", Consolas, monospace' };
-  const ink = "#122229", ink2 = "#4b5d63", rule = "#dfe6e5", violet = "#4433a8";
+  const ink = "#122229", ink2 = "#4b5d63", rule = "#dfe6e5", violet = "#23408e";
+  let logoOk = false;
+  try { await LOGO.decode(); logoOk = LOGO.naturalWidth > 0; } catch (e) { logoOk = false; }
   const m = document.createElement("canvas").getContext("2d");
   m.font = `400 17px ${F.body}`;
   const metaRows = [];
@@ -2844,13 +2933,14 @@ async function renderDocImage(doc) {
   ctx.fillStyle = "#fbfaf6"; ctx.fillRect(0, 0, W, H);
   ctx.strokeStyle = "#cfd9d8"; ctx.lineWidth = 1; ctx.strokeRect(24.5, 24.5, W - 49, H - 49);
   let y = 66;
-  ctx.strokeStyle = violet; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(P + 36, y + 32, 34, 0, Math.PI * 2); ctx.stroke();
-  ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(P + 36, y + 32, 28, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = violet; ctx.font = `800 17px ${F.disp}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; spacing("1px");
-  ctx.fillText("DIC", P + 36, y + 33);
-  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-  ctx.fillStyle = ink2; ctx.font = `700 13px ${F.body}`; spacing("2px");
-  ctx.fillText("DIRECTION DES IMPÔTS & COTISATIONS", P + 92, y + 16);
+  if (logoOk) ctx.drawImage(LOGO, P - 4, y - 6, 80, 80);
+  else {
+    ctx.strokeStyle = violet; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(P + 36, y + 32, 34, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = violet; ctx.font = `800 15px ${F.disp}`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("PP", P + 36, y + 33);
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  }
+  ctx.fillStyle = ink2; ctx.font = `700 13px ${F.body}`; spacing("1.5px");
+  ctx.fillText("PRÉFECTURE DE POLICE · IMPÔTS ET COTISATIONS", P + 92, y + 16);
   spacing("0px"); ctx.fillStyle = ink; ctx.font = `800 38px ${F.disp}`;
   ctx.fillText(doc.kind, P + 92, y + 58);
   ctx.textAlign = "right"; ctx.font = `600 16px ${F.mono}`; ctx.fillText(`N° ${doc.no}`, W - P, y + 16);
@@ -2952,8 +3042,13 @@ function avisDoc(d) {
   const dec = S.decisions[d.id], st = dStatus(d), e = echOf(d);
   const lines = [
     ["Chiffre d’affaires", money(d.ca)], ["Charges hors salaires", money(d.charges)], ["Masse salariale", money(d.masse)],
-    ["Résultat imposable", money(d.resultat), true],
-    [`Impôt sur le résultat (${pct(d.tauxIS)})`, money(d.impot)], [`Cotisations sociales (${pct(d.tauxCot)})`, money(d.cotisations)]];
+    ["Résultat imposable", money(d.resultat), true]];
+  if (d.detail && d.detail.is) {
+    d.detail.is.forEach(t => lines.push([`Impôt · ${trancheLabel(t)} à ${pct(t.taux)}`, money(t.montant)]));
+    lines.push([`Impôt sur le bénéfice (${pct(d.tauxIS)} effectif)`, money(d.impot), true]);
+    d.detail.cot.forEach(t => lines.push([`Cotisations · ${trancheLabel(t)} à ${pct(t.taux)}${t.libelle ? " · " + t.libelle.toLowerCase() : ""}`, money(t.montant)]));
+    lines.push([`Cotisations sur les salaires (${pct(d.tauxCot)} effectif)`, money(d.cotisations), true]);
+  } else lines.push([`Impôt sur le résultat (${pct(d.tauxIS)})`, money(d.impot)], [`Cotisations sociales (${pct(d.tauxCot)})`, money(d.cotisations)]);
   if (d.enRetard) lines.push([`Majoration de retard (${pct(d.majPct)})`, money(d.majoration)]);
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) lines.push(["Montant rectifié après vérification", money(dec.montant), true]);
   const doc = {
@@ -2961,7 +3056,7 @@ function avisDoc(d) {
     meta: [["Entreprise", d.entrepriseNom || "—"], ["Période", periodLabel(d.periode)], ["Déclarant", d.declarant || "—"], ["Déposée le", d.depotAt ? longDate(new Date(d.depotAt)) : "—"]],
     lines, total: [st === "payee" ? "Montant réglé" : "Montant à régler", money(dMontant(d))],
     note: dec && dec.note ? dec.note : "", stamp: STAMP_DECL[st] || STAMP_DECL.soumise,
-    footer: st === "validee" ? "À régler auprès de la Direction des Impôts & Cotisations dès réception de cet avis. Un retard de paiement peut entraîner une pénalité." : "Direction des Impôts & Cotisations."
+    footer: st === "validee" ? "À régler auprès de la Préfecture de police, Direction des impôts et cotisations, dès réception de cet avis. Un retard de paiement peut entraîner une pénalité." : "Préfecture de police · Direction des impôts et cotisations."
   };
   if (e) doc.table = { title: "Échéancier de paiement", head: ["Échéance", "Date limite", "Montant", "État"], rows: e.echeances.map(x => [`${x.n} / ${e.echeances.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : (new Date(x.date).getTime() < Date.now() ? "En retard" : "À venir")]) };
   return doc;
@@ -2975,7 +3070,7 @@ function decisionDoc(dm) {
     lines: [["Quantité", String(dm.quantite || "—")], ["Montant demandé", money(dm.montant)], ["Reçue le", dm.recueAt ? longDate(new Date(dm.recueAt)) : "—"]],
     total: ["Crédits accordés", money(ok ? a.montantAccorde : 0)], note: a && a.commentaire ? a.commentaire : "", noteTitle: "Motif de la décision",
     stamp: STAMP_ARB[st] || STAMP_ARB.attente,
-    footer: ok ? "Les crédits sont mis à disposition du service par la Direction des Impôts & Cotisations." : "Direction des Impôts & Cotisations."
+    footer: ok ? "Les crédits sont mis à disposition du service par la Préfecture de police, Direction des impôts et cotisations." : "Préfecture de police · Direction des impôts et cotisations."
   };
 }
 function penaltyDoc(p) {
@@ -2985,7 +3080,7 @@ function penaltyDoc(p) {
     lines: p.statut === "payee" && p.paidAt ? [["Réglée le", longDate(new Date(p.paidAt))]] : [],
     total: [p.statut === "payee" ? "Pénalité réglée" : "Pénalité à régler", money(p.montant)],
     stamp: STAMP_PEN[p.statut] || STAMP_PEN.due,
-    footer: p.statut === "due" ? "À régler auprès de la Direction des Impôts & Cotisations dès réception de cet avis." : "Direction des Impôts & Cotisations."
+    footer: p.statut === "due" ? "À régler auprès de la Préfecture de police, Direction des impôts et cotisations, dès réception de cet avis." : "Préfecture de police · Direction des impôts et cotisations."
   };
 }
 
@@ -3420,6 +3515,165 @@ function renderEnvEditor(force) {
     }));
 }
 $("#env-editor").addEventListener("input", () => { S.envDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
+
+/* ---------- Barèmes progressifs par tranches ---------- */
+function normBrackets(list) {
+  const rows = (Array.isArray(list) ? list : [])
+    .map(b => ({ jusqua: b.jusqua === null || b.jusqua === "" || b.jusqua === undefined ? null : Number(b.jusqua), taux: Number(b.taux) || 0, libelle: String(b.libelle || "") }))
+    .filter(b => b.jusqua === null || (Number.isFinite(b.jusqua) && b.jusqua > 0));
+  const bounded = rows.filter(b => b.jusqua !== null).sort((a, b) => a.jusqua - b.jusqua);
+  const open = rows.find(b => b.jusqua === null) || { jusqua: null, taux: bounded.length ? bounded[bounded.length - 1].taux : 0, libelle: "" };
+  return bounded.concat([open]);
+}
+function progressive(amount, list) {
+  const out = [];
+  let lower = 0;
+  for (const b of normBrackets(list)) {
+    const upper = b.jusqua == null ? Infinity : b.jusqua;
+    if (amount <= lower) break;
+    const base = Math.min(amount, upper) - lower;
+    out.push({ de: lower, a: b.jusqua, taux: b.taux, base: Math.round(base), montant: Math.round(base * b.taux / 100), libelle: b.libelle });
+    lower = upper;
+  }
+  return { total: out.reduce((s, t) => s + t.montant, 0), tranches: out };
+}
+const trancheLabel = t => (t.a == null ? `au-delà de ${money(t.de)}` : t.de === 0 ? `jusqu’à ${money(t.a)}` : `de ${money(t.de)} à ${money(t.a)}`);
+const effRate = (tax, base) => (base > 0 ? Math.round(tax / base * 10000) / 100 : 0);
+const isLabel = d => (d.bareme === "progressif" ? `Impôt sur le bénéfice (barème, ${pct(d.tauxIS)} effectif)` : `Impôt sur le résultat (${pct(d.tauxIS)})`);
+const cotLabel = d => (d.bareme === "progressif" ? `Cotisations sur les salaires (barème, ${pct(d.tauxCot)} effectif)` : `Cotisations sociales (${pct(d.tauxCot)})`);
+function trancheTable(title, tranches) {
+  return sec(title, h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+    h("thead", {}, h("tr", {}, ["Tranche", "Taux", "Part taxée", "Montant"].map((t, i) => h("th", { class: i >= 2 ? "num" : null, text: t })))),
+    h("tbody", {}, tranches.map(t => h("tr", {},
+      h("td", {}, capFirst(trancheLabel(t)), t.libelle ? h("span", { class: "tag bad", text: t.libelle }) : null),
+      h("td", { text: pct(t.taux) }),
+      h("td", { class: "num", text: money(t.base) }),
+      h("td", { class: "num", text: money(t.montant) })))))));
+}
+function baremeLines(list, base) {
+  return normBrackets(list).map((b, i, arr) => {
+    const de = i ? arr[i - 1].jusqua : 0;
+    const t = { de, a: b.jusqua, taux: b.taux, libelle: b.libelle };
+    return `• ${capFirst(trancheLabel(t))} : ${pct(b.taux)}${b.libelle ? " (" + b.libelle.toLowerCase() + ")" : ""}`;
+  }).concat(base ? [base] : []);
+}
+
+/* Éditeur des tranches dans les réglages */
+const BAR_EXAMPLES = { is: [50000, 250000, 1500000], cot: [30000, 120000, 200000] };
+function readBrackets(box) {
+  return $$(".br-row", box).map((r, i, arr) => ({
+    jusqua: i === arr.length - 1 ? null : (r.querySelector("[data-k=jusqua]").value === "" ? NaN : Number(r.querySelector("[data-k=jusqua]").value)),
+    taux: Number(r.querySelector("[data-k=taux]").value),
+    libelle: r.querySelector("[data-k=libelle]").value.trim()
+  }));
+}
+function refreshBracketBox(box, kind) {
+  const rows = $$(".br-row", box);
+  let prev = 0;
+  rows.forEach((r, i) => {
+    const last = i === rows.length - 1;
+    r.querySelector(".br-from").textContent = money(prev);
+    const j = r.querySelector("[data-k=jusqua]");
+    j.disabled = last;
+    j.placeholder = last ? "au-delà" : "";
+    if (last) j.value = "";
+    r.querySelector(".br-del").disabled = rows.length <= 1 || last;
+    const v = Number(j.value);
+    if (!last && Number.isFinite(v) && v > 0) prev = v;
+  });
+  const list = readBrackets(box).map(b => Object.assign({}, b, { jusqua: Number.isFinite(b.jusqua) ? b.jusqua : (b.jusqua === null ? null : 1e15) }));
+  const ex = box.querySelector(".br-ex");
+  ex.textContent = "Exemples : " + BAR_EXAMPLES[kind].map(a => { const r = progressive(a, list); return `${money(a)} → ${money(r.total)} (${pct(effRate(r.total, a))})`; }).join(" · ");
+}
+function bracketRow(b) {
+  const row = h("div", { class: "br-row" },
+    h("span", { class: "br-from mono" }),
+    h("input", { "data-k": "jusqua", type: "number", min: "1", step: "1", inputmode: "numeric", "aria-label": "Plafond de la tranche" }),
+    h("div", { class: "money", "data-cur": "%" }, h("input", { "data-k": "taux", type: "number", min: "0", max: "100", step: "0.5", "aria-label": "Taux de la tranche" })),
+    h("input", { "data-k": "libelle", autocomplete: "off", placeholder: "Libellé", "aria-label": "Libellé de la tranche (facultatif)" }),
+    h("button", { class: "icon-btn br-del", type: "button", "aria-label": "Supprimer la tranche", text: "×" }));
+  row.querySelector("[data-k=jusqua]").value = b.jusqua == null ? "" : String(b.jusqua);
+  row.querySelector("[data-k=taux]").value = String(b.taux ?? 0);
+  row.querySelector("[data-k=libelle]").value = b.libelle || "";
+  return row;
+}
+function bracketEditor(box, kind, title, hint, list) {
+  const rows = h("div", { class: "br-rows" }, normBrackets(list).map(bracketRow));
+  fill(box,
+    h("h4", { class: "br-title", text: title }),
+    h("p", { class: "hint", style: "margin:2px 0 8px", text: hint }),
+    h("div", { class: "br-head" }, h("span", { text: "De" }), h("span", { text: "Jusqu’à" }), h("span", { text: "Taux" }), h("span", { text: "Libellé" }), h("span", {})),
+    rows,
+    h("div", { class: "paste-row", style: "margin-top:8px" },
+      h("button", { class: "btn ghost small br-add", type: "button", text: "Ajouter une tranche" }),
+      h("span", { class: "hint br-ex" })));
+  box.dataset.kind = kind;
+  refreshBracketBox(box, kind);
+}
+function renderBaremes(force) {
+  const c = cfg();
+  const isBox = $("#bareme-is"), cotBox = $("#bareme-cot");
+  if (!force && (S.barDirty || $("#card-baremes").contains(document.activeElement))) { toggleBaremeMode(); return; }
+  $("#s-mode").value = c.baremeMode === "unique" ? "unique" : "progressif";
+  $("#s-cotbase").value = c.baremeCotBase === "salarie" ? "salarie" : "masse";
+  bracketEditor(isBox, "is", "Impôt sur les bénéfices nets", "Appliqué au résultat : chiffre d’affaires − charges − salaires.", c.baremeIS);
+  bracketEditor(cotBox, "cot", "Cotisations sur les salaires", "Appliqué aux salaires déclarés par l’entreprise.", c.baremeCot);
+  toggleBaremeMode();
+}
+function toggleBaremeMode() {
+  const prog = $("#s-mode").value === "progressif";
+  $("#bareme-editors").hidden = !prog;
+  $$(".flat-rate").forEach(f => { f.hidden = prog; });
+}
+$("#card-baremes").addEventListener("input", e => {
+  S.barDirty = true;
+  $("#s-bar-msg").textContent = "Modifications non enregistrées.";
+  const box = e.target.closest("#bareme-is, #bareme-cot");
+  if (box) refreshBracketBox(box, box.dataset.kind);
+});
+$("#card-baremes").addEventListener("change", e => {
+  if (e.target.id === "s-mode") { S.barDirty = true; toggleBaremeMode(); $("#s-bar-msg").textContent = "Modifications non enregistrées."; }
+  if (e.target.id === "s-cotbase") { S.barDirty = true; $("#s-bar-msg").textContent = "Modifications non enregistrées."; }
+});
+$("#card-baremes").addEventListener("click", e => {
+  const box = e.target.closest("#bareme-is, #bareme-cot");
+  if (!box) return;
+  if (e.target.closest(".br-add")) {
+    const rows = $$(".br-row", box), last = rows[rows.length - 1];
+    const prevVal = rows.length > 1 ? Number(rows[rows.length - 2].querySelector("[data-k=jusqua]").value) || 0 : 0;
+    const lastRate = Number(last.querySelector("[data-k=taux]").value) || 0;
+    box.querySelector(".br-rows").insertBefore(bracketRow({ jusqua: prevVal ? prevVal * 2 : 10000, taux: lastRate, libelle: "" }), last);
+  } else if (e.target.closest(".br-del")) {
+    e.target.closest(".br-row").remove();
+  } else return;
+  S.barDirty = true;
+  $("#s-bar-msg").textContent = "Modifications non enregistrées.";
+  refreshBracketBox(box, box.dataset.kind);
+});
+function validBrackets(list, name) {
+  const bounded = list.slice(0, -1);
+  for (let i = 0; i < bounded.length; i++) {
+    const v = bounded[i].jusqua;
+    if (!Number.isFinite(v) || v <= 0) return `${name} : chaque tranche sauf la dernière doit avoir un plafond.`;
+    if (i && v <= bounded[i - 1].jusqua) return `${name} : les plafonds doivent aller en croissant.`;
+  }
+  for (const b of list) if (!Number.isFinite(b.taux) || b.taux < 0 || b.taux > 100) return `${name} : chaque taux doit être compris entre 0 et 100 %.`;
+  return "";
+}
+$("#s-bar-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const mode = $("#s-mode").value;
+  const is = readBrackets($("#bareme-is")), cot = readBrackets($("#bareme-cot"));
+  if (mode === "progressif") {
+    const err = validBrackets(is, "Impôt") || validBrackets(cot, "Cotisations");
+    if (err) { $("#s-bar-msg").textContent = err; return; }
+  }
+  const clean = list => list.map(b => ({ jusqua: b.jusqua, taux: b.taux, libelle: b.libelle || "" }));
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, {
+    baremeMode: mode, baremeIS: clean(is), baremeCot: clean(cot), baremeCotBase: $("#s-cotbase").value, updatedAt: nowISO()
+  })));
+  if (ok) { S.barDirty = false; $("#s-bar-msg").textContent = mode === "progressif" ? "Barèmes enregistrés." : "Taux unique activé."; toast("Barèmes enregistrés."); renderBaremes(true); }
+});
 
 /* ---------- Onglets ---------- */
 function showTab(name) {

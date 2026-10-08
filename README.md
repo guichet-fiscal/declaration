@@ -1,6 +1,6 @@
-# Guichet fiscal
+# Guichet fiscal · Préfecture de police
 
-Site de la Direction des Impôts & Cotisations du serveur Grand Paris RP.
+Site de la Préfecture de police (Direction des impôts et cotisations) du serveur Grand Paris RP.
 Les entreprises et les services publics déposent leurs déclarations et leurs demandes sur Discord, avec les modèles du site. La Direction les saisit ici, émet les avis, arbitre les demandes et suit le Trésor.
 
 ## Qui possède quoi
@@ -75,6 +75,32 @@ Si l’écran « Accès pas encore accordé » s’affiche, l’identifiant qu�
 - **Avis en image** : chaque avis d’imposition, décision budgétaire et pénalité peut être copié en image pour être collé sur Discord.
 - **Pénalités et paiement en plusieurs fois** : depuis la fiche d’une entreprise ou le dossier d’une déclaration.
 - **Journal** : chaque action est inscrite par la base avec son auteur. Personne ne peut le modifier depuis le site.
+
+### Les barèmes par tranches
+
+Par défaut, l’impôt et les cotisations sont calculés par tranches, comme un vrai barème progressif : chaque tranche est taxée à son propre taux, et seule la part qui dépasse un seuil paie le taux supérieur. Une petite entreprise ne paie donc que les premières tranches.
+
+| Impôt sur les bénéfices nets | Taux |
+|---|---|
+| Jusqu’à 20 000 € | 0 % |
+| De 20 000 € à 100 000 € | 12 % |
+| De 100 000 € à 300 000 € | 22 % |
+| De 300 000 € à 600 000 € | 30 % |
+| De 600 000 € à 1 000 000 € | 38 % |
+| Au-delà de 1 000 000 € | 45 % |
+
+| Cotisations sur les salaires | Taux |
+|---|---|
+| Jusqu’à 20 000 € | 0 % |
+| De 20 000 € à 60 000 € | 18 % |
+| De 60 000 € à 100 000 € | 32 % |
+| De 100 000 € à 130 000 € | 38 % |
+| De 130 000 € à 150 000 € | 44 % |
+| Au-delà de 150 000 € | 80 % (surtaxe infraction) |
+
+Tout se modifie dans **Réglages → Barèmes par tranches** : ajouter ou supprimer une tranche, changer un plafond, un taux ou un libellé. Une tranche qui porte un libellé (comme « Surtaxe infraction ») déclenche une alerte quand une entreprise l’atteint. Le barème des salaires peut s’appliquer à la masse salariale totale ou au salaire moyen de chaque salarié. Le mode « Taux unique » reste disponible.
+
+Chaque déclaration garde le détail du calcul au moment de sa saisie : changer le barème ne modifie pas les avis déjà émis.
 
 ### Les alertes
 
