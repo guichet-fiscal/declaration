@@ -23,6 +23,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v3_discord.sql` : la table privée des salons Discord
 - `supabase/v4_inspection_cloture.sql` : le rôle Inspection et le verrou des semaines clôturées
 - `supabase/v5_pieces.sql` : l’espace privé des captures d’écran des contrôles fiscaux
+- `supabase/v6_direct.sql` : le journal en direct et la présence des agents
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -42,7 +43,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines) et `supabase/v5_pieces.sql` (captures des contrôles). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) et `supabase/v6_direct.sql` (journal en direct et présence des agents). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -211,6 +212,17 @@ L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; l
 ## Clôturer une semaine
 
 Une fois le délai de dépôt passé, **Tableau de bord → Clôturer la semaine** (ou **Recouvrement → Clôture des semaines**) affiche le bilan de la période puis la verrouille. Une semaine clôturée ne reçoit plus de déclaration, ses déclarations ne peuvent plus être modifiées ni supprimées, et le montant de ses avis est figé. Les encaissements, échéanciers, pénalités et relances restent possibles. Le verrou est posé par la base : il tient même si quelqu’un contourne le site. La Direction peut rouvrir la semaine à tout moment ; le bilan au jour de la clôture reste disponible en image.
+
+## Travailler à plusieurs, en direct
+
+Plus besoin de recharger la page : ce que fait un autre agent apparaît tout seul, dans les listes, le tableau de bord et la fenêtre que vous avez ouverte.
+
+- **Fenêtre ouverte** (fiche, déclaration, demande, contrôle, saisie, dossier de justice, bilan de semaine) : elle se met à jour sur place, sans perdre votre position, et indique qui vient de la changer. Si vous étiez en train d’écrire dedans, rien n’est effacé : un bandeau prévient, et **Afficher sa version** recharge la fenêtre quand vous êtes prêt.
+- **Deux agents sur le même dossier** : un enregistrement qui écraserait le travail de l’autre est arrêté. Le bandeau propose de voir sa version ou d’**Enregistrer quand même**. Les notes, pièces et suites s’ajoutent à celles de l’autre au lieu de les remplacer.
+- **Qui est en ligne** : le bouton en haut de page (« 2 autres en ligne ») liste les agents connectés et ce qu’ils consultent ; une fenêtre affiche « Léa consulte aussi ce dossier ». Le **Journal** se remplit en direct.
+- **Pied de page** : « En direct » quand tout va bien. Si le direct décroche (veille, réseau), le site relit le registre toutes les 15 secondes jusqu’à son retour, puis rattrape ce qui a été manqué.
+
+La présence et le journal en direct demandent d’avoir exécuté `supabase/v6_direct.sql`. Sans lui, le reste marche déjà.
 
 ## Recherche rapide
 

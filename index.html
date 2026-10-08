@@ -493,6 +493,22 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--rule);border
 .search-hit .meta{grid-column:2;font-size:12.5px;color:var(--ink-3)}
 @media (max-width:520px){.search-hit{grid-template-columns:minmax(0,1fr)}.search-hit .tag{grid-row:auto}.search-hit .meta{grid-column:1}}
 @media (display-mode: standalone){header.top .wrap{padding-top:max(14px,env(safe-area-inset-top))}}
+/* direct et travail à plusieurs */
+header.top{position:relative}
+.presence::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ink-3);margin-right:7px;vertical-align:1px}
+.presence.has-peers::before{background:var(--ok)}
+.pop{position:absolute;right:max(16px,calc((100vw - 1180px)/2));top:calc(100% - 6px);z-index:30;background:var(--sheet);border:1px solid var(--rule);border-radius:var(--r);box-shadow:0 12px 32px rgba(0,0,0,.14);padding:12px 14px;width:min(340px,calc(100vw - 32px))}
+.pop-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:650;color:var(--ink-3);margin-bottom:6px}
+.pop-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.pop-list li{display:grid;gap:1px;font-size:14px}
+.pop-list .meta{font-size:12.5px;color:var(--ink-3)}
+.live-note{font-size:12px;color:var(--ok);margin-top:3px;font-weight:600}
+.dlg-peers{font-size:12px;color:var(--accent);margin-top:3px;font-weight:600}
+.dlg-peers::before{content:"● ";color:var(--ok)}
+.live-stale{border-left-color:var(--accent);align-items:center;flex-wrap:wrap}
+#foot-sync.is-live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px;animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){#foot-sync.is-live::before{animation:none}}
 </style>
 </head>
 <body data-gate="chargement">
@@ -509,10 +525,12 @@ kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--rule);border
     <div class="who">
       <button class="btn ghost small" type="button" id="btn-install" hidden>Installer l’appli</button>
       <button class="btn ghost small" type="button" id="btn-search" aria-keyshortcuts="Control+K" title="Rechercher (Ctrl + K ou /)" hidden>Rechercher<kbd>Ctrl K</kbd></button>
+      <button class="btn ghost small presence" type="button" id="presence" aria-haspopup="true" hidden>En ligne</button>
       <span class="role" id="role">Connexion au registre…</span>
       <button class="btn ghost small" type="button" id="logout" hidden>Se déconnecter</button>
     </div>
   </div>
+  <div class="pop" id="presence-pop" hidden></div>
 </header>
 
 <nav class="tabs" aria-label="Guichets">
@@ -1699,7 +1717,8 @@ async function write(fn) {
     catch (e) {
       const code = e && e.code;
       if (code === "unavailable" && attempt === 0) { await sleep(400 + Math.random() * 600); continue; }
-      if (code === "refused") toast(e.message, true);
+      if (code === "conflict") { if (typeof S.onConflict === "function") S.onConflict(e.message); }
+      else if (code === "refused") toast(e.message, true);
       else if (code === "invalid_argument") {
         if (S.admin) { setReadOnly(); toast("Enregistrement refusé : votre accès ne permet que la lecture.", true); }
         else toast("Action réservée à la Direction.", true);
@@ -1797,34 +1816,93 @@ function makeStore(sb) {
     if (code === "PGRST301" || /jwt/i.test(msg)) return { code: "revoked", message: msg };
     return { code: "unavailable", message: msg || "Erreur réseau" };
   };
+  // Même contenu, quel que soit l'ordre des clés (la base range les clés à sa façon).
+  const same = (a, b) => {
+    if (a === b) return true;
+    if (!a || !b || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) !== Array.isArray(b)) return false;
+    const ka = Object.keys(a), kb = Object.keys(b);
+    return ka.length === kb.length && ka.every(k => same(a[k], b[k]));
+  };
+  // Changements reçus des autres agents : chemin → moment de réception (sert à repérer les conflits).
+  const remoteAt = new Map();
+  let lastLoad = 0, loading = null;
+  const emitRemote = list => {
+    const now = Date.now();
+    for (const c of list) remoteAt.set(c.path, now);
+    if (list.length && typeof S.onRemote === "function") { try { S.onRemote(list); } catch (e) { /* l'affichage suit au prochain rendu */ } }
+  };
   async function loadAll() {
-    const rows = [], step = 1000;
-    for (let from = 0; ; from += step) {
-      const { data, error } = await sb.from("registre").select("collection,id,data").order("collection").order("id").range(from, from + step - 1);
-      if (error) throw mapErr(error);
-      rows.push(...(data || []));
-      if (!data || data.length < step) break;
+    if (loading) return loading;
+    loading = (async () => {
+      const rows = [], step = 1000;
+      for (let from = 0; ; from += step) {
+        const { data, error } = await sb.from("registre").select("collection,id,data,updated_by").order("collection").order("id").range(from, from + step - 1);
+        if (error) throw mapErr(error);
+        rows.push(...(data || []));
+        if (!data || data.length < step) break;
+      }
+      const before = ready ? new Map(cache) : null, changes = [];
+      cache.clear();
+      for (const r of rows) {
+        const p = r.collection + "/" + r.id, d = r.data || {};
+        cache.set(p, d);
+        if (before) { const o = before.get(p); if (!same(o, d)) changes.push({ path: p, data: d, old: o, by: r.updated_by || null }); before.delete(p); }
+      }
+      if (before) for (const [p, o] of before) changes.push({ path: p, data: undefined, old: o, by: null });
+      ready = true;
+      lastLoad = Date.now();
+      notifyAll();
+      emitRemote(changes.filter(c => !c.by || c.by !== S.uid));
+    })();
+    try { return await loading; } finally { loading = null; }
+  }
+  function onRow(payload) {
+    if (payload.eventType === "DELETE") {
+      const o = payload.old || {}, p = o.collection && o.id ? o.collection + "/" + o.id : null;
+      if (!p || !cache.has(p)) return; // déjà retiré ici : c'était notre propre suppression
+      const old = cache.get(p);
+      cache.delete(p); notify([p]);
+      emitRemote([{ path: p, data: undefined, old, by: null }]);
+      return;
     }
-    cache.clear();
-    for (const r of rows) cache.set(r.collection + "/" + r.id, r.data || {});
-    ready = true;
-    notifyAll();
+    const n = payload.new || {};
+    if (!n.collection || !n.id) return;
+    const p = n.collection + "/" + n.id, d = n.data || {}, old = cache.get(p);
+    if (same(old, d)) return; // écho de notre propre enregistrement
+    cache.set(p, d); notify([p]);
+    if (!n.updated_by || n.updated_by !== S.uid) emitRemote([{ path: p, data: d, old, by: n.updated_by || null }]);
   }
   function startLive() {
+    // Le direct passe par Supabase Realtime. S'il décroche (veille, réseau, jeton expiré),
+    // le registre est relu toutes les 15 secondes jusqu'à son retour, puis relu une fois
+    // pour rattraper ce qui a pu être manqué entre-temps.
+    let wasDown = false;
+    const setLive = v => { if (S.live !== v) { S.live = v; if (typeof S.onLive === "function") S.onLive(v); } };
     try {
-      sb.channel("registre-direct").on("postgres_changes", { event: "*", schema: "public", table: "registre" }, payload => {
-        if (payload.eventType === "DELETE") {
-          const o = payload.old || {};
-          if (o.collection && o.id) { cache.delete(o.collection + "/" + o.id); notify([o.collection + "/" + o.id]); }
-        } else {
-          const n = payload.new || {};
-          if (n.collection && n.id) { cache.set(n.collection + "/" + n.id, n.data || {}); notify([n.collection + "/" + n.id]); }
-        }
-      }).subscribe();
-    } catch (e) { /* le rafraîchissement périodique prend le relais */ }
-    setInterval(() => { if (document.visibilityState === "visible") loadAll().catch(() => {}); }, 60000);
+      sb.channel("registre-direct").on("postgres_changes", { event: "*", schema: "public", table: "registre" }, onRow).subscribe(status => {
+        if (status === "SUBSCRIBED") { setLive(true); if (wasDown) { wasDown = false; loadAll().catch(() => {}); } }
+        else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") { wasDown = true; setLive(false); }
+      });
+    } catch (e) { setLive(false); }
+    try {
+      sb.auth.onAuthStateChange((ev, session) => {
+        if (session && session.access_token && (ev === "TOKEN_REFRESHED" || ev === "SIGNED_IN")) { try { sb.realtime.setAuth(session.access_token); } catch (e) { /* jeton repris au prochain essai */ } }
+      });
+    } catch (e) { /* sans effet */ }
+    setInterval(() => {
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      const every = S.live ? 120e3 : 15e3;
+      if (Date.now() - lastLoad >= every) loadAll().catch(() => {});
+    }, 5000);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") loadAll().catch(() => {}); });
     window.addEventListener("online", () => { loadAll().catch(() => {}); });
+  }
+  // Un enregistrement sur un dossier modifié par un autre agent depuis que vous l'avez
+  // ouvert est arrêté : il écraserait son travail sans que vous l'ayez vu.
+  function conflictCheck(path) {
+    if (typeof S.editSinceFor !== "function") return;
+    const since = S.editSinceFor(path), at = remoteAt.get(path);
+    if (since && at && at > since && S.forceWrite !== path) throw { code: "conflict", message: path };
   }
   function listen(map, key, next, snap) {
     if (!map.has(key)) map.set(key, new Set());
@@ -1842,8 +1920,10 @@ function makeStore(sb) {
       onSnapshot(next) { return listen(docL, path, next, docSnap); },
       async set(data) {
         const body = JSON.parse(JSON.stringify(data));
+        conflictCheck(path);
         const { error } = await sb.from("registre").upsert({ collection: col, id, data: body }, { onConflict: "collection,id" });
         if (error) throw mapErr(error);
+        remoteAt.delete(path); if (S.forceWrite === path) S.forceWrite = null;
         cache.set(path, body); notify([path]);
       },
       async update(partial) {
@@ -1851,6 +1931,7 @@ function makeStore(sb) {
         return ref.set(Object.assign({}, cache.get(path), JSON.parse(JSON.stringify(partial))));
       },
       async delete() {
+        conflictCheck(path);
         const { data, error } = await sb.from("registre").delete().eq("collection", col).eq("id", id).select("id");
         if (error) throw mapErr(error);
         if (cache.has(path) && (!data || !data.length)) throw { code: "invalid_argument", message: "Suppression refusée" };
@@ -1952,6 +2033,7 @@ async function init() {
   S.connected = true;
   subscribe();
   store.startLive();
+  startCollab();
   if (S.role !== "direction" && S.role !== "inspecteur") setReadOnly();
   else {
     applyRole();
@@ -2060,7 +2142,7 @@ function render() {
   renderExoSettings();
   renderRecouvSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
-  $("#foot-sync").textContent = S.connected ? (S.loaded.has("declarations") ? "Registre synchronisé" : "Synchronisation…") : "";
+  drawSync();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -5572,6 +5654,13 @@ function newControle(e, declIds) {
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: create, text: "Ouvrir le contrôle" })]
   });
 }
+// Ajout ou retrait dans une liste (notes, pièces) : repart de la dernière version reçue,
+// pour ne jamais effacer ce qu'un autre agent vient d'ajouter au même contrôle.
+async function saveControleList(c, field, fn, msg) {
+  const latest = S.controles.find(x => x.id === c.id) || c;
+  S.forceWrite = "controles/" + c.id;
+  return saveControle(latest, { [field]: fn((latest[field] || []).slice()) }, msg);
+}
 async function saveControle(c, patch, msg) {
   const body = Object.assign({}, c, patch);
   delete body.id;
@@ -5602,7 +5691,7 @@ async function pieceBlobUrl(path) {
 const storageHelp = err => (/bucket|not found|row-level|policy/i.test((err && err.message) || "") ? "L’espace des pièces n’est pas prêt : exécutez supabase/v5_pieces.sql (voir le README)." : "Envoi refusé : " + ((err && err.message) || "erreur"));
 async function addPieces(c, files, legende) {
   let n = 0;
-  const pieces = (c.pieces || []).slice();
+  const pieces = [];
   for (const f of files) {
     if (!/^image\//.test(f.type)) { toast(`« ${f.name} » n’est pas une image.`, true); continue; }
     if (piecesUsed() > PIECES_QUOTA * 0.98) { toast("L’espace des pièces est presque plein (1 Go) : retirez d’anciennes captures ou ajoutez un lien.", true); break; }
@@ -5614,7 +5703,7 @@ async function addPieces(c, files, legende) {
     pieces.push({ id: pid, type: "image", path, nom: f.name, taille: blob.size, legende: legende || "", at: nowISO(), auteur: S.agentName || "" });
     n++;
   }
-  if (n && await saveControle(c, { pieces }, `${n} pièce${plural(n)} ajoutée${plural(n)}.`)) return true;
+  if (n && await saveControleList(c, "pieces", l => l.concat(pieces), `${n} pièce${plural(n)} ajoutée${plural(n)}.`)) return true;
   return false;
 }
 function openControle(id) {
@@ -5641,7 +5730,7 @@ function openControle(id) {
     const cap = h("figcaption", {}, h("span", { text: p.legende || p.nom || "Pièce" }), h("span", { class: "meta", text: `${p.auteur || ""} · ${fmtDate(new Date(p.at))}${p.taille ? " · " + fmtSize(p.taille) : ""}` }),
       dir && open ? h("button", { class: "linkbtn", type: "button", onclick: async () => {
         if (p.path) { const { error } = await S.sb.storage.from("pieces").remove([p.path]); if (error) { toast(storageHelp(error), true); return; } }
-        if (await saveControle(c0, { pieces: (c0.pieces || []).filter(x => x.id !== p.id) }, "Pièce retirée.")) reopen();
+        if (await saveControleList(c0, "pieces", l => l.filter(x => x.id !== p.id), "Pièce retirée.")) reopen();
       }, text: "Retirer" }) : null);
     if (p.type === "lien") { fig.append(h("a", { class: "piece-link", href: p.url, target: "_blank", rel: "noopener noreferrer", text: "Ouvrir le lien ↗" }), cap); return fig; }
     const a = h("a", { class: "piece-img", target: "_blank", rel: "noopener" }, h("span", { class: "muted", text: "Chargement…" }));
@@ -5660,8 +5749,8 @@ function openControle(id) {
       const v = url.value.trim();
       if (!/^https:\/\/\S+$/.test(v)) { perr.textContent = "Collez une adresse qui commence par https://"; return; }
       if (/cdn\.discordapp\.com|media\.discordapp\.net/.test(v)) { perr.textContent = "Les liens d’images Discord expirent au bout d’environ une journée : collez le lien du message (clic droit → Copier le lien du message) ou ajoutez la capture comme image."; return; }
-      const pieces = (c0.pieces || []).concat([{ id: shortId(), type: "lien", url: v, legende: leg.value.trim(), at: nowISO(), auteur: S.agentName || "" }]);
-      if (await saveControle(c0, { pieces }, "Lien ajouté.")) reopen();
+      const item = { id: shortId(), type: "lien", url: v, legende: leg.value.trim(), at: nowISO(), auteur: S.agentName || "" };
+      if (await saveControleList(c0, "pieces", l => l.concat([item]), "Lien ajouté.")) reopen();
     };
     pieceForm = h("div", { class: "decide" },
       h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pc-leg", text: "Légende" }), leg), h("div", { class: "field" }, h("label", { for: "pc-file", text: "Captures d’écran" }), file)),
@@ -5676,7 +5765,8 @@ function openControle(id) {
     notes.length ? h("ul", { class: "notes" }, notes.map(n => h("li", {}, h("span", { class: "meta", text: `${fmtDateTime(new Date(n.at))} · ${n.auteur || "—"}` }), h("p", { class: "prewrap", text: n.texte })))) : h("p", { class: "muted", style: "margin:0", text: "Aucune note." }),
     ag && open ? h("div", { class: "paste-row", style: "margin-top:8px" }, noteIn, h("button", { class: "btn ghost small", type: "button", onclick: async () => {
       const t = noteIn.value.trim(); if (!t) return;
-      if (await saveControle(c0, { notes: (c0.notes || []).concat([{ at: nowISO(), auteur: S.agentName || "", texte: t }]) }, "Note ajoutée.")) reopen();
+      const item = { at: nowISO(), auteur: S.agentName || "", texte: t };
+      if (await saveControleList(c0, "notes", l => l.concat([item]), "Note ajoutée.")) reopen();
     }, text: "Ajouter la note" })) : null);
 
   // Rectifications : montants retenus par période, qualification, total.
@@ -6233,7 +6323,9 @@ function openTransmission(id) {
         b.disabled = false;
       }, text: "Télécharger le PDF" }),
       dir ? h("button", { class: "btn ink small", type: "button", onclick: async () => {
-        const body = Object.assign({}, t, { statut: sel.value, suites: (t.suites || []).concat([{ at: nowISO(), statut: sel.value, note: note.value.trim(), auteur: S.agentName || "" }]) });
+        const t2 = S.transmissions.find(x => x.id === t.id) || t;
+        S.forceWrite = "transmissions/" + t.id;
+        const body = Object.assign({}, t2, { statut: sel.value, suites: (t2.suites || []).concat([{ at: nowISO(), statut: sel.value, note: note.value.trim(), auteur: S.agentName || "" }]) });
         delete body.id;
         if (await write(() => S.db.doc("transmissions/" + id).set(body))) { toast("Suite enregistrée."); openTransmission(id); }
       }, text: "Enregistrer la suite" }) : null].filter(Boolean)
@@ -6264,6 +6356,254 @@ $("#r-save").addEventListener("click", async () => {
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
   if (ok) { S.recDirty = false; $("#r-msg").textContent = "Réglages du recouvrement enregistrés."; toast("Réglages du recouvrement enregistrés."); renderRecouvSettings(true); }
 });
+
+/* ---------- Travail à plusieurs, en direct ---------- */
+// Chaque changement fait par un autre agent arrive tout seul : listes, tableaux de bord et
+// fenêtre ouverte se mettent à jour. Si vous étiez en train d'écrire dans cette fenêtre, rien
+// n'est effacé : un bandeau prévient, et un enregistrement qui écraserait son travail est arrêté.
+const collab = { peers: [], presence: null, journal: null, names: new Map(), by: new Map(), timer: 0, pending: [], viewT: 0 };
+const pathEnt = c => {
+  const v = c.data || c.old || {};
+  if (v.entrepriseId) return v.entrepriseId;
+  const [col, id] = c.path.split("/");
+  if (col === "entreprises") return id;
+  if (col === "decisions" || col === "echeanciers") { const d = S.declarations.find(x => x.id === id); return d ? d.entrepriseId : (v.entrepriseId || null); }
+  return null;
+};
+const isCfg = c => c.path === "config/main";
+function noteAuthor(c) {
+  if (!c.by) return;
+  const nom = collab.names.get(c.by);
+  if (nom) collab.by.set(c.path, { nom, at: Date.now() });
+}
+// Nom de l'agent qui a changé ce dossier : par la présence, le journal en direct, ou le journal.
+async function whoChanged(path, by) {
+  if (by && collab.names.get(by)) return collab.names.get(by);
+  const k = collab.by.get(path);
+  if (k && Date.now() - k.at < 120e3) return k.nom;
+  try {
+    const [col, id] = path.split("/");
+    const { data } = await S.sb.from("journal").select("auteur").eq("collection", col).eq("doc_id", id).order("at", { ascending: false }).limit(1);
+    return (data && data[0] && data[0].auteur) || "";
+  } catch (e) { return ""; }
+}
+const joinNames = list => { const u = [...new Set(list.filter(Boolean))]; return u.length <= 1 ? (u[0] || "") : u.slice(0, -1).join(", ") + " et " + u[u.length - 1]; };
+
+// Fenêtres « en direct » : la fiche, un dossier, un contrôle, une saisie, un dossier de justice, une semaine.
+let dlgSeq = 0;
+const baseOpenDialog = openDialog;
+openDialog = function (o) {
+  dlgSeq++;
+  dlg._live = null; dlg._dirty = false; dlg._openedAt = Date.now(); S.forceWrite = null;
+  return baseOpenDialog(o);
+};
+const markDirty = e => { if (e.target && e.target.id !== "q-in" && !(e.target.closest && e.target.closest(".live-stale"))) dlg._dirty = true; };
+dlg.addEventListener("input", markDirty);
+dlg.addEventListener("change", markDirty);
+// L'événement « close » arrive après coup : une fenêtre rouverte entre-temps garde son suivi.
+dlg.addEventListener("close", () => { if (!dlg.open) { dlg._live = null; setView(); } });
+let pointerDown = false;
+dlg.addEventListener("pointerdown", () => { pointerDown = true; });
+window.addEventListener("pointerup", () => { pointerDown = false; });
+function liveView(fn, info) {
+  return function (...args) {
+    const seq = dlgSeq, r = fn.apply(this, args);
+    if (dlgSeq !== seq) {
+      const v = info(...args);
+      if (v) { dlg._live = v; drawDlgPeers(); setView(); }
+    }
+    return r;
+  };
+}
+function gone() { closeDialog(); toast("Ce dossier vient d’être supprimé par un autre agent.", true); }
+const entMatch = id => c => isCfg(c) || pathEnt(c) === id;
+openFiche = liveView(openFiche, (e, opts) => e && e.id ? { key: "ent:" + e.id, label: "Fiche · " + e.nom, match: entMatch(e.id),
+  reopen: () => { const e2 = S.entreprises.find(x => x.id === e.id); if (e2) openFiche(e2, opts); else gone(); } } : null);
+openDecl = liveView(openDecl, id => { const d = S.declarations.find(x => x.id === id); return d ? { key: "decl:" + id, label: `Déclaration ${dossierNo("DF", id)} · ${d.entrepriseNom}`,
+  match: c => c.path.endsWith("/" + id) || entMatch(d.entrepriseId)(c), reopen: () => S.declarations.some(x => x.id === id) ? openDecl(id) : gone() } : null; });
+openDem = liveView(openDem, id => { const dm = S.demandes.find(x => x.id === id); return dm ? { key: "dem:" + id, label: `Demande ${dossierNo("DM", id)} · ${dm.service}`,
+  match: c => isCfg(c) || c.path === "demandes/" + id || c.path === "arbitrages/" + id, reopen: () => S.demandes.some(x => x.id === id) ? openDem(id) : gone() } : null; });
+openControle = liveView(openControle, id => { const c0 = S.controles.find(x => x.id === id); return c0 ? { key: "ctrl:" + id, label: `Contrôle ${dossierNo("CF", id)} · ${c0.entrepriseNom}`,
+  match: c => c.path === "controles/" + id || entMatch(c0.entrepriseId)(c), reopen: () => S.controles.some(x => x.id === id) ? openControle(id) : gone() } : null; });
+openSaisieDetail = liveView(openSaisieDetail, id => { const s = S.saisies.find(x => x.id === id); return s ? { key: "sai:" + id, label: `Saisie ${dossierNo("SA", id)} · ${s.entrepriseNom}`,
+  match: c => c.path === "saisies/" + id || entMatch(s.entrepriseId)(c), reopen: () => S.saisies.some(x => x.id === id) ? openSaisieDetail(id) : gone() } : null; });
+openTransmission = liveView(openTransmission, id => { const t = S.transmissions.find(x => x.id === id); return t ? { key: "tj:" + id, label: `Justice ${dossierNo("TJ", id)} · ${t.entrepriseNom}`,
+  match: c => c.path === "transmissions/" + id || entMatch(t.entrepriseId)(c), reopen: () => S.transmissions.some(x => x.id === id) ? openTransmission(id) : gone() } : null; });
+openCloture = liveView(openCloture, key => ({ key: "clo:" + key, label: "Bilan · " + periodPlain(key),
+  match: c => isCfg(c) || ["clotures", "declarations", "decisions", "echeanciers", "entreprises"].includes(c.path.split("/")[0]), reopen: () => openCloture(key) }));
+startEditDecl = (base => function (...a) { const r = base.apply(this, a); if (S.editDecl) S.editSince = Date.now(); setView(); return r; })(startEditDecl);
+startEditDem = (base => function (...a) { const r = base.apply(this, a); if (S.editDem) S.editSince = Date.now(); setView(); return r; })(startEditDem);
+S.editSinceFor = path => {
+  if (S.editDecl && path === "declarations/" + S.editDecl) return S.editSince || 0;
+  if (S.editDem && path === "demandes/" + S.editDem) return S.editSince || 0;
+  return dlg.open && dlg._live ? dlg._openedAt : 0;
+};
+
+function rerender(note) {
+  const v = dlg._live;
+  if (!v || !dlg.open) return;
+  if (pointerDown) { setTimeout(() => rerender(note), 300); return; }
+  const body = $(".dlg-body", dlg), top = body ? body.scrollTop : 0, ae = document.activeElement;
+  const fid = ae && dlg.contains(ae) ? ae.id : "", ftxt = ae && dlg.contains(ae) && !ae.id ? (ae.textContent || "").trim() : "";
+  v.reopen();
+  if (!dlg.open) return;
+  const nb = $(".dlg-body", dlg);
+  if (nb) nb.scrollTop = top;
+  const back = fid ? document.getElementById(fid) : ftxt ? $$("button", dlg).find(b => (b.textContent || "").trim() === ftxt) : null;
+  if (back && dlg.contains(back)) { try { back.focus({ preventScroll: true }); } catch (e) { /* focus impossible */ } }
+  if (note) {
+    const titles = $(".dlg-titles", dlg);
+    if (titles) { const n = h("div", { class: "live-note", text: note }); titles.append(n); setTimeout(() => n.remove(), 6000); }
+  }
+}
+function staleBanner(text, conflictPath) {
+  const body = $(".dlg-body", dlg);
+  if (!body) return;
+  let b = $(".live-stale", body);
+  if (!b) { b = h("div", { class: "notice live-stale", role: "status" }); body.prepend(b); }
+  fill(b, h("div", { style: "flex:1" }, h("strong", { text: text + " " }), conflictPath
+      ? "Votre enregistrement a été arrêté pour ne pas écraser son travail."
+      : "Ce que vous êtes en train de saisir n’est pas encore enregistré."),
+    h("div", { class: "row-actions" },
+      h("button", { class: "btn small", type: "button", onclick: () => rerender(""), text: "Afficher sa version" }),
+      conflictPath ? h("button", { class: "btn ghost small", type: "button", onclick: () => { S.forceWrite = conflictPath; fill(b, h("div", {}, h("strong", { text: "Écrasement autorisé. " }), "Cliquez de nouveau sur votre bouton d’enregistrement : votre version remplacera la sienne.")); }, text: "Enregistrer quand même" }) : null));
+  body.scrollTop = 0;
+}
+S.onRemote = changes => {
+  changes.forEach(noteAuthor);
+  const editing = S.editDecl ? "declarations/" + S.editDecl : S.editDem ? "demandes/" + S.editDem : null;
+  const e = editing && changes.find(c => c.path === editing);
+  if (e) whoChanged(e.path, e.by).then(n => toast(`${n || "Un autre agent"} vient ${e.data ? "de modifier" : "de supprimer"} le dossier que vous modifiez.${e.data ? " Enregistrer écraserait sa version : annulez puis reprenez la modification pour partir de la sienne." : ""}`, true));
+  const v = dlg.open && dlg._live;
+  if (!v) return;
+  const hits = changes.filter(c => { try { return v.match(c); } catch (x) { return false; } });
+  if (!hits.length) return;
+  collab.pending.push(...hits);
+  clearTimeout(collab.timer);
+  collab.timer = setTimeout(async () => {
+    const list = collab.pending.splice(0);
+    const names = await Promise.all(list.slice(0, 4).map(c => whoChanged(c.path, c.by)));
+    const who = joinNames(names);
+    if (!dlg.open || dlg._live !== v) return;
+    if (dlg._dirty) staleBanner(`${who || "Un autre agent"} vient de modifier ce dossier.`);
+    else rerender(`Mis à jour à l’instant${who ? " · " + who : ""}`);
+  }, 350);
+};
+// Enregistrement arrêté : le bandeau propose de voir sa version ou d'écraser.
+S.onConflict = async path => {
+  const at = Date.now(), who = await whoChanged(path, null);
+  const msg = `${who || "Un autre agent"} a modifié ce dossier pendant votre saisie.`;
+  if (dlg.open && dlg._live) staleBanner(msg, path);
+  else { S.forceWrite = path; toast(msg + " Rien n’a été enregistré ; enregistrez de nouveau pour écraser sa version.", true); }
+  return at;
+};
+S.onLive = () => drawSync();
+function drawSync() {
+  const el = $("#foot-sync");
+  if (!el) return;
+  el.classList.toggle("is-live", !!(S.connected && S.live));
+  el.textContent = !S.connected ? "" : !S.loaded.has("declarations") ? "Synchronisation…" : S.live ? "En direct" : "Actualisation toutes les 15 s";
+  el.title = S.live ? "Les changements des autres agents arrivent tout seuls." : "Le direct est momentanément indisponible : le registre est relu régulièrement.";
+}
+
+// Présence : qui est connecté et ce qu'il regarde (salon privé, réservé aux agents).
+function myView() {
+  const v = dlg.open && dlg._live;
+  if (v) return { cle: v.key, vue: v.label };
+  if (S.editDecl) return { cle: "decl:" + S.editDecl, vue: "Modifie la déclaration " + dossierNo("DF", S.editDecl) };
+  if (S.editDem) return { cle: "dem:" + S.editDem, vue: "Modifie la demande " + dossierNo("DM", S.editDem) };
+  const t = $("#tab-btn-" + S.tab);
+  return { cle: "tab:" + S.tab, vue: t ? t.textContent.trim() : "" };
+}
+function setView() {
+  drawDlgPeers();
+  clearTimeout(collab.viewT);
+  collab.viewT = setTimeout(() => { if (collab.presence) collab.presence.track(Object.assign({ uid: S.uid, nom: S.agentName || "Agent", role: S.role || "", at: nowISO() }, myView())).catch(() => {}); }, 400);
+}
+function readPresence(ch) {
+  const st = ch.presenceState(), out = [];
+  for (const k of Object.keys(st)) {
+    const list = (st[k] || []).slice().sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+    if (!list.length) continue;
+    const p = list[0];
+    if (p.uid) collab.names.set(p.uid, p.nom || "");
+    if (p.uid !== S.uid) out.push(Object.assign({}, p, { tabs: list.length }));
+  }
+  collab.peers = out.sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  drawPresence(); drawDlgPeers();
+}
+function drawPresence() {
+  const b = $("#presence");
+  if (!b) return;
+  if (!collab.presence) { b.hidden = true; return; }
+  b.hidden = false;
+  const n = collab.peers.length;
+  b.textContent = n ? `${n} autre${plural(n)} en ligne` : "Seul en ligne";
+  b.classList.toggle("has-peers", n > 0);
+  b.title = n ? collab.peers.map(p => `${p.nom} : ${p.vue || "—"}`).join("\n") : "Aucun autre agent connecté pour l’instant.";
+  const pop = $("#presence-pop");
+  if (pop && !pop.hidden) drawPresencePop();
+}
+function drawPresencePop() {
+  const pop = $("#presence-pop");
+  fill(pop, h("div", { class: "pop-title", text: "Agents connectés" }),
+    h("ul", { class: "pop-list" },
+      h("li", {}, h("strong", { text: (S.agentName || "Vous") + " (vous)" }), h("span", { class: "meta", text: myView().vue || "—" })),
+      collab.peers.map(p => h("li", {}, h("strong", { text: p.nom || "Agent" }), h("span", { class: "meta", text: [ROLE_LABEL[p.role] || "", p.vue || ""].filter(Boolean).join(" · ") })))),
+    collab.peers.length ? null : h("p", { class: "hint", style: "margin:6px 0 0", text: "Personne d’autre pour l’instant." }));
+}
+function drawDlgPeers() {
+  if (!dlg.open) return;
+  const titles = $(".dlg-titles", dlg);
+  if (!titles) return;
+  let el = $(".dlg-peers", titles);
+  const v = dlg._live, here = v ? collab.peers.filter(p => p.cle === v.key) : [];
+  if (!here.length) { if (el) el.remove(); return; }
+  if (!el) { el = h("div", { class: "dlg-peers" }); titles.append(el); }
+  el.textContent = `${joinNames(here.map(p => p.nom))} ${here.length > 1 ? "consultent" : "consulte"} aussi ce dossier`;
+}
+$("#presence").addEventListener("click", ev => {
+  ev.stopPropagation();
+  const pop = $("#presence-pop");
+  pop.hidden = !pop.hidden;
+  if (!pop.hidden) drawPresencePop();
+});
+document.addEventListener("click", ev => { const pop = $("#presence-pop"); if (pop && !pop.hidden && !pop.contains(ev.target)) pop.hidden = true; });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") { const pop = $("#presence-pop"); if (pop) pop.hidden = true; } });
+showTab = (base => function (...a) { const r = base.apply(this, a); setView(); return r; })(showTab);
+
+function startCollab() {
+  const sb = S.sb;
+  if (!sb || !sb.channel) return;
+  // 1. Présence (demande supabase/v6_direct.sql : sans lui, le salon privé est refusé et rien ne s'affiche).
+  try {
+    const ch = sb.channel("guichet:presence", { config: { private: true, presence: { key: S.uid || "anonyme" } } });
+    ch.on("presence", { event: "sync" }, () => readPresence(ch));
+    ch.subscribe(status => {
+      if (status === "SUBSCRIBED") { collab.presence = ch; setView(); drawPresence(); }
+      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        if (!collab.presence) { try { sb.removeChannel(ch); } catch (e) { /* salon fermé */ } drawPresence(); }
+      }
+    });
+  } catch (e) { /* présence indisponible */ }
+  // 2. Journal en direct (même script SQL) ; à défaut, relu toutes les 30 s quand l'onglet est ouvert.
+  try {
+    const jc = sb.channel("journal-direct").on("postgres_changes", { event: "INSERT", schema: "public", table: "journal" }, p => {
+      const r = p.new || {};
+      if (r.collection && r.doc_id && r.auteur) collab.by.set(r.collection + "/" + r.doc_id, { nom: r.auteur, at: Date.now() });
+      if (S.journalLoaded && Array.isArray(S.journal) && !S.journal.some(x => x.id === r.id)) {
+        S.journal.unshift(r); if (S.journal.length > 1000) S.journal.length = 1000;
+        if (S.tab === "journal") renderJournal();
+      }
+    });
+    jc.subscribe(status => {
+      if (status === "SUBSCRIBED") collab.journal = jc;
+      else if ((status === "CHANNEL_ERROR" || status === "TIMED_OUT") && !collab.journal) { try { sb.removeChannel(jc); } catch (e) { /* salon fermé */ } }
+    });
+  } catch (e) { /* journal relu à la demande */ }
+  setInterval(() => { if (!collab.journal && S.tab === "journal" && document.visibilityState === "visible") loadJournal(); }, 30e3);
+  drawSync();
+}
 
 /* ---------- Recherche rapide ---------- */
 // Un seul champ pour retrouver une entreprise, un patron ou n'importe quel numéro de dossier
