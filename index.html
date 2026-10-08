@@ -394,6 +394,16 @@ table.compact td{padding:8px 10px}
 .calc-detail .row{display:flex;justify-content:space-between;gap:10px}
 .calc-detail .row b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
 .calc-detail h4{margin:4px 0 0;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
+/* Salariés détaillés */
+.sal-box{display:grid;gap:6px;margin-bottom:8px}
+.sal-label{font-weight:600;font-size:13.5px}
+.sal-head,.sal-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 110px 32px;gap:8px;align-items:center}
+.sal-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
+.sal-rows{display:grid;gap:6px}
+.sal-row input{padding:7px 9px;font-size:14px}
+.sal-cot{font-size:13px;text-align:right;color:var(--ink-2)}
+input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
+@media (max-width:520px){.sal-head{display:none}.sal-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px}.sal-row .sal-cot{grid-column:1/3;text-align:left}}
 </style>
 </head>
 <body data-gate="chargement">
@@ -707,6 +717,12 @@ table.compact td{padding:8px 10px}
             <span class="hint">Achats de stock, matières, loyers, carburant, réparations.</span>
           </div></div>
           <div class="case"><div class="case-no">03</div><div class="case-body">
+            <div class="sal-box" id="d-sal" hidden>
+              <span class="sal-label">Salariés et salaires versés</span>
+              <div class="sal-head" aria-hidden="true"><span>Salarié</span><span>Salaire</span><span>Cotisation</span><span></span></div>
+              <div class="sal-rows" id="d-sal-rows"></div>
+              <div class="paste-row"><button class="btn ghost small" type="button" id="d-sal-add">Ajouter un salarié</button><span class="hint" id="d-sal-hint"></span></div>
+            </div>
             <div class="row2">
               <div class="field">
                 <label for="d-ms">Masse salariale versée</label>
@@ -717,7 +733,7 @@ table.compact td{padding:8px 10px}
                 <input id="d-nb" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
               </div>
             </div>
-            <span class="hint">Base des cotisations sociales.</span>
+            <span class="hint" id="d-ms-hint">Base des cotisations sociales.</span>
           </div></div>
           <div class="case"><div class="case-no">B</div><div class="case-body">
             <div class="row2">
@@ -975,9 +991,10 @@ table.compact td{padding:8px 10px}
             </div>
             <div class="field">
               <label for="s-cotbase">Base du barème des salaires</label>
-              <select id="s-cotbase"><option value="masse">Masse salariale totale</option><option value="salarie">Salaire moyen par salarié</option></select>
+              <select id="s-cotbase"><option value="individuel">Chaque salaire séparément</option><option value="masse">Masse salariale totale</option><option value="salarie">Salaire moyen par salarié</option></select>
             </div>
           </div>
+          <p class="hint" id="s-cotbase-hint" style="margin:8px 0 0"></p>
           <div id="bareme-editors">
             <div id="bareme-is"></div>
             <div id="bareme-cot"></div>
@@ -1124,7 +1141,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
   budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {},
-  baremeMode: "progressif", baremeCotBase: "masse",
+  baremeMode: "progressif", baremeCotBase: "individuel",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
   baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
   services: ["Police nationale", "Gendarmerie", "SAMU", "Sapeurs-pompiers", "Mairie", "Justice", "Douane"]
@@ -1240,21 +1257,28 @@ function periodPlain(key) {
 }
 
 /* ---------- Calculs ---------- */
-function compute(ca, ch, ms, late, c, nb) {
+function compute(ca, ch, ms, late, c, nb, salaries) {
   c = c || cfg();
   const resultat = ca - ch - ms;
   let impot, cotisations, detail = null;
   if (c.baremeMode !== "unique") {
     const is = progressive(Math.max(0, resultat), c.baremeIS);
-    let cot;
-    if (c.baremeCotBase === "salarie" && nb > 0) {
+    let cot, salDetail = null;
+    if (c.baremeCotBase === "individuel" && Array.isArray(salaries) && salaries.length) {
+      const per = salaries.map(x => { const v = Math.max(0, Number(x.salaire) || 0); const r = progressive(v, c.baremeCot); return { nom: x.nom || "", salaire: Math.round(v), cotisation: r.total, taux: effRate(r.total, v), tranches: r.tranches }; });
+      const agg = {};
+      per.forEach(pp => pp.tranches.forEach(t => { agg[t.de] = agg[t.de] || Object.assign({}, t, { base: 0, montant: 0 }); agg[t.de].base += t.base; agg[t.de].montant += t.montant; }));
+      cot = { total: per.reduce((x, pp) => x + pp.cotisation, 0), tranches: Object.values(agg).sort((a, b) => a.de - b.de) };
+      salDetail = per.map(({ nom, salaire, cotisation, taux }) => ({ nom, salaire, cotisation, taux }));
+    } else if (c.baremeCotBase === "salarie" && nb > 0) {
       const per = progressive(ms / nb, c.baremeCot);
       const tr = per.tranches.map(t => Object.assign({}, t, { base: Math.round(t.base * nb), montant: Math.round(t.montant * nb) }));
       cot = { total: tr.reduce((x, t) => x + t.montant, 0), tranches: tr };
     } else cot = progressive(ms, c.baremeCot);
     impot = is.total;
     cotisations = cot.total;
-    detail = { is: is.tranches, cot: cot.tranches, cotBase: c.baremeCotBase === "salarie" && nb > 0 ? "salarie" : "masse" };
+    detail = { is: is.tranches, cot: cot.tranches, cotBase: salDetail ? "individuel" : c.baremeCotBase === "salarie" && nb > 0 ? "salarie" : "masse" };
+    if (salDetail) detail.salaries = salDetail;
   } else {
     impot = Math.round(Math.max(0, resultat) * (Number(c.tauxIS) || 0) / 100);
     cotisations = Math.round(ms * (Number(c.tauxCot) || 0) / 100);
@@ -1344,7 +1368,9 @@ function alertsFor(d) {
   if (nb > 0 && ms === 0) out.push("Salariés déclarés sans salaires");
   if (ms > 0 && nb === 0) out.push("Salaires versés sans salarié");
   const smin = Number(c.salaireMin) || 0;
-  if (smin > 0 && nb > 0 && ms > 0 && ms / nb < smin) out.push(`Salaire moyen sous le minimum (${money(ms / nb)} par salarié)`);
+  const sals = d.detail && d.detail.salaries;
+  if (smin > 0 && sals) { const low = sals.filter(x => x.salaire < smin); if (low.length) out.push(`${low.length} salarié${plural(low.length)} sous le salaire minimum (${low.slice(0, 3).map(x => x.nom || "sans nom").join(", ")}${low.length > 3 ? "…" : ""})`); }
+  else if (smin > 0 && nb > 0 && ms > 0 && ms / nb < smin) out.push(`Salaire moyen sous le minimum (${money(ms / nb)} par salarié)`);
   if (ca > 0 && ch >= ca * 0.9) out.push("Charges supérieures à 90 % du chiffre d’affaires");
   if (ca === 0 && nb > 0) out.push("Aucun chiffre d’affaires avec des salariés");
   if (hist.slice(-3).concat([d]).filter(x => x.enRetard).length >= 2) out.push("Retards répétés");
@@ -1749,6 +1775,7 @@ function render() {
   renderSettings();
   renderEnvEditor();
   renderBaremes();
+  renderSalMode();
   renderBackupInfo();
   renderEntreprises();
   renderEconomie();
@@ -2203,7 +2230,10 @@ function openDecl(id) {
   if (d.detail && d.detail.is) {
     body.push(h("div", { class: "dlg-cols" },
       trancheTable("Impôt sur le bénéfice, par tranche", d.detail.is.length ? d.detail.is : [{ de: 0, a: null, taux: 0, base: 0, montant: 0 }]),
-      trancheTable(d.detail.cotBase === "salarie" ? "Cotisations, par tranche (salaire moyen × salariés)" : "Cotisations sur les salaires, par tranche", d.detail.cot.length ? d.detail.cot : [{ de: 0, a: null, taux: 0, base: 0, montant: 0 }])));
+      trancheTable(d.detail.cotBase === "individuel" ? "Cotisations, toutes tranches cumulées" : d.detail.cotBase === "salarie" ? "Cotisations, par tranche (salaire moyen × salariés)" : "Cotisations sur les salaires, par tranche", d.detail.cot.length ? d.detail.cot : [{ de: 0, a: null, taux: 0, base: 0, montant: 0 }])));
+    if (d.detail.salaries) body.push(sec("Salaires et cotisations, salarié par salarié", h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+      h("thead", {}, h("tr", {}, ["Salarié", "Salaire", "Cotisation", "Taux effectif"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+      h("tbody", {}, d.detail.salaries.map((x, i) => h("tr", {}, h("td", { text: x.nom || "Salarié " + (i + 1) }), h("td", { class: "num", text: money(x.salaire) }), h("td", { class: "num", text: money(x.cotisation) }), h("td", { class: "num", text: pct(x.taux) }))))))));
   }
   const echSec = echeancierSection(d, () => openDecl(id));
   if (echSec) body.push(echSec);
@@ -2358,7 +2388,7 @@ function renderDeclPreview() {
   const dl = deadline(key);
   const late = depot.getTime() > dl.getTime();
   const nbV = numIn($("#d-nb")) || 0;
-  const r = compute(ca, ch, ms, late, c, nbV);
+  const r = compute(ca, ch, ms, late, c, nbV, salMode() ? readSalaries() : null);
   $("#c-res").textContent = money(r.resultat);
   $("#c-res").className = r.resultat < 0 ? "neg" : "";
   $("#c-is-l").textContent = r.detail ? `Impôt sur le bénéfice (${pct(r.tauxIS)} effectif)` : `Impôt sur le résultat (${pct(c.tauxIS)})`;
@@ -2371,7 +2401,8 @@ function renderDeclPreview() {
   const det = $("#c-detail");
   if (r.detail && (ca || ms)) {
     const rows = (title, tr) => [h("h4", { text: title }), tr.map(t => h("div", { class: "row" }, h("span", { text: `${capFirst(trancheLabel(t))} · ${pct(t.taux)}` }), h("b", { text: money(t.montant) })))];
-    fill(det, rows("Impôt, par tranche", r.detail.is.length ? r.detail.is : [{ de: 0, a: null, taux: 0, montant: 0 }]), rows(r.detail.cotBase === "salarie" ? "Cotisations, par tranche (salaire moyen)" : "Cotisations, par tranche", r.detail.cot.length ? r.detail.cot : [{ de: 0, a: null, taux: 0, montant: 0 }]));
+    const salRows = r.detail.salaries ? [h("h4", { text: "Cotisations, salarié par salarié" }), r.detail.salaries.map((x, i) => h("div", { class: "row" }, h("span", { text: `${x.nom || "Salarié " + (i + 1)} · ${money(x.salaire)} (${pct(x.taux)})` }), h("b", { text: money(x.cotisation) })))] : null;
+    fill(det, rows("Impôt, par tranche", r.detail.is.length ? r.detail.is : [{ de: 0, a: null, taux: 0, montant: 0 }]), salRows || rows(r.detail.cotBase === "salarie" ? "Cotisations, par tranche (salaire moyen)" : "Cotisations, par tranche", r.detail.cot.length ? r.detail.cot : [{ de: 0, a: null, taux: 0, montant: 0 }]));
     det.hidden = false;
   } else { fill(det); det.hidden = true; }
   $("#d-per-hint").textContent = `Dépôt avant le ${fmtDateTime(dl)}.`;
@@ -2382,7 +2413,7 @@ function renderDeclPreview() {
   const brLi = (list) => normBrackets(list).map((b, i, arr) => h("li", {}, h("span", { text: capFirst(trancheLabel({ de: i ? arr[i - 1].jusqua : 0, a: b.jusqua })) }), h("b", { text: pct(b.taux) })));
   fill($("#bareme"),
     c.baremeMode !== "unique"
-      ? [h("li", { class: "br-cap" }, h("span", { text: "Impôt sur les bénéfices" })), brLi(c.baremeIS), h("li", { class: "br-cap" }, h("span", { text: c.baremeCotBase === "salarie" ? "Cotisations, par salaire moyen" : "Cotisations sur les salaires" })), brLi(c.baremeCot)]
+      ? [h("li", { class: "br-cap" }, h("span", { text: "Impôt sur les bénéfices" })), brLi(c.baremeIS), h("li", { class: "br-cap" }, h("span", { text: c.baremeCotBase === "individuel" ? "Cotisations, sur chaque salaire" : c.baremeCotBase === "salarie" ? "Cotisations, par salaire moyen" : "Cotisations sur les salaires" })), brLi(c.baremeCot)]
       : [h("li", {}, h("span", { text: "Impôt sur le résultat" }), h("b", { text: pct(c.tauxIS) })), h("li", {}, h("span", { text: "Cotisations, sur la masse salariale" }), h("b", { text: pct(c.tauxCot) }))],
     h("li", {}, h("span", { text: "Majoration de retard" }), h("b", { text: pct(c.majoration) })),
     h("li", {}, h("span", { text: "Délai après fin de " + (c.periodicite === "mois" ? "mois" : "semaine") }), h("b", { text: `${c.delaiJours} j` })));
@@ -2401,12 +2432,17 @@ function parseAmount(txt) {
   const m = /-?\d+(\.\d+)?/.exec(s);
   return m ? Math.round(parseFloat(m[0]) * mult) : null;
 }
-function parseTemplate(text, keymap, multi) {
+function parseTemplate(text, keymap, multi, lists) {
   const out = {};
   let last = null;
   for (const raw of String(text || "").split(/\r?\n/)) {
     const line = raw.replace(/[*_`>~|]/g, "").trim();
     if (!line) continue;
+    if (last && lists && lists.includes(last) && /^[-•·–—]/.test(line)) {
+      const item = line.replace(/^[-•·–—]\s*/, "");
+      if (item) (out[last + "List"] = out[last + "List"] || []).push(item);
+      continue;
+    }
     const i = line.indexOf(":");
     if (i > 0) {
       const field = keymap(norm(line.slice(0, i)));
@@ -2440,20 +2476,33 @@ const declKeys = k =>
   /^(chiffre|ca\b|recette)/.test(k) ? "ca" :
   /^(charge|depense|frais|achat)/.test(k) ? "charges" :
   /^(masse|salaires?\b)/.test(k) ? "masse" :
-  /^(nombre|nb|effectif|salaries)/.test(k) ? "nb" :
+  /^(nombre|nb|effectif)/.test(k) ? "nb" :
+  /^(salaries|salarie|employes|employe|personnel)/.test(k) ? "salaries" :
   /^(declarant|patron|gerant|nom)/.test(k) ? "declarant" :
   /^(observation|note|remarque|commentaire)/.test(k) ? "note" : null;
 function parseDecl() {
-  const p = parseTemplate($("#d-paste").value, declKeys, ["note"]);
+  const p = parseTemplate($("#d-paste").value, declKeys, ["note"], ["salaries"]);
+  if (p.salaries && /^\s*\d+\s*$/.test(p.salaries) && p.nb == null) p.nb = p.salaries;
   let n = 0;
   if (p.entreprise) { const e = findEnt(p.entreprise); $("#d-ent").value = e ? e.nom : p.entreprise; n++; }
   if (p.periode) { const k = parsePeriode(p.periode); if (k) { ensureOption($("#d-per"), k, periodLabel(k)); n++; } }
   for (const [f, id] of [["ca", "d-ca"], ["charges", "d-ch"], ["masse", "d-ms"], ["nb", "d-nb"]]) {
     if (p[f] != null) { const v = parseAmount(p[f]); if (v != null) { $("#" + id).value = String(Math.max(0, v)); n++; } }
   }
+  const emps = (p.salariesList || []).map(parseEmployee).filter(Boolean);
+  let salHint = "";
+  if (emps.length) {
+    if (salMode()) setSalaries(emps.map(x => ({ nom: x.nom, salaire: Number.isFinite(x.salaire) ? x.salaire : "" })));
+    else { $("#d-ms").value = String(Math.round(emps.reduce((x, y) => x + (Number.isFinite(y.salaire) ? y.salaire : 0), 0))); $("#d-nb").value = String(emps.length); }
+    n++;
+  } else if (salMode() && p.masse != null) {
+    const ms = parseAmount(p.masse), nbx = p.nb != null ? parseAmount(p.nb) : 1;
+    if (ms != null && nbx > 0) { setSalaries(Array.from({ length: Math.min(nbx, 60) }, (_, i) => ({ nom: `Salarié ${i + 1}`, salaire: Math.round(ms / nbx) }))); salHint = " Les salaires n’étaient pas détaillés : ils ont été répartis à parts égales, corrigez-les si besoin."; }
+  }
   if (p.declarant) { $("#d-decl").value = p.declarant; n++; }
   if (p.note) { $("#d-note").value = p.note; n++; }
-  $("#d-parse-msg").textContent = n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez l’heure de dépôt puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Déclaration fiscale ».";
+  $("#d-sal-hint").textContent = salHint.trim();
+  $("#d-parse-msg").textContent = (n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez l’heure de dépôt puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Déclaration fiscale ».") + salHint;
   renderDeclPreview();
 }
 $("#d-parse").addEventListener("click", parseDecl);
@@ -2467,8 +2516,11 @@ $("#form-decl").addEventListener("submit", async e => {
   $$("#form-decl [aria-invalid]").forEach(x => x.removeAttribute("aria-invalid"));
   const name = $("#d-ent").value.trim();
   const key = $("#d-per").value;
+  if (salMode()) syncSalaries();
+  const sal = salMode() ? readSalaries() : null;
   const ca = numIn($("#d-ca")), ch = numIn($("#d-ch")), ms = numIn($("#d-ms")), nb = numIn($("#d-nb"));
   const bad = [];
+  if (sal && sal.some(x => !Number.isFinite(x.salaire) || x.salaire < 0)) bad.push(["d-sal-add", "le salaire de chaque salarié"]);
   if (!name) bad.push(["d-ent", "le nom de l’entreprise"]);
   if (!Number.isFinite(ca) || ca < 0) bad.push(["d-ca", "le chiffre d’affaires"]);
   if (!Number.isFinite(ch) || ch < 0) bad.push(["d-ch", "les charges"]);
@@ -2483,7 +2535,7 @@ $("#form-decl").addEventListener("submit", async e => {
   const c = cfg();
   const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
   const late = depot.getTime() > deadline(key).getTime();
-  const r = compute(ca, ch, ms, late, c, nb);
+  const r = compute(ca, ch, ms, late, c, nb, sal);
   const ent = findEnt(name);
   const dup = S.declarations.some(d => d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
   const body = {
@@ -2492,6 +2544,7 @@ $("#form-decl").addEventListener("submit", async e => {
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
     bareme: r.detail ? "progressif" : "unique", detail: r.detail,
+    salaries: sal ? sal.map(x => ({ nom: x.nom, salaire: Math.round(x.salaire) })) : null,
     enRetard: late, rectificative: dup,
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
     depotAt: depot.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
@@ -2511,6 +2564,7 @@ $("#form-decl").addEventListener("submit", async e => {
     h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(ref.id), text: "Ouvrir le dossier" }));
   rc.hidden = false;
   $("#form-decl").reset();
+  if (salMode()) setSalaries([]);
   $("#d-paste").value = "";
   $("#d-parse-msg").textContent = "";
   $("#d-date").value = toLocalInput(new Date());
@@ -2615,8 +2669,7 @@ function renderTemplates() {
     `Période : ${periodPlain(defaultKey())}`,
     "Chiffre d’affaires : ",
     "Charges (hors salaires) : ",
-    "Masse salariale : ",
-    "Nombre de salariés : ",
+    ...(salMode() ? ["Salariés (un par ligne : nom – salaire) :", "- ", "- ", "- "] : ["Masse salariale : ", "Nombre de salariés : "]),
     "Déclarant (nom, fonction) : ",
     "Observations : "].join("\n");
   $("#tpl-dem").textContent = [
@@ -2633,7 +2686,7 @@ function renderTemplates() {
     "**BARÈME FISCAL EN VIGUEUR**",
     ...(c.baremeMode !== "unique"
       ? ["Impôt sur les bénéfices nets (chiffre d’affaires − charges − salaires), par tranche :", ...baremeLines(c.baremeIS), "",
-         `Cotisations sur les salaires (${c.baremeCotBase === "salarie" ? "par salarié, sur le salaire moyen" : "sur la masse salariale"}), par tranche :`, ...baremeLines(c.baremeCot), "",
+         `Cotisations sur les salaires (${c.baremeCotBase === "individuel" ? "sur chaque salaire, salarié par salarié" : c.baremeCotBase === "salarie" ? "par salarié, sur le salaire moyen" : "sur la masse salariale"}), par tranche :`, ...baremeLines(c.baremeCot), "",
          "Chaque tranche est taxée à son propre taux : seule la part qui dépasse un seuil paie le taux supérieur.", ""]
       : [`• Impôt sur le résultat : ${pct(c.tauxIS)} du bénéfice (chiffre d’affaires − charges − salaires)`, `• Cotisations sociales : ${pct(c.tauxCot)} de la masse salariale`]),
     `• Déclaration : chaque ${per}, au plus tard ${c.delaiJours} jour${plural(c.delaiJours)} après la fin de la ${per === "mois" ? "période" : "semaine"}`,
@@ -3046,7 +3099,11 @@ function avisDoc(d) {
   if (d.detail && d.detail.is) {
     d.detail.is.forEach(t => lines.push([`Impôt · ${trancheLabel(t)} à ${pct(t.taux)}`, money(t.montant)]));
     lines.push([`Impôt sur le bénéfice (${pct(d.tauxIS)} effectif)`, money(d.impot), true]);
-    d.detail.cot.forEach(t => lines.push([`Cotisations · ${trancheLabel(t)} à ${pct(t.taux)}${t.libelle ? " · " + t.libelle.toLowerCase() : ""}`, money(t.montant)]));
+    if (d.detail.salaries) {
+      const list = d.detail.salaries, shown = list.slice(0, 15);
+      shown.forEach((x, i) => lines.push([`Cotisations · ${x.nom || "Salarié " + (i + 1)} (salaire ${money(x.salaire)})`, money(x.cotisation)]));
+      if (list.length > shown.length) { const rest = list.slice(15); lines.push([`Cotisations · ${rest.length} autres salariés`, money(rest.reduce((x, y) => x + y.cotisation, 0))]); }
+    } else d.detail.cot.forEach(t => lines.push([`Cotisations · ${trancheLabel(t)} à ${pct(t.taux)}${t.libelle ? " · " + t.libelle.toLowerCase() : ""}`, money(t.montant)]));
     lines.push([`Cotisations sur les salaires (${pct(d.tauxCot)} effectif)`, money(d.cotisations), true]);
   } else lines.push([`Impôt sur le résultat (${pct(d.tauxIS)})`, money(d.impot)], [`Cotisations sociales (${pct(d.tauxCot)})`, money(d.cotisations)]);
   if (d.enRetard) lines.push([`Majoration de retard (${pct(d.majPct)})`, money(d.majoration)]);
@@ -3615,13 +3672,19 @@ function renderBaremes(force) {
   const isBox = $("#bareme-is"), cotBox = $("#bareme-cot");
   if (!force && (S.barDirty || $("#card-baremes").contains(document.activeElement))) { toggleBaremeMode(); return; }
   $("#s-mode").value = c.baremeMode === "unique" ? "unique" : "progressif";
-  $("#s-cotbase").value = c.baremeCotBase === "salarie" ? "salarie" : "masse";
+  $("#s-cotbase").value = ["individuel", "salarie"].includes(c.baremeCotBase) ? c.baremeCotBase : "masse";
   bracketEditor(isBox, "is", "Impôt sur les bénéfices nets", "Appliqué au résultat : chiffre d’affaires − charges − salaires.", c.baremeIS);
   bracketEditor(cotBox, "cot", "Cotisations sur les salaires", "Appliqué aux salaires déclarés par l’entreprise.", c.baremeCot);
   toggleBaremeMode();
 }
+const COTBASE_HINT = {
+  individuel: "Chaque entreprise liste ses salariés avec leur salaire. Le barème s’applique à chaque salaire : un petit salaire paie peu, un gros salaire paie plus.",
+  masse: "Le barème s’applique à la masse salariale totale de l’entreprise.",
+  salarie: "Le barème s’applique au salaire moyen, puis est multiplié par le nombre de salariés."
+};
 function toggleBaremeMode() {
   const prog = $("#s-mode").value === "progressif";
+  $("#s-cotbase-hint").textContent = prog ? COTBASE_HINT[$("#s-cotbase").value] || "" : "";
   $("#bareme-editors").hidden = !prog;
   $$(".flat-rate").forEach(f => { f.hidden = prog; });
 }
@@ -3633,7 +3696,7 @@ $("#card-baremes").addEventListener("input", e => {
 });
 $("#card-baremes").addEventListener("change", e => {
   if (e.target.id === "s-mode") { S.barDirty = true; toggleBaremeMode(); $("#s-bar-msg").textContent = "Modifications non enregistrées."; }
-  if (e.target.id === "s-cotbase") { S.barDirty = true; $("#s-bar-msg").textContent = "Modifications non enregistrées."; }
+  if (e.target.id === "s-cotbase") { S.barDirty = true; toggleBaremeMode(); $("#s-bar-msg").textContent = "Modifications non enregistrées."; }
 });
 $("#card-baremes").addEventListener("click", e => {
   const box = e.target.closest("#bareme-is, #bareme-cot");
@@ -3674,6 +3737,58 @@ $("#s-bar-save").addEventListener("click", async () => {
   })));
   if (ok) { S.barDirty = false; $("#s-bar-msg").textContent = mode === "progressif" ? "Barèmes enregistrés." : "Taux unique activé."; toast("Barèmes enregistrés."); renderBaremes(true); }
 });
+
+
+/* ---------- Salariés détaillés : un salaire, une cotisation ---------- */
+const salMode = () => cfg().baremeMode !== "unique" && cfg().baremeCotBase === "individuel";
+function salRow(x) {
+  const r = h("div", { class: "sal-row" },
+    h("input", { "data-k": "nom", autocomplete: "off", placeholder: "Nom ou poste", "aria-label": "Nom du salarié" }),
+    h("div", { class: "money", "data-cur": cur() }, h("input", { "data-k": "salaire", type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "0", "aria-label": "Salaire versé" })),
+    h("span", { class: "sal-cot mono", text: "—" }),
+    h("button", { class: "icon-btn", type: "button", "aria-label": "Retirer ce salarié", "data-del": "1", text: "×" }));
+  if (x) { r.querySelector("[data-k=nom]").value = x.nom || ""; r.querySelector("[data-k=salaire]").value = x.salaire === "" || x.salaire == null ? "" : String(x.salaire); }
+  return r;
+}
+function readSalaries() {
+  return $$("#d-sal-rows .sal-row")
+    .map(r => ({ nom: r.querySelector("[data-k=nom]").value.trim(), salaire: r.querySelector("[data-k=salaire]").value.trim() === "" ? (r.querySelector("[data-k=nom]").value.trim() ? NaN : null) : Number(r.querySelector("[data-k=salaire]").value) }))
+    .filter(x => x.salaire !== null);
+}
+function syncSalaries() {
+  if (!salMode()) return;
+  const list = readSalaries(), c = cfg();
+  const ms = list.reduce((x, y) => x + (Number.isFinite(y.salaire) ? y.salaire : 0), 0);
+  $("#d-ms").value = list.length ? String(Math.round(ms)) : "";
+  $("#d-nb").value = list.length ? String(list.length) : "";
+  $$("#d-sal-rows .sal-row").forEach(r => { const v = Number(r.querySelector("[data-k=salaire]").value); r.querySelector(".sal-cot").textContent = r.querySelector("[data-k=salaire]").value !== "" && Number.isFinite(v) && v >= 0 ? money(progressive(v, c.baremeCot).total) : "—"; });
+}
+function setSalaries(list) { fill($("#d-sal-rows"), (list.length ? list : [null]).map(salRow)); syncSalaries(); }
+function parseEmployee(t) {
+  const txt = String(t || "").trim();
+  if (!txt) return null;
+  const m = /^(.*?)[\s:=–—-]*(\d[\d\s.,]*\s*[kK]?)\s*(?:€|\$|eur(?:os?)?)?\s*$/.exec(txt);
+  if (!m) return { nom: txt, salaire: NaN };
+  const v = parseAmount(m[2]);
+  return { nom: m[1].trim().replace(/[\s:=–—-]+$/, "").trim(), salaire: v == null ? NaN : v };
+}
+function renderSalMode() {
+  const on = salMode();
+  $("#d-sal").hidden = !on;
+  $("#d-ms").readOnly = on;
+  $("#d-nb").readOnly = on;
+  $("#d-ms-hint").textContent = on ? "Calculés à partir de la liste : chaque salaire a sa propre cotisation selon le barème des salaires." : "Base des cotisations sociales.";
+  if (on && !$$("#d-sal-rows .sal-row").length) setSalaries([]);
+}
+$("#d-sal-add").addEventListener("click", () => { $("#d-sal-rows").append(salRow()); syncSalaries(); const ins = $$("#d-sal-rows [data-k=nom]"); ins[ins.length - 1].focus(); });
+$("#d-sal-rows").addEventListener("click", e => {
+  if (!e.target.closest("[data-del]")) return;
+  e.target.closest(".sal-row").remove();
+  if (!$$("#d-sal-rows .sal-row").length) $("#d-sal-rows").append(salRow());
+  syncSalaries();
+  renderDeclPreview();
+});
+$("#d-sal-rows").addEventListener("input", syncSalaries);
 
 /* ---------- Onglets ---------- */
 function showTab(name) {

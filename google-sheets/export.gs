@@ -104,6 +104,13 @@ function actualiser() {
   ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le"],
     col("penalites").map(r => [no("PN", r.id), r.data.entrepriseNom, r.data.motif, r.data.montant, STATUTS_PEN[r.data.statut] || r.data.statut, date(r.data.createdAt), date(r.data.paidAt)]));
 
+  const lignesSal = [];
+  col("declarations").forEach(r => {
+    const d = r.data, sal = (d.detail && d.detail.salaries) || [];
+    sal.forEach((x, i) => lignesSal.push([no("DF", r.id), d.entrepriseNom, d.periode, x.nom || "Salarié " + (i + 1), x.salaire, x.cotisation, x.taux / 100]));
+  });
+  ecrire("Salaires", ["Déclaration", "Entreprise", "Période", "Salarié", "Salaire", "Cotisation", "Taux effectif"], lignesSal);
+
   const lignesEch = [];
   col("echeanciers").forEach(r => (r.data.echeances || []).forEach(x => lignesEch.push([no("DF", r.id), r.data.entrepriseNom, x.n + "/" + r.data.echeances.length, date(x.date), x.montant, x.payee ? "Payée" : "À payer", date(x.paidAt)])));
   ecrire("Échéanciers", ["Déclaration", "Entreprise", "Échéance", "Date limite", "Montant", "État", "Payée le"], lignesEch);

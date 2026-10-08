@@ -98,7 +98,11 @@ Par défaut, l’impôt et les cotisations sont calculés par tranches, comme un
 | De 130 000 € à 150 000 € | 44 % |
 | Au-delà de 150 000 € | 80 % (surtaxe infraction) |
 
-Tout se modifie dans **Réglages → Barèmes par tranches** : ajouter ou supprimer une tranche, changer un plafond, un taux ou un libellé. Une tranche qui porte un libellé (comme « Surtaxe infraction ») déclenche une alerte quand une entreprise l’atteint. Le barème des salaires peut s’appliquer à la masse salariale totale ou au salaire moyen de chaque salarié. Le mode « Taux unique » reste disponible.
+Tout se modifie dans **Réglages → Barèmes par tranches** : ajouter ou supprimer une tranche, changer un plafond, un taux ou un libellé. Une tranche qui porte un libellé (comme « Surtaxe infraction ») déclenche une alerte quand une entreprise l’atteint. Le barème des salaires peut s’appliquer de trois façons :
+
+- **Chaque salaire séparément** (recommandé) : l’entreprise liste ses salariés avec leur salaire, et chaque salaire a sa propre cotisation. Un petit salaire paie peu, un gros salaire paie plus. Le modèle Discord demande alors un salarié par ligne (`- Nom : salaire`).
+- **Masse salariale totale** : le barème s’applique au total des salaires de l’entreprise.
+- **Salaire moyen par salarié** : le barème s’applique au salaire moyen, multiplié par le nombre de salariés. Le mode « Taux unique » reste disponible.
 
 Chaque déclaration garde le détail du calcul au moment de sa saisie : changer le barème ne modifie pas les avis déjà émis.
 
