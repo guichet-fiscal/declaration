@@ -456,6 +456,20 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
 .att-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
 .exo-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
 .calc dd.exo{color:var(--ok)}
+.pieces{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.piece{margin:0;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--sheet);display:grid;grid-template-rows:auto 1fr}
+.piece-img{display:grid;place-items:center;aspect-ratio:4/3;background:var(--paper);overflow:hidden}
+.piece-img img{width:100%;height:100%;object-fit:cover;display:block}
+.piece-link{display:grid;place-items:center;aspect-ratio:4/3;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:13px;text-decoration:none}
+.piece figcaption{padding:7px 9px 9px;font-size:12.5px;display:grid;gap:2px;min-width:0;overflow-wrap:anywhere}
+.piece .meta{color:var(--ink-3);font-size:11.5px}
+.notes{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.notes li{border-left:3px solid var(--rule);padding:2px 0 2px 10px}
+.notes .meta{font-size:12px;color:var(--ink-3)}
+.notes p{margin:2px 0 0}
+.rect-table input{min-width:92px;padding:6px 8px;font-size:13.5px}
+.rect-table td:nth-child(6) input{min-width:150px}
+.paste-row textarea{flex:1 1 260px}
 </style>
 </head>
 <body data-gate="chargement">
@@ -665,6 +679,16 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
       </div>
     </div>
     <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <div>
+          <h3>Contrôles fiscaux</h3>
+          <p class="sub" id="rc-controles-sub">Vérifications en cours et terminées.</p>
+        </div>
+        <button class="btn ghost small" type="button" id="rc-controle-new" hidden>Ouvrir un contrôle</button>
+      </div>
+      <div id="rc-controles"><div class="empty">Chargement…</div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
       <h3>Clôture des semaines</h3>
       <p class="sub">Une semaine clôturée est verrouillée : ses déclarations et le montant de ses avis ne bougent plus. Les encaissements restent possibles.</p>
       <div id="rc-clotures"><div class="empty">Chargement…</div></div>
@@ -751,6 +775,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
           <option value="relances">Relances</option>
           <option value="clotures">Clôtures</option>
           <option value="attestations">Attestations</option>
+          <option value="controles">Contrôles fiscaux</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1094,6 +1119,13 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
                 <span class="hint">En jours après sa délivrance.</span>
               </div>
             </div>
+            <div class="row2">
+              <div class="field">
+                <label for="s-repjours">Délai de réponse à un contrôle fiscal</label>
+                <input id="s-repjours" type="number" min="1" max="30" step="1">
+                <span class="hint">En jours après la proposition de rectification. Ensuite, elle est réputée acceptée.</span>
+              </div>
+            </div>
             <div class="paste-row">
               <button class="btn" type="submit" id="s-save">Enregistrer le barème</button>
               <span id="s-msg" class="hint" aria-live="polite"></span>
@@ -1286,7 +1318,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 /* ---------- État ---------- */
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
-  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28,
+  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
   exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
@@ -1296,7 +1328,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1934,6 +1966,7 @@ function subscribe() {
   col("relances", s => { S.relances = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("clotures", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.clotures = o; });
   col("attestations", s => { S.attestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("controles", s => { S.controles = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2230,7 +2263,7 @@ function renderAlerts() {
         h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: d.entrepriseNom || "Sans nom" }),
         h("span", { class: "meta-inline", text: ` · ${periodShort(d.periode)} · ${dossierNo("DF", d.id)}` }),
         h("div", { class: "reasons" }, a.map(r => h("span", { class: "reason", text: r })))),
-      w || (canAgent() && ["soumise", "validee"].includes(dStatus(d))) ? h("button", { class: "btn ghost small", type: "button", onclick: () => decide(d, "controle", dMontant(d), "Contrôle déclenché : " + a.join(" ; ")), text: "Contrôler" }) : null))),
+      w || (canAgent() && ["soumise", "validee"].includes(dStatus(d))) ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const ct = ctrlOf(d); if (ct) openControle(ct.id); else newControle(entOf(d), [d.id]); }, text: ctrlOf(d) ? "Voir le contrôle" : "Contrôler" }) : null))),
     rows.length > 8 ? h("div", { class: "reg-foot", text: `+ ${rows.length - 8} autre${plural(rows.length - 8)} : onglet Entreprises, filtre Alertes.` }) : null);
 }
 
@@ -2363,13 +2396,14 @@ dlg.addEventListener("click", e => { if (e.target === dlg) closeDialog(); });
 const kv = pairs => h("dl", { class: "kv" }, pairs.filter(Boolean).flatMap(([k, v, cls]) => [h("dt", { class: cls === "tot" ? "tot-dt" : null, text: k }), h("dd", { class: cls === "tot" ? "tot-dd num" : (cls || null) }, v)]));
 const sec = (title, ...kids) => h("div", { class: "dlg-sec" }, h("h4", { text: title }), kids);
 
-async function decide(d, statut, montant, note) {
+async function decide(d, statut, montant, note, opts) {
+  const quiet = !!(opts && opts.quiet);
   const prev = S.decisions[d.id] || {};
   const body = { statut, montant: Math.round(Number(montant) || 0), note: note || "", at: prev.at && statut === "payee" ? prev.at : nowISO(), by: S.uid || null };
   if (statut === "payee") { body.paidAt = nowISO(); body.paidByNom = S.agentName || ""; }
   const ok = await write(() => S.db.doc("decisions/" + d.id).set(body));
-  if (ok) toast({ validee: "Avis émis : montant à payer.", payee: "Paiement encaissé.", controle: "Dossier placé en contrôle.", rejetee: "Déclaration rejetée.", soumise: "Décision annulée." }[statut] || "Enregistré.");
-  if (ok && statut === "validee" && prev.statut !== "validee" && prev.statut !== "payee") autoPublish("avis", avisDoc(d), "Avis émis.");
+  if (ok && !quiet) toast({ validee: "Avis émis : montant à payer.", payee: "Paiement encaissé.", controle: "Dossier placé en contrôle.", rejetee: "Déclaration rejetée.", soumise: "Décision annulée." }[statut] || "Enregistré.");
+  if (ok && !quiet && statut === "validee" && prev.statut !== "validee" && prev.statut !== "payee") autoPublish("avis", avisDoc(d), "Avis émis.");
   // Paiement en plusieurs fois : chaque échéance a déjà sa quittance.
   if (ok && statut === "payee" && prev.statut !== "payee" && !echOf(d)) autoPublish("quittances", quittanceDeclDoc(d), "Paiement encaissé.");
   return ok;
@@ -2477,7 +2511,9 @@ function openDecl(id) {
   }
   if (w || inspOk) foot.push(h("span", { class: "spacer" }));
   if (w && !locked && dec && st !== "payee" && !(ecd && ecd.echeances.some(x => x.payee))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("decisions/" + id).delete())) { toast("Décision annulée : le dossier est de nouveau à valider."); openDecl(id); } }, text: "Remettre à valider" }));
-  if ((w || inspOk) && st !== "controle") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("controle"), text: "Contrôle fiscal" }));
+  const ctl = ctrlOf(d);
+  if (ctl) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(ctl.id), text: `Contrôle ${dossierNo("CF", ctl.id)}` }));
+  else if (w || inspOk) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(entOf(d), [d.id]), text: "Contrôle fiscal" }));
   if (w && st !== "rejetee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => go("rejetee"), text: "Rejeter" }));
   if ((w || inspOk) && st !== "validee" && st !== "payee") foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
   if (w) {
@@ -2977,6 +3013,7 @@ function renderSettings() {
     $("#s-smin").value = String(c.salaireMin || 0);
     $("#s-paydelai").value = String(c.delaiPaiementJours ?? 2);
     $("#s-attjours").value = String(c.attestationJours || 28);
+    $("#s-repjours").value = String(c.delaiReponseJours || 2);
     const opts = [];
     let kk = keyOf(new Date());
     for (let i = 0; i < 30; i++) { opts.push([kk, periodLabel(kk)]); kk = prevKey(kk); }
@@ -3020,6 +3057,7 @@ $("#form-set").addEventListener("submit", async e => {
     salaireMin: Number($("#s-smin").value) || 0,
     delaiPaiementJours: Math.max(0, Math.min(30, Math.round(Number($("#s-paydelai").value) || 0))),
     attestationJours: Math.max(1, Math.min(365, Math.round(Number($("#s-attjours").value) || 28))),
+    delaiReponseJours: Math.max(1, Math.min(30, Math.round(Number($("#s-repjours").value) || 2))),
     debutSuivi: $("#s-debut").value || DEFAULTS.debutSuivi
   };
   const bad = [];
@@ -3071,7 +3109,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -3413,6 +3451,7 @@ function decisionDoc(dm) {
   };
 }
 function penaltyDoc(p) {
+  if (p.type === "redressement") return amrDocFromPen(p);
   return {
     kind: "AVIS DE PÉNALITÉ", no: dossierNo("PN", p.id), date: "Émis le " + longDate(p.createdAt ? new Date(p.createdAt) : new Date()),
     meta: [["Entreprise", p.entrepriseNom || "—"], ["Motif", p.motif || "—"]],
@@ -3561,7 +3600,7 @@ function openFiche(e, opts) {
     h("td", { class: "act" },
       h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(penaltyDoc(p), reopen), text: "Image" }),
       p.statut === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittancePenDoc(p), reopen), text: "Quittance" }) : null,
-      w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: () => editPenalty(p, reopen), text: "Modifier" }) : null,
+      w && p.statut === "due" && p.type !== "redressement" ? h("button", { class: "btn ghost small", type: "button", onclick: () => editPenalty(p, reopen), text: "Modifier" }) : null,
       w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "payee")) reopen(); }, text: "Encaisser" }) : null,
       w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "annulee")) reopen(); }, text: "Annuler" }) : null,
       w && p.statut === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "due")) reopen(); }, text: "Annuler l’encaissement" }) : null,
@@ -3607,12 +3646,14 @@ function openFiche(e, opts) {
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r })))) : null,
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
     sec("Historique des déclarations", hist),
-    sec("Pénalités", pens, penForm)
+    sec("Pénalités et redressements", pens, penForm),
+    ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null
   ];
   const foot = [
     w && !e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const d = sm.ds[0]; if (d) registerFromDecl(d); }, text: "Enregistrer au registre" }) : null,
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e, () => openFiche(S.entreprises.find(x => x.id === e.id) || e)), text: "Modifier l’entreprise" }) : null,
     e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openAttestation(e, reopen), text: "Attestation de régularité" }) : null,
+    canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(e), text: "Contrôle fiscal" }) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -3739,7 +3780,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -3764,7 +3805,7 @@ function describe(e) {
       return paid > was ? `a encaissé l’échéance ${paid}/${n} de ${a.entrepriseNom}` : `a modifié l’échéancier de ${a.entrepriseNom}`;
     }
     case "penalites":
-      if (x === "ajout") return `a infligé une pénalité de ${money(v.montant)} à ${v.entrepriseNom} (${v.motif})`;
+      if (x === "ajout") return v.type === "redressement" ? `a mis en recouvrement ${money(v.montant)} de redressement fiscal à ${v.entrepriseNom}` : `a infligé une pénalité de ${money(v.montant)} à ${v.entrepriseNom} (${v.motif})`;
       if (x === "suppression") return `a supprimé une pénalité de ${v.entrepriseNom}`;
       return ({ payee: `a encaissé la pénalité de ${a.entrepriseNom} (${money(a.montant)})`, annulee: `a annulé la pénalité de ${a.entrepriseNom} (${money(a.montant)})`, due: `a remis à payer la pénalité de ${a.entrepriseNom}` })[a.statut] || `a modifié une pénalité de ${a.entrepriseNom}`;
     case "demandes":
@@ -3776,6 +3817,14 @@ function describe(e) {
       const who = dm ? `${dm.service} (${dm.objet})` : jNo(e);
       if (x === "suppression") return `a effacé l’arbitrage de ${who}`;
       return ({ accordee: `a accordé ${money(a.montantAccorde)} à ${who}`, partielle: `a accordé ${money(a.montantAccorde)}, en partie, à ${who}`, refusee: `a refusé la demande de ${who}`, etude: `a mis à l’étude la demande de ${who}` })[a.statut] || `a modifié l’arbitrage de ${who}`;
+    }
+    case "controles": {
+      if (x === "ajout") return `a ouvert le contrôle fiscal de ${v.entrepriseNom} (${(v.periodes || []).map(periodPlain).join(", ")})`;
+      if (x === "suppression") return `a supprimé le contrôle fiscal de ${v.entrepriseNom}`;
+      if (a.statut !== b.statut) return ({ propose: `a notifié une proposition de rectification à ${a.entrepriseNom} (${money(a.total)})`, recouvre: `a mis en recouvrement le redressement de ${a.entrepriseNom} (${money(a.total)})`, sans_suite: `a classé sans suite le contrôle de ${a.entrepriseNom}`, ouvert: `a repris l’instruction du contrôle de ${a.entrepriseNom}` })[a.statut] || `a mis à jour le contrôle de ${a.entrepriseNom}`;
+      if ((a.pieces || []).length > (b.pieces || []).length) return `a ajouté une pièce au contrôle de ${a.entrepriseNom}`;
+      if ((a.notes || []).length > (b.notes || []).length) return `a ajouté une note au contrôle de ${a.entrepriseNom}`;
+      return `a mis à jour le contrôle de ${a.entrepriseNom}`;
     }
     case "attestations":
       if (x === "suppression") return `a supprimé une attestation de ${v.entrepriseNom}`;
@@ -3792,7 +3841,7 @@ function describe(e) {
       if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -3813,7 +3862,7 @@ const FIELD_LABEL = {
   resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
-  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
+  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
   services: "Services", enveloppes: "Enveloppes", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
@@ -4262,6 +4311,7 @@ function editEntreprise(e, back) {
       for (const [id, ec] of Object.entries(S.echeanciers)) if (ec.entrepriseId === e.id && ec.entrepriseNom !== n) jobs.push(["echeanciers", id]);
       for (const r of S.relances) if (r.entrepriseId === e.id && r.entrepriseNom !== n) jobs.push(["relances", r.id]);
       for (const a of S.attestations) if (a.entrepriseId === e.id && a.entrepriseNom !== n) jobs.push(["attestations", a.id]);
+      for (const ct of S.controles) if (ct.entrepriseId === e.id && ct.entrepriseNom !== n) jobs.push(["controles", ct.id]);
       let done = 0;
       for (const [col, id] of jobs) { await write(() => S.db.doc(col + "/" + id).update({ entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -4345,6 +4395,7 @@ const DISCORD_AUTO = [
   ["penalites", "Pénalités, dès qu’elles sont infligées", "entreprises"],
   ["quittances", "Quittances, à chaque encaissement", "entreprises"],
   ["attestations", "Attestations de régularité délivrées", "entreprises"],
+  ["controles", "Contrôles fiscaux : avis de vérification, proposition, mise en recouvrement", "entreprises"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
 ];
 function hookFor(ch) {
@@ -4525,7 +4576,7 @@ function unpaidItems(e) {
     const ec = echOf(d);
     out.push({ kind: "decl", id: d.id, ref: dossierNo("DF", d.id), label: `Avis d’imposition · ${periodPlain(d.periode)}${ec ? " · échéancier en retard" : ""}`, montant: dReste(d), since: (S.decisions[d.id] || {}).at });
   }
-  for (const p of pensOf(e)) if (penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo("PN", p.id), label: `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt });
+  for (const p of pensOf(e)) if (penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), label: p.type === "redressement" ? `Redressement fiscal · ${p.motif || ""}` : `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt });
   return out.sort((a, b) => String(a.since || "").localeCompare(String(b.since || "")));
 }
 function retardataires() {
@@ -4642,9 +4693,10 @@ function rcMore(key, n) {
 }
 function renderRecouvrement() {
   if (S.tab !== "recouvrement") return;
-  if (!S.connected || !S.loaded.has("declarations")) { ["#rc-retards", "#rc-impayes", "#rc-hist", "#rc-clotures"].forEach(s => fill($(s), h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" }))); return; }
+  if (!S.connected || !S.loaded.has("declarations")) { ["#rc-retards", "#rc-impayes", "#rc-hist", "#rc-clotures", "#rc-controles"].forEach(s => fill($(s), h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" }))); return; }
   const w = canAgent();
   renderClotures();
+  renderControles();
   const rt = retardataires();
   $("#rc-retards-sub").textContent = rt.length
     ? `${rt.length} entreprise${plural(rt.length)} n’${rt.length > 1 ? "ont" : "a"} pas déposé toutes ${rt.length > 1 ? "leurs" : "ses"} déclarations échues depuis ${periodPlain(cfg().debutSuivi).toLowerCase()}.`
@@ -4771,7 +4823,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -4845,7 +4897,7 @@ function quittanceEchDoc(d, i) {
   });
 }
 function quittancePenDoc(p) {
-  return quittanceDoc({ no: dossierNo("QT", p.id), ent: entOf(p), objet: p.motif || "Pénalité", ref: dossierNo("PN", p.id), montant: p.montant, paidAt: p.paidAt, paidByNom: p.paidByNom });
+  return quittanceDoc({ no: dossierNo("QT", p.id), ent: entOf(p), objet: p.motif || "Pénalité", ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), montant: p.montant, paidAt: p.paidAt, paidByNom: p.paidByNom });
 }
 
 /* ---------- Attestation de régularité fiscale et sociale ---------- */
@@ -5082,6 +5134,373 @@ $("#x-save").addEventListener("click", async () => {
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
   if (ok) { S.exoDirty = false; $("#x-msg").textContent = v.exoActive ? "Exonération enregistrée. Elle s’applique aux déclarations saisies à partir de maintenant." : "Exonération désactivée."; toast("Exonération enregistrée."); renderExoSettings(true); }
 });
+
+/* ---------- Contrôle fiscal ---------- */
+// Déroulé inspiré de la procédure réelle : avis de vérification (art. L47 du LPF), instruction et
+// pièces, proposition de rectification avec délai de réponse (art. L57 du LPF), majorations de 40,
+// 80 ou 100 % (art. 1729 et 1732 du CGI), puis avis de mise en recouvrement (art. L256 du LPF).
+const CSTAT = { ouvert: ["Instruction en cours", "accent"], propose: ["Proposition notifiée", "warn"], recouvre: ["Mis en recouvrement", "bad"], sans_suite: ["Classé sans suite", "muted"] };
+const QUALIF = {
+  bonne_foi: ["Bonne foi : aucune majoration", 0],
+  manquement: ["Manquement délibéré : 40 % (art. 1729 a du CGI)", 40],
+  fraude: ["Manœuvres frauduleuses : 80 % (art. 1729 c du CGI)", 80],
+  opposition: ["Opposition au contrôle : 100 % (art. 1732 du CGI)", 100]
+};
+const ORIGINES = { alerte: "Alerte du guichet", signalement: "Signalement", aleatoire: "Contrôle aléatoire", autre: "Autre" };
+const PIECE_URLS = new Map();
+const PIECES_QUOTA = 1024 * 1048576;
+const shortId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const fmtSize = b => (b >= 1048576 ? (b / 1048576).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Mo" : Math.max(1, Math.round(b / 1024)) + " Ko");
+const piecesUsed = () => S.controles.reduce((s, c) => s + (c.pieces || []).reduce((t, p) => t + (Number(p.taille) || 0), 0), 0);
+const ctrlOf = d => S.controles.find(c => (c.declIds || []).includes(d.id) && (c.statut === "ouvert" || c.statut === "propose")) || null;
+const ctrlsOf = e => S.controles.filter(c => sameEnt(c, e)).sort((a, b) => String(b.ouvertLe).localeCompare(String(a.ouvertLe)));
+// Droits (impôt et cotisations, exonération comprise) recalculés au barème actuel.
+function droitsSur(d, ca, ch, ms, nb, sal) {
+  const conf = cfg();
+  const r = applyExo(compute(ca, ch, ms, false, conf, nb, sal), entOf(d), d.periode, conf, false);
+  return r.impot + r.cotisations;
+}
+function rectifCalc(c) {
+  const lines = (c.declIds || []).map(id => {
+    const d = S.declarations.find(x => x.id === id);
+    if (!d) return null;
+    const r = (c.rectifications || {})[id] || {};
+    const pick = (k, dk) => (r[k] != null && r[k] !== "" && Number.isFinite(Number(r[k])) ? Number(r[k]) : Number(d[dk]) || 0);
+    const ca = pick("ca", "ca"), ch = pick("charges", "charges"), ms = pick("masse", "masse"), nb = pick("nb", "nbSalaries");
+    const dm = Number(d.masse) || 0;
+    // Salaires détaillés : un complément « non déclaré » s'ajoute si la masse retenue est plus forte.
+    const sal = d.salaries && d.salaries.length ? (ms === dm ? d.salaries : ms > dm ? d.salaries.concat([{ nom: "Salaires non déclarés", salaire: ms - dm }]) : null) : null;
+    const bd = droitsSur(d, Number(d.ca) || 0, Number(d.charges) || 0, dm, Number(d.nbSalaries) || 0, d.salaries);
+    const rd = droitsSur(d, ca, ch, ms, nb, sal);
+    return { d, ca, ch, ms, nb, motif: r.motif || "", baseDroits: bd, retenuDroits: rd, droits: Math.max(0, rd - bd) };
+  }).filter(Boolean);
+  const taux = (QUALIF[c.qualification] || QUALIF.bonne_foi)[1];
+  const droits = lines.reduce((s, l) => s + l.droits, 0), majoration = Math.round(droits * taux / 100);
+  return { lines, droits, taux, majoration, total: droits + majoration };
+}
+function avisVerifDoc(c) {
+  const e = entOf(c);
+  return {
+    kind: "AVIS DE VÉRIFICATION", no: dossierNo("CF", c.id), date: "Notifié le " + longDate(new Date(c.ouvertLe)),
+    meta: [["Entreprise", e.nom], ["Patron", e.patron || "—"], ["Périodes vérifiées", (c.periodes || []).map(periodPlain).join(", ") || "—"], ["Inspecteur", c.inspecteur || "—"]],
+    lines: [["Origine du contrôle", ORIGINES[c.origine] || "—"], ["Ouverture", fmtDateTime(new Date(c.ouvertLe))]],
+    total: ["Contrôle fiscal", "Ouvert"], stamp: ["CONTRÔLE FISCAL", "accent"],
+    footer: "La Direction des impôts et cotisations vérifie les déclarations des périodes ci-dessus (art. L47 du LPF). Tenez vos justificatifs à sa disposition : factures, relevés de compte, liste et salaires des employés. Vous pouvez vous faire assister d’un conseil. S’opposer au contrôle entraîne une majoration de 100 % (art. 1732 du CGI).",
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Avis de vérification ${dossierNo("CF", c.id)}** · ${e.nom} · contrôle fiscal de ${(c.periodes || []).map(periodPlain).join(", ").toLowerCase()}.` }
+  };
+}
+function propositionDoc(c) {
+  const e = entOf(c), k = rectifCalc(c), q = QUALIF[c.qualification] || QUALIF.bonne_foi;
+  const lim = c.delaiReponse ? longDate(new Date(c.delaiReponse)) : "—";
+  const lines = k.lines.filter(l => l.droits > 0).map(l => [`Rappel · ${periodPlain(l.d.periode)}${l.motif ? " · " + l.motif : ""}`, money(l.droits)]);
+  lines.push(["Droits rappelés", money(k.droits), true]);
+  if (k.taux) lines.push([`Majoration de ${k.taux} %`, money(k.majoration)]);
+  return {
+    kind: "PROPOSITION DE RECTIFICATION", no: dossierNo("CF", c.id), date: "Notifiée le " + longDate(new Date(c.proposeLe || Date.now())),
+    meta: [["Entreprise", e.nom], ["Patron", e.patron || "—"], ["Qualification", q[0].split(" :")[0]], ["Réponse attendue avant le", lim]],
+    lines, total: ["Rappel total proposé", money(k.total)],
+    table: { title: "Détail par période (barème en vigueur)", head: ["Période", "Sur la base déclarée", "Sur la base retenue", "Rappel"], rows: k.lines.map(l => [periodPlain(l.d.periode), money(l.baseDroits), money(l.retenuDroits), money(l.droits)]) },
+    note: c.motif || "", noteTitle: "Constats du contrôle",
+    stamp: ["RECTIFICATION", "warn"],
+    footer: `Vous pouvez présenter vos observations ou accepter ces rectifications jusqu’au ${lim} (art. L57 du LPF). Sans réponse dans ce délai, elles sont réputées acceptées et mises en recouvrement.`,
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Proposition de rectification ${dossierNo("CF", c.id)}** · ${e.nom} · rappel de ${money(k.total)}, observations attendues avant le ${lim}.` }
+  };
+}
+function amrDoc(c, p) {
+  const e = entOf(c || p);
+  const paid = p && p.statut === "payee";
+  const q = c ? QUALIF[c.qualification] || QUALIF.bonne_foi : null;
+  return {
+    kind: "AVIS DE MISE EN RECOUVREMENT", no: dossierNo("AMR", p ? p.id : c.id), date: "Émis le " + longDate(new Date((c && c.recouvreLe) || (p && p.createdAt) || Date.now())),
+    meta: [["Entreprise", e.nom], ["Patron", e.patron || "—"], ["Contrôle", c ? dossierNo("CF", c.id) : "—"], ["Qualification", q ? q[0].split(" :")[0] : "—"]],
+    lines: c ? [["Droits rappelés", money(c.droits)], [`Majoration (${q[1]} %)`, money(c.majoration)]] : [],
+    total: [paid ? "Somme réglée" : "Somme à payer", money(p ? p.montant : c.total)],
+    stamp: paid ? ["PAYÉ", "ok"] : p && p.statut === "annulee" ? ["DÉGREVÉ", "muted"] : ["À PAYER", "bad"],
+    footer: "Cet avis rend la somme exigible (art. L256 du LPF). Faute de paiement, la Direction engagera le recouvrement forcé.",
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Avis de mise en recouvrement ${dossierNo("AMR", p ? p.id : c.id)}** · ${e.nom} · redressement de ${money(p ? p.montant : c.total)} à payer.` }
+  };
+}
+const amrDocFromPen = p => amrDoc(S.controles.find(c => c.id === p.controleId) || null, p);
+
+function newControle(e, declIds) {
+  const ds = declsOf(e).filter(d => dStatus(d) !== "rejetee").sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 16);
+  if (!ds.length) { toast("Cette entreprise n’a encore aucune déclaration à contrôler.", true); return; }
+  const pre = new Set(declIds && declIds.length ? declIds : [ds[0].id]);
+  const boxes = ds.map(d => { const cb = h("input", { type: "checkbox", id: "nc-" + d.id, "data-decl": d.id }); cb.checked = pre.has(d.id); const busy = ctrlOf(d); cb.disabled = !!busy;
+    return h("label", { class: "switch", for: "nc-" + d.id }, cb, `${periodPlain(d.periode)} · ${money(d.ca)} de chiffre d’affaires · ${(DSTAT[dStatus(d)] || DSTAT.soumise)[0].toLowerCase()}${busy ? " · déjà dans " + dossierNo("CF", busy.id) : ""}`); });
+  const motif = h("textarea", { id: "nc-motif", rows: "3", placeholder: "Pourquoi ce contrôle : alertes, signalement, incohérences…" });
+  const al = [...new Set(ds.filter(d => pre.has(d.id)).flatMap(alertsFor))];
+  motif.value = al.length ? "Alertes du guichet : " + al.join(" ; ") + "." : "";
+  const orig = h("select", { id: "nc-orig" }, Object.entries(ORIGINES).map(([v, l]) => h("option", { value: v, text: l })));
+  orig.value = al.length ? "alerte" : "aleatoire";
+  const insp = h("input", { id: "nc-insp", autocomplete: "off" }); insp.value = S.agentName || "";
+  const susp = h("input", { type: "checkbox", id: "nc-susp" }); susp.checked = true;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const create = async ev => {
+    const ids = $$("input[data-decl]", dlg).filter(b => b.checked && !b.disabled).map(b => b.dataset.decl);
+    if (!ids.length) { err.textContent = "Cochez au moins une période à contrôler."; return; }
+    ev.currentTarget.disabled = true;
+    const ref = S.db.collection("controles").doc();
+    const sel = ids.map(id => S.declarations.find(d => d.id === id)).filter(Boolean);
+    const c = { entrepriseId: e.id || null, entrepriseNom: e.nom, declIds: ids, periodes: [...new Set(sel.map(d => d.periode))].sort(), motif: motif.value.trim(), origine: orig.value, inspecteur: insp.value.trim(),
+      statut: "ouvert", ouvertLe: nowISO(), ouvertPar: S.agentName || "", by: S.uid || null, notes: [], pieces: [], rectifications: {}, qualification: "bonne_foi", suspendus: [] };
+    if (susp.checked) for (const d of sel) { const st = dStatus(d); if (st === "soumise" || st === "validee") c.suspendus.push(d.id); }
+    if (!(await write(() => ref.set(c)))) { ev.currentTarget.disabled = false; return; }
+    for (const id of c.suspendus) { const d = S.declarations.find(x => x.id === id); if (d) await decide(d, "controle", dMontant(d), (S.decisions[id] || {}).note || `Contrôle fiscal ${dossierNo("CF", ref.id)}`, { quiet: true }); }
+    toast(`Contrôle ${dossierNo("CF", ref.id)} ouvert.`);
+    autoPublish("controles", avisVerifDoc(Object.assign({ id: ref.id }, c)), "Contrôle ouvert.");
+    openControle(ref.id);
+  };
+  openDialog({
+    eyebrow: "Contrôle fiscal", title: "Ouvrir un contrôle · " + e.nom,
+    body: [sec("Périodes à vérifier", h("div", { class: "checks-col" }, boxes)),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "nc-orig", text: "Origine" }), orig), h("div", { class: "field" }, h("label", { for: "nc-insp", text: "Inspecteur chargé du dossier" }), insp)),
+      h("div", { class: "field" }, h("label", { for: "nc-motif", text: "Motif" }), motif),
+      h("label", { class: "switch", for: "nc-susp" }, susp, "Suspendre les avis non payés de ces périodes pendant le contrôle"), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: create, text: "Ouvrir le contrôle" })]
+  });
+}
+async function saveControle(c, patch, msg) {
+  const body = Object.assign({}, c, patch);
+  delete body.id;
+  const ok = await write(() => S.db.doc("controles/" + c.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+// Les captures sont réduites à 1 600 pixels et passées en JPEG (environ 200 Ko).
+async function compressImage(file) {
+  const bmp = await createImageBitmap(file);
+  const sc = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement("canvas");
+  cv.width = Math.max(1, Math.round(bmp.width * sc)); cv.height = Math.max(1, Math.round(bmp.height * sc));
+  const g = cv.getContext("2d");
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, cv.width, cv.height);
+  g.drawImage(bmp, 0, 0, cv.width, cv.height);
+  if (bmp.close) bmp.close();
+  return new Promise(res => cv.toBlob(res, "image/jpeg", 0.82));
+}
+async function pieceBlobUrl(path) {
+  if (PIECE_URLS.has(path)) return PIECE_URLS.get(path);
+  const { data, error } = await S.sb.storage.from("pieces").download(path);
+  if (error || !data) return null;
+  const u = URL.createObjectURL(data);
+  PIECE_URLS.set(path, u);
+  return u;
+}
+const storageHelp = err => (/bucket|not found|row-level|policy/i.test((err && err.message) || "") ? "L’espace des pièces n’est pas prêt : exécutez supabase/v5_pieces.sql (voir le README)." : "Envoi refusé : " + ((err && err.message) || "erreur"));
+async function addPieces(c, files, legende) {
+  let n = 0;
+  const pieces = (c.pieces || []).slice();
+  for (const f of files) {
+    if (!/^image\//.test(f.type)) { toast(`« ${f.name} » n’est pas une image.`, true); continue; }
+    if (piecesUsed() > PIECES_QUOTA * 0.98) { toast("L’espace des pièces est presque plein (1 Go) : retirez d’anciennes captures ou ajoutez un lien.", true); break; }
+    let blob;
+    try { blob = await compressImage(f); } catch (e) { toast(`Impossible de lire « ${f.name} ».`, true); continue; }
+    const pid = shortId(), path = `${c.id}/${pid}.jpg`;
+    const { error } = await S.sb.storage.from("pieces").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+    if (error) { toast(storageHelp(error), true); break; }
+    pieces.push({ id: pid, type: "image", path, nom: f.name, taille: blob.size, legende: legende || "", at: nowISO(), auteur: S.agentName || "" });
+    n++;
+  }
+  if (n && await saveControle(c, { pieces }, `${n} pièce${plural(n)} ajoutée${plural(n)}.`)) return true;
+  return false;
+}
+function openControle(id) {
+  const c0 = S.controles.find(x => x.id === id);
+  if (!c0) return;
+  const c = JSON.parse(JSON.stringify(c0));
+  c.rectifications = c.rectifications || {};
+  const ag = canAgent(), dir = writer();
+  const live = c.statut === "ouvert", open = c.statut === "ouvert" || c.statut === "propose";
+  const reopen = () => openControle(id);
+  const k0 = rectifCalc(c);
+
+  const perim = h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
+    h("thead", {}, h("tr", {}, ["Période", "Chiffre d’affaires", "Charges", "Salaires", "Droits sur la base déclarée", "Statut"].map((t, i) => h("th", { class: i && i < 5 ? "num" : null, text: t })))),
+    h("tbody", {}, k0.lines.map(l => h("tr", {},
+      h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(l.d.id), text: periodPlain(l.d.periode) })),
+      h("td", { class: "num", text: money(l.d.ca) }), h("td", { class: "num", text: money(l.d.charges) }), h("td", { class: "num", text: money(l.d.masse) }),
+      h("td", { class: "num", text: money(l.baseDroits) }), h("td", {}, dChip(l.d)))))));
+
+  // Pièces : captures rangées dans l'espace privé, ou liens.
+  const gal = h("div", { class: "pieces" });
+  fill(gal, (c.pieces || []).length ? (c.pieces || []).map(p => {
+    const fig = h("figure", { class: "piece" });
+    const cap = h("figcaption", {}, h("span", { text: p.legende || p.nom || "Pièce" }), h("span", { class: "meta", text: `${p.auteur || ""} · ${fmtDate(new Date(p.at))}${p.taille ? " · " + fmtSize(p.taille) : ""}` }),
+      dir && open ? h("button", { class: "linkbtn", type: "button", onclick: async () => {
+        if (p.path) { const { error } = await S.sb.storage.from("pieces").remove([p.path]); if (error) { toast(storageHelp(error), true); return; } }
+        if (await saveControle(c0, { pieces: (c0.pieces || []).filter(x => x.id !== p.id) }, "Pièce retirée.")) reopen();
+      }, text: "Retirer" }) : null);
+    if (p.type === "lien") { fig.append(h("a", { class: "piece-link", href: p.url, target: "_blank", rel: "noopener noreferrer", text: "Ouvrir le lien ↗" }), cap); return fig; }
+    const a = h("a", { class: "piece-img", target: "_blank", rel: "noopener" }, h("span", { class: "muted", text: "Chargement…" }));
+    fig.append(a, cap);
+    pieceBlobUrl(p.path).then(u => { if (u) { a.href = u; fill(a, h("img", { src: u, alt: p.legende || p.nom || "Pièce" })); } else fill(a, h("span", { class: "err", text: "Pièce introuvable" })); });
+    return fig;
+  }) : h("p", { class: "muted", style: "margin:0", text: "Aucune pièce pour l’instant." }));
+  let pieceForm = null;
+  if (ag && open) {
+    const file = h("input", { type: "file", id: "pc-file", accept: "image/*", multiple: true });
+    const leg = h("input", { id: "pc-leg", autocomplete: "off", placeholder: "Ce que montre la capture" });
+    const url = h("input", { id: "pc-url", type: "url", autocomplete: "off", placeholder: "Ou un lien : message Discord, Google Drive, Imgur, Medal…" });
+    const perr = h("span", { class: "err", "aria-live": "polite" });
+    file.addEventListener("change", async () => { if (!file.files.length) return; perr.textContent = "Envoi en cours…"; const ok = await addPieces(c0, [...file.files], leg.value.trim()); perr.textContent = ""; if (ok) reopen(); });
+    const addLink = async () => {
+      const v = url.value.trim();
+      if (!/^https:\/\/\S+$/.test(v)) { perr.textContent = "Collez une adresse qui commence par https://"; return; }
+      if (/cdn\.discordapp\.com|media\.discordapp\.net/.test(v)) { perr.textContent = "Les liens d’images Discord expirent au bout d’environ une journée : collez le lien du message (clic droit → Copier le lien du message) ou ajoutez la capture comme image."; return; }
+      const pieces = (c0.pieces || []).concat([{ id: shortId(), type: "lien", url: v, legende: leg.value.trim(), at: nowISO(), auteur: S.agentName || "" }]);
+      if (await saveControle(c0, { pieces }, "Lien ajouté.")) reopen();
+    };
+    pieceForm = h("div", { class: "decide" },
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pc-leg", text: "Légende" }), leg), h("div", { class: "field" }, h("label", { for: "pc-file", text: "Captures d’écran" }), file)),
+      h("div", { class: "paste-row" }, url, h("button", { class: "btn ghost small", type: "button", onclick: addLink, text: "Ajouter le lien" }), perr),
+      h("span", { class: "hint", text: `Les captures sont réduites et compressées (environ 200 Ko) avant d’être rangées dans l’espace privé du guichet : ${fmtSize(piecesUsed())} utilisés sur 1 Go.` }));
+  }
+
+  // Instruction : notes datées.
+  const notes = (c.notes || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const noteIn = h("textarea", { id: "ct-note", rows: "2", placeholder: "Constat, audition, échange avec l’entreprise…" });
+  const notesBox = h("div", {},
+    notes.length ? h("ul", { class: "notes" }, notes.map(n => h("li", {}, h("span", { class: "meta", text: `${fmtDateTime(new Date(n.at))} · ${n.auteur || "—"}` }), h("p", { class: "prewrap", text: n.texte })))) : h("p", { class: "muted", style: "margin:0", text: "Aucune note." }),
+    ag && open ? h("div", { class: "paste-row", style: "margin-top:8px" }, noteIn, h("button", { class: "btn ghost small", type: "button", onclick: async () => {
+      const t = noteIn.value.trim(); if (!t) return;
+      if (await saveControle(c0, { notes: (c0.notes || []).concat([{ at: nowISO(), auteur: S.agentName || "", texte: t }]) }, "Note ajoutée.")) reopen();
+    }, text: "Ajouter la note" })) : null);
+
+  // Rectifications : montants retenus par période, qualification, total.
+  const sumBox = h("dl", { class: "kv", style: "margin:0" });
+  const qual = h("select", { id: "ct-qual", disabled: !(ag && live) }, Object.entries(QUALIF).map(([v, [l]]) => h("option", { value: v, text: l })));
+  qual.value = c.qualification || "bonne_foi";
+  const numIn2 = (dk, v, l) => { const i = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "data-k": dk, "aria-label": l, disabled: !(ag && live) }); i.value = v == null ? "" : String(v); return i; };
+  const rectTable = h("table", { class: "compact rect-table" },
+    h("thead", {}, h("tr", {}, ["Période", "CA retenu", "Charges retenues", "Salaires retenus", "Salariés", "Motif", "Rappel"].map((t, i) => h("th", { class: i === 6 ? "num" : null, text: t })))),
+    h("tbody", {}, k0.lines.map(l => h("tr", { "data-rect": l.d.id },
+      h("td", { text: periodPlain(l.d.periode) }),
+      h("td", {}, numIn2("ca", l.ca, "Chiffre d’affaires retenu")), h("td", {}, numIn2("charges", l.ch, "Charges retenues")),
+      h("td", {}, numIn2("masse", l.ms, "Salaires retenus")), h("td", {}, numIn2("nb", l.nb, "Salariés retenus")),
+      h("td", {}, Object.assign(h("input", { "data-k": "motif", autocomplete: "off", placeholder: "Ex. : ventes non déclarées", disabled: !(ag && live), "aria-label": "Motif de la rectification" }), { value: l.motif })),
+      h("td", { class: "num rc-droits", text: money(l.droits) })))));
+  const refresh = () => {
+    c.qualification = qual.value;
+    $$("tr[data-rect]", rectTable).forEach(tr => {
+      const r = c.rectifications[tr.dataset.rect] = c.rectifications[tr.dataset.rect] || {};
+      $$("input[data-k]", tr).forEach(i => { if (i.dataset.k === "motif") r.motif = i.value.trim(); else r[i.dataset.k] = i.value === "" ? null : Number(i.value); });
+    });
+    const k = rectifCalc(c);
+    $$("tr[data-rect]", rectTable).forEach(tr => { const l = k.lines.find(x => x.d.id === tr.dataset.rect); $(".rc-droits", tr).textContent = l ? money(l.droits) : "—"; });
+    fill(sumBox, h("dt", { text: "Droits rappelés" }), h("dd", { class: "num", text: money(k.droits) }),
+      h("dt", { text: `Majoration (${k.taux} %)` }), h("dd", { class: "num", text: money(k.majoration) }),
+      h("dt", { class: "tot-dt", text: "Total du redressement" }), h("dd", { class: "tot-dd num", text: money(k.total) }));
+  };
+  rectTable.addEventListener("input", refresh);
+  qual.addEventListener("change", refresh);
+  refresh();
+
+  const motifIn = h("textarea", { id: "ct-motif", rows: "2", disabled: !(ag && live), placeholder: "Ce que le contrôle a établi" });
+  motifIn.value = c.motif || "";
+  const collect = () => { refresh(); const k = rectifCalc(c); return { motif: motifIn.value.trim(), qualification: c.qualification, rectifications: c.rectifications, droits: k.droits, majoration: k.majoration, total: k.total }; };
+
+  const body = [
+    sec("Périmètre", perim),
+    sec("Constats", motifIn),
+    sec("Pièces", gal, pieceForm),
+    sec("Instruction", notesBox),
+    sec("Rectifications", h("div", { class: "tbl-wrap" }, rectTable), h("div", { class: "row2", style: "margin-top:10px;align-items:start" }, h("div", { class: "field" }, h("label", { for: "ct-qual", text: "Qualification des manquements" }), qual), sumBox),
+      h("p", { class: "hint", style: "margin:0", text: "Le rappel est la différence entre les droits sur les montants retenus et ceux sur les montants déclarés, au barème actuel et exonération comprise." }))
+  ];
+  if (c.statut === "propose" || c.reponse) {
+    const rep = h("textarea", { id: "ct-rep", rows: "2", placeholder: "Observations de l’entreprise", disabled: !(ag && open) });
+    rep.value = (c.reponse && c.reponse.texte) || "";
+    const acc = h("select", { id: "ct-acc", disabled: !(ag && open) }, [["", "Pas encore de réponse"], ["accepte", "Accepte les rectifications"], ["conteste", "Conteste les rectifications"]].map(([v, l]) => h("option", { value: v, text: l })));
+    acc.value = (c.reponse && c.reponse.position) || "";
+    const late = c.delaiReponse && new Date(c.delaiReponse).getTime() < Date.now();
+    body.push(sec("Réponse de l’entreprise",
+      h("p", { class: "hint", style: "margin:0", text: c.delaiReponse ? `Délai de réponse jusqu’au ${fmtDateTime(new Date(c.delaiReponse))}${late ? " : expiré, les rectifications sont réputées acceptées." : "."}` : "" }),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ct-acc", text: "Position" }), acc), h("div", { class: "field" }, h("label", { for: "ct-rep", text: "Observations" }), rep)),
+      ag && open ? h("div", { class: "paste-row" }, h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await saveControle(c0, { reponse: { at: nowISO(), texte: rep.value.trim(), position: acc.value } }, "Réponse enregistrée.")) reopen(); }, text: "Enregistrer la réponse" })) : null));
+  }
+  const pen = c.penaliteId ? S.penalites.find(p => p.id === c.penaliteId) : null;
+  if (c.statut === "recouvre") body.push(sec("Mise en recouvrement", kv([
+    ["Avis", pen ? dossierNo("AMR", pen.id) : "—"], ["Mis en recouvrement le", c.recouvreLe ? fmtDateTime(new Date(c.recouvreLe)) : "—"],
+    ["Paiement", pen ? chip(pen.statut === "annulee" ? ["Dégrevé", "muted"] : PSTAT[pen.statut] || PSTAT.due) : "—"], ["Somme", money(c.total), "tot"]])));
+  if (c.statut === "sans_suite") body.push(sec("Conclusion", h("p", { class: "prewrap", style: "margin:0", text: c.conclusion || "Classé sans suite." })));
+
+  // Les avis suspendus pendant le contrôle redeviennent payables à sa clôture.
+  const restoreAvis = async note => {
+    for (const did of c.declIds || []) { const d = S.declarations.find(x => x.id === did); if (d && dStatus(d) === "controle") await decide(d, "validee", dMontant(d), note, { quiet: true }); }
+  };
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisVerifDoc(c0), reopen), text: "Avis de vérification" })];
+  if (c.statut !== "ouvert" && c.proposeLe) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(propositionDoc(c0), reopen), text: "Proposition" }));
+  if (c.statut === "recouvre") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(amrDoc(c0, pen), reopen), text: "Avis de mise en recouvrement" }));
+  foot.push(h("span", { class: "spacer" }));
+  if (ag && live) {
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await saveControle(c0, collect(), "Contrôle enregistré.")) reopen(); }, text: "Enregistrer" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => closeSansSuite(c0, collect(), restoreAvis), text: "Classer sans suite" }));
+    foot.push(h("button", { class: "btn ink small", type: "button", onclick: async () => {
+      const v = collect();
+      if (v.total <= 0) { toast("Aucun rappel : modifiez les montants retenus ou classez le contrôle sans suite.", true); return; }
+      const days = Math.max(1, Number(cfg().delaiReponseJours) || 2);
+      const patch = Object.assign(v, { statut: "propose", proposeLe: nowISO(), delaiReponse: new Date(Date.now() + days * 864e5).toISOString() });
+      if (!(await saveControle(c0, patch, "Proposition de rectification notifiée."))) return;
+      const c1 = S.controles.find(x => x.id === id);
+      autoPublish("controles", propositionDoc(c1), "Proposition notifiée.");
+      showDocImage(propositionDoc(c1), reopen);
+    }, text: "Notifier la proposition" }));
+  }
+  if (ag && c.statut === "propose") {
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await saveControle(c0, { statut: "ouvert" }, "Retour à l’instruction.")) reopen(); }, text: "Reprendre l’instruction" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => closeSansSuite(c0, {}, restoreAvis), text: "Abandonner le redressement" }));
+  }
+  if (dir && c.statut === "propose") foot.push(h("button", { class: "btn ink small", type: "button", onclick: async ev => {
+    ev.currentTarget.disabled = true;
+    const ref = S.db.collection("penalites").doc();
+    const p = { entrepriseId: c.entrepriseId || null, entrepriseNom: c.entrepriseNom, motif: `Redressement fiscal ${dossierNo("CF", id)} · ${(c.periodes || []).map(periodPlain).join(", ")}`, montant: Math.round(c.total), statut: "due", type: "redressement", controleId: id, declId: (c.declIds || [])[0] || null, createdAt: nowISO(), by: S.uid || null };
+    if (!(await write(() => ref.set(p)))) { reopen(); return; }
+    if (!(await saveControle(c0, { statut: "recouvre", recouvreLe: nowISO(), penaliteId: ref.id }))) return;
+    await restoreAvis(`Avis maintenu après le contrôle ${dossierNo("CF", id)}`);
+    toast("Redressement mis en recouvrement.");
+    const doc = amrDoc(S.controles.find(x => x.id === id), S.penalites.find(x => x.id === ref.id));
+    autoPublish("controles", doc, "Redressement mis en recouvrement.");
+    showDocImage(doc, reopen);
+  }, text: "Mettre en recouvrement" }));
+  openDialog({ eyebrow: `Contrôle fiscal ${dossierNo("CF", id)} · ouvert le ${fmtDate(new Date(c.ouvertLe))}${c.inspecteur ? " · " + c.inspecteur : ""}`, title: c.entrepriseNom, wide: true, stampEl: stamp(CSTAT[c.statut] || CSTAT.ouvert), body, foot });
+}
+function closeSansSuite(c0, patch, restoreAvis) {
+  const t = h("textarea", { id: "ss-txt", rows: "3", placeholder: "Conclusion : rien d’anormal, justificatifs fournis…" });
+  openDialog({ eyebrow: `Contrôle fiscal ${dossierNo("CF", c0.id)}`, title: "Classer sans suite",
+    body: [h("p", { style: "margin:0", text: "Le contrôle est clos sans redressement. Les avis suspendus pendant le contrôle redeviennent payables." }), h("div", { class: "field" }, h("label", { for: "ss-txt", text: "Conclusion" }), t)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(c0.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ink small", type: "button", onclick: async () => {
+        if (!(await saveControle(c0, Object.assign({}, patch, { statut: "sans_suite", closLe: nowISO(), conclusion: t.value.trim() }), "Contrôle classé sans suite."))) return;
+        await restoreAvis(`Contrôle ${dossierNo("CF", c0.id)} classé sans suite`);
+        openControle(c0.id);
+      }, text: "Classer sans suite" })] });
+}
+function pickEntreprise(title, then) {
+  const inp = h("input", { id: "pk-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = () => { const e = findEnt(inp.value); if (!e) { err.textContent = "Entreprise introuvable au registre."; return; } then(e); };
+  inp.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); go(); } });
+  openDialog({ eyebrow: "Recouvrement", title, body: [h("div", { class: "field" }, h("label", { for: "pk-ent", text: "Entreprise" }), inp), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: go, text: "Continuer" })] });
+  setTimeout(() => inp.focus(), 30);
+}
+function ctrlListItem(c) {
+  return h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openControle(c.id), text: `${dossierNo("CF", c.id)} · ${c.entrepriseNom}` }),
+      h("span", { class: "meta", text: [(c.periodes || []).map(periodPlain).join(", "), c.total ? money(c.total) + " rappelés" : "", c.inspecteur || "", (c.pieces || []).length ? `${c.pieces.length} pièce${plural(c.pieces.length)}` : ""].filter(Boolean).join(" · ") })),
+    chip(CSTAT[c.statut] || CSTAT.ouvert),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(c.id), text: "Ouvrir" })));
+}
+function renderControles() {
+  const box = $("#rc-controles");
+  const cs = S.controles.slice().sort((a, b) => ((a.statut === "recouvre" || a.statut === "sans_suite") - (b.statut === "recouvre" || b.statut === "sans_suite")) || String(b.ouvertLe).localeCompare(String(a.ouvertLe)));
+  const used = piecesUsed();
+  $("#rc-controles-sub").textContent = `${cs.filter(c => c.statut === "ouvert" || c.statut === "propose").length} en cours · pièces : ${fmtSize(used)} sur 1 Go`;
+  $("#rc-controle-new").hidden = !canAgent();
+  fill(box, cs.length ? h("ul", { class: "ent-list" }, cs.slice(0, S.rcAll.cf ? 500 : RC_LIMIT).map(ctrlListItem)) : h("div", { class: "empty", text: "Aucun contrôle fiscal pour l’instant." }), rcMore("cf", cs.length));
+}
+$("#rc-controle-new").addEventListener("click", () => pickEntreprise("Ouvrir un contrôle fiscal", e => newControle(e)));
 
 /* ---------- Onglets ---------- */
 function showTab(name) {

@@ -126,6 +126,13 @@ function actualiser() {
     col("attestations").map(r => { const a = r.data, now = new Date();
       return [no("AT", r.id), a.entrepriseNom, date(a.at), date(a.validUntil), a.revoqueeLe ? "Révoquée" : new Date(a.validUntil) > now ? "Valable" : "Expirée", a.byNom || "", a.motifRevocation || ""]; }));
 
+  const CSTAT = { ouvert: "Instruction en cours", propose: "Proposition notifiée", recouvre: "Mis en recouvrement", sans_suite: "Classé sans suite" };
+  const QUALIF = { bonne_foi: "Bonne foi", manquement: "Manquement délibéré (40 %)", fraude: "Manœuvres frauduleuses (80 %)", opposition: "Opposition au contrôle (100 %)" };
+  ecrire("Contrôles", ["N°", "Entreprise", "Périodes", "Origine", "Inspecteur", "Statut", "Ouvert le", "Qualification", "Droits rappelés", "Majoration", "Total", "Pièces", "Conclusion"],
+    col("controles").map(r => { const c = r.data;
+      return [no("CF", r.id), c.entrepriseNom, (c.periodes || []).join(", "), c.origine || "", c.inspecteur || "", CSTAT[c.statut] || c.statut, date(c.ouvertLe), QUALIF[c.qualification] || "",
+        c.droits || 0, c.majoration || 0, c.total || 0, (c.pieces || []).length, c.conclusion || ""]; }));
+
   ecrire("Clôtures", ["Période", "Clôturée le", "Par", "Déclarations déposées", "Attendues", "Montant des avis", "Encaissé à la clôture", "Reste à recouvrer"],
     col("clotures").map(r => { const b = r.data.bilan || {}; return [r.id, date(r.data.at), r.data.byNom || "", b.deposees, b.attendues, b.declare, b.encaisse, b.reste]; }));
 
@@ -140,7 +147,8 @@ function actualiser() {
     ["Pénalités", col("penalites").length],
     ["Relances", col("relances").length],
     ["Attestations délivrées", col("attestations").length],
-    ["Semaines clôturées", col("clotures").length]
+    ["Semaines clôturées", col("clotures").length],
+    ["Contrôles fiscaux", col("controles").length]
   ]);
 }
 
