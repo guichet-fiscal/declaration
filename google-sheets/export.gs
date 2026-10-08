@@ -88,10 +88,11 @@ function actualiser() {
     const montant = dec && dec.montant != null ? dec.montant : d.total;
     let encaisse = st === "payee" ? montant : 0;
     if (st === "validee" && e && e.echeances) encaisse = e.echeances.filter(x => x.payee).reduce((s, x) => s + (x.montant || 0), 0);
-    return [no("DF", r.id), d.entrepriseNom, d.periode, d.ca, d.charges, d.masse, d.nbSalaries, d.resultat, d.impot, d.cotisations, d.majoration, d.total, montant, encaisse,
+    const exo = d.exoneration ? (d.exoneration.montantIS || 0) + (d.exoneration.montantCot || 0) : 0;
+    return [no("DF", r.id), d.entrepriseNom, d.periode, d.ca, d.charges, d.masse, d.nbSalaries, d.resultat, d.impot, d.cotisations, d.majoration, exo, d.total, montant, encaisse,
       STATUTS_DECL[st] || st, d.enRetard ? "Oui" : "Non", e && e.echeances ? e.echeances.length + " fois" : "", date(d.depotAt), d.declarant || "", dec && dec.note ? dec.note : ""];
   });
-  ecrire("Déclarations", ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Charges", "Masse salariale", "Salariés", "Résultat", "Impôt", "Cotisations", "Majoration", "Total calculé", "Montant retenu", "Encaissé", "Statut", "Retard", "Échéancier", "Déposée le", "Déclarant", "Observation"], declarations);
+  ecrire("Déclarations", ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Charges", "Masse salariale", "Salariés", "Résultat", "Impôt", "Cotisations", "Majoration", "Exonération", "Total calculé", "Montant retenu", "Encaissé", "Statut", "Retard", "Échéancier", "Déposée le", "Déclarant", "Observation"], declarations);
 
   ecrire("Entreprises", ["Nom", "Secteur", "Patron", "Active", "Ajoutée le"],
     col("entreprises").map(r => [r.data.nom, r.data.secteur || "", r.data.patron || "", r.data.actif === false ? "Non" : "Oui", date(r.data.createdAt)]));

@@ -454,6 +454,8 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
 .checklist li.yes::before{content:"✓";background:var(--ok-soft);color:var(--ok)}
 .checklist li.no::before{content:"✕";background:var(--bad-soft);color:var(--bad)}
 .att-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
+.exo-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
+.calc dd.exo{color:var(--ok)}
 </style>
 </head>
 <body data-gate="chargement">
@@ -864,6 +866,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
             <dt>Résultat (01 − 02 − 03)</dt><dd id="c-res">0 €</dd>
             <dt id="c-is-l">Impôt sur le résultat</dt><dd id="c-is">0 €</dd>
             <dt id="c-cot-l">Cotisations sociales</dt><dd id="c-cot">0 €</dd>
+            <dt id="c-exo-l" hidden>Exonération</dt><dd id="c-exo" class="exo" hidden></dd>
             <dt id="c-maj-l">Majoration de retard</dt><dd id="c-maj">0 €</dd>
             <dt class="tot-dt">Montant dû</dt><dd class="tot-dd" id="c-tot">0 €</dd>
           </dl>
@@ -1097,6 +1100,25 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
             </div>
           </form>
         </div>
+        <div class="card" id="card-exo">
+          <h3>Exonération des entreprises nouvelles</h3>
+          <p class="sub">Sur le modèle de l’aide aux créateurs d’entreprise (cotisations réduites au démarrage) et du régime des entreprises nouvelles (impôt réduit) : une entreprise qui ouvre paie moins pendant ses premières périodes. La réduction figure sur l’avis.</p>
+          <div class="set-form">
+            <label class="switch" for="x-on"><input type="checkbox" id="x-on"> Accorder une exonération aux entreprises nouvelles</label>
+            <div class="row3 exo-field" style="align-items:end">
+              <div class="field"><label for="x-per" id="x-per-l">Durée (en semaines)</label><input id="x-per" type="number" min="1" max="52" step="1"></div>
+              <div class="field"><label for="x-is">Réduction de l’impôt</label><div class="money" data-cur="%"><input id="x-is" type="number" min="0" max="100" step="5"></div></div>
+              <div class="field"><label for="x-cot">Réduction des cotisations</label><div class="money" data-cur="%"><input id="x-cot" type="number" min="0" max="100" step="5"></div></div>
+            </div>
+            <label class="switch exo-field" for="x-deg"><input type="checkbox" id="x-deg"> Dégressive : la réduction baisse à chaque période jusqu’à la fin</label>
+            <p class="hint" id="x-ex" style="margin:0"></p>
+            <p class="hint" style="margin:0">Une entreprise est « nouvelle » si son début d’activité est postérieur au début du suivi. Dans « Modifier l’entreprise », la Direction peut aussi accorder ou refuser l’exonération au cas par cas.</p>
+            <div class="paste-row">
+              <button class="btn" type="button" id="x-save">Enregistrer l’exonération</button>
+              <span id="x-msg" class="hint" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
         <div class="card" id="card-baremes">
           <h3>Barèmes par tranches</h3>
           <p class="sub">Chaque tranche est taxée à son propre taux : une petite entreprise ne paie que les premières tranches, et seule la part qui dépasse un seuil paie le taux supérieur. La dernière tranche s’applique à tout ce qui dépasse.</p>
@@ -1265,6 +1287,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
   budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28,
+  exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
   baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
@@ -1646,7 +1669,7 @@ function applyRole() {
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
-  $$("#s-save, #s-svc-save, #s-bar-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
   $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
@@ -1937,6 +1960,7 @@ function render() {
   renderEconomie();
   renderRecouvrement();
   renderDiscordSettings();
+  renderExoSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
   $("#foot-sync").textContent = S.connected ? (S.loaded.has("declarations") ? "Registre synchronisé" : "Synchronisation…") : "";
 }
@@ -2354,8 +2378,8 @@ function avisText(d) {
   const dec = S.decisions[d.id], st = dStatus(d), m = dMontant(d);
   const L = [`**Avis d’imposition ${dossierNo("DF", d.id)}**`, `Entreprise : ${d.entrepriseNom}`, `Période : ${periodLabel(d.periode)}`,
     `Résultat déclaré : ${money(d.resultat)}`,
-    `${isLabel(d)} : ${money(d.impot)}`,
-    `${cotLabel(d)} : ${money(d.cotisations)}`];
+    `${isLabel(d)} : ${money(brutIS(d))}`,
+    `${cotLabel(d)} : ${money(brutCot(d))}`].concat(exoLines(d).map(([l, v]) => `${l} : ${v}`));
   if (d.enRetard) L.push(`Majoration de retard (${pct(d.majPct)}) : ${money(d.majoration)}`);
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) L.push(`Montant rectifié après vérification : ${money(dec.montant)}`);
   L.push(`**Montant à régler : ${money(m)}**`, `Statut : ${(DSTAT[st] || DSTAT.soumise)[0]}`);
@@ -2378,8 +2402,9 @@ function openDecl(id) {
         ["Salariés", String(d.nbSalaries ?? 0), "num"],
         ["Résultat", money(d.resultat), "tot"]])),
       sec("Calcul au dépôt", kv([
-        [d.bareme === "progressif" ? `Impôt (barème, ${pct(d.tauxIS)} effectif)` : `Impôt (${pct(d.tauxIS)})`, money(d.impot), "num"],
-        [d.bareme === "progressif" ? `Cotisations (barème, ${pct(d.tauxCot)} effectif)` : `Cotisations (${pct(d.tauxCot)})`, money(d.cotisations), "num"],
+        [d.bareme === "progressif" ? `Impôt (barème, ${pct(d.tauxIS)} effectif)` : `Impôt (${pct(d.tauxIS)})`, money(brutIS(d)), "num"],
+        [d.bareme === "progressif" ? `Cotisations (barème, ${pct(d.tauxCot)} effectif)` : `Cotisations (${pct(d.tauxCot)})`, money(brutCot(d)), "num"],
+        ...exoLines(d).map(([l, v]) => [l.replace("Exonération de début d’activité", "Exonération"), v, "num"]),
         d.enRetard ? [`Majoration (${pct(d.majPct)})`, money(d.majoration), "num"] : null,
         ["Total calculé", money(d.total), "tot"]]))),
     sec("Dépôt", kv([
@@ -2589,13 +2614,20 @@ function renderDeclPreview() {
   const dl = deadline(key);
   const late = depot.getTime() > dl.getTime();
   const nbV = numIn($("#d-nb")) || 0;
-  const r = compute(ca, ch, ms, late, c, nbV, salMode() ? readSalaries() : null);
+  const r0 = compute(ca, ch, ms, late, c, nbV, salMode() ? readSalaries() : null);
+  const r = applyExo(r0, findEnt($("#d-ent").value.trim()), key, c, late);
+  const xo = r.exoneration;
+  $("#c-exo-l").hidden = $("#c-exo").hidden = !xo;
+  if (xo) {
+    $("#c-exo-l").textContent = `${exoLabel(xo)} : impôt −${pct(xo.tauxIS)}, cotisations −${pct(xo.tauxCot)}`;
+    $("#c-exo").textContent = "− " + money(xo.montantIS + xo.montantCot);
+  }
   $("#c-res").textContent = money(r.resultat);
   $("#c-res").className = r.resultat < 0 ? "neg" : "";
   $("#c-is-l").textContent = r.detail ? `Impôt sur le bénéfice (${pct(r.tauxIS)} effectif)` : `Impôt sur le résultat (${pct(c.tauxIS)})`;
-  $("#c-is").textContent = money(r.impot);
+  $("#c-is").textContent = money(r0.impot);
   $("#c-cot-l").textContent = r.detail ? `Cotisations sur les salaires (${pct(r.tauxCot)} effectif)` : `Cotisations sociales (${pct(c.tauxCot)})`;
-  $("#c-cot").textContent = money(r.cotisations);
+  $("#c-cot").textContent = money(r0.cotisations);
   $("#c-maj-l").textContent = `Majoration de retard (${pct(c.majoration)})`;
   $("#c-maj").textContent = late ? money(r.majoration) : "—";
   $("#c-tot").textContent = money(r.total);
@@ -2736,8 +2768,8 @@ $("#form-decl").addEventListener("submit", async e => {
   const c = cfg();
   const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
   const late = depot.getTime() > deadline(key).getTime();
-  const r = compute(ca, ch, ms, late, c, nb, sal);
   const ent = findEnt(name);
+  const r = applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late);
   const editing = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
   const lockedK = isClosed(key) ? key : editing && isClosed(editing.periode) ? editing.periode : null;
   if (lockedK) { err.textContent = `${closedNote(lockedK)} : la Direction doit la rouvrir pour y ajouter ou modifier une déclaration.`; return; }
@@ -2747,7 +2779,7 @@ $("#form-decl").addEventListener("submit", async e => {
     ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
-    bareme: r.detail ? "progressif" : "unique", detail: r.detail,
+    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration,
     salaries: sal ? sal.map(x => ({ nom: x.nom, salaire: Math.round(x.salaire) })) : null,
     enRetard: late, rectificative: dup,
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
@@ -2771,7 +2803,7 @@ $("#form-decl").addEventListener("submit", async e => {
   rc.replaceChildren(stamp([editing ? "Modifiée" : "Enregistrée", "ok"]),
     h("div", { style: "min-width:0;flex:1 1 260px" },
       h("strong", { text: `${dossierNo("DF", ref.id)} · ${body.entrepriseNom}` }),
-      h("div", { class: "muted", text: `${periodLabel(key)} · montant calculé ${money(body.total)}${late ? " (majoré)" : ""}${dup ? " · rectificative" : ""}` })),
+      h("div", { class: "muted", text: `${periodLabel(key)} · montant calculé ${money(body.total)}${late ? " (majoré)" : ""}${body.exoneration ? ` · ${money(exoMontant(body))} d’exonération` : ""}${dup ? " · rectificative" : ""}` })),
     h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(ref.id), text: "Ouvrir le dossier" }));
   rc.hidden = false;
   $("#form-decl").reset();
@@ -2972,7 +3004,7 @@ function renderSettings() {
           h("button", { class: "btn danger small", type: "button", onclick: async () => { if (await write(() => S.db.doc("entreprises/" + e.id).delete())) { closeDialog(); toast("Entreprise retirée."); } }, text: "Retirer" })] });
     });
     return h("li", {},
-      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), " ", pingTag(e), h("span", { class: "meta", text: [e.secteur, e.patron, e.debutActivite && keyStart(e.debutActivite) > startTime() ? "depuis " + periodPlain(e.debutActivite).toLowerCase() : ""].filter(Boolean).join(" · ") || "—" })),
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), " ", pingTag(e), (exoSituation(e) || {}).on ? h("span", { class: "tag ok", text: "exonérée" }) : null, h("span", { class: "meta", text: [e.secteur, e.patron, e.debutActivite && keyStart(e.debutActivite) > startTime() ? "depuis " + periodPlain(e.debutActivite).toLowerCase() : ""].filter(Boolean).join(" · ") || "—" })),
       h("label", { class: "switch", for: "act-" + e.id }, cb, "Active"),
       h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e), text: "Modifier", disabled: !writer() }), rm));
   }));
@@ -3344,14 +3376,15 @@ function avisDoc(d) {
     ["Résultat imposable", money(d.resultat), true]];
   if (d.detail && d.detail.is) {
     d.detail.is.forEach(t => lines.push([`Impôt · ${trancheLabel(t)} à ${pct(t.taux)}`, money(t.montant)]));
-    lines.push([`Impôt sur le bénéfice (${pct(d.tauxIS)} effectif)`, money(d.impot), true]);
+    lines.push([`Impôt sur le bénéfice (${pct(d.tauxIS)} effectif)`, money(brutIS(d)), true]);
     if (d.detail.salaries) {
       const list = d.detail.salaries, shown = list.slice(0, 15);
       shown.forEach((x, i) => lines.push([`Cotisations · ${x.nom || "Salarié " + (i + 1)} (salaire ${money(x.salaire)})`, money(x.cotisation)]));
       if (list.length > shown.length) { const rest = list.slice(15); lines.push([`Cotisations · ${rest.length} autres salariés`, money(rest.reduce((x, y) => x + y.cotisation, 0))]); }
     } else d.detail.cot.forEach(t => lines.push([`Cotisations · ${trancheLabel(t)} à ${pct(t.taux)}${t.libelle ? " · " + t.libelle.toLowerCase() : ""}`, money(t.montant)]));
-    lines.push([`Cotisations sur les salaires (${pct(d.tauxCot)} effectif)`, money(d.cotisations), true]);
-  } else lines.push([`Impôt sur le résultat (${pct(d.tauxIS)})`, money(d.impot)], [`Cotisations sociales (${pct(d.tauxCot)})`, money(d.cotisations)]);
+    lines.push([`Cotisations sur les salaires (${pct(d.tauxCot)} effectif)`, money(brutCot(d)), true]);
+  } else lines.push([`Impôt sur le résultat (${pct(d.tauxIS)})`, money(brutIS(d))], [`Cotisations sociales (${pct(d.tauxCot)})`, money(brutCot(d))]);
+  exoLines(d).forEach(l => lines.push(l));
   if (d.enRetard) lines.push([`Majoration de retard (${pct(d.majPct)})`, money(d.majoration)]);
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) lines.push(["Montant rectifié après vérification", money(dec.montant), true]);
   const due = st === "validee" && !e ? payDue(d) : null;
@@ -3570,6 +3603,7 @@ function openFiche(e, opts) {
         att ? h("span", { class: "muted", text: `${dossierNo("AT", att.id)} · ${att.revoqueeLe ? "révoquée le " + fmtDate(new Date(att.revoqueeLe)) : (attValid(att) ? "jusqu’au " : "expirée le ") + fmtDate(new Date(att.validUntil))}` }) : null,
         h("button", { class: "linkbtn", type: "button", onclick: () => openAttestation(e, reopen), text: canAgent() ? "Vérifier et délivrer" : "Voir" }));
     })() : null,
+    (() => { const x = exoSituation(e); return x ? h("div", { class: "exo-line" }, h("strong", { text: "Exonération :" }), chip([x.text, x.tone])) : null; })(),
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r })))) : null,
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
     sec("Historique des déclarations", hist),
@@ -3675,7 +3709,8 @@ function renderEconomie() {
   const empEnts = cur.filter(d => (Number(d.nbSalaries) || 0) > 0).length;
   setKpi("e-emp", NF.format(emp), emp ? `dans ${empEnts} entreprise${plural(empEnts)}` : "aucun salarié déclaré");
   setKpi("e-mas", money(mas), emp ? `${money(mas / emp)} par salarié en moyenne` : "aucun salarié déclaré");
-  setKpi("e-rec", money(rec), penPaid ? `dont ${money(penPaid)} de pénalités` : "impôts et cotisations encaissés", rec > 0 ? "ok" : "");
+  const exoSum = allP.reduce((s, d) => s + exoMontant(d), 0);
+  setKpi("e-rec", money(rec), [penPaid ? `dont ${money(penPaid)} de pénalités` : "impôts et cotisations encaissés", exoSum ? `${money(exoSum)} exonérés` : ""].filter(Boolean).join(" · "), rec > 0 ? "ok" : "");
   setKpi("e-taux", dues ? `${Math.round(paidPart / dues * 100)} %` : "—", dues ? `${money(dues - paidPart)} restent à payer` : "aucun avis émis", dues && paidPart < dues ? "warn" : "");
   drawCols($("#ch-ca"), { short, full, series: [{ name: "Chiffre d’affaires", cls: "b1", values: per.map(ds => sumOf(ds, "ca")) }], label: "Chiffre d’affaires déclaré, " + spanLabel(keys, 12) });
   treasuryChart($("#ch-tr"), $("#lg-tr"), 12, keys);
@@ -3757,7 +3792,7 @@ function describe(e) {
       if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -3778,7 +3813,7 @@ const FIELD_LABEL = {
   resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
-  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations",
+  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
   services: "Services", enveloppes: "Enveloppes", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
@@ -4207,6 +4242,8 @@ function editEntreprise(e, back) {
   fill(debut, h("option", { value: "", text: `Depuis le début du suivi (${periodPlain(cfg().debutSuivi).toLowerCase()})` }), keys.slice().reverse().map(k => h("option", { value: k, text: periodLabel(k) })));
   if (e.debutActivite && !keys.includes(e.debutActivite) && keyStart(e.debutActivite) > startTime()) debut.append(h("option", { value: e.debutActivite, text: periodLabel(e.debutActivite) }));
   debut.value = e.debutActivite && keyStart(e.debutActivite) > startTime() ? e.debutActivite : "";
+  const exo = h("select", {}, h("option", { value: "auto", text: "Automatique : si l’entreprise est nouvelle" }), h("option", { value: "accordee", text: "Accordée" }), h("option", { value: "refusee", text: "Refusée" }));
+  exo.value = ["accordee", "refusee"].includes(e.exoneration) ? e.exoneration : "auto";
   const err = h("span", { class: "err", "aria-live": "polite" });
   const progress = h("span", { class: "hint" });
   const save = h("button", { class: "btn small", type: "button", text: "Enregistrer" });
@@ -4216,7 +4253,7 @@ function editEntreprise(e, back) {
     if (S.entreprises.some(x => x.id !== e.id && norm(x.nom) === norm(n))) { err.textContent = `« ${n} » existe déjà au registre.`; return; }
     if (disc.value.trim() && !parseMention(disc.value.trim())) { err.textContent = "ID Discord : 17 à 20 chiffres (clic droit sur le membre → Copier l’identifiant)."; disc.focus(); return; }
     save.disabled = true;
-    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || null }));
+    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || null, exoneration: exo.value }));
     if (!ok) { save.disabled = false; return; }
     if (n !== e.nom) {
       const jobs = [];
@@ -4237,6 +4274,8 @@ function editEntreprise(e, back) {
       h("div", { class: "row2" },
         h("div", { class: "field" }, h("label", { for: "ee-discord", text: "ID Discord du patron" }), Object.assign(disc, { id: "ee-discord" }), h("span", { class: "hint", text: "Pour le mentionner dans les avis et relances publiés. Clic droit sur le membre → Copier l’identifiant." })),
         h("div", { class: "field" }, h("label", { for: "ee-debut", text: "Début d’activité" }), Object.assign(debut, { id: "ee-debut" }), h("span", { class: "hint", text: "Avant cette période, l’entreprise n’est pas attendue et n’est jamais relancée." }))),
+      cfg().exoActive ? h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ee-exo", text: "Exonération de début d’activité" }), Object.assign(exo, { id: "ee-exo" }),
+        h("span", { class: "hint", text: `${cfg().exoPeriodes} période${plural(cfg().exoPeriodes)} à partir du début d’activité (ou du début du suivi). S’applique aux déclarations saisies ensuite.` }))) : null,
       h("p", { class: "hint", style: "margin:0", text: "Un changement de nom est reporté sur toutes ses déclarations, pénalités, échéanciers et relances." }), err, progress],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour à la fiche" : "Annuler" }), h("span", { class: "spacer" }), save]
   });
@@ -4938,6 +4977,111 @@ function openVerifyAttestation() {
   setTimeout(() => inp.focus(), 30);
 }
 $("#btn-att-verify").addEventListener("click", openVerifyAttestation);
+
+/* ---------- Exonération des entreprises nouvelles ---------- */
+// Sur le modèle de l'ACRE (cotisations réduites au début de l'activité) et du régime des entreprises
+// nouvelles (impôt réduit puis dégressif) : pendant ses premières périodes, une entreprise nouvelle
+// paie moins d'impôt et de cotisations. La réduction est calculée au dépôt et figure sur l'avis.
+const brutIS = d => (d.exoneration ? Number(d.exoneration.impotBrut) || 0 : Number(d.impot) || 0);
+const brutCot = d => (d.exoneration ? Number(d.exoneration.cotisationsBrutes) || 0 : Number(d.cotisations) || 0);
+const exoMontant = d => (d.exoneration ? (Number(d.exoneration.montantIS) || 0) + (Number(d.exoneration.montantCot) || 0) : 0);
+// Première période exonérée de l'entreprise, ou null si elle n'y a pas droit.
+function exoStartKey(e, c) {
+  c = c || cfg();
+  if (!c.exoActive || !e || !e.id || e.exoneration === "refusee") return null;
+  const deb = e.debutActivite && bounds(e.debutActivite) ? e.debutActivite : null;
+  if (e.exoneration === "accordee") return deb || c.debutSuivi;
+  return deb && keyStart(deb) > startTime() ? deb : null;
+}
+function exoInfo(e, key, c) {
+  c = c || cfg();
+  const startK = exoStartKey(e, c);
+  if (!startK || !bounds(key)) return null;
+  const st = keyStart(keyOf(bounds(startK).start, c.periodicite));
+  if (keyStart(key) < st) return null;
+  let i = 0, k = key;
+  while (keyStart(k) > st && i < 400) { k = prevKey(k); i++; }
+  const n = Math.max(1, Math.min(52, Math.round(Number(c.exoPeriodes) || 4)));
+  if (i >= n) return null;
+  const f = c.exoDegressif ? (n - i) / n : 1;
+  const tauxIS = Math.round(Math.min(100, Math.max(0, Number(c.exoIS) || 0)) * f * 10) / 10;
+  const tauxCot = Math.round(Math.min(100, Math.max(0, Number(c.exoCot) || 0)) * f * 10) / 10;
+  if (!tauxIS && !tauxCot) return null;
+  let fin = keyOf(bounds(startK).start, c.periodicite);
+  for (let j = 1; j < n; j++) fin = keyOf(new Date(bounds(fin).end.getTime() + 864e5), c.periodicite);
+  return { rang: i + 1, sur: n, tauxIS, tauxCot, fin, degressif: !!c.exoDegressif };
+}
+// Applique la réduction au calcul brut ; la majoration de retard porte sur les montants réduits.
+function applyExo(r, e, key, c, late) {
+  c = c || cfg();
+  const x = exoInfo(e, key, c);
+  if (!x) return Object.assign({}, r, { exoneration: null });
+  const mIS = Math.round(r.impot * x.tauxIS / 100), mCot = Math.round(r.cotisations * x.tauxCot / 100);
+  const impot = r.impot - mIS, cotisations = r.cotisations - mCot;
+  const majoration = late ? Math.round((impot + cotisations) * (Number(c.majoration) || 0) / 100) : 0;
+  return Object.assign({}, r, {
+    impot, cotisations, majoration, total: impot + cotisations + majoration,
+    exoneration: Object.assign({}, x, { montantIS: mIS, montantCot: mCot, impotBrut: r.impot, cotisationsBrutes: r.cotisations })
+  });
+}
+const exoLabel = x => `Exonération de début d’activité (période ${x.rang} sur ${x.sur})`;
+// Lignes « brut, réduction, net » pour l'avis, le dossier et le texte Discord.
+function exoLines(d) {
+  const x = d.exoneration;
+  if (!x) return [];
+  const out = [];
+  if (x.montantIS) out.push([`${exoLabel(x)} · impôt −${pct(x.tauxIS)}`, "− " + money(x.montantIS)]);
+  if (x.montantCot) out.push([`${exoLabel(x)} · cotisations −${pct(x.tauxCot)}`, "− " + money(x.montantCot)]);
+  return out;
+}
+function exoSituation(e) {
+  const c = cfg(), startK = exoStartKey(e, c);
+  if (!c.exoActive) return null;
+  if (!startK) return e.exoneration === "refusee" ? { text: "Exonération refusée par la Direction", tone: "muted" } : null;
+  const now = exoInfo(e, keyOf(new Date()), c);
+  if (now) return { text: `Exonérée · période ${now.rang} sur ${now.sur} · impôt −${pct(now.tauxIS)}, cotisations −${pct(now.tauxCot)} · jusqu’à ${periodPlain(now.fin).toLowerCase()} incluse`, tone: "ok", on: true };
+  const first = exoInfo(e, keyOf(bounds(startK).start, c.periodicite), c);
+  if (first && keyStart(keyOf(new Date())) < keyStart(startK)) return { text: `Exonération prévue à partir de ${periodPlain(startK).toLowerCase()}`, tone: "info" };
+  return first ? { text: `Exonération terminée (${periodPlain(first.fin).toLowerCase()})`, tone: "muted" } : null;
+}
+
+/* Réglages : exonération */
+function renderExoSettings(force) {
+  const box = $("#card-exo");
+  if (!force && (S.exoDirty || box.contains(document.activeElement))) { exoExample(); return; }
+  const c = cfg();
+  $("#x-on").checked = !!c.exoActive;
+  $("#x-per").value = String(c.exoPeriodes || 4);
+  $("#x-is").value = String(c.exoIS ?? 100);
+  $("#x-cot").value = String(c.exoCot ?? 50);
+  $("#x-deg").checked = !!c.exoDegressif;
+  $("#x-per-l").textContent = `Durée (en ${cfg().periodicite === "mois" ? "mois" : "semaines"})`;
+  exoExample();
+}
+function exoExample() {
+  const on = $("#x-on").checked, n = Math.max(1, Math.min(52, Math.round(Number($("#x-per").value) || 4)));
+  const is = Math.min(100, Math.max(0, Number($("#x-is").value) || 0)), cot = Math.min(100, Math.max(0, Number($("#x-cot").value) || 0)), deg = $("#x-deg").checked;
+  $$("#card-exo .exo-field").forEach(f => { f.hidden = !on; });
+  if (!on) { $("#x-ex").textContent = "Aucune exonération : les entreprises nouvelles paient dès leur première période."; return; }
+  const unit = cfg().periodicite === "mois" ? "mois" : "semaine";
+  const steps = [];
+  for (let i = 0; i < Math.min(n, 6); i++) { const f = deg ? (n - i) / n : 1; steps.push(`${unit} ${i + 1} : impôt −${pct(Math.round(is * f * 10) / 10)}, cotisations −${pct(Math.round(cot * f * 10) / 10)}`); }
+  if (n > 6) steps.push("…");
+  $("#x-ex").textContent = `Exemple pour une entreprise nouvelle : ${steps.join(" · ")}. Ensuite, elle paie plein tarif.`;
+}
+$("#card-exo").addEventListener("input", () => { S.exoDirty = true; $("#x-msg").textContent = "Modifications non enregistrées."; exoExample(); });
+$("#x-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const v = {
+    exoActive: $("#x-on").checked,
+    exoPeriodes: Math.max(1, Math.min(52, Math.round(Number($("#x-per").value) || 4))),
+    exoIS: Math.min(100, Math.max(0, Number($("#x-is").value) || 0)),
+    exoCot: Math.min(100, Math.max(0, Number($("#x-cot").value) || 0)),
+    exoDegressif: $("#x-deg").checked
+  };
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
+  if (ok) { S.exoDirty = false; $("#x-msg").textContent = v.exoActive ? "Exonération enregistrée. Elle s’applique aux déclarations saisies à partir de maintenant." : "Exonération désactivée."; toast("Exonération enregistrée."); renderExoSettings(true); }
+});
 
 /* ---------- Onglets ---------- */
 function showTab(name) {
