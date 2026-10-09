@@ -518,6 +518,9 @@ header.top{position:relative}
 .set-page[hidden]{display:none}
 .set-page>.card{margin:0}
 .reasons.done .reason{opacity:.6;text-decoration:line-through;text-decoration-color:var(--ink-3)}
+/* surveillance des comptes */
+.proof-img{display:block;max-width:220px;max-height:140px;border:1px solid var(--rule);border-radius:6px;object-fit:contain;background:var(--field)}
+.mini-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px;font-weight:650}
 </style>
 </head>
 <body data-gate="chargement">
@@ -746,6 +749,16 @@ header.top{position:relative}
     <div class="card" style="margin-top:16px">
       <div class="card-head">
         <div>
+          <h3>Surveillance des comptes</h3>
+          <p class="sub" id="rc-comptes-sub">Soldes des comptes des entreprises rapprochés de leurs déclarations.</p>
+        </div>
+        <button class="btn ghost small" type="button" id="rc-releve-new" hidden>Relevé de compte</button>
+      </div>
+      <div id="rc-comptes"><div class="empty">Chargement…</div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <div>
           <h3>Contrôles fiscaux</h3>
           <p class="sub" id="rc-controles-sub">Vérifications en cours et terminées.</p>
         </div>
@@ -926,6 +939,20 @@ header.top{position:relative}
               </div>
             </div>
             <span class="hint" id="d-ms-hint">Base des cotisations sociales.</span>
+          </div></div>
+          <div class="case"><div class="case-no">04</div><div class="case-body">
+            <div class="row2">
+              <div class="field">
+                <label for="d-solde">Solde du compte de l’entreprise</label>
+                <div class="money" data-cur="€"><input id="d-solde" type="number" step="1" inputmode="numeric" placeholder="Fin de période"></div>
+              </div>
+              <div class="field">
+                <label for="d-solde-file">Capture du compte</label>
+                <input id="d-solde-file" type="file" accept="image/*">
+                <input id="d-solde-lien" type="url" autocomplete="off" placeholder="Ou un lien : message Discord, Imgur…" style="margin-top:6px">
+              </div>
+            </div>
+            <span class="hint" id="d-solde-hint">Solde affiché sur le compte de l’entreprise à la fin de la période, avec une capture. Un relevé fait par un agent fait foi.</span>
           </div></div>
           <div class="case"><div class="case-no">B</div><div class="case-body">
             <div class="row2">
@@ -1277,6 +1304,22 @@ header.top{position:relative}
               </div>
             </div>
           </div>
+          <div class="card" id="card-bl">
+            <h3>Surveillance des comptes</h3>
+            <p class="sub">Contre le blanchiment : chaque employé peut déposer de l’argent sale sur le compte de l’entreprise. Le guichet compare le solde du compte à ce que les déclarations expliquent.</p>
+            <div class="set-form">
+              <label class="switch" for="bl-actif"><input type="checkbox" id="bl-actif"> Surveiller les comptes</label>
+              <div class="row2" style="align-items:end">
+                <div class="field"><label for="bl-seuil">Écart à partir duquel alerter</label><div class="money" data-cur="€"><input id="bl-seuil" type="number" min="0" step="500"></div><span class="hint">Différence entre le solde réel et le solde attendu.</span></div>
+                <div class="field"><label for="bl-plafond">Dépôt d’argent sale possible par employé et par jour</label><div class="money" data-cur="€"><input id="bl-plafond" type="number" min="0" step="1000"></div><span class="hint">Règle du serveur : sert à repérer les écarts qui lui ressemblent.</span></div>
+              </div>
+              <label class="switch" for="bl-oblig"><input type="checkbox" id="bl-oblig"> Exiger le solde du compte dans chaque déclaration (sinon, alerte)</label>
+              <div class="paste-row">
+                <button class="btn" type="button" id="bl-save">Enregistrer</button>
+                <span id="bl-msg" class="hint" aria-live="polite"></span>
+              </div>
+            </div>
+          </div>
       </div>
       <div class="set-page" id="set-page-entreprises" data-sg="entreprises" role="tabpanel" aria-labelledby="set-tab-entreprises" hidden>
           <div class="card">
@@ -1441,7 +1484,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1688,6 +1731,7 @@ function alertsFor(d) {
   if (ca === 0 && nb > 0) out.push("Aucun chiffre d’affaires avec des salariés");
   if (hist.slice(-3).concat([d]).filter(x => x.enRetard).length >= 2) out.push("Retards répétés");
   if (d.detail) for (const t of (d.detail.cot || []).concat(d.detail.is || [])) if (t.libelle && t.base > 0) out.push(`${t.libelle} : au-delà de ${money(t.de)}`);
+  out.push(...blanchimentSignals(d));
   return out;
 }
 
@@ -1702,7 +1746,8 @@ function alertState(d) {
   const c = ctrlCovering(d), k = alertClassee(d);
   if (c) return { list, active: [], how: "controle", ctrl: c };
   // Classée pour ces alertes-là : si la déclaration est corrigée et que d'autres apparaissent, elles reviennent.
-  if (k && (!Array.isArray(k.alertes) || list.every(a => k.alertes.includes(a)))) return { list, active: [], how: "classee", classe: k };
+  const akey = a => (isBlSignal(a) ? a.split(/\s*:|\s\d/)[0] : a);
+  if (k && (!Array.isArray(k.alertes) || list.every(a => k.alertes.map(akey).includes(akey(a))))) return { list, active: [], how: "classee", classe: k };
   return { list, active: list, how: null };
 }
 const activeAlerts = d => alertState(d).active;
@@ -1838,7 +1883,7 @@ function applyRole() {
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
   $("#btn-search").hidden = !S.connected;
-  $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
   $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
@@ -2171,6 +2216,8 @@ function subscribe() {
   col("saisies", s => { S.saisies = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("transmissions", s => { S.transmissions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
+  col("releves", s => { S.releves = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2199,6 +2246,7 @@ function render() {
   renderDiscordSettings();
   renderExoSettings();
   renderRecouvSettings();
+  renderBlSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
   drawSync();
 }
@@ -2689,6 +2737,15 @@ function openDecl(id) {
       h("thead", {}, h("tr", {}, ["Salarié", "Salaire", "Cotisation", "Taux effectif"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
       h("tbody", {}, d.detail.salaries.map((x, i) => h("tr", {}, h("td", { text: x.nom || "Salarié " + (i + 1) }), h("td", { class: "num", text: money(x.salaire) }), h("td", { class: "num", text: money(x.cotisation) }), h("td", { class: "num", text: pct(x.taux) }))))))));
   }
+  if (blc().actif && (hasSolde(d) || d.soldePreuve || (registered && relevesOf(entOf(d)).length))) {
+    const ex = ecartDe(entOf(d), d.periode), mine = !ex.cur.d || ex.cur.d.id === d.id;
+    body.push(sec("Compte de l’entreprise", kv([
+      ["Solde déclaré", hasSolde(d) ? money(d.solde) : "non déclaré"],
+      ["Capture", proofEl(d.soldePreuve)],
+      mine && ex.cur.rel ? ["Relevé par " + (ex.cur.rel.agent || "un agent"), `${money(ex.cur.rel.montant)} le ${fmtDateTime(new Date(ex.cur.rel.at))}`] : null,
+      mine && ex.attendu != null ? ["Solde attendu", money(ex.attendu)] : null,
+      mine && ex.ecart != null ? ["Écart inexpliqué", (ex.ecart > 0 ? "+" : "") + money(ex.ecart), "tot"] : null])));
+  }
   const echSec = echeancierSection(d, () => openDecl(id));
   if (echSec) body.push(echSec);
   // Retard : une seule pénalité par déclaration, et aucune en taxation d'office (sa majoration de 40 % la remplace).
@@ -2997,6 +3054,7 @@ function renderDeclPreview() {
     det.hidden = false;
   } else { fill(det); det.hidden = true; }
   $("#d-per-hint").textContent = `Dépôt avant le ${fmtDateTime(dl)}.`;
+  soldeHint(key, ca, ch, ms);
   $("#c-due").replaceChildren(late ? chip(["Déposée hors délai : majoration appliquée", "bad"]) : chip(["Dans les délais", "ok"]));
   const name = $("#d-ent").value.trim();
   const ent = findEnt(name);
@@ -3069,10 +3127,14 @@ const declKeys = k =>
   /^(masse|salaires?\b)/.test(k) ? "masse" :
   /^(nombre|nb|effectif)/.test(k) ? "nb" :
   /^(salaries|salarie|employes|employe|personnel)/.test(k) ? "salaries" :
+  /^(capture|preuve|justificatif|image)/.test(k) ? "capture" :
+  /^(solde|compte|coffre|tresorerie)/.test(k) ? "solde" :
   /^(declarant|patron|gerant|nom)/.test(k) ? "declarant" :
   /^(observation|note|remarque|commentaire)/.test(k) ? "note" : null;
 function parseDecl() {
   const p = parseTemplate($("#d-paste").value, declKeys, ["note"], ["salaries"]);
+  const rawCap = String($("#d-paste").value || "").split(/\r?\n/).find(l => /^[\s*_>]*(capture|preuve|justificatif|image)/i.test(norm(l)));
+  if (rawCap) { const m = /https?:\/\/[^\s<>*`]+/i.exec(rawCap); if (m) p.capture = m[0]; }
   if (p.salaries && /^\s*\d+\s*$/.test(p.salaries) && p.nb == null) p.nb = p.salaries;
   let n = 0;
   if (p.entreprise) { const e = findEnt(p.entreprise); $("#d-ent").value = e ? e.nom : p.entreprise; n++; }
@@ -3090,6 +3152,8 @@ function parseDecl() {
     const ms = parseAmount(p.masse), nbx = p.nb != null ? parseAmount(p.nb) : 1;
     if (ms != null && nbx > 0) { setSalaries(Array.from({ length: Math.min(nbx, 60) }, (_, i) => ({ nom: `Salarié ${i + 1}`, salaire: Math.round(ms / nbx) }))); salHint = " Les salaires n’étaient pas détaillés : ils ont été répartis à parts égales, corrigez-les si besoin."; }
   }
+  if (p.solde != null) { const v = parseAmount(p.solde); if (v != null) { $("#d-solde").value = String(v); n++; } }
+  if (p.capture) { const m = /https?:\/\/\S+/i.exec(p.capture); if (m) { $("#d-solde-lien").value = m[0]; n++; } }
   if (p.declarant) { $("#d-decl").value = p.declarant; n++; }
   if (p.note) { $("#d-note").value = p.note; n++; }
   $("#d-sal-hint").textContent = salHint.trim();
@@ -3098,6 +3162,7 @@ function parseDecl() {
 }
 $("#d-parse").addEventListener("click", parseDecl);
 $("#d-paste").addEventListener("paste", () => setTimeout(parseDecl, 0));
+["#d-solde", "#d-ent"].forEach(sel => $(sel).addEventListener("input", () => renderDeclPreview()));
 
 $("#form-decl").addEventListener("submit", async e => {
   e.preventDefault();
@@ -3150,6 +3215,8 @@ $("#form-decl").addEventListener("submit", async e => {
       : repl && repl.taxationOffice ? Object.assign({}, repl.taxationOffice, { rectifiee: true })
       : editing0 && editing0.taxationOffice ? editing0.taxationOffice : null,
     salaries: sal ? sal.map(x => ({ nom: x.nom, salaire: Math.round(x.salaire) })) : null,
+    solde: $("#d-solde").value === "" || !Number.isFinite(Number($("#d-solde").value)) ? null : Math.round(Number($("#d-solde").value)),
+    soldePreuve: linkProof($("#d-solde-lien").value) || (editing0 && editing0.soldePreuve && editing0.soldePreuve.type === "image" ? editing0.soldePreuve : null),
     enRetard: late, rectificative: dup,
     remplace: repl ? repl.id : null, credit: repl && dEncaisse(repl) > 0 ? Math.round(dEncaisse(repl)) : 0,
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
@@ -3160,6 +3227,8 @@ $("#form-decl").addEventListener("submit", async e => {
   const btn = $("#d-submit");
   btn.disabled = true;
   const ref = editing ? S.db.doc("declarations/" + editing.id) : S.db.collection("declarations").doc();
+  const sf = $("#d-solde-file").files && $("#d-solde-file").files[0];
+  if (sf) { const pr = await uploadProof(`soldes/${ref.id}`, sf); if (pr) body.soldePreuve = pr; }
   const ok = await write(() => ref.set(body));
   btn.disabled = !canAgent();
   if (!ok) return;
@@ -3302,6 +3371,7 @@ function renderTemplates() {
     "Chiffre d’affaires : ",
     "Charges (hors salaires) : ",
     ...(salMode() ? ["Salariés (un par ligne : nom – salaire) :", "- ", "- ", "- "] : ["Masse salariale : ", "Nombre de salariés : "]),
+    ...(blc().actif ? ["Solde du compte de l’entreprise : ", "Capture du compte (image jointe ou lien) : "] : []),
     "Déclarant (nom, fonction) : ",
     "Observations : "].join("\n");
   $("#tpl-dem").textContent = [
@@ -3459,7 +3529,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -4011,6 +4081,7 @@ function openFiche(e, opts) {
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
     sec("Historique des déclarations", hist),
     sec("Pénalités et redressements", pens, penForm),
+    compteSection(e, reopen),
     ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
     (() => {
       const rl = relancesOf(e).slice(0, 6), sa = saisiesOf(e), tj = S.transmissions.filter(t => sameEnt(t, e));
@@ -4155,7 +4226,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -4197,6 +4268,12 @@ function describe(e) {
       if (x === "ajout") return `a notifié une saisie de ${money(v.montant)} à ${v.entrepriseNom}${v.tiers ? " (" + v.tiers + ")" : ""}`;
       if (x === "suppression") return `a supprimé une saisie de ${v.entrepriseNom}`;
       return a.statut === "executee" && b.statut !== "executee" ? `a exécuté la saisie de ${a.entrepriseNom} (${money(a.recouvre || 0)} recouvrés)` : a.statut === "levee" && b.statut !== "levee" ? `a donné mainlevée de la saisie de ${a.entrepriseNom}` : `a modifié la saisie de ${a.entrepriseNom}`;
+    case "releves":
+      if (x === "suppression") return `a supprimé un relevé du compte de ${v.entrepriseNom}`;
+      return `a relevé le compte de ${v.entrepriseNom} : ${money(v.montant)}`;
+    case "soupcons":
+      if (x === "suppression") return `a supprimé une déclaration de soupçon sur ${v.entrepriseNom}`;
+      return x === "ajout" ? `a transmis une déclaration de soupçon sur ${v.entrepriseNom} (${money(v.montant)})` : `a mis à jour la déclaration de soupçon sur ${v.entrepriseNom}`;
     case "alertes":
       if (x === "suppression") return `a rouvert les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})`;
       return `a classé les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})${v.motif ? " : " + v.motif : ""}`;
@@ -4638,6 +4715,8 @@ function startEditDecl(d) {
   $("#d-ch").value = String(d.charges ?? 0);
   $("#d-ms").value = String(d.masse ?? 0);
   $("#d-nb").value = String(d.nbSalaries ?? 0);
+  $("#d-solde").value = hasSolde(d) ? String(d.solde) : "";
+  $("#d-solde-lien").value = d.soldePreuve && d.soldePreuve.type === "lien" ? d.soldePreuve.url : "";
   if (salMode()) {
     const list = d.salaries && d.salaries.length ? d.salaries
       : (d.nbSalaries > 0 ? Array.from({ length: Math.min(d.nbSalaries, 60) }, (_, i) => ({ nom: `Salarié ${i + 1}`, salaire: Math.round((d.masse || 0) / d.nbSalaries) })) : []);
@@ -5164,6 +5243,7 @@ function renderRecouvrement() {
   const ag = canAgent(), dir = writer(), c = cfg();
   renderClotures();
   renderControles();
+  renderComptes();
   const rt = retardataires();
   $("#rc-retards-sub").textContent = rt.length
     ? `${rt.length} entreprise${plural(rt.length)} n’${rt.length > 1 ? "ont" : "a"} pas déposé toutes ${rt.length > 1 ? "leurs" : "ses"} déclarations échues depuis ${periodPlain(c.debutSuivi).toLowerCase()}. Procédure : rappel, mise en demeure de déclarer, puis taxation d’office.`
@@ -5486,7 +5566,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -5815,12 +5895,14 @@ const QUALIF = {
   fraude: ["Manœuvres frauduleuses : 80 % (art. 1729 c du CGI)", 80],
   opposition: ["Opposition au contrôle : 100 % (art. 1732 du CGI)", 100]
 };
-const ORIGINES = { alerte: "Alerte du guichet", signalement: "Signalement", aleatoire: "Contrôle aléatoire", autre: "Autre" };
+const ORIGINES = { alerte: "Alerte du guichet", signalement: "Signalement", aleatoire: "Contrôle aléatoire", blanchiment: "Surveillance des comptes", autre: "Autre" };
 const PIECE_URLS = new Map();
 const PIECES_QUOTA = 1024 * 1048576;
 const shortId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const fmtSize = b => (b >= 1048576 ? (b / 1048576).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Mo" : Math.max(1, Math.round(b / 1024)) + " Ko");
-const piecesUsed = () => S.controles.reduce((s, c) => s + (c.pieces || []).reduce((t, p) => t + (Number(p.taille) || 0), 0), 0);
+const piecesUsed = () => S.controles.reduce((s, c) => s + (c.pieces || []).reduce((t, p) => t + (Number(p.taille) || 0), 0), 0)
+  + (S.releves || []).reduce((s, r) => s + (Number(r.preuve && r.preuve.taille) || 0), 0)
+  + S.declarations.reduce((s, d) => s + (Number(d.soldePreuve && d.soldePreuve.taille) || 0), 0);
 const ctrlOf = d => S.controles.find(c => (c.declIds || []).includes(d.id) && (c.statut === "ouvert" || c.statut === "propose")) || null;
 // Un contrôle mis en recouvrement devient « Soldé » quand le redressement est payé, « Dégrevé » s'il est annulé.
 const ctrlPen = c => (c && c.penaliteId ? S.penalites.find(p => p.id === c.penaliteId) : null) || null;
@@ -5860,6 +5942,18 @@ function rectifCalc(c) {
 }
 function avisVerifDoc(c) {
   const e = entOf(c);
+  // Demande de justifications sur l'origine des sommes portées au compte (art. L16 et L69 du LPF).
+  if (c.justif && (c.justif.ecarts || []).length) {
+    const lim = longDate(new Date(c.justif.delai || c.ouvertLe));
+    return {
+      kind: "DEMANDE DE JUSTIFICATIONS", no: dossierNo("CF", c.id), date: "Notifiée le " + longDate(new Date(c.ouvertLe)),
+      meta: [["Entreprise", e.nom], ["Patron", e.patron || "—"], ["Réponse attendue avant le", lim], ["Inspecteur", c.inspecteur || "—"]],
+      lines: c.justif.ecarts.map(x => [`Sommes sans origine connue · ${periodPlain(x.periode)}`, "+" + money(x.ecart)]),
+      total: ["À justifier", money(c.justif.ecarts.reduce((t, x) => t + x.ecart, 0))], stamp: ["JUSTIFICATIONS", "accent"],
+      footer: `Le compte de l’entreprise a reçu des sommes que ses déclarations n’expliquent pas. Justifiez leur origine avant le ${lim} : factures, contrats, apports. Sans réponse suffisante, elles seront imposées d’office comme recettes non déclarées, majorées pour manœuvres frauduleuses (sur le modèle des art. L16 et L69 du LPF et 1729 du CGI).`,
+      discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Demande de justifications ${dossierNo("CF", c.id)}** · ${e.nom} · ${money(c.justif.ecarts.reduce((t, x) => t + x.ecart, 0))} portés au compte sans origine connue, réponse avant le ${lim}.` }
+    };
+  }
   return {
     kind: "AVIS DE VÉRIFICATION", no: dossierNo("CF", c.id), date: "Notifié le " + longDate(new Date(c.ouvertLe)),
     meta: [["Entreprise", e.nom], ["Patron", e.patron || "—"], ["Périodes vérifiées", (c.periodes || []).map(periodPlain).join(", ") || "—"], ["Inspecteur", c.inspecteur || "—"]],
@@ -5902,7 +5996,8 @@ function amrDoc(c, p) {
 }
 const amrDocFromPen = p => amrDoc(S.controles.find(c => c.id === p.controleId) || null, p);
 
-function newControle(e, declIds) {
+function newControle(e, declIds, opts) {
+  opts = opts || {};
   const ds = declsOf(e).filter(d => dStatus(d) !== "rejetee").sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 16);
   if (!ds.length) { toast("Cette entreprise n’a encore aucune déclaration à contrôler.", true); return; }
   const pre = new Set(declIds && declIds.length ? declIds : [ds[0].id]);
@@ -5910,9 +6005,9 @@ function newControle(e, declIds) {
     return h("label", { class: "switch", for: "nc-" + d.id }, cb, `${periodPlain(d.periode)} · ${money(d.ca)} de chiffre d’affaires · ${(DSTAT[dStatus(d)] || DSTAT.soumise)[0].toLowerCase()}${busy ? " · déjà dans " + dossierNo("CF", busy.id) : ""}`); });
   const motif = h("textarea", { id: "nc-motif", rows: "3", placeholder: "Pourquoi ce contrôle : alertes, signalement, incohérences…" });
   const al = [...new Set(ds.filter(d => pre.has(d.id)).flatMap(activeAlerts))];
-  motif.value = al.length ? "Alertes du guichet : " + al.join(" ; ") + "." : "";
+  motif.value = opts.motif || (al.length ? "Alertes du guichet : " + al.join(" ; ") + "." : "");
   const orig = h("select", { id: "nc-orig" }, Object.entries(ORIGINES).map(([v, l]) => h("option", { value: v, text: l })));
-  orig.value = al.length ? "alerte" : "aleatoire";
+  orig.value = opts.origine || (al.length ? "alerte" : "aleatoire");
   const insp = h("input", { id: "nc-insp", autocomplete: "off" }); insp.value = S.agentName || "";
   const susp = h("input", { type: "checkbox", id: "nc-susp" }); susp.checked = true;
   const err = h("span", { class: "err", "aria-live": "polite" });
@@ -5926,6 +6021,9 @@ function newControle(e, declIds) {
       statut: "ouvert", ouvertLe: nowISO(), ouvertPar: S.agentName || "", by: S.uid || null, notes: [], pieces: [], rectifications: {}, qualification: "bonne_foi", suspendus: [] };
     // On garde l'état de chaque avis avant suspension pour le rétablir exactement à la fin du contrôle.
     c.avant = {};
+    if (opts.rectifications) for (const id of ids) if (opts.rectifications[id]) c.rectifications[id] = opts.rectifications[id];
+    if (opts.qualification) c.qualification = opts.qualification;
+    if (opts.justif) c.justif = { ecarts: opts.justif.filter(x => ids.includes(x.declId)), delai: new Date(Date.now() + Math.max(1, Number(cfg().delaiReponseJours) || 2) * 864e5).toISOString() };
     if (susp.checked) for (const d of sel) { const st = dStatus(d); if (st === "soumise" || st === "validee") { c.suspendus.push(d.id); c.avant[d.id] = st; } }
     if (!(await write(() => ref.set(c)))) { ev.currentTarget.disabled = false; return; }
     for (const id of c.suspendus) { const d = S.declarations.find(x => x.id === id); if (d) await decide(d, "controle", dMontant(d), (S.decisions[id] || {}).note || `Contrôle fiscal ${dossierNo("CF", ref.id)}`, { quiet: true }); }
@@ -6365,14 +6463,16 @@ const QUALIFS_J = {
   fraude: "Fraude fiscale : soustraction frauduleuse à l’impôt (art. 1741 du CGI)",
   travail: "Travail dissimulé (art. L8221-1 du Code du travail)",
   opposition: "Opposition au contrôle fiscal (art. 1732 et 1746 du CGI)",
-  insolvabilite: "Organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal)"
+  insolvabilite: "Organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal)",
+  blanchiment: "Blanchiment : sommes d’origine illicite passées par le compte de l’entreprise (art. 324-1 du Code pénal)"
 };
 const MESURES_J = {
   saisie_comptes: "Saisie des sommes détenues sur les comptes de l’entreprise, à hauteur de la dette",
   saisie_biens: "Saisie et vente des biens de l’entreprise : véhicules, stocks, matériel",
   fermeture: "Fermeture administrative temporaire de l’établissement",
   poursuites: "Poursuites pénales contre le dirigeant",
-  interdiction: "Interdiction de gérer une entreprise, à titre de peine complémentaire"
+  interdiction: "Interdiction de gérer une entreprise, à titre de peine complémentaire",
+  confiscation: "Confiscation des sommes d’origine illicite figurant sur le compte de l’entreprise"
 };
 // Repères du droit réel, rappelés en fin de dossier.
 const FONDEMENTS = {
@@ -6381,7 +6481,8 @@ const FONDEMENTS = {
   fraude: "Fraude fiscale (art. 1741 du CGI) : 5 ans d’emprisonnement et 500 000 € d’amende, montant pouvant être porté au double du produit de la fraude ; 7 ans et 3 000 000 € en bande organisée ou avec de faux documents ; peines complémentaires de privation des droits civiques et d’affichage. La dénonciation au procureur est obligatoire au-delà de 100 000 € de droits rappelés avec une majoration de 80 ou 100 %, ou de 40 % en cas de réitération (art. L228 du LPF).",
   travail: "Travail dissimulé (art. L8221-1 et L8224-1 du Code du travail) : 3 ans d’emprisonnement et 45 000 € d’amende. L’autorité administrative peut fermer l’établissement jusqu’à trois mois, en informant le procureur (art. L8272-2).",
   opposition: "Opposition au contrôle fiscal : les droits sont majorés de 100 % (art. 1732 du CGI) ; mettre les agents dans l’impossibilité d’exercer leurs fonctions est un délit (art. 1746 du CGI).",
-  insolvabilite: "Organiser ou aggraver son insolvabilité pour échapper au paiement de l’impôt est réprimé comme une fraude fiscale (art. 1741 du CGI) et comme une organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal)."
+  insolvabilite: "Organiser ou aggraver son insolvabilité pour échapper au paiement de l’impôt est réprimé comme une fraude fiscale (art. 1741 du CGI) et comme une organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal).",
+  blanchiment: "Blanchiment (art. 324-1 du Code pénal) : faciliter la justification mensongère de l’origine de fonds, ou concourir à leur placement, dissimulation ou conversion ; 5 ans d’emprisonnement et 375 000 € d’amende, 10 ans et 750 000 € s’il est habituel, facilité par une activité professionnelle ou commis en bande organisée (art. 324-2). Les fonds sont présumés d’origine illicite quand l’opération n’a d’autre justification que d’en dissimuler l’origine (art. 324-1-1). Les sommes portées au compte sans origine justifiée peuvent aussi être imposées d’office (art. L16 et L69 du LPF), et les soupçons sont signalés à TRACFIN (art. L561-15 du Code monétaire et financier)."
 };
 // Dénonciation obligatoire (art. L228 du LPF) : plus de 100 000 € de droits rappelés à 80 ou 100 %,
 // ou à 40 % quand l'entreprise a déjà été sanctionnée.
@@ -6415,6 +6516,8 @@ function justiceFacts(e) {
     if (s.executeeLe) events.push([s.executeeLe, "Saisie exécutée", `${dossierNo("SA", s.id)} · ${money(s.recouvre || 0)} recouvrés`]);
     if (s.leveeLe) events.push([s.leveeLe, "Mainlevée de saisie", dossierNo("SA", s.id)]);
   }
+  for (const r of relevesOf(e)) events.push([r.at, "Relevé du compte", `${dossierNo("RC", r.id)} · ${money(r.montant)} · ${r.agent || "agent"}`]);
+  for (const x of soupconsOf(e)) events.push([x.at, "Déclaration de soupçon", `${dossierNo("DS", x.id)} · ${money(x.montant)}`]);
   events.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
   const total = debts.reduce((s, x) => s + x.reste, 0);
   const lastMed = lastMedPaiement(e, debts);
@@ -6484,6 +6587,15 @@ async function buildJusticePdf(t, e) {
     const notes = (c.notes || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
     if (notes.length) { pw.p("Instruction :", { bold: true, after: 4 }); pw.bullets(notes.map(n => `${fmtDate(new Date(n.at))} · ${n.auteur || "—"} : ${n.texte}`), { size: 20 }); }
   }
+  const syn = blc().actif ? comptesSynthese(e, 8).filter(x => x.cur.pos != null) : [];
+  if (syn.length || (t.qualifs || []).includes("blanchiment")) {
+    pw.h2(`${++sn}. Compte de l’entreprise`);
+    pw.p("Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un relevé fait par un agent fait foi face au solde déclaré.", { size: 18, color: pw.ink2 });
+    if (syn.length) pw.table([{ t: "Période", w: 1 }, { t: "Solde retenu", w: 1.2, num: true }, { t: "Source", w: 1.3 }, { t: "Attendu", w: 1.2, num: true }, { t: "Écart", w: 1.1, num: true }],
+      syn.map(x => [periodPlain(x.k), money(x.cur.pos), x.cur.source === "releve" ? `relevé (${x.cur.rel.agent || "agent"})` : "déclaré", x.attendu != null ? money(x.attendu) : "—", x.ecart != null ? (x.ecart > 0 ? "+" : "") + money(x.ecart) : "—"]));
+    const sp = soupconsOf(e);
+    if (sp.length) pw.p("Déclarations de soupçon : " + sp.map(x => `${dossierNo("DS", x.id)} du ${fmtDate(new Date(x.at))} (${money(x.montant)})`).join(", ") + ".", { bold: true });
+  }
   if (f.sais.length) {
     pw.h2(`${++sn}. Saisies`);
     pw.table([{ t: "N°", w: 1 }, { t: "Nature", w: 2 }, { t: "Tiers ou lieu", w: 1.6 }, { t: "Montant", w: 1, num: true }, { t: "État", w: 1.1 }],
@@ -6525,11 +6637,12 @@ function openJustice(e) {
   if (!writer()) return;
   const f = justiceFacts(e), c = cfg();
   const box = (id, label, on) => { const cb = h("input", { type: "checkbox", id }); cb.checked = !!on; return h("label", { class: "switch", for: id }, cb, label); };
-  const fraude = f.ctrls.some(x => ["manquement", "fraude"].includes(x.qualification) && x.statut !== "sans_suite");
+  const fraude = f.ctrls.some(x => ["manquement", "fraude"].includes(x.qualification) && ["propose", "recouvre"].includes(x.statut));
   const travail = f.ctrls.some(x => (x.declIds || []).some(id => { const r = (x.rectifications || {})[id]; const d = S.declarations.find(y => y.id === id); return r && d && Number(r.masse) > Number(d.masse); }));
-  const opposition = f.ctrls.some(x => x.qualification === "opposition");
+  const opposition = f.ctrls.some(x => x.qualification === "opposition" && ["propose", "recouvre"].includes(x.statut));
   // « Défaut de paiement » n'est coché d'office que si une somme est déjà exigible.
-  const defaults = { impaye: f.debts.some(x => x.echu !== false), fraude, travail, opposition, insolvabilite: false };
+  const blEcarts = comptesSynthese(e, 8).filter(x => ecartSuspect(x) && x.ecart > blc().seuil);
+  const defaults = { impaye: f.debts.some(x => x.echu !== false), fraude, travail, opposition, insolvabilite: false, blanchiment: soupconsOf(e).length > 0 || blEcarts.length > 0 };
   const denon = denonciationObligatoire(e);
   const medOk = !!f.lastMed && medExpired(f.lastMed);
   const checks = h("ul", { class: "checklist" },
@@ -6656,6 +6769,358 @@ $("#r-save").addEventListener("click", async () => {
   };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
   if (ok) { S.recDirty = false; $("#r-msg").textContent = "Réglages du recouvrement enregistrés."; toast("Réglages du recouvrement enregistrés."); renderRecouvSettings(true); }
+});
+
+/* ---------- Surveillance des comptes (lutte contre le blanchiment) ---------- */
+// Sur le serveur, chaque employé peut déposer chaque jour de l'argent sale sur le compte de
+// l'entreprise. On ne voit pas les mouvements du compte, seulement son solde : la Direction
+// rapproche donc le solde réel de ce que les déclarations expliquent. Solde de fin de période
+// = solde précédent + chiffre d'affaires − charges − salaires − impôts et pénalités payés.
+// Ce qui dépasse est un enrichissement inexpliqué. Comme dans la réalité, l'entreprise doit
+// en justifier l'origine ; à défaut, il est imposé d'office (art. L16 et L69 du LPF) et le
+// soupçon peut être signalé (sur le modèle de TRACFIN, art. L561-15 du CMF).
+function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false }, cfg().blanchiment || {}); }
+function relevesOf(e) { return (S.releves || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
+function soupconsOf(e) { return (S.soupcons || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
+function periodDays(k) { const b = bounds(k); return b ? Math.max(1, Math.round((b.end.getTime() - b.start.getTime()) / 864e5)) : 7; }
+function hasSolde(d) { return !!d && d.solde != null && d.solde !== "" && Number.isFinite(Number(d.solde)); }
+// Dernière déclaration valable de la période (une rectificative remplace la précédente).
+function periodDecl(e, k) { return declsOf(e).filter(d => d.periode === k && dStatus(d) !== "rejetee").sort(byCreatedDesc)[0] || null; }
+// Position du compte en fin de période. Chaque observation a son heure : le relevé d'un agent
+// (il fait foi) ou, à défaut, le solde déclaré au moment du dépôt. Un relevé appartient à la seule
+// période dont la fin est la plus proche, dans la fenêtre « veille de la fin → lendemain du délai ».
+// Un solde déclaré trop tard (déclaration en retard de plus d'un jour) ne décrit plus la fin de la
+// période : il ne sert pas au rapprochement.
+const nextKeyOf = k => { const b = bounds(k); return b ? keyOf(new Date(b.end.getTime() + 864e5), /-S\d{2}$/.test(k) ? "semaine" : "mois") : null; };
+function releveWindow(k) {
+  const b = bounds(k);
+  if (!b) return null;
+  return { end: b.end.getTime(), from: b.end.getTime() - 864e5, to: deadline(k).getTime() + 864e5 };
+}
+function releveFor(e, k) {
+  const w = releveWindow(k);
+  if (!w) return null;
+  const nb = bounds(nextKeyOf(k)), pb = bounds(prevKey(k));
+  const near = t => Math.abs(t - w.end) <= (nb ? Math.abs(t - nb.end.getTime()) : Infinity) && Math.abs(t - w.end) <= (pb ? Math.abs(t - pb.end.getTime()) : Infinity);
+  return relevesOf(e).map(r => ({ r, t: new Date(r.at).getTime() })).filter(x => Number.isFinite(x.t) && x.t >= w.from && x.t <= w.to && near(x.t))
+    .sort((a, b) => Math.abs(a.t - w.end) - Math.abs(b.t - w.end))[0] || null;
+}
+function compteDe(e, k) {
+  const d = periodDecl(e, k), w = releveWindow(k);
+  if (!w) return { d, decl: null, rel: null, pos: null, t: null, source: null };
+  const rx = releveFor(e, k), rel = rx ? rx.r : null;
+  const dep = d && d.depotAt ? new Date(d.depotAt).getTime() : null;
+  const decl = hasSolde(d) ? Number(d.solde) : null;
+  const declT = dep && Number.isFinite(dep) ? dep : w.end;
+  const declOk = decl != null && declT <= w.to;
+  if (rel) return { d, decl, rel, pos: Number(rel.montant) || 0, t: rx.t, declT, source: "releve" };
+  return { d, decl, rel: null, pos: declOk ? decl : null, t: declOk ? declT : null, declT, source: declOk ? "declare" : null, late: decl != null && !declOk };
+}
+// Impôts, échéances et pénalités payés entre deux observations : ils sont sortis du compte.
+function paiementsEntre(e, t0, t1) {
+  let t = 0;
+  const inR = at => { const x = at ? new Date(at).getTime() : NaN; return Number.isFinite(x) && x > t0 && x <= t1; };
+  for (const x of declsOf(e)) {
+    const dec = S.decisions[x.id], ec = echOf(x);
+    if (ec) ec.echeances.forEach(y => { if (y.payee && inR(y.paidAt)) t += Number(y.montant) || 0; });
+    else if (dec && dec.statut === "payee" && inR(dec.paidAt)) t += Math.max(0, dMontant(x) - dCredit(x));
+    // Déclaration remplacée par une rectificative : son paiement a bien eu lieu.
+    if (dec && dec.statut === "rejetee" && dec.avantDecision && dec.avantDecision.statut === "payee" && !ec && inR(dec.avantDecision.paidAt))
+      t += Math.max(0, (Number(dec.avantDecision.montant) || 0) - dCredit(x));
+  }
+  for (const p of pensOf(e)) if (p.statut === "payee" && inR(p.paidAt)) t += Number(p.montant) || 0;
+  return t;
+}
+// Pour la période elle-même (saisie d'une déclaration) : depuis la dernière observation connue.
+function paiementsDe(e, k) {
+  const prev = compteDe(e, prevKey(k)), w = releveWindow(k);
+  return w ? paiementsEntre(e, prev.t != null ? prev.t : -Infinity, w.end + (Number(cfg().delaiJours) || 0) * 864e5) : 0;
+}
+// Après un redressement mis en recouvrement, les montants retenus par le contrôle remplacent les déclarés.
+function retenuDe(d) {
+  const c = S.controles.find(x => x.statut === "recouvre" && (x.declIds || []).includes(d.id));
+  const r = c && c.rectifications ? c.rectifications[d.id] || {} : {};
+  const pick = (k, dk) => (r[k] != null && r[k] !== "" && Number.isFinite(Number(r[k])) ? Number(r[k]) : Number(d[dk]) || 0);
+  return { ca: pick("ca", "ca"), ch: pick("charges", "charges"), ms: pick("masse", "masse") };
+}
+function fluxDe(e, k, d, t0, t1) {
+  if (!d) return null;
+  const v = retenuDe(d);
+  return v.ca - v.ch - v.ms - (t0 != null && t1 != null ? paiementsEntre(e, t0, t1) : paiementsDe(e, k));
+}
+function ecartDe(e, k) {
+  if (!bounds(k)) return { cur: { pos: null }, prev: { pos: null }, flux: null, attendu: null, ecart: null };
+  const cur = compteDe(e, k), prev = compteDe(e, prevKey(k));
+  if (cur.pos == null || !cur.d || prev.pos == null || cur.t == null || prev.t == null || cur.t <= prev.t) return { cur, prev, flux: null, attendu: null, ecart: null };
+  const flux = fluxDe(e, k, cur.d, prev.t, cur.t), attendu = prev.pos + flux;
+  return { cur, prev, flux, attendu, ecart: Math.round(cur.pos - attendu) };
+}
+function medianeSecteur(d) {
+  if (!bounds(d.periode)) return null;
+  const nbOf = x => Number(x.nbSalaries) || 0;
+  const sect = secteurOf(d), keys = new Set(keysEnding(d.periode, 4)), k0 = entKey(d);
+  const vals = S.declarations.filter(x => keys.has(x.periode) && entKey(x) !== k0 && dStatus(x) !== "rejetee" && nbOf(x) > 0 && secteurOf(x) === sect)
+    .map(x => (Number(x.ca) || 0) / nbOf(x)).sort((a, b) => a - b);
+  if (vals.length < 3 || sect === "Non renseigné") return null;
+  const m = Math.floor(vals.length / 2);
+  return vals.length % 2 ? vals[m] : (vals[m - 1] + vals[m]) / 2;
+}
+// Signaux de blanchiment d'une déclaration : ils rejoignent les alertes du guichet.
+function blanchimentSignals(d) {
+  const c = blc();
+  if (!c.actif || !d || !d.entrepriseId) return [];
+  const e = entOf(d);
+  if (!e.id || e.actif === false || !bounds(d.periode)) return [];
+  const cur = compteDe(e, d.periode);
+  if (cur.d && cur.d.id !== d.id) return [];
+  const out = [];
+  if (c.soldeObligatoire && cur.decl == null && !cur.rel) out.push("Solde du compte non déclaré");
+  if (cur.rel && cur.decl != null && cur.declT != null && Math.abs(cur.declT - new Date(cur.rel.at).getTime()) <= 864e5 && Math.abs(cur.decl - Number(cur.rel.montant)) > Math.max(1000, Math.abs(Number(cur.rel.montant)) * 0.02))
+    out.push(`Solde déclaré inexact : ${money(cur.decl)} déclarés, ${money(cur.rel.montant)} relevés par ${cur.rel.agent || "un agent"}`);
+  const x = ecartDe(e, d.periode);
+  if (x.ecart != null) {
+    if (x.ecart > c.seuil) {
+      out.push(`Enrichissement inexpliqué : +${money(x.ecart)} sur le compte`);
+      const pl = Number(c.plafond) || 0, rest = pl ? x.ecart % pl : 0;
+      if (pl && x.ecart >= pl && (rest <= pl * 0.03 || pl - rest <= pl * 0.03)) out.push(`Écart proche d’un multiple de ${money(pl)} : dépôts réguliers possibles`);
+      const nb = Number(d.nbSalaries) || 0, cap = nb * pl * periodDays(d.periode);
+      if (cap > 0 && x.ecart >= cap * 0.5) out.push(`Écart égal à ${Math.round(x.ecart / cap * 100)} % de ce que ${nb} employé${plural(nb)} peu${nb > 1 ? "vent" : "t"} déposer en ${periodDays(d.periode)} jours`);
+    } else if (x.ecart < -c.seuil) out.push(`Sorties d’argent inexpliquées : ${money(-x.ecart)} manquent sur le compte`);
+  }
+  const nb = Number(d.nbSalaries) || 0, med = nb > 0 ? medianeSecteur(d) : null;
+  if (med && med > 0 && (Number(d.ca) || 0) / nb > med * 3) out.push(`Chiffre d’affaires par salarié ${Math.round((Number(d.ca) || 0) / nb / med)} fois la médiane du secteur`);
+  const hist = declsOf(e).filter(y => y.id !== d.id && dStatus(y) !== "rejetee" && String(y.periode) < String(d.periode)).sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 3);
+  if (hist.length) {
+    const avg = hist.reduce((t, y) => t + (Number(y.ca) || 0), 0) / hist.length;
+    if (avg >= 1000 && (Number(d.ca) || 0) > avg * 2.5) out.push(`Chiffre d’affaires multiplié par ${((Number(d.ca) || 0) / avg).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} d’un coup`);
+  }
+  return out;
+}
+// Écart encore à traiter : aucun contrôle ne porte sur la déclaration et l'alerte n'est pas classée.
+const ecartOuvert = x => x.ecart != null && x.cur.d && !ctrlCovering(x.cur.d) && !alertClassee(x.cur.d);
+// Écart retenu pour un signalement : tout sauf ce qu'un contrôle a jugé justifié ou que la Direction a classé.
+const ecartSuspect = x => x.ecart != null && x.cur.d && !alertClassee(x.cur.d) && !((ctrlCovering(x.cur.d) || {}).statut === "sans_suite");
+// Synthèse par entreprise sur les dernières périodes : pour la carte du recouvrement et la justice.
+function comptesSynthese(e, n) {
+  return keysEnding(lastClosedKey(), n || 6).map(k => Object.assign({ k }, ecartDe(e, k))).filter(x => x.cur.pos != null || x.cur.d);
+}
+function suspects() {
+  const c = blc();
+  if (!c.actif) return [];
+  const keys = recentKeys(4);
+  return activeEnts().map(e => {
+    const rows = keys.map(k => { const d = periodDecl(e, k); return d ? { d, sig: activeAlerts(d).filter(isBlSignal) } : null; }).filter(x => x && x.sig.length);
+    const ecarts = keys.map(k => ecartDe(e, k)).filter(x => ecartOuvert(x) && Math.abs(x.ecart) > c.seuil);
+    return { e, rows, ecarts, total: ecarts.filter(x => x.ecart > 0).reduce((t, x) => t + x.ecart, 0) };
+  }).filter(x => x.rows.length).sort((a, b) => b.total - a.total || b.rows.length - a.rows.length);
+}
+function isBlSignal(s) { return /^(Solde du compte non déclaré|Solde déclaré inexact|Enrichissement inexpliqué|Écart proche|Écart égal|Sorties d’argent inexpliquées|Chiffre d’affaires par salarié|Chiffre d’affaires multiplié)/.test(s); }
+
+// Pièce jointe (capture ou lien) : affichage dans une fenêtre.
+function proofEl(p) {
+  if (!p) return h("span", { class: "muted", text: "aucune capture" });
+  if (p.type === "lien") { let ok = false; try { ok = ["http:", "https:"].includes(new URL(p.url).protocol); } catch (e) { ok = false; } return ok ? h("a", { href: p.url, target: "_blank", rel: "noopener noreferrer", text: "Ouvrir la capture (lien)" }) : h("span", { class: "muted", text: "lien non valable" }); }
+  const img = h("img", { class: "proof-img", alt: "Capture du compte", loading: "lazy" });
+  const a = h("a", { target: "_blank", rel: "noopener", title: "Agrandir" }, img);
+  pieceBlobUrl(p.path).then(u => { if (u) { img.src = u; a.href = u; } else a.replaceWith(h("span", { class: "muted", text: "capture introuvable" })); });
+  return a;
+}
+async function uploadProof(prefix, file) {
+  if (!file) return null;
+  if (!/^image\//.test(file.type)) { toast(`« ${file.name} » n’est pas une image.`, true); return null; }
+  let blob;
+  try { blob = await compressImage(file); } catch (e) { toast(`Impossible de lire « ${file.name} ».`, true); return null; }
+  const path = `${prefix}/${shortId()}.jpg`;
+  const { error } = await S.sb.storage.from("pieces").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+  if (error) { toast(storageHelp(error), true); return null; }
+  return { type: "image", path, nom: file.name, taille: blob.size };
+}
+function linkProof(url) { const u = String(url || "").trim(); return /^https?:\/\/\S+$/i.test(u) ? { type: "lien", url: u } : null; }
+
+// Relevé de compte fait par un agent (il prend le job pour voir le compte de l'entreprise).
+function openReleve(e, back) {
+  if (!canAgent()) return;
+  const m = h("input", { id: "rv-montant", type: "number", step: "1", inputmode: "numeric", placeholder: "0" });
+  const at = h("input", { id: "rv-at", type: "datetime-local" }); at.value = toLocalInput(new Date());
+  const file = h("input", { id: "rv-file", type: "file", accept: "image/*" });
+  const url = h("input", { id: "rv-url", type: "url", autocomplete: "off", placeholder: "Ou un lien : message Discord, Imgur…" });
+  const note = h("input", { id: "rv-note", autocomplete: "off", placeholder: "Facultatif : circonstances du relevé" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le relevé" });
+  go.addEventListener("click", async () => {
+    const v = Number(m.value);
+    if (m.value === "" || !Number.isFinite(v)) { err.textContent = "Indiquez le solde affiché sur le compte."; m.focus(); return; }
+    go.disabled = true;
+    const ref = S.db.collection("releves").doc();
+    const preuve = (file.files && file.files[0] ? await uploadProof(`releves/${ref.id}`, file.files[0]) : null) || linkProof(url.value);
+    const r = { entrepriseId: e.id || null, entrepriseNom: e.nom, montant: Math.round(v), at: at.value ? new Date(at.value).toISOString() : nowISO(), agent: S.agentName || "", by: S.uid || null, preuve, note: note.value.trim(), createdAt: nowISO() };
+    if (!(await write(() => ref.set(r)))) { go.disabled = false; return; }
+    const t = new Date(r.at).getTime(), k0 = keyOf(new Date(r.at)), kk = [k0, prevKey(k0)].find(k => { const x = releveFor(e, k); return x && x.r.id === ref.id; });
+    const c = kk ? compteDe(e, kk) : null;
+    toast(`Relevé ${dossierNo("RC", ref.id)} enregistré${kk ? " pour " + periodPlain(kk).toLowerCase() : ""}${c && c.decl != null && c.declT != null && Math.abs(c.declT - t) <= 864e5 && Math.abs(c.decl - r.montant) > 1000 ? " : il ne correspond pas au solde déclaré" : ""}.`);
+    (back || closeDialog)();
+  });
+  openDialog({
+    eyebrow: "Surveillance des comptes", title: "Relevé de compte · " + e.nom,
+    body: [h("p", { style: "margin:0", text: "Prenez le job pour afficher le compte de l’entreprise, notez le solde et joignez une capture. Le relevé d’un agent fait foi face au solde déclaré par l’entreprise." }),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "rv-montant", text: "Solde relevé" }), h("div", { class: "money", "data-cur": cur() }, m)), h("div", { class: "field" }, h("label", { for: "rv-at", text: "Relevé le" }), at)),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "rv-file", text: "Capture du compte" }), file), h("div", { class: "field" }, h("label", { for: "rv-url", text: "Ou lien de la capture" }), url)),
+      h("div", { class: "field" }, h("label", { for: "rv-note", text: "Observation" }), note), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+  setTimeout(() => m.focus(), 30);
+}
+
+// Section « Compte de l'entreprise » de la fiche et du dossier.
+function compteTable(e, keys) {
+  const rows = keys.map(k => { const x = ecartDe(e, k); return { k, x }; }).filter(r => r.x.cur.pos != null || r.x.cur.d);
+  if (!rows.length) return h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucun solde connu : demandez-le avec la déclaration ou faites un relevé de compte." });
+  const s = blc();
+  return h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+    h("thead", {}, h("tr", {}, ["Période", "Déclaré", "Relevé", "Attendu", "Écart"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+    h("tbody", {}, rows.map(({ k, x }) => h("tr", {},
+      h("td", { text: periodPlain(k) }),
+      h("td", { class: "num", text: x.cur.decl != null ? money(x.cur.decl) : "—" }),
+      h("td", { class: "num", text: x.cur.rel ? money(x.cur.rel.montant) : "—" }),
+      h("td", { class: "num", text: x.attendu != null ? money(x.attendu) : "—" }),
+      h("td", { class: "num" }, x.ecart == null ? "—" : h("span", { class: Math.abs(x.ecart) > s.seuil ? "neg" : null, style: Math.abs(x.ecart) > s.seuil ? "font-weight:700" : null, text: (x.ecart > 0 ? "+" : "") + money(x.ecart) })))))));
+}
+function compteSection(e, reopen) {
+  if (!e.id || !blc().actif) return null;
+  const rl = relevesOf(e).slice(0, 4), ag = canAgent();
+  return sec("Compte de l’entreprise",
+    h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas." }),
+    compteTable(e, keysEnding(lastClosedKey(), 6)),
+    rl.length ? h("ul", { class: "ent-list", style: "margin-top:8px" }, rl.map(r => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("RC", r.id)} · ${money(r.montant)}` }), h("span", { class: "meta", text: `relevé le ${fmtDateTime(new Date(r.at))} par ${r.agent || "—"}${r.note ? " · " + r.note : ""}` })),
+      proofEl(r.preuve), writer() ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("releves/" + r.id).delete())) { toast("Relevé retiré."); if (reopen) reopen(); } }, text: "Retirer" }) : h("span", {})))) : null,
+    ag ? h("div", { class: "paste-row", style: "margin-top:6px" },
+      h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e, reopen), text: "Relevé de compte" }),
+      writer() && comptesSynthese(e, 6).some(x => ecartSuspect(x) && x.ecart > blc().seuil) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSoupcon(e), text: "Déclaration de soupçon" }) : null) : null);
+}
+
+// Demande de justifications : un contrôle dont la rectification retient l'écart en recettes,
+// avec la majoration des manœuvres frauduleuses (80 %), à confirmer par l'agent.
+function demanderJustif(e) {
+  const s = blc();
+  const list = keysEnding(lastClosedKey(), 6).map(k => ecartDe(e, k)).filter(x => ecartOuvert(x) && x.ecart > s.seuil);
+  if (!list.length) { toast("Aucun écart inexpliqué à justifier sur les dernières périodes.", true); return; }
+  const rect = {};
+  for (const x of list) rect[x.cur.d.id] = { ca: (Number(x.cur.d.ca) || 0) + x.ecart, motif: `Enrichissement inexpliqué du compte (+${money(x.ecart)})` };
+  newControle(e, list.map(x => x.cur.d.id), { origine: "blanchiment", rectifications: rect, qualification: "fraude",
+    justif: list.map(x => ({ periode: x.cur.d.periode, ecart: x.ecart, declId: x.cur.d.id })),
+    motif: "Demande de justifications : " + list.map(x => `${periodPlain(x.cur.d.periode)}, +${money(x.ecart)} sur le compte que les déclarations n’expliquent pas`).join(" ; ") + "." });
+}
+
+// Déclaration de soupçon : sur le modèle de TRACFIN (art. L561-15 du CMF).
+const SOUPCON_STAT = { transmise: ["Transmise", "warn"], classee: ["Classée", "muted"], justice: ["Jointe à la justice", "bad"] };
+function soupconDoc(s) {
+  const e = entOf(s);
+  const mj = (S.discord && S.discord.mentionJustice) || "";
+  return {
+    kind: "DÉCLARATION DE SOUPÇON", no: dossierNo("DS", s.id), date: "Transmise le " + longDate(new Date(s.at)),
+    meta: [["Entreprise", e.nom || s.entrepriseNom], ["Dirigeant", e.patron || "—"], ["Secteur", e.secteur || "—"], ["Transmise par", s.byNom || "Direction des impôts et cotisations"]],
+    lines: (s.ecarts || []).map(x => [`Enrichissement inexpliqué · ${periodPlain(x.periode)}`, "+" + money(x.ecart)]),
+    total: ["Sommes en cause", money(s.montant)],
+    note: s.faits || "", noteTitle: "Faits",
+    stamp: ["SOUPÇON", "bad"],
+    footer: "Sur le modèle de la déclaration de soupçon adressée à TRACFIN (art. L561-15 du Code monétaire et financier). Le blanchiment est puni de 5 ans et 375 000 € d’amende (art. 324-1 du Code pénal), 10 ans et 750 000 € s’il est habituel ou commis en bande organisée (art. 324-2).",
+    discord: { channel: "justice", mentions: [mj].filter(Boolean), text: `**Déclaration de soupçon ${dossierNo("DS", s.id)}** · ${e.nom || s.entrepriseNom} · ${money(s.montant)} d’origine inexpliquée.` }
+  };
+}
+function openSoupcon(e) {
+  if (!writer()) return;
+  const s0 = blc(), syn = comptesSynthese(e, 8).filter(x => ecartSuspect(x) && x.ecart > s0.seuil);
+  const sig = [...new Set(keysEnding(lastClosedKey(), 4).map(k => periodDecl(e, k)).filter(Boolean).flatMap(d => alertsFor(d).filter(isBlSignal)))];
+  const rl = relevesOf(e).slice(0, 3);
+  const montant = syn.reduce((t, x) => t + x.ecart, 0);
+  const txt = h("textarea", { id: "ds-faits", rows: "6" });
+  txt.value = [`Le compte de ${e.nom}${e.patron ? " (dirigeant : " + e.patron + ")" : ""} a reçu ${money(montant)} que ses déclarations n’expliquent pas : ${syn.map(x => `${periodPlain(x.k)} +${money(x.ecart)}`).join(", ") || "—"}.`,
+    sig.length ? "Signaux : " + sig.join(" ; ") + "." : "",
+    rl.length ? "Relevés de compte : " + rl.map(r => `${fmtDate(new Date(r.at))} ${money(r.montant)} (${r.agent || "agent"})`).join(", ") + "." : "",
+    "Ces sommes peuvent provenir de dépôts d’argent d’origine illicite par les employés de l’entreprise."].filter(Boolean).join("\n");
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: hookFor("justice") ? "Transmettre sur Discord" : "Enregistrer" });
+  go.addEventListener("click", async () => {
+    if (!txt.value.trim()) { err.textContent = "Décrivez les faits."; return; }
+    go.disabled = true;
+    const ref = S.db.collection("soupcons").doc();
+    const s = { entrepriseId: e.id || null, entrepriseNom: e.nom, at: nowISO(), by: S.uid || null, byNom: S.agentName || "", montant, faits: txt.value.trim(), ecarts: syn.map(x => ({ periode: x.k, ecart: x.ecart })), signaux: sig, statut: "transmise" };
+    if (!(await write(() => ref.set(s)))) { go.disabled = false; return; }
+    const doc = soupconDoc(Object.assign({ id: ref.id }, s));
+    if (hookFor("justice")) await publishDoc(doc, "Déclaration de soupçon transmise.");
+    else toast("Déclaration de soupçon enregistrée : configurez le salon de la justice pour la transmettre.");
+    showDocImage(doc, () => openFiche(e));
+  });
+  openDialog({
+    eyebrow: "Surveillance des comptes", title: "Déclaration de soupçon · " + e.nom, wide: true,
+    body: [h("p", { style: "margin:0", text: "Dans la réalité, l’administration et les professionnels signalent à TRACFIN les sommes dont ils soupçonnent l’origine illicite. Ici, la déclaration part dans le salon de la justice et rejoint le dossier de l’entreprise ; elle n’accuse pas, elle signale." }),
+      compteTable(e, keysEnding(lastClosedKey(), 6)),
+      h("div", { class: "field" }, h("label", { for: "ds-faits", text: "Faits" }), txt), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+}
+
+// Carte du recouvrement : entreprises dont le compte n'est pas expliqué.
+function renderComptes() {
+  const box = $("#rc-comptes");
+  if (!box) return;
+  const s = blc(), ag = canAgent(), dir = writer();
+  $("#rc-releve-new").hidden = !ag;
+  if (!s.actif) { fill(box, h("div", { class: "empty", text: "Surveillance des comptes désactivée (Réglages → Recouvrement)." })); return; }
+  const list = suspects();
+  $("#rc-comptes-sub").textContent = list.length
+    ? `${list.length} entreprise${plural(list.length)} à examiner sur les quatre dernières périodes. Écart compté au-delà de ${money(s.seuil)} ; un relevé d’agent fait foi face au solde déclaré.`
+    : `Aucun écart au-delà de ${money(s.seuil)} sur les quatre dernières périodes. Demandez le solde du compte avec chaque déclaration, et faites des relevés surprises.`;
+  const rl = S.releves.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
+  const ds = S.soupcons.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
+  fill(box,
+    list.length ? h("ul", { class: "rc-list" }, list.slice(0, S.rcAll.bl ? 200 : RC_LIMIT).map(x => h("li", {},
+      h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
+        h("div", { class: "reasons", style: "margin-top:4px" }, [...new Set(x.rows.flatMap(r => r.sig))].slice(0, 4).map(t => h("span", { class: "reason", text: t })))),
+      h("div", { class: "rc-state" }, x.total > 0 ? h("strong", { class: "mono", text: "+" + money(x.total) }) : null, soupconsOf(x.e)[0] ? chip([`Soupçon ${dossierNo("DS", soupconsOf(x.e)[0].id)}`, "bad"]) : null),
+      ag ? h("div", { class: "row-actions" },
+        h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(x.e), text: "Relevé de compte" }),
+        x.total > 0 ? h("button", { class: "btn ghost small", type: "button", onclick: () => demanderJustif(x.e), text: "Demander des justifications" }) : null,
+        dir && x.total > 0 ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSoupcon(x.e), text: "Déclaration de soupçon" }) : null) : null))) : h("div", { class: "empty", text: "Rien d’inexpliqué pour l’instant." }),
+    rcMore("bl", list.length),
+    rl.length || ds.length ? h("div", { class: "dash-grid", style: "margin-top:12px" },
+      h("div", {}, h("h4", { class: "mini-title", text: "Derniers relevés" }), rl.length ? h("ul", { class: "ent-list" }, rl.map(r => h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(entOf(r)), text: `${dossierNo("RC", r.id)} · ${r.entrepriseNom}` }), h("span", { class: "meta", text: `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}` })), h("span", {}), h("span", {})))) : h("p", { class: "muted", text: "Aucun relevé." })),
+      h("div", {}, h("h4", { class: "mini-title", text: "Déclarations de soupçon" }), ds.length ? h("ul", { class: "ent-list" }, ds.map(x => h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => showDocImage(soupconDoc(x)), text: `${dossierNo("DS", x.id)} · ${x.entrepriseNom}` }), h("span", { class: "meta", text: `${money(x.montant)} · ${fmtDate(new Date(x.at))}${x.byNom ? " · " + x.byNom : ""}` })), chip(SOUPCON_STAT[x.statut] || SOUPCON_STAT.transmise), h("span", {})))) : h("p", { class: "muted", text: "Aucune déclaration de soupçon." }))) : null);
+}
+$("#rc-releve-new").addEventListener("click", () => pickEntreprise("Relevé de compte", e => openReleve(e)));
+
+// Indication sous le solde, pendant la saisie d'une déclaration.
+function soldeHint(key, ca, ch, ms) {
+  const el = $("#d-solde-hint");
+  if (!el) return;
+  const v = $("#d-solde").value, e = findEnt($("#d-ent").value.trim());
+  const base = "Solde affiché sur le compte de l’entreprise à la fin de la période, avec une capture. Un relevé fait par un agent fait foi.";
+  if (!e || v === "" || !blc().actif) { el.textContent = base; return; }
+  const prev = compteDe(e, prevKey(key));
+  if (prev.pos == null) { el.textContent = "Aucun solde connu pour la période précédente : cet écart sera calculé à partir de la suivante."; return; }
+  const attendu = prev.pos + ca - ch - ms - paiementsEntre(e, prev.t, Date.now()), ecart = Math.round(Number(v) - attendu);
+  el.textContent = `Solde attendu d’après ${periodPlain(prevKey(key)).toLowerCase()} : ${money(attendu)} · écart ${(ecart > 0 ? "+" : "") + money(ecart)}${ecart > blc().seuil ? " : enrichissement inexpliqué" : ""}.`;
+}
+
+// Réglages : surveillance des comptes.
+function renderBlSettings(force) {
+  const box = $("#card-bl");
+  if (!box || (!force && (S.blDirty || box.contains(document.activeElement)))) return;
+  const c = blc();
+  $("#bl-actif").checked = !!c.actif;
+  $("#bl-seuil").value = String(c.seuil);
+  $("#bl-plafond").value = String(c.plafond);
+  $("#bl-oblig").checked = !!c.soldeObligatoire;
+}
+$("#card-bl").addEventListener("input", () => { S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; });
+$("#bl-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const v = { actif: $("#bl-actif").checked, seuil: Math.max(0, Math.round(Number($("#bl-seuil").value) || 0)), plafond: Math.max(0, Math.round(Number($("#bl-plafond").value) || 0)), soldeObligatoire: $("#bl-oblig").checked };
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { blanchiment: v, updatedAt: nowISO() })));
+  if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
 });
 
 /* ---------- Travail à plusieurs, en direct ---------- */
@@ -6958,6 +7423,8 @@ function searchIndex() {
   for (const a of S.attestations) push("Attestation", dossierNo("AT", a.id), `${dossierNo("AT", a.id)} · ${a.entrepriseNom}`, (a.revoqueeLe ? `Révoquée le ${longDate(new Date(a.revoqueeLe))}` : `${attState(a)[0]} · jusqu’au ${longDate(new Date(a.validUntil))}`), "", () => showDocImage(attestationDoc(a)), a.at);
   for (const r of S.relances) push(isMed(r) ? "Mise en demeure" : "Relance", rlNo(r), `${rlNo(r)} · ${r.entrepriseNom}`, `${rlLabel(r)} · envoyée le ${fmtDate(new Date(r.at))}`, "", () => showDocImage(relanceDoc(r)), r.at);
   for (const s of S.saisies) push("Saisie", dossierNo("SA", s.id), `${dossierNo("SA", s.id)} · ${s.entrepriseNom}`, `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)} · ${(SSTAT[s.statut] || SSTAT.notifiee)[0]}`, s.tiers, () => openSaisieDetail(s.id), s.at);
+  for (const r of S.releves) push("Relevé", dossierNo("RC", r.id), `${dossierNo("RC", r.id)} · ${r.entrepriseNom}`, `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}`, r.note, () => openFiche(entOf(r)), r.at);
+  for (const x of S.soupcons) push("Soupçon", dossierNo("DS", x.id), `${dossierNo("DS", x.id)} · ${x.entrepriseNom}`, `Déclaration de soupçon · ${money(x.montant)}`, "", () => showDocImage(soupconDoc(x)), x.at);
   for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
   return out;
 }

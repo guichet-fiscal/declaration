@@ -24,6 +24,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v4_inspection_cloture.sql` : le rôle Inspection et le verrou des semaines clôturées
 - `supabase/v5_pieces.sql` : l’espace privé des captures d’écran des contrôles fiscaux
 - `supabase/v6_direct.sql` : le journal en direct, la présence des agents et les rectificatives saisies par l’Inspection
+- `supabase/v7_blanchiment.sql` : les relevés de compte faits par l’Inspection
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -43,7 +44,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) et `supabase/v6_direct.sql` (journal en direct et présence des agents). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents) et `supabase/v7_blanchiment.sql` (relevés de compte). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -208,6 +209,18 @@ Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. L
 Quand les droits rappelés par un contrôle dépassent 100 000 € avec une majoration de 80 % ou 100 %, le site signale la **dénonciation obligatoire** au procureur (art. L228 du LPF), comme dans la réalité.
 
 L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; la majoration, la saisie et la transmission à la justice sont réservées à la Direction. Rien de nouveau à exécuter dans Supabase pour cette partie.
+
+## Surveillance des comptes (blanchiment)
+
+Sur le serveur, chaque employé peut déposer chaque jour jusqu’à 10 000 € d’argent sale sur le compte de l’entreprise. On ne voit pas les mouvements du compte, seulement son solde : le guichet rapproche donc le solde de ce que les déclarations expliquent.
+
+1. **Le solde du compte** : chaque déclaration porte le solde du compte en fin de période, avec une capture (fichier ou lien). Le modèle Discord a deux lignes de plus : « Solde du compte de l’entreprise » et « Capture du compte ». Réglage possible : exiger le solde dans chaque déclaration (sinon, alerte).
+2. **Le relevé de compte** : un agent prend le job, regarde le compte et enregistre le solde, l’heure et une capture (Recouvrement → Surveillance des comptes, ou la fiche). **Le relevé fait foi** face au solde déclaré. Un relevé compte pour la période dont la fin est la plus proche, entre la veille de la fin et le lendemain du délai de dépôt. Si le solde déclaré diffère du relevé fait dans les 24 heures, une alerte le signale. La Direction peut retirer un relevé erroné.
+3. **Le rapprochement** : solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts et pénalités payés entre les deux observations. Au-delà de l’écart fixé (10 000 € par défaut), le guichet signale un **enrichissement inexpliqué**, et précise quand l’écart ressemble à des dépôts de 10 000 € ou approche ce que les employés peuvent déposer dans la période. Il signale aussi les sorties d’argent inexpliquées, un chiffre d’affaires par salarié plus de 3 fois supérieur à la médiane du secteur, et un chiffre d’affaires multiplié d’un coup. Ces signaux rejoignent les alertes habituelles (tableau de bord, fiche, dossier).
+4. **Demander des justifications** : ouvre un contrôle fiscal prérempli (origine « Surveillance des comptes »). L’écart est retenu en recettes non déclarées, avec la majoration des manœuvres frauduleuses (80 %), et la **demande de justifications** part sur Discord avec un délai de réponse. Dans la réalité : demande de justifications puis taxation d’office des sommes d’origine indéterminée (art. L16 et L69 du LPF). Après la mise en recouvrement, les montants retenus par le contrôle expliquent l’écart.
+5. **Déclaration de soupçon** (Direction) : sur le modèle de TRACFIN (art. L561-15 du Code monétaire et financier), elle part dans le salon de la justice avec la mention du rôle choisi. Le dossier de justice propose alors la qualification **blanchiment** (art. 324-1 du Code pénal : 5 ans et 375 000 € ; 10 ans et 750 000 € s’il est habituel ou en bande organisée, art. 324-2) et la mesure de confiscation, et son PDF ajoute la section « Compte de l’entreprise ».
+
+Un écart classé par la Direction, ou qu’un contrôle a jugé justifié, ne revient plus. Les captures vont dans l’espace privé des pièces (`supabase/v5_pieces.sql`). Réglages → Recouvrement → Surveillance des comptes : activer, écart à partir duquel alerter, dépôt possible par employé et par jour, solde obligatoire.
 
 ## Cohérence des dossiers
 

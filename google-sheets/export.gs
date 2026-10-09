@@ -90,9 +90,10 @@ function actualiser() {
     if (st === "validee" && e && e.echeances) encaisse = e.echeances.filter(x => x.payee).reduce((s, x) => s + (x.montant || 0), 0);
     const exo = d.exoneration ? (d.exoneration.montantIS || 0) + (d.exoneration.montantCot || 0) : 0;
     return [no("DF", r.id), d.entrepriseNom, d.periode, d.ca, d.charges, d.masse, d.nbSalaries, d.resultat, d.impot, d.cotisations, d.majoration, exo, d.total, montant, encaisse,
-      STATUTS_DECL[st] || st, d.enRetard ? "Oui" : "Non", e && e.echeances ? e.echeances.length + " fois" : "", date(d.depotAt), d.declarant || "", dec && dec.note ? dec.note : ""];
+      STATUTS_DECL[st] || st, d.enRetard ? "Oui" : "Non", e && e.echeances ? e.echeances.length + " fois" : "", date(d.depotAt), d.declarant || "", dec && dec.note ? dec.note : "",
+      d.solde != null && d.solde !== "" ? d.solde : "", d.soldePreuve ? (d.soldePreuve.type === "lien" ? d.soldePreuve.url : "Capture dans le guichet") : ""];
   });
-  ecrire("Déclarations", ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Charges", "Masse salariale", "Salariés", "Résultat", "Impôt", "Cotisations", "Majoration", "Exonération", "Total calculé", "Montant retenu", "Encaissé", "Statut", "Retard", "Échéancier", "Déposée le", "Déclarant", "Observation"], declarations);
+  ecrire("Déclarations", ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Charges", "Masse salariale", "Salariés", "Résultat", "Impôt", "Cotisations", "Majoration", "Exonération", "Total calculé", "Montant retenu", "Encaissé", "Statut", "Retard", "Échéancier", "Déposée le", "Déclarant", "Observation", "Solde du compte déclaré", "Capture du solde"], declarations);
 
   ecrire("Entreprises", ["Nom", "Secteur", "Patron", "Active", "Ajoutée le"],
     col("entreprises").map(r => [r.data.nom, r.data.secteur || "", r.data.patron || "", r.data.actif === false ? "Non" : "Oui", date(r.data.createdAt)]));
@@ -159,6 +160,12 @@ function actualiser() {
   ecrire("Clôtures", ["Période", "Clôturée le", "Par", "Déclarations déposées", "Attendues", "Montant des avis", "Encaissé à la clôture", "Reste à recouvrer"],
     col("clotures").map(r => { const b = r.data.bilan || {}; return [r.id, date(r.data.at), r.data.byNom || "", b.deposees, b.attendues, b.declare, b.encaisse, b.reste]; }));
 
+  ecrire("Relevés de compte", ["N°", "Entreprise", "Solde relevé", "Relevé le", "Agent", "Capture", "Observation"],
+    col("releves").map(r => { const x = r.data; return [no("RC", r.id), x.entrepriseNom, x.montant, date(x.at), x.agent || "", x.preuve ? (x.preuve.type === "lien" ? x.preuve.url : "Capture dans le guichet") : "", x.note || ""]; }));
+
+  ecrire("Soupçons", ["N°", "Entreprise", "Sommes en cause", "Transmise le", "Par", "Périodes", "Faits"],
+    col("soupcons").map(r => { const x = r.data; return [no("DS", r.id), x.entrepriseNom, x.montant, date(x.at), x.byNom || "", (x.ecarts || []).map(e => e.periode + " : +" + e.ecart).join(", "), x.faits || ""]; }));
+
   ecrire("Journal", ["Date", "Auteur", "Action", "Type", "Dossier"],
     (data.journal || []).map(j => [date(j.at), j.auteur || "", j.action, j.collection, j.doc_id]));
 
@@ -173,7 +180,9 @@ function actualiser() {
     ["Semaines clôturées", col("clotures").length],
     ["Contrôles fiscaux", col("controles").length],
     ["Saisies", col("saisies").length],
-    ["Dossiers transmis à la justice", col("transmissions").length]
+    ["Dossiers transmis à la justice", col("transmissions").length],
+    ["Relevés de compte", col("releves").length],
+    ["Déclarations de soupçon", col("soupcons").length]
   ]);
 }
 
