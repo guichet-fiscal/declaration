@@ -728,8 +728,8 @@ header.top{position:relative}
       <div class="card">
         <div class="card-head">
           <div>
-            <h3>Impayés échus</h3>
-            <p class="sub" id="rc-impayes-sub">Avis, échéances et pénalités non payés après le délai.</p>
+            <h3>Impayés</h3>
+            <p class="sub" id="rc-impayes-sub">Avis, échéances et pénalités non payés.</p>
           </div>
           <button class="btn ghost small" type="button" id="rc-impayes-all" hidden>Relancer les impayés</button>
         </div>
@@ -2764,7 +2764,9 @@ async function decide(d, statut, montant, note, opts) {
     eb.echeances.forEach(x => { if (!x.payee) { x.payee = true; x.paidAt = nowISO(); x.paidByNom = S.agentName || ""; x.solde = true; } });
     if (!(await write(() => S.db.doc("echeanciers/" + d.id).set(eb)))) return false;
   }
-  const body = { statut, montant: Math.round(Number(montant) || 0), note: note || "", at: prev.at && statut === "payee" ? prev.at : nowISO(), by: S.uid || null };
+  // La date de l'avis reste celle de son émission : un encaissement annulé ou un montant corrigé ne relance pas le délai de paiement.
+  const keepAt = prev.at && (statut === "payee" || (statut === "validee" && (prev.statut === "payee" || prev.statut === "validee")));
+  const body = { statut, montant: Math.round(Number(montant) || 0), note: note || "", at: keepAt ? prev.at : nowISO(), by: S.uid || null };
   if (statut === "payee") { body.paidAt = nowISO(); body.paidByNom = S.agentName || ""; }
   if (statut === "rejetee" && prev.remplaceePar) Object.assign(body, { remplaceePar: prev.remplaceePar, avant: prev.avant, avantDecision: prev.avantDecision || null });
   const ok = await write(() => S.db.doc("decisions/" + d.id).set(body));
@@ -4189,6 +4191,7 @@ function openFiche(e, opts) {
         h("button", { class: "linkbtn", type: "button", onclick: () => openAttestation(e, reopen), text: canAgent() ? "Vérifier et délivrer" : "Voir" }));
     })() : null,
     (() => { const x = exoSituation(e); return x ? h("div", { class: "exo-line" }, h("strong", { text: "Exonération :" }), chip([x.text, x.tone])) : null; })(),
+    relancesSection(e, reopen),
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r }))),
       writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
@@ -5214,6 +5217,20 @@ function unpaidItems(e) {
   for (const p of pensOf(e)) if (penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), label: p.type === "redressement" ? `Redressement fiscal · ${p.motif || ""}` : `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt });
   return out.sort((a, b) => String(a.since || "").localeCompare(String(b.since || "")));
 }
+// Sommes à payer pas encore exigibles (délai de paiement en cours) : un rappel amiable est possible,
+// la mise en demeure attend l'échéance. Les échéanciers suivent leurs propres dates.
+function aEchoirItems(e) {
+  const out = [];
+  for (const d of declsOf(e)) {
+    const dec = S.decisions[d.id];
+    if (!dec || dec.statut !== "validee" || dReste(d) <= 0 || echOf(d) || declEchue(d)) continue;
+    const due = payDue(d);
+    out.push({ kind: "decl", id: d.id, ref: dossierNo("DF", d.id), label: `Avis d’imposition · ${periodPlain(d.periode)}`, montant: dReste(d), plan: false, since: dec.at, exigible: due ? due.toISOString() : nowISO() });
+  }
+  for (const p of pensOf(e)) if (p.statut === "due" && !penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), label: p.type === "redressement" ? `Redressement fiscal · ${p.motif || ""}` : `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt, exigible: new Date(new Date(p.createdAt || 0).getTime() + payDelayMs()).toISOString() });
+  return out.sort((a, b) => String(a.exigible).localeCompare(String(b.exigible)));
+}
+const aEchoir = () => S.entreprises.map(e => { const items = aEchoirItems(e); return { e, items, total: items.reduce((s, x) => s + x.montant, 0), exigible: items.length ? items[0].exigible : null }; }).filter(x => x.items.length).sort((a, b) => String(a.exigible).localeCompare(String(b.exigible)));
 // Réglée : payée ou rejetée. Un avis suspendu par un contrôle ou remis à valider ne l'est pas :
 // la dette reviendra. Échéancier : réglé quand plus aucune échéance passée n'est due.
 function declSettled(d, plan) {
@@ -5304,16 +5321,18 @@ async function sendRelance(x, type, opts) {
   const periodes = type === "declaration" ? x.keys.slice() : [];
   const ref = S.db.collection("relances").doc();
   const r = { entrepriseId: e.id || null, entrepriseNom: e.nom, type, niveau, periodes, items, montant: items.reduce((s, i) => s + i.montant, 0),
-    echeance: new Date(Date.now() + relanceDelayMs(niveau)).toISOString(), at: nowISO(), by: S.uid || null, byNom: S.agentName || "", groupee: !!opts.groupee };
+    echeance: new Date(Math.max(Date.now() + relanceDelayMs(niveau), opts.echeance ? new Date(opts.echeance).getTime() || 0 : 0)).toISOString(), at: nowISO(), by: S.uid || null, byNom: S.agentName || "", groupee: !!opts.groupee };
   if (!(await write(() => ref.set(r)))) return null;
   return Object.assign({ id: ref.id }, r);
 }
-async function relanceOne(x, type, niveau) {
-  const r = await sendRelance(x, type, { niveau });
-  if (!r) return;
+async function relanceOne(x, type, niveau, opts) {
+  opts = opts || {};
+  const r = await sendRelance(x, type, { niveau, echeance: opts.echeance });
+  if (!r) return null;
   const doc = relanceDoc(r), label = rlLabel(r), fem = type === "paiement" || isMed(r);
-  if (hookFor("relances")) await publishDoc(doc, `${label} enregistré${fem ? "e" : ""}.`);
-  else { toast(`${label} enregistré${fem ? "e" : ""} : postez l’image sur Discord.`); showDocImage(doc); }
+  if (hookFor("relances")) { await publishDoc(doc, `${label} enregistré${fem ? "e" : ""}.`); if (opts.back) opts.back(); }
+  else { toast(`${label} enregistré${fem ? "e" : ""} : postez l’image sur Discord.`); showDocImage(doc, opts.back); }
+  return r;
 }
 
 // Relance groupée : un seul message, chaque patron mentionné. On peut décocher une entreprise avant l'envoi.
@@ -5376,6 +5395,34 @@ function relanceAll(type) {
   refresh();
 }
 
+// Fiche : ce qui peut être relancé pour cette entreprise, avec les mêmes règles que l'onglet Recouvrement.
+function relancesSection(e, reopen) {
+  if (!e.id) return null;
+  const ag = canAgent(), miss = missingKeys(e), ech = unpaidItems(e), free = ech.filter(i => !saisieOfItem(i)), ae = aEchoirItems(e);
+  if (!miss.length && !ech.length && !ae.length) return null;
+  const sum = l => l.reduce((t, i) => t + i.montant, 0);
+  const btn = (text, fn, cls) => h("button", { class: cls || "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; await fn(); b.disabled = false; }, text });
+  const rows = [];
+  if (miss.length) {
+    const last = relanceFor(e, "declaration", miss), x = { e, keys: miss };
+    rows.push(h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `Déclaration${plural(miss.length)} manquante${plural(miss.length)}` }), h("span", { class: "meta", text: miss.map(periodPlain).join(", ") })),
+      rlChip(last), ag ? h("span", { class: "row-actions" }, btn("Rappel de déclaration", () => relanceOne(x, "declaration", "relance", { back: reopen })), btn("Mise en demeure de déclarer", () => relanceOne(x, "declaration", "mise_en_demeure", { back: reopen }))) : h("span", {})));
+  }
+  if (ech.length) {
+    const last = free.length ? relanceFor(e, "paiement", free) : null, x = { e, items: free };
+    rows.push(h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `Impayé échu · ${money(sum(ech))}` }), h("span", { class: "meta", text: ech.map(i => i.ref + (saisieOfItem(i) ? " (sous saisie)" : "")).join(", ") })),
+      free.length ? rlChip(last) : chip(["Sous saisie", "warn"]),
+      ag && free.length ? h("span", { class: "row-actions" }, btn("Relance de paiement", () => relanceOne(x, "paiement", "relance", { back: reopen })), btn("Mise en demeure de payer", () => relanceOne(x, "paiement", "mise_en_demeure", { back: reopen }))) : h("span", {})));
+  }
+  if (ae.length) {
+    const last = relanceFor(e, "paiement", ae), x = { e, items: ae };
+    rows.push(h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `À payer · ${money(sum(ae))}` }), h("span", { class: "meta", text: `${ae.map(i => i.ref).join(", ")} · exigible le ${fmtDateTime(new Date(ae[0].exigible))}, la mise en demeure de payer sera possible à partir de là` })),
+      last ? rlChip(last) : chip(["Délai de paiement en cours", "muted"]),
+      ag ? h("span", { class: "row-actions" }, btn("Rappel de paiement", () => relanceOne(x, "paiement", "relance", { echeance: ae[0].exigible, back: reopen }))) : h("span", {})));
+  }
+  return sec("Relances et mises en demeure", h("ul", { class: "ent-list" }, rows));
+}
+
 /* ---------- Onglet Recouvrement ---------- */
 const rlChip = r => {
   if (!r) return chip(["Pas encore relancée", "muted"]);
@@ -5417,10 +5464,10 @@ function renderRecouvrement() {
         dir && x.closed.length ? h("button", { class: "btn ghost small", type: "button", title: "Imposition estimée pour les semaines clôturées sans déclaration", onclick: () => openDefaut(x.e, x.closed), text: "Sanctionner le défaut" }) : null) : null);
   })) : h("div", { class: "empty", text: "Aucune déclaration manquante." }), rcMore("rt", rt.length));
 
-  const ip = impayes();
-  $("#rc-impayes-sub").textContent = ip.length
+  const ip = impayes(), ae = aEchoir();
+  $("#rc-impayes-sub").textContent = (ip.length
     ? `${money(ip.reduce((s, x) => s + x.total, 0))} échus non payés, ${ip.length} entreprise${plural(ip.length)}. Procédure : relance, mise en demeure de payer, puis saisie et transmission à la justice.`
-    : "Aucun impayé échu.";
+    : "Aucun impayé échu.") + (ae.length ? ` ${money(ae.reduce((s, x) => s + x.total, 0))} encore dans le délai de paiement (${Number(c.delaiPaiementJours) || 0} jour${plural(Number(c.delaiPaiementJours) || 0)} après l’avis) : un rappel est possible, la mise en demeure attend l’échéance.` : "");
   $("#rc-impayes-all").hidden = !ag || !ip.length;
   fill($("#rc-impayes"), ip.length ? h("ul", { class: "rc-list" }, ip.slice(0, S.rcAll.ip ? 500 : RC_LIMIT).map(x => {
     // Les sommes déjà sous une saisie en cours ne sont ni relancées ni saisies une seconde fois.
@@ -5444,7 +5491,18 @@ function renderRecouvrement() {
         dir && free.length ? h("button", { class: medOk ? "btn small" : "btn ghost small", type: "button", title: medOk ? "" : "Dans la procédure réelle, la saisie suit une mise en demeure de payer restée sans effet", onclick: () => openSaisie(x.e), text: "Saisir" }) : null,
         sa ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisieDetail(sa.id), text: "Voir la saisie" }) : null,
         dir ? h("button", { class: "btn ghost small", type: "button", onclick: () => tj ? openTransmission(tj.id) : openJustice(x.e), text: tj ? "Dossier de justice" : "Transmettre à la justice" }) : null) : null);
-  })) : h("div", { class: "empty", text: "Aucun impayé échu." }), rcMore("ip", ip.length));
+  })) : ae.length ? null : h("div", { class: "empty", text: "Aucun impayé échu." }), rcMore("ip", ip.length),
+    ae.length ? h("h4", { class: "mini-title", style: "margin-top:14px", text: "Dans le délai de paiement" }) : null,
+    ae.length ? h("ul", { class: "rc-list" }, ae.slice(0, S.rcAll.ae ? 500 : RC_LIMIT).map(x => {
+      const last = relanceFor(x.e, "paiement", x.items);
+      return h("li", {},
+        h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
+          h("div", { class: "rc-keys" }, x.items.slice(0, 6).map(i => h("span", { class: "tag", text: `${i.ref} · ${money(i.montant)}` }))),
+          h("span", { class: "meta", text: `Exigible le ${fmtDateTime(new Date(x.exigible))} : mise en demeure possible à partir de là.` })),
+        h("div", { class: "rc-state" }, h("strong", { class: "mono", text: money(x.total) }), last ? rlChip(last) : chip(["Délai de paiement en cours", "muted"])),
+        ag ? h("div", { class: "row-actions" },
+          h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(x, "paiement", "relance", { echeance: x.exigible }), text: "Rappel" })) : null);
+    })) : null, ae.length ? rcMore("ae", ae.length) : null);
 
   const ss = S.saisies.slice().sort((a, b) => (a.statut !== "notifiee") - (b.statut !== "notifiee") || String(b.at).localeCompare(String(a.at)));
   fill($("#rc-saisies"), ss.length ? h("ul", { class: "ent-list" }, ss.slice(0, S.rcAll.sa ? 500 : RC_LIMIT).map(s => h("li", {},

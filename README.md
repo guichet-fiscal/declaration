@@ -202,7 +202,7 @@ Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. L
 
 **Une entreprise qui ne paie pas**
 
-1. **Relance de paiement** (amiable).
+1. **Relance de paiement** (amiable). Une somme devient exigible à la fin du délai de paiement (2 jours après l’avis par défaut, Réglages → Calendrier et taux). Avant, elle apparaît dans Recouvrement → Impayés, rubrique « Dans le délai de paiement », avec sa date : un **rappel** est déjà possible, la mise en demeure attend l’échéance. Annuler un encaissement ne repousse pas cette date.
 2. **Mise en demeure de payer** : un délai (2 jours par défaut). Elle vaut commandement de payer (art. L257-0 A et L258 A du LPF).
 3. **Majoration de 10 %** (Direction) sur chaque avis payé en retard, une seule fois, comme l’article 1730 du CGI.
 4. **Saisie** (Direction) : **à tiers détenteur** (la banque, l’employeur ou un client verse à la Direction ce qu’il doit à l’entreprise, sans passer par un juge : art. L262 du LPF) ou **saisie-vente** des biens (véhicules, stocks). L’acte part sur Discord. **Saisie exécutée** encaisse les sommes visées et publie les quittances ; **Mainlevée** l’arrête. Le site demande une mise en demeure expirée, sauf si vous cochez « Saisir quand même ». Pendant une saisie, l’attestation de régularité est refusée.
@@ -210,7 +210,7 @@ Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. L
 
 Quand les droits rappelés par un contrôle dépassent 100 000 € avec une majoration de 80 % ou 100 %, le site signale la **dénonciation obligatoire** au procureur (art. L228 du LPF), comme dans la réalité.
 
-L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; la majoration, la saisie et la transmission à la justice sont réservées à la Direction. Rien de nouveau à exécuter dans Supabase pour cette partie.
+Relances et mises en demeure partent de l’onglet Recouvrement ou, en haut de la fiche de l’entreprise, de la rubrique « Relances et mises en demeure ». La fenêtre « Transmettre à la justice » ne les envoie pas : elle vérifie seulement qu’elles ont été faites. L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; la majoration, la saisie et la transmission à la justice sont réservées à la Direction. Rien de nouveau à exécuter dans Supabase pour cette partie.
 
 ## Surveillance des comptes (blanchiment)
 
