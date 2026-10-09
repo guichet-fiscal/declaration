@@ -551,6 +551,7 @@ header.top{position:relative}
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
     <button class="tab" role="tab" type="button" id="tab-btn-prets" data-tab="prets" aria-selected="false">Prêts</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-vehicules" data-tab="vehicules" aria-selected="false">Véhicules</button>
     <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
     <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-agent>Saisir une déclaration</button>
     <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-agent>Saisir une demande</button>
@@ -806,6 +807,40 @@ header.top{position:relative}
         </div>
       </div>
       <div id="pret-list"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-vehicules" role="tabpanel" aria-labelledby="tab-btn-vehicules" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Véhicules de société</h2>
+        <p class="sub">Les entreprises achètent leurs véhicules en concession avec l’argent de leur compte. Le registre dit à la police à quelle entreprise appartient un véhicule et qui peut le conduire. Un véhicule payé par l’entreprise pour l’usage personnel du dirigeant est un abus de biens sociaux.</p>
+      </div>
+      <div class="toolbar"><button class="btn ghost" type="button" id="veh-pub" hidden>Publier le registre pour la police</button><button class="btn" type="button" id="veh-new" hidden>Enregistrer un véhicule</button></div>
+    </div>
+    <div class="ledger">
+      <div class="kpi" id="vk-service"><span class="l">En service</span><span class="v">—</span><span class="s">véhicules de société</span></div>
+      <div class="kpi" id="vk-valeur"><span class="l">Valeur du parc</span><span class="v">—</span><span class="s">payés par les entreprises</span></div>
+      <div class="kpi" id="vk-exam"><span class="l">À examiner</span><span class="v">—</span><span class="s">achats signalés</span></div>
+      <div class="kpi" id="vk-fact"><span class="l">Factures</span><span class="v">—</span><span class="s">attendues</span></div>
+      <div class="kpi" id="vk-constat"><span class="l">Police</span><span class="v">—</span><span class="s">contrôles défavorables</span></div>
+      <div class="kpi" id="vk-rq"><span class="l">Requalifiés</span><span class="v">—</span><span class="s">véhicules personnels</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="field" style="max-width:420px"><label for="veh-check">Vérifier une plaque</label><input id="veh-check" class="mono" autocomplete="off" spellcheck="false" placeholder="Ex. : 12ABC345" style="text-transform:uppercase"></div>
+      <div id="veh-check-out" aria-live="polite"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="search-row">
+        <div class="seg" id="seg-veh" role="group" aria-label="Filtrer les véhicules">
+          <button type="button" data-f="exam" aria-pressed="true">À examiner<span class="count"></span></button>
+          <button type="button" data-f="service" aria-pressed="false">En service<span class="count"></span></button>
+          <button type="button" data-f="requalifie" aria-pressed="false">Requalifiés<span class="count"></span></button>
+          <button type="button" data-f="vendu" aria-pressed="false">Vendus<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Tous<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="veh-list"><div class="empty">Chargement…</div></div>
     </div>
   </section>
 
@@ -1164,6 +1199,12 @@ header.top{position:relative}
         <div class="tpl-foot"><span>Une demande par besoin.</span><button class="btn ghost small" type="button" data-copy="tpl-dem">Copier</button></div>
       </div>
       <div class="card">
+        <h3>Achat d’un véhicule de société</h3>
+        <p class="sub">Pour le salon des déclarations : le patron déclare chaque véhicule acheté en concession avec l’argent de l’entreprise.</p>
+        <pre class="tpl" id="tpl-veh"></pre>
+        <div class="tpl-foot"><span>Un message par véhicule, facture jointe.</span><button class="btn ghost small" type="button" data-copy="tpl-veh">Copier</button></div>
+      </div>
+      <div class="card">
         <h3>Annonce du barème</h3>
         <p class="sub">Généré à partir de vos réglages. À republier quand vous changez un taux.</p>
         <pre class="tpl" id="tpl-bareme"></pre>
@@ -1367,6 +1408,23 @@ header.top{position:relative}
             <span id="e-msg" class="err" aria-live="polite"></span>
             <ul class="ent-list" id="ent-admin"></ul>
           </div>
+          <div class="card" id="card-veh">
+            <h3>Véhicules de société</h3>
+            <p class="sub">Contre les abus de biens sociaux : un véhicule payé par l’entreprise sert à son activité. Le guichet signale les achats qui ne lui ressemblent pas.</p>
+            <div class="set-form">
+              <label class="switch" for="vh-actif"><input type="checkbox" id="vh-actif"> Suivre les véhicules de société</label>
+              <div class="row3" style="align-items:end">
+                <div class="field"><label for="vh-fact">Facture à fournir sous (jours)</label><input id="vh-fact" type="number" min="1" max="30" step="1"></div>
+                <div class="field"><label for="vh-part">Achat à examiner au-delà de</label><div class="money" data-cur="%"><input id="vh-part" type="number" min="0" step="5"></div><span class="hint">du chiffre d’affaires des quatre dernières périodes (0 : jamais).</span></div>
+                <div class="field"><label for="vh-marge">Voitures en plus de l’effectif</label><input id="vh-marge" type="number" min="0" max="20" step="1"><span class="hint">Au-delà, les derniers achats ressortent. Utilitaires et poids lourds non comptés.</span></div>
+              </div>
+              <div class="field"><label for="vh-loisir">Secteurs qui peuvent avoir des sportives, voitures de prestige, hélicoptères ou bateaux</label><textarea id="vh-loisir" rows="3" placeholder="Un secteur par ligne. Ex. : Concession automobile, Location de véhicules"></textarea></div>
+              <div class="paste-row">
+                <button class="btn" type="button" id="vh-save">Enregistrer</button>
+                <span id="vh-msg" class="hint" aria-live="polite"></span>
+              </div>
+            </div>
+          </div>
       </div>
       <div class="set-page" id="set-page-services" data-sg="services" role="tabpanel" aria-labelledby="set-tab-services" hidden>
           <div class="card">
@@ -1515,7 +1573,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1920,7 +1978,7 @@ function applyRole() {
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
   $("#btn-search").hidden = !S.connected;
-  $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
+  $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
   $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
@@ -2255,6 +2313,7 @@ function subscribe() {
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
   col("releves", s => { S.releves = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
@@ -2285,8 +2344,10 @@ function render() {
   renderExoSettings();
   renderRecouvSettings();
   renderBlSettings();
+  renderVehSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
   renderPrets();
+  renderVehicules();
   drawSync();
 }
 function fillSelect(sel, options, preferred) {
@@ -3423,6 +3484,19 @@ function renderTemplates() {
     "Urgence (normale / prioritaire / urgente) : ",
     "Justification : ",
     "Demandeur (nom, grade) : "].join("\n");
+  $("#tpl-veh").textContent = [
+    "**ACHAT D’UN VÉHICULE DE SOCIÉTÉ**",
+    "Entreprise : ",
+    "Plaque : ",
+    "Modèle : ",
+    "Type (utilitaire / poids lourd / service / berline / SUV / moto / sportive / prestige / hélicoptère / bateau) : ",
+    "Prix payé avec le compte de l’entreprise : ",
+    "Concession : ",
+    "Date d’achat : ",
+    "Usage dans l’entreprise : ",
+    "Conducteurs autorisés (un par ligne) :", "- ", "- ",
+    "Facture de la concession (image jointe ou lien) : ",
+    "Déclarant (nom, fonction) : "].join("\n");
   $("#tpl-bareme").textContent = [
     "**BARÈME FISCAL EN VIGUEUR**",
     ...(c.baremeMode !== "unique"
@@ -3568,7 +3642,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -4122,6 +4196,7 @@ function openFiche(e, opts) {
     sec("Pénalités et redressements", pens, penForm),
     compteSection(e, reopen),
     pretsSection(e),
+    vehiculesSection(e),
     ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
     (() => {
       const rl = relancesOf(e).slice(0, 6), sa = saisiesOf(e), tj = S.transmissions.filter(t => sameEnt(t, e));
@@ -4266,7 +4341,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -4317,6 +4392,18 @@ function describe(e) {
       if (a.justificatif && !b.justificatif) return `a enregistré le justificatif d’achat du prêt de ${nom}`;
       const pa = (a.echeances || []).filter(y => y.payee).length, pb = (b.echeances || []).filter(y => y.payee).length;
       return pa > pb ? `a encaissé ${pa - pb} échéance${plural(pa - pb)} du prêt de ${nom}` : `a mis à jour le prêt de ${nom}`;
+    }
+    case "vehicules": {
+      const nom = v.entrepriseNom || "?", pl = v.plaque || "?";
+      if (x === "suppression") return `a retiré du registre le véhicule ${pl} de ${nom}`;
+      if (x === "ajout") return `a enregistré le véhicule ${pl} (${v.modele || "véhicule"}, ${money(v.prix)}) de ${nom}`;
+      if (b.statut === "requalifie" && a.statut !== "requalifie" && a.statut !== "saisi") return `a annulé la requalification du véhicule ${pl} de ${nom}`;
+      if (a.statut !== b.statut) return ({ requalifie: `a requalifié le véhicule ${pl} de ${nom} en véhicule personnel du dirigeant`, vendu: `a enregistré la vente du véhicule ${pl} de ${nom}`, saisi: `a enregistré la saisie du véhicule ${pl} de ${nom}`, service: `a remis en service le véhicule ${pl} de ${nom}` })[a.statut] || `a mis à jour le véhicule ${pl} de ${nom}`;
+      if ((a.constats || []).length > (b.constats || []).length) { const c = a.constats[a.constats.length - 1]; return `a enregistré un contrôle de police du véhicule ${pl} de ${nom} : ${(CONSTATS[c.type] || CONSTATS.autre)[0].toLowerCase()}`; }
+      if (a.validation && JSON.stringify(a.validation) !== JSON.stringify(b.validation)) return `a validé l’affectation du véhicule ${pl} de ${nom}`;
+      if (a.facture && !b.facture) return `a enregistré la facture du véhicule ${pl} de ${nom}`;
+      if (a.requalification && a.requalification.rembourseLe && !(b.requalification || {}).rembourseLe) return `a constaté le remboursement du véhicule ${pl} par le dirigeant de ${nom}`;
+      return `a modifié le véhicule ${pl} de ${nom}`;
     }
     case "releves":
       if (x === "suppression") return `a supprimé un relevé du compte de ${v.entrepriseNom}`;
@@ -4909,7 +4996,8 @@ const DISCORD_CHANNELS = [
   ["entreprises", "Salon des entreprises", "Avis d’imposition et pénalités. Le patron est mentionné quand son ID Discord est connu."],
   ["services", "Salon des services publics", "Décisions sur les demandes de moyens. Le service est mentionné si vous lui avez donné un rôle."],
   ["relances", "Salon des relances", "Rappels, relances et mises en demeure. Laissez vide pour utiliser le salon des entreprises."],
-  ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."]
+  ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."],
+  ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."]
 ];
 const DISCORD_AUTO = [
   ["avis", "Avis d’imposition, dès qu’il est émis", "entreprises"],
@@ -4919,11 +5007,12 @@ const DISCORD_AUTO = [
   ["controles", "Contrôles fiscaux : avis de vérification, proposition, mise en recouvrement", "entreprises"],
   ["saisies", "Saisies notifiées", "entreprises"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
+  ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
 ];
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
-  return w[ch] || (ch === "relances" ? w.entreprises || "" : "");
+  return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : "");
 }
 const autoOn = k => { const a = (S.discord && S.discord.auto) || {}; const def = DISCORD_AUTO.find(x => x[0] === k); return !!a[k] && !!def && !!hookFor(def[2]); };
 
@@ -5016,6 +5105,7 @@ function renderDiscordSettings(force) {
   DISCORD_CHANNELS.forEach(([k]) => { $("#dw-" + k).value = w[k] || ""; });
   $("#dw-nom").value = d.nom || "";
   $("#dw-mjustice").value = d.mentionJustice || "";
+  $("#dw-mpolice").value = d.mentionPolice || "";
   DISCORD_AUTO.forEach(([k]) => { $("#da-" + k).checked = fresh ? true : !!a[k]; });
   S.discordDirty = false;
 }
@@ -5028,6 +5118,8 @@ function buildDiscordForm() {
       h("span", { class: "hint", text: hint }))),
     h("div", { class: "row2" },
       h("div", { class: "field" }, h("label", { for: "dw-mjustice", text: "Rôle de la justice à mentionner" }), h("input", { id: "dw-mjustice", class: "mono", autocomplete: "off", placeholder: "<@&ID du rôle>" }), h("span", { class: "hint", text: "Prévenu à chaque dossier transmis." })),
+      h("div", { class: "field" }, h("label", { for: "dw-mpolice", text: "Rôle de la police à mentionner" }), h("input", { id: "dw-mpolice", class: "mono", autocomplete: "off", placeholder: "<@&ID du rôle>" }), h("span", { class: "hint", text: "Prévenu quand un véhicule est requalifié." }))),
+    h("div", { class: "row2" },
       h("div", { class: "field" }, h("label", { for: "dw-nom", text: "Nom affiché dans Discord" }), h("input", { id: "dw-nom", autocomplete: "off", placeholder: "Préfecture de police" }))),
     h("fieldset", { class: "checks" }, h("legend", { text: "Publier automatiquement" }),
       DISCORD_AUTO.map(([k, l]) => h("label", { class: "switch", for: "da-" + k }, h("input", { type: "checkbox", id: "da-" + k }), l))),
@@ -5049,9 +5141,11 @@ function buildDiscordForm() {
     }
     const mj = $("#dw-mjustice").value.trim();
     if (mj && !parseMention(mj)) { $("#dw-msg").textContent = "Rôle de la justice : écrivez <@&ID> pour un rôle, ou l’ID d’un membre."; $("#dw-mjustice").focus(); return; }
+    const mp = $("#dw-mpolice").value.trim();
+    if (mp && !parseMention(mp)) { $("#dw-msg").textContent = "Rôle de la police : écrivez <@&ID> pour un rôle, ou l’ID d’un membre."; $("#dw-mpolice").focus(); return; }
     const auto = {};
     DISCORD_AUTO.forEach(([k]) => { auto[k] = $("#da-" + k).checked; });
-    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim(), mentionJustice: normMention(mj) };
+    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim(), mentionJustice: normMention(mj), mentionPolice: normMention(mp) };
     const { error } = await S.sb.from("parametres_prives").upsert({ cle: "discord", valeur, modifie_le: nowISO() }, { onConflict: "cle" });
     if (error) { $("#dw-msg").textContent = "Enregistrement refusé : " + error.message; return; }
     S.discord = valeur; S.discordDirty = false;
@@ -5625,7 +5719,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -5716,6 +5810,7 @@ function regularite(e) {
   if (unpaid.length) manques.push(`${money(unpaid.reduce((s, x) => s + x.montant, 0))} échus non payés (${unpaid.map(x => x.ref).join(", ")})`);
   if (S.saisies.some(x => sameEnt(x, e) && saisieOpen(x))) manques.push("Saisie en cours");
   if (S.transmissions.some(x => sameEnt(x, e) && justiceOpen(x))) manques.push("Dossier transmis à la justice en cours, dette non réglée");
+  for (const v of vehsOf(e)) if (vehRembRetard(v)) manques.push(`Véhicule ${v.plaque} requalifié : le dirigeant n’a pas remboursé ${money(v.requalification.montant)} à l’entreprise`);
   if (e.actif === false) manques.push("Entreprise inactive");
   if (!e.id) manques.push("Entreprise absente du registre");
   return { ok: !manques.length, manques, attendues: exp.length, deposees: exp.filter(k => hasDecl(e, k)).length, sanctionnees: exp.filter(k => !hasDecl(e, k) && defautOf(e, k)).length, echeancier: ech, unpaid, miss };
@@ -5954,14 +6049,15 @@ const QUALIF = {
   fraude: ["Manœuvres frauduleuses : 80 % (art. 1729 c du CGI)", 80],
   opposition: ["Opposition au contrôle : 100 % (art. 1732 du CGI)", 100]
 };
-const ORIGINES = { alerte: "Alerte du guichet", signalement: "Signalement", aleatoire: "Contrôle aléatoire", blanchiment: "Surveillance des comptes", autre: "Autre" };
+const ORIGINES = { alerte: "Alerte du guichet", signalement: "Signalement", aleatoire: "Contrôle aléatoire", blanchiment: "Surveillance des comptes", vehicules: "Véhicules de société", autre: "Autre" };
 const PIECE_URLS = new Map();
 const PIECES_QUOTA = 1024 * 1048576;
 const shortId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const fmtSize = b => (b >= 1048576 ? (b / 1048576).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Mo" : Math.max(1, Math.round(b / 1024)) + " Ko");
 const piecesUsed = () => S.controles.reduce((s, c) => s + (c.pieces || []).reduce((t, p) => t + (Number(p.taille) || 0), 0), 0)
   + (S.releves || []).reduce((s, r) => s + (Number(r.preuve && r.preuve.taille) || 0), 0)
-  + S.declarations.reduce((s, d) => s + (Number(d.soldePreuve && d.soldePreuve.taille) || 0), 0);
+  + S.declarations.reduce((s, d) => s + (Number(d.soldePreuve && d.soldePreuve.taille) || 0), 0)
+  + (S.vehicules || []).reduce((s, v) => s + [v.facture, (v.requalification || {}).rembourseePreuve].concat((v.constats || []).map(x => x.preuve)).reduce((t, p) => t + (Number(p && p.taille) || 0), 0), 0);
 const ctrlOf = d => S.controles.find(c => (c.declIds || []).includes(d.id) && (c.statut === "ouvert" || c.statut === "propose")) || null;
 // Un contrôle mis en recouvrement devient « Soldé » quand le redressement est payé, « Dégrevé » s'il est annulé.
 const ctrlPen = c => (c && c.penaliteId ? S.penalites.find(p => p.id === c.penaliteId) : null) || null;
@@ -6082,6 +6178,7 @@ function newControle(e, declIds, opts) {
     c.avant = {};
     if (opts.rectifications) for (const id of ids) if (opts.rectifications[id]) c.rectifications[id] = opts.rectifications[id];
     if (opts.qualification) c.qualification = opts.qualification;
+    if (opts.vehiculeId) c.vehiculeId = opts.vehiculeId;
     if (opts.justif) c.justif = { ecarts: opts.justif.filter(x => ids.includes(x.declId)), delai: new Date(Date.now() + Math.max(1, Number(cfg().delaiReponseJours) || 2) * 864e5).toISOString() };
     if (susp.checked) for (const d of sel) { const st = dStatus(d); if (st === "soumise" || st === "validee") { c.suspendus.push(d.id); c.avant[d.id] = st; } }
     if (!(await write(() => ref.set(c)))) { btn.disabled = false; return; }
@@ -6523,7 +6620,8 @@ const QUALIFS_J = {
   travail: "Travail dissimulé (art. L8221-1 du Code du travail)",
   opposition: "Opposition au contrôle fiscal (art. 1732 et 1746 du CGI)",
   insolvabilite: "Organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal)",
-  blanchiment: "Blanchiment : sommes d’origine illicite passées par le compte de l’entreprise (art. 324-1 du Code pénal)"
+  blanchiment: "Blanchiment : sommes d’origine illicite passées par le compte de l’entreprise (art. 324-1 du Code pénal)",
+  abs: "Abus de biens sociaux : biens de l’entreprise employés à l’usage personnel du dirigeant (art. L241-3 et L242-6 du Code de commerce)"
 };
 const MESURES_J = {
   saisie_comptes: "Saisie des sommes détenues sur les comptes de l’entreprise, à hauteur de la dette",
@@ -6531,7 +6629,8 @@ const MESURES_J = {
   fermeture: "Fermeture administrative temporaire de l’établissement",
   poursuites: "Poursuites pénales contre le dirigeant",
   interdiction: "Interdiction de gérer une entreprise, à titre de peine complémentaire",
-  confiscation: "Confiscation des sommes d’origine illicite figurant sur le compte de l’entreprise"
+  confiscation: "Confiscation des sommes d’origine illicite figurant sur le compte de l’entreprise",
+  confiscation_vehicules: "Confiscation des véhicules payés par l’entreprise pour l’usage personnel du dirigeant, et remboursement de leur prix à l’entreprise"
 };
 // Repères du droit réel, rappelés en fin de dossier.
 const FONDEMENTS = {
@@ -6541,6 +6640,7 @@ const FONDEMENTS = {
   travail: "Travail dissimulé (art. L8221-1 et L8224-1 du Code du travail) : 3 ans d’emprisonnement et 45 000 € d’amende. L’autorité administrative peut fermer l’établissement jusqu’à trois mois, en informant le procureur (art. L8272-2).",
   opposition: "Opposition au contrôle fiscal : les droits sont majorés de 100 % (art. 1732 du CGI) ; mettre les agents dans l’impossibilité d’exercer leurs fonctions est un délit (art. 1746 du CGI).",
   insolvabilite: "Organiser ou aggraver son insolvabilité pour échapper au paiement de l’impôt est réprimé comme une fraude fiscale (art. 1741 du CGI) et comme une organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal).",
+  abs: "Abus de biens sociaux (art. L241-3 4° du Code de commerce pour les SARL, L242-6 3° pour les SA et SAS) : faire, de mauvaise foi, des biens ou du crédit de la société un usage que le dirigeant sait contraire à l’intérêt de celle-ci, à des fins personnelles ; 5 ans d’emprisonnement et 375 000 € d’amende, 7 ans et 500 000 € quand les faits passent par des comptes ou des structures à l’étranger. Sur le plan fiscal, une dépense engagée dans l’intérêt personnel du dirigeant n’est pas une charge déductible (art. 39-1 du CGI) et l’avantage est imposé comme un revenu distribué (art. 111 c du CGI).",
   blanchiment: "Blanchiment (art. 324-1 du Code pénal) : faciliter la justification mensongère de l’origine de fonds, ou concourir à leur placement, dissimulation ou conversion ; 5 ans d’emprisonnement et 375 000 € d’amende, 10 ans et 750 000 € s’il est habituel, facilité par une activité professionnelle ou commis en bande organisée (art. 324-2). Les fonds sont présumés d’origine illicite quand l’opération n’a d’autre justification que d’en dissimuler l’origine (art. 324-1-1). Les sommes portées au compte sans origine justifiée peuvent aussi être imposées d’office (art. L16 et L69 du LPF), et les soupçons sont signalés à TRACFIN (art. L561-15 du Code monétaire et financier)."
 };
 // Dénonciation obligatoire (art. L228 du LPF) : plus de 100 000 € de droits rappelés à 80 ou 100 %,
@@ -6586,12 +6686,20 @@ function justiceFacts(e) {
   }
   for (const r of relevesOf(e)) events.push([r.at, "Relevé du compte", `${dossierNo("RC", r.id)} · ${money(r.montant)} · ${r.agent || "agent"}`]);
   for (const x of soupconsOf(e)) events.push([x.at, "Déclaration de soupçon", `${dossierNo("DS", x.id)} · ${money(x.montant)}`]);
+  const vehs = vehsOf(e).filter(v => v.statut === "requalifie" || v.statut === "saisi" || vehActive(v).length || (v.constats || []).some(x => x.type !== "conforme"));
+  for (const v of vehs) {
+    events.push([v.achatLe || v.createdAt, "Achat d’un véhicule", `${v.plaque} · ${v.modele || "véhicule"} · ${money(v.prix)} payés par l’entreprise`]);
+    for (const x of v.constats || []) events.push([x.at, "Contrôle de police du véhicule", `${v.plaque} · ${(CONSTATS[x.type] || CONSTATS.autre)[0].toLowerCase()}${x.conducteur ? " · conducteur : " + x.conducteur : ""}${x.agent ? " · " + x.agent : ""}`]);
+    if (v.requalification) events.push([v.requalification.at, "Requalification du véhicule", `${v.plaque} · ${money(v.requalification.montant)} à rembourser à l’entreprise`]);
+    if (v.requalification && v.requalification.rembourseLe) events.push([v.requalification.rembourseLe, "Remboursement par le dirigeant", `${v.plaque} · ${money(v.requalification.montant)}`]);
+    if (v.vente && v.vente.dirigeant) events.push([v.vente.at, "Cession du véhicule au dirigeant", `${v.plaque} · ${money(v.vente.prix)} pour un achat de ${money(v.prix)}`]);
+  }
   events.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
   const total = debts.reduce((s, x) => s + x.reste, 0);
   const lastMed = lastMedPaiement(e, debts);
   const relanceP = rls.some(r => r.type === "paiement");
   const paid = ds.reduce((s, d) => s + dEncaisse(d), 0) + pensOf(e).filter(p => p.statut === "payee").reduce((s, p) => s + (Number(p.montant) || 0), 0);
-  return { ds, debts, ctrls, rls, sais, events, total, lastMed, relanceP, paid };
+  return { ds, debts, ctrls, rls, sais, events, total, lastMed, relanceP, paid, vehs };
 }
 function autoExpose(e, f, qualifs) {
   const parts = [];
@@ -6606,6 +6714,8 @@ function autoExpose(e, f, qualifs) {
   if (ex.length || open.length) parts.push(`${ex.length ? `${ex.length} saisie${plural(ex.length)} a permis de recouvrer ${money(ex.reduce((s, x) => s + (x.recouvre || 0), 0))}` : ""}${ex.length && open.length ? ", et " : ""}${open.length ? `${open.length} saisie${plural(open.length)} reste${open.length > 1 ? "nt" : ""} sans effet` : ""}.`);
   if (qualifs.includes("travail")) parts.push("Des salariés ont été employés sans être déclarés.");
   if (qualifs.includes("insolvabilite")) parts.push("L’entreprise a organisé son insolvabilité pour échapper au paiement.");
+  const absVs = (f.vehs || []).filter(vehAbs);
+  if (qualifs.includes("abs") && absVs.length) parts.push(`Des véhicules payés avec l’argent de l’entreprise servent à l’usage personnel de son dirigeant : ${absVs.map(v => `${v.modele || "véhicule"} ${v.plaque} (${money(v.prix)}${v.statut === "requalifie" ? ", requalifié" + (vehRembRetard(v) ? ", non remboursé" : "") : ""})`).join(", ")}.`);
   parts.push("La Direction sollicite les mesures ci-après pour recouvrer ces sommes et faire cesser les manquements.");
   return parts.join(" ");
 }
@@ -6664,6 +6774,14 @@ async function buildJusticePdf(t, e) {
     const sp = soupconsOf(e);
     if (sp.length) pw.p("Déclarations de soupçon : " + sp.map(x => `${dossierNo("DS", x.id)} du ${fmtDate(new Date(x.at))} (${money(x.montant)})`).join(", ") + ".", { bold: true });
   }
+  if (f.vehs.length || (t.qualifs || []).includes("abs")) {
+    pw.h2(`${++sn}. Véhicules de l’entreprise`);
+    pw.p("Véhicules achetés en concession avec l’argent de l’entreprise, tels qu’ils figurent au registre des véhicules de société.", { size: 18, color: pw.ink2 });
+    if (f.vehs.length) pw.table([{ t: "Plaque", w: 1 }, { t: "Modèle", w: 1.4 }, { t: "Prix", w: 1, num: true }, { t: "Acheté le", w: 1 }, { t: "État", w: 1.6 }],
+      f.vehs.map(v => [v.plaque, `${v.modele || "—"} (${vehCat(v)[0].toLowerCase()})`, money(v.prix), v.achatLe ? fmtDate(new Date(v.achatLe)) : "—", vehState(v)[0]]));
+    const pts = f.vehs.flatMap(v => vehActive(v).map(x => `${v.plaque} : ${x.t}`).concat(v.requalification && v.requalification.motif ? [`${v.plaque} : requalifié le ${fmtDate(new Date(v.requalification.at))} · ${v.requalification.motif}`] : []));
+    if (pts.length) pw.bullets(pts, { size: 19 });
+  }
   if (f.sais.length) {
     pw.h2(`${++sn}. Saisies`);
     pw.table([{ t: "N°", w: 1 }, { t: "Nature", w: 2 }, { t: "Tiers ou lieu", w: 1.6 }, { t: "Montant", w: 1, num: true }, { t: "État", w: 1.1 }],
@@ -6710,7 +6828,8 @@ function openJustice(e) {
   const opposition = f.ctrls.some(x => x.qualification === "opposition" && ["propose", "recouvre"].includes(x.statut));
   // « Défaut de paiement » n'est coché d'office que si une somme est déjà exigible.
   const blEcarts = comptesSynthese(e, 8).filter(x => ecartSuspect(x) && x.ecart > blc().seuil);
-  const defaults = { impaye: f.debts.some(x => x.echu !== false), fraude, travail, opposition, insolvabilite: false, blanchiment: soupconsOf(e).length > 0 || blEcarts.length > 0 };
+  const absV = f.vehs.filter(vehAbs);
+  const defaults = { impaye: f.debts.some(x => x.echu !== false), fraude, travail, opposition, insolvabilite: false, blanchiment: soupconsOf(e).length > 0 || blEcarts.length > 0, abs: absV.length > 0 };
   const denon = denonciationObligatoire(e);
   const medOk = !!f.lastMed && medExpired(f.lastMed);
   const checks = h("ul", { class: "checklist" },
@@ -6720,7 +6839,7 @@ function openJustice(e) {
     f.ctrls.length ? h("li", { class: "yes", text: `${f.ctrls.length} contrôle${plural(f.ctrls.length)} fiscal${f.ctrls.length > 1 ? "aux" : ""} au dossier` }) : null,
     f.sais.length ? h("li", { class: "yes", text: `${f.sais.length} saisie${plural(f.sais.length)} au dossier` }) : null);
   const qBoxes = Object.entries(QUALIFS_J).map(([k, l]) => box("jq-" + k, l, defaults[k]));
-  const mBoxes = Object.entries(MESURES_J).map(([k, l]) => box("jm-" + k, l, k === "saisie_comptes" ? f.total > 0 : k === "poursuites" ? fraude || travail || opposition : false));
+  const mBoxes = Object.entries(MESURES_J).map(([k, l]) => box("jm-" + k, l, k === "saisie_comptes" ? f.total > 0 : k === "poursuites" ? fraude || travail || opposition || absV.length > 0 : k === "confiscation_vehicules" ? absV.some(v => v.statut === "requalifie" && vehRembRetard(v)) : false));
   const exp = h("textarea", { id: "j-expose", rows: "6" });
   exp.value = autoExpose(e, f, Object.keys(defaults).filter(k => defaults[k]));
   const dest = h("input", { id: "j-dest", autocomplete: "off" });
@@ -6861,7 +6980,7 @@ function pretDues(p) {
   return (p.echeances || []).map((x, i) => Object.assign({ i }, x)).filter(x => !x.payee && (new Date(x.date).getTime() < now || (ex && ex <= now)));
 }
 const pretDuMontant = p => pretDues(p).reduce((t, x) => t + (Number(x.montant) || 0), 0);
-const justifEchu = p => p.statut === "en_cours" && p.justifRequis && !p.justificatif && p.justifAvant && new Date(p.justifAvant).getTime() < Date.now();
+const justifEchu = p => p.statut === "en_cours" && p.justifRequis && !p.justificatif && !pretVehJustif(p) && p.justifAvant && new Date(p.justifAvant).getTime() < Date.now();
 function pretState(p) {
   if (p.statut === "en_cours") {
     if (p.exigibleLe) return ["Exigible", "bad"];
@@ -6981,7 +7100,7 @@ function openPret(id) {
         x.payee ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const q = quittancePretDoc(p, i); if (q) showDocImage(q, reopen); }, text: "Quittance" }) : null,
         dir && p.statut === "en_cours" && i === next ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await payPret(p, [i])) { toast(`Échéance ${x.n}/${p.echeances.length} encaissée.`); reopen(); } else b.disabled = false; }, text: "Encaisser" }) : null));
   });
-  const justif = p.justificatif;
+  const justif = p.justificatif, vj = !justif ? pretVehJustif(p) : null;
   const jf = h("input", { id: "pr-jfile", type: "file", accept: "image/*" }), jl = h("input", { id: "pr-jlien", type: "url", autocomplete: "off", placeholder: "Ou un lien : facture, capture de l’achat…" });
   const body = [
     p.statut === "demande" ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Demande en attente. " }), "La Direction l’accorde (les fonds sortent alors du Trésor) ou la refuse.")) : null,
@@ -6992,9 +7111,10 @@ function openPret(id) {
     p.motifDemande ? sec("Motif de la demande", h("p", { class: "prewrap", style: "margin:0", text: p.motifDemande })) : null,
     rows.length ? sec("Échéancier", h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
       h("thead", {}, h("tr", {}, ["", "Date limite", "Montant", "Dont intérêts", "État", ""].map((t, i) => h("th", { class: i === 2 || i === 3 ? "num" : null, text: t })))), h("tbody", {}, rows)))) : null,
-    p.justifRequis || justif ? sec("Emploi des fonds", justif
+    p.justifRequis || justif || vj ? sec("Emploi des fonds", justif
       ? h("div", { class: "paste-row" }, h("span", { text: `Justificatif remis le ${fmtDate(new Date(justif.at))}${justif.byNom ? " (" + justif.byNom + ")" : ""}${justif.note ? " · " + justif.note : ""}` }), proofEl(justif.preuve))
-      : h("div", {}, h("p", { class: "hint", style: "margin:0 0 6px", text: p.justifAvant ? `Justificatif de l’achat attendu avant le ${longDate(new Date(p.justifAvant))}.` : "Justificatif de l’achat attendu." }),
+      : vj ? h("div", { class: "paste-row" }, h("span", { text: "Véhicule acheté avec ce prêt, facture au registre :" }), h("button", { class: "linkbtn", type: "button", onclick: () => openVeh(vj.id), text: `${vj.plaque} · ${vj.modele || "véhicule"} (${vehNo(vj)})` }), proofEl(vj.facture))
+      : h("div", {}, h("p", { class: "hint", style: "margin:0 0 6px", text: (p.justifAvant ? `Justificatif de l’achat attendu avant le ${longDate(new Date(p.justifAvant))}.` : "Justificatif de l’achat attendu.") + (p.objet === "vehicule" ? " Le véhicule enregistré au registre avec ce prêt et sa facture en tient lieu." : "") }),
         dir && p.statut === "en_cours" ? h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pr-jfile", text: "Capture" }), jf), h("div", { class: "field" }, h("label", { for: "pr-jlien", text: "Ou lien" }), jl)) : null,
         dir && p.statut === "en_cours" ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:6px", onclick: async ev => {
           const b = ev.currentTarget; b.disabled = true;
@@ -7236,6 +7356,14 @@ function paiementsEntre(e, t0, t1) {
   for (const p of pretsOf(e)) {
     if (pretVerse(p) && inR(p.verseLe)) t -= Number(p.montant) || 0;
     (p.echeances || []).forEach(x => { if (x.payee && inR(x.paidAt)) t += Number(x.montant) || 0; });
+  }
+  // Véhicules : l'achat payé par le compte (s'il n'est pas déjà dans les charges déclarées), la vente
+  // (si son prix n'est pas dans le chiffre d'affaires) et le remboursement du dirigeant après requalification.
+  for (const v of vehsOf(e)) {
+    const reintegre = S.controles.some(c => c.vehiculeId === v.id && c.statut === "recouvre");
+    if ((!v.dansCharges || reintegre) && inR(v.achatLe)) t += Number(v.prix) || 0;
+    if (v.vente && !v.vente.dansCA && inR(v.vente.at)) t -= Number(v.vente.prix) || 0;
+    for (const rq of [v.requalification, v.requalifAnnulee]) if (rq && rq.rembourseLe && inR(rq.rembourseLe)) t -= Number(rq.montant) || 0;
   }
   return t;
 }
@@ -7531,6 +7659,633 @@ $("#bl-save").addEventListener("click", async () => {
   if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
 });
 
+/* ---------- Véhicules de société (abus de biens sociaux) ---------- */
+// L'entreprise achète ses véhicules en concession avec l'argent de son compte. Un véhicule payé par
+// l'entreprise pour l'usage personnel du dirigeant est un abus de biens sociaux (art. L241-3 4° et
+// L242-6 3° du Code de commerce) ; fiscalement, la dépense n'est pas une charge de l'entreprise
+// (art. 39-1 du CGI) et l'avantage est un revenu distribué (art. 111 c du CGI). Le guichet tient donc
+// le registre des véhicules de chaque entreprise : la police vérifie les plaques, les achats sans
+// rapport avec l'activité ressortent, et la Direction peut requalifier le véhicule.
+const VEH_CATS = {
+  utilitaire: ["Utilitaire ou fourgon", "pro"],
+  poids_lourd: ["Poids lourd ou engin", "pro"],
+  service: ["Véhicule de service (dépanneuse, taxi, ambulance…)", "pro"],
+  berline: ["Berline ou citadine", "tourisme"],
+  suv: ["SUV ou 4×4", "tourisme"],
+  moto: ["Moto ou deux-roues", "tourisme"],
+  sportive: ["Sportive", "loisir"],
+  prestige: ["Prestige ou supercar", "loisir"],
+  aerien: ["Hélicoptère ou avion", "loisir"],
+  nautique: ["Bateau", "loisir"]
+};
+const VEH_SOURCES = { entreprise: "l’entreprise", concession: "la concession", police: "un constat de police", agent: "un agent du guichet" };
+const CONSTATS = { conforme: ["Usage conforme", "ok"], perso: ["Usage personnel", "bad"], conducteur: ["Conducteur non autorisé", "bad"], autre: ["Autre irrégularité", "warn"] };
+function vcfg() { return Object.assign({ actif: true, delaiFacture: 3, partCA: 50, parcMarge: 1, secteursLoisir: "" }, cfg().vehicules || {}); }
+function vehNo(v) { return dossierNo("VS", v.id); }
+function normPlaque(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
+function vehCat(v) { return VEH_CATS[v.categorie] || ["Véhicule", "tourisme"]; }
+function vehsOf(e) { return (S.vehicules || []).filter(v => sameEnt(v, e)).sort((a, b) => String(b.achatLe || b.createdAt).localeCompare(String(a.achatLe || a.createdAt))); }
+function vehByPlaque(p) { const n = normPlaque(p); return n ? (S.vehicules || []).filter(v => normPlaque(v.plaque) === n).sort((a, b) => String(b.achatLe || b.createdAt).localeCompare(String(a.achatLe || a.createdAt))) : []; }
+// Nombre de salariés : celui de la dernière déclaration valable.
+function nbSalariesDe(e) {
+  const d = declsOf(e).filter(x => dStatus(x) !== "rejetee" && bounds(x.periode)).sort((a, b) => String(b.periode).localeCompare(String(a.periode)) || byCreatedDesc(a, b))[0];
+  return d ? Number(d.nbSalaries) || 0 : null;
+}
+// Chiffre d'affaires des quatre périodes qui finissent à l'achat (montants retenus par un contrôle s'il y en a eu un).
+function caAvant(e, v) {
+  const t = new Date(v.achatLe || v.createdAt || Date.now());
+  const keys = keysEnding(keyOf(Number.isFinite(t.getTime()) ? t : new Date()), 4);
+  const ds = keys.map(k => periodDecl(e, k)).filter(Boolean);
+  return { ca: ds.reduce((s, d) => s + retenuDe(d).ca, 0), n: ds.length };
+}
+function secteurLoisirOk(e) {
+  const s = norm(e.secteur || "");
+  if (!s) return false;
+  return String(vcfg().secteursLoisir || "").split(/\r?\n|,/).map(x => norm(x)).filter(Boolean).some(x => s.includes(x) || x.includes(s));
+}
+// Signaux : chaque clé porte ce qui a été vu (catégorie, prix, taille du parc…). Une validation de la
+// Direction ne couvre que ces valeurs-là : si le véhicule est modifié ensuite, le signal revient.
+function vehSignals(v) {
+  const c = vcfg();
+  if (!c.actif || !v || v.statut === "requalifie" || v.statut === "saisi") return [];
+  const e = entOf(v), out = [], prix = Number(v.prix) || 0, cat = vehCat(v);
+  const add = (k, t, grave) => out.push({ k, t, grave: !!grave });
+  if (v.source && v.source !== "entreprise" && !v.declareLe) add("nondeclare", `Achat non déclaré par l’entreprise : signalé par ${VEH_SOURCES[v.source] || "un tiers"}`, true);
+  if (cat[1] === "loisir" && !secteurLoisirOk(e)) add("loisir:" + v.categorie, `${cat[0]} sans rapport apparent avec l’activité${e.secteur ? " (" + e.secteur.toLowerCase() + ")" : ""}`);
+  if (prix > 0 && Number(c.partCA) > 0) {
+    const x = caAvant(e, v);
+    if (x.ca > 0 && prix > x.ca * Number(c.partCA) / 100) add("prix:" + prix, `Prix égal à ${Math.round(prix / x.ca * 100)} % du chiffre d’affaires des quatre dernières périodes`);
+    else if (x.ca <= 0) add("prix:" + prix, "Acheté sans chiffre d’affaires déclaré sur les quatre dernières périodes");
+  }
+  const age = (Date.now() - new Date(v.achatLe || v.createdAt || Date.now()).getTime()) / 864e5;
+  if (!v.facture && age > (Number(c.delaiFacture) || 3)) add("facture", "Facture de la concession non fournie");
+  if (Number(v.detteAchat) > 0) add("dette:" + v.detteAchat, `Acheté alors que l’entreprise devait ${money(v.detteAchat)} à la Préfecture`);
+  for (const x of v.constats || []) if (x.type && x.type !== "conforme") add("constat:" + x.id, `Constat de police du ${fmtDate(new Date(x.at))} : ${(CONSTATS[x.type] || CONSTATS.autre)[0].toLowerCase()}${x.conducteur ? " (" + x.conducteur + ")" : ""}`, true);
+  // Parc de tourisme plus grand que l'effectif : les derniers achats ressortent.
+  if (v.statut === "service" && cat[1] !== "pro") {
+    const nb = nbSalariesDe(e);
+    if (nb != null) {
+      const parc = vehsOf(e).filter(y => y.statut === "service" && vehCat(y)[1] !== "pro").reverse(), allow = nb + (Number(c.parcMarge) || 0), i = parc.findIndex(y => y.id === v.id);
+      if (i >= allow) add(`parc:${parc.length}/${nb}`, `${parc.length} véhicules de tourisme ou de loisir pour ${nb} salarié${plural(nb)}`);
+    }
+  }
+  if (v.statut !== "vendu") return out;
+  // Vendu : seuls restent les signaux graves (achat caché, dette, contrôle de police) et la cession au dirigeant.
+  const kept = out.filter(x => x.k === "nondeclare" || x.k.startsWith("dette:") || x.k.startsWith("constat:"));
+  const vt = v.vente || {}, pv = Number(vt.prix) || 0;
+  const dirigeant = vt.dirigeant || (e.patron && vt.acheteur && norm(vt.acheteur) === norm(e.patron));
+  if (dirigeant && prix > 0 && pv < prix * 0.5) kept.push({ k: "cession:" + pv, t: `Cédé au dirigeant pour ${Math.round(pv / prix * 100)} % de son prix d’achat (${money(pv)} pour ${money(prix)})`, grave: true });
+  return kept;
+}
+// Véhicules qui relèvent de l'abus de biens sociaux (pour la justice).
+function vehAbs(v) { return v.statut === "requalifie" || v.statut === "saisi" || (v.constats || []).some(x => x.type === "perso" || x.type === "conducteur") || vehActive(v).some(s => s.k.startsWith("cession:")); }
+function vehActive(v) { const ok = new Set((v.validation && v.validation.keys) || []); return vehSignals(v).filter(s => !ok.has(s.k)); }
+function vehRembRetard(v) { const r = v.requalification; return v.statut === "requalifie" && r && !r.rembourseLe && Number(r.montant) > 0 && r.avant && new Date(r.avant).getTime() < Date.now(); }
+function vehState(v) {
+  if (v.statut === "requalifie") { const r = v.requalification || {}; return !(Number(r.montant) > 0) ? ["Requalifié", "bad"] : r.rembourseLe ? ["Requalifié · remboursé", "muted"] : vehRembRetard(v) ? ["Remboursement en retard", "bad"] : ["Requalifié", "bad"]; }
+  if (v.statut === "saisi") return ["Saisi", "muted"];
+  const a = vehActive(v);
+  if (a.length) return [v.statut === "vendu" ? "Vente à examiner" : "À examiner", a.some(s => s.grave) ? "bad" : "warn"];
+  if (v.statut === "vendu") return ["Vendu", "muted"];
+  if (!v.facture) return ["Facture attendue", "info"];
+  return ["Conforme", "ok"];
+}
+// Un prêt « achat de véhicule » est justifié par un véhicule du registre acheté avec, facture à l'appui.
+function pretVehJustif(p) { return p.objet === "vehicule" ? (S.vehicules || []).find(v => v.pretId === p.id && v.facture && (v.statut === "service" || v.statut === "vendu")) || null : null; }
+
+// Documents : certificat d'affectation (vérifiable par la police) et requalification.
+function vehDoc(v) {
+  const e = entOf(v), st = vehState(v), cat = vehCat(v);
+  const tone = { ok: "ok", info: "accent", warn: "warn", bad: "bad", muted: "muted" }[st[1]] || "accent";
+  return {
+    kind: "CERTIFICAT D’AFFECTATION", no: vehNo(v), date: "Véhicule acheté le " + longDate(new Date(v.achatLe || v.createdAt)),
+    meta: [["Entreprise", e.nom || v.entrepriseNom], ["Dirigeant", e.patron || "—"], ["Véhicule", `${v.modele || "—"} · ${cat[0].toLowerCase()}`], ["Concession", v.concession || "—"],
+      ["Usage dans l’entreprise", v.usage || "—"], ["Conducteurs autorisés", (v.conducteurs || []).join(", ") || "salariés de l’entreprise"]],
+    lines: [["Prix payé par l’entreprise", money(v.prix)], ["Facture de la concession", v.facture ? "fournie" : "attendue"]],
+    total: ["Plaque", v.plaque || "—"],
+    stamp: [v.statut === "service" ? (st[1] === "ok" || st[1] === "info" ? "VÉHICULE DE SOCIÉTÉ" : "À EXAMINER") : st[0].toUpperCase(), tone],
+    footer: "Ce véhicule appartient à l’entreprise. Il sert à son activité, conduit par les personnes ci-dessus. La police peut vérifier sa plaque auprès de la Direction. L’usage personnel d’un véhicule payé par l’entreprise est un abus de biens sociaux (art. L241-3 et L242-6 du Code de commerce) : 5 ans d’emprisonnement et 375 000 € d’amende.",
+    discord: { channel: "police", mentions: [], text: `**Véhicule de société ${vehNo(v)}** · \`${v.plaque}\` · ${v.modele || "véhicule"} · ${e.nom || v.entrepriseNom}${(v.conducteurs || []).length ? " · conducteurs : " + v.conducteurs.join(", ") : ""}` }
+  };
+}
+function requalifDoc(v) {
+  const e = entOf(v), r = v.requalification || {}, ctrl = S.controles.find(c => c.vehiculeId === v.id);
+  return {
+    kind: "REQUALIFICATION D’UN VÉHICULE", no: vehNo(v), date: "Décidée le " + longDate(new Date(r.at || Date.now())),
+    meta: [["Entreprise", e.nom || v.entrepriseNom], ["Dirigeant", e.patron || "—"], ["Véhicule", `${v.modele || "—"} · ${v.plaque}`], ["Acheté le", longDate(new Date(v.achatLe || v.createdAt))]],
+    lines: [["Prix payé par l’entreprise", money(v.prix)], r.rembourseLe ? ["Remboursé par le dirigeant le", fmtDate(new Date(r.rembourseLe))] : r.avant && Number(r.montant) > 0 ? ["À rembourser avant le", fmtDate(new Date(r.avant))] : null, ctrl ? ["Contrôle fiscal", dossierNo("CF", ctrl.id)] : null].filter(Boolean),
+    total: [r.rembourseLe ? "Remboursé à l’entreprise" : "À rembourser à l’entreprise", money(r.montant || 0)],
+    note: r.motif || "", noteTitle: "Motifs",
+    stamp: [r.rembourseLe ? "REMBOURSÉ" : "REQUALIFIÉ", r.rembourseLe ? "ok" : "bad"],
+    footer: "Ce véhicule, payé avec l’argent de l’entreprise, sert à l’usage personnel du dirigeant : il n’est plus un véhicule de société. Le dirigeant rembourse son prix à l’entreprise. À défaut, la Direction peut faire saisir le véhicule et transmettre le dossier à la justice pour abus de biens sociaux (art. L241-3 et L242-6 du Code de commerce : 5 ans d’emprisonnement et 375 000 € d’amende). La dépense n’est pas une charge de l’entreprise (art. 39-1 du CGI) et l’avantage est imposé comme un revenu distribué (art. 111 c du CGI).",
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Requalification du véhicule ${vehNo(v)}** · ${e.nom || v.entrepriseNom} · \`${v.plaque}\` (${v.modele || "véhicule"}) n’est plus un véhicule de société${Number(r.montant) > 0 && !r.rembourseLe ? ` · ${money(r.montant)} à rembourser à l’entreprise avant le ${fmtDate(new Date(r.avant))}` : ""}.` }
+  };
+}
+// La police est prévenue dans son salon, s'il en a un à part.
+async function notifyPolice(text) {
+  const w = (S.discord && S.discord.webhooks) || {};
+  if (!w.police || !canAgent()) return false;
+  const mp = (S.discord && S.discord.mentionPolice) || "";
+  const r = await postDiscord("police", { content: [mp, text].filter(Boolean).join(" "), mentions: [mp].filter(Boolean) });
+  return r.ok;
+}
+
+// Écritures
+async function saveVeh(v, patch, msg) {
+  const latest = (S.vehicules || []).find(x => x.id === v.id) || v;
+  const body = Object.assign({}, latest, patch); delete body.id;
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+  const ok = await write(() => S.db.doc("vehicules/" + v.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+function vehNow(id) { return (S.vehicules || []).find(x => x.id === id) || null; }
+function vehChanged(cur) {
+  toast(cur ? `Ce véhicule a changé entre-temps : il est maintenant « ${vehState(cur)[0].toLowerCase()} ».` : "Ce véhicule vient d’être retiré du registre par un autre agent.", true);
+  if (cur) openVeh(cur.id); else closeDialog();
+}
+function proofFields(id, hint) {
+  const f = h("input", { id: id + "-file", type: "file", accept: "image/*" }), l = h("input", { id: id + "-lien", type: "url", autocomplete: "off", placeholder: hint || "Ou un lien : message Discord, Imgur…" });
+  return { f, l, el: h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: id + "-file", text: "Capture" }), f), h("div", { class: "field" }, h("label", { for: id + "-lien", text: "Ou lien" }), l)),
+    read: async prefix => (f.files && f.files[0] ? await uploadProof(prefix, f.files[0]) : null) || linkProof(l.value) };
+}
+
+// Fenêtre d'un véhicule
+function openVeh(id) {
+  const v = vehNow(id);
+  if (!v) return;
+  const e = entOf(v), dir = writer(), ag = canAgent(), reopen = () => openVeh(id);
+  const sig = vehSignals(v), act = vehActive(v), cat = vehCat(v), r = v.requalification;
+  const pret = v.pretId ? (S.prets || []).find(p => p.id === v.pretId) : null;
+  const ctrl = S.controles.find(c => c.vehiculeId === v.id) || null;
+  const constats = (v.constats || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const fac = proofFields("vh-fac", "Ou un lien vers la facture");
+  const body = [
+    r ? h("div", { class: "notice", style: "margin:0;border-left-color:var(--bad)" }, h("div", {},
+      h("strong", { text: `Requalifié le ${fmtDate(new Date(r.at))}${r.byNom ? " par " + r.byNom : ""}. ` }),
+      Number(r.montant) > 0 ? (r.rembourseLe ? `Le dirigeant a remboursé ${money(r.montant)} à l’entreprise le ${fmtDate(new Date(r.rembourseLe))}.` : `Le dirigeant doit rembourser ${money(r.montant)} à l’entreprise avant le ${fmtDate(new Date(r.avant))}${vehRembRetard(v) ? " : délai dépassé." : "."}`) : "Aucun remboursement demandé.",
+      r.motif ? h("p", { class: "prewrap", style: "margin:6px 0 0", text: r.motif }) : null)) : null,
+    act.length ? sec("Points à examiner", h("div", { class: "reasons" }, act.map(s => h("span", { class: "reason", text: s.t }))),
+      dir && !r ? h("p", { class: "hint", style: "margin:6px 0 0", text: "Validez l’affectation si l’achat se justifie (un motif est demandé), ou requalifiez le véhicule s’il sert au dirigeant." }) : null) : null,
+    v.validation && sig.some(s => (v.validation.keys || []).includes(s.k)) ? h("p", { class: "hint", style: "margin:0", text: `Affectation validée le ${fmtDate(new Date(v.validation.at))}${v.validation.byNom ? " par " + v.validation.byNom : ""} : ${v.validation.motif}` }) : null,
+    kv([["Plaque", h("span", { class: "mono", text: v.plaque })], ["Modèle", v.modele || "—"], ["Catégorie", cat[0]], ["Prix payé", money(v.prix)],
+      ["Acheté le", v.achatLe ? fmtDate(new Date(v.achatLe)) : "—"], ["Concession", v.concession || "—"], ["Usage", v.usage || "—"],
+      ["Conducteurs autorisés", (v.conducteurs || []).join(", ") || "—"],
+      ["Déclaré par", (VEH_SOURCES[v.source] || VEH_SOURCES.entreprise) + (v.declareLe && v.source !== "entreprise" ? ` · déclaré par l’entreprise le ${fmtDate(new Date(v.declareLe))}` : "")],
+      ["Dans les charges", v.dansCharges ? `oui, ${periodPlain(keyOf(new Date(v.achatLe || v.createdAt))).toLowerCase()}` : "non"],
+      pret ? ["Financé par", `${pretNo(pret)} · ${money(pret.montant)}`] : null,
+      v.statut === "vendu" && v.vente ? ["Vendu", `le ${fmtDate(new Date(v.vente.at))} à ${v.vente.acheteur || "—"} pour ${money(v.vente.prix)}${v.vente.dirigeant ? " (dirigeant ou proche)" : ""}`] : null,
+      v.statut === "saisi" ? ["Saisi", `le ${fmtDate(new Date(v.saisiLe))}${v.saisiMotif ? " · " + v.saisiMotif : ""}`] : null]),
+    sec("Facture de la concession", v.facture ? h("div", { class: "paste-row" }, proofEl(v.facture), h("span", { class: "muted", text: v.factureLe ? `ajoutée le ${fmtDate(new Date(v.factureLe))}` : "" }))
+      : h("div", {}, h("p", { class: "hint", style: "margin:0 0 6px", text: `Attendue dans les ${vcfg().delaiFacture} jours qui suivent l’achat.` }),
+        ag && v.statut === "service" ? fac.el : null,
+        ag && v.statut === "service" ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:6px", onclick: async ev => {
+          const b = ev.currentTarget; b.disabled = true;
+          const preuve = await fac.read(`vehicules/${v.id}`);
+          if (!preuve) { toast("Joignez une capture ou un lien.", true); b.disabled = false; return; }
+          if (await saveVeh(v, { facture: preuve, factureLe: nowISO() }, "Facture enregistrée.")) reopen(); else b.disabled = false;
+        }, text: "Enregistrer la facture" }) : null)),
+    sec("Contrôles de police", constats.length ? h("ul", { class: "notes" }, constats.map(x => h("li", {},
+      h("span", { class: "meta", text: `${fmtDateTime(new Date(x.at))}${x.lieu ? " · " + x.lieu : ""}${x.agent ? " · " + x.agent : ""}` }),
+      h("div", { class: "paste-row" }, chip(CONSTATS[x.type] || CONSTATS.autre), x.conducteur ? h("span", { text: "Conducteur : " + x.conducteur }) : null, x.preuve ? proofEl(x.preuve) : null),
+      x.note ? h("p", { class: "prewrap", text: x.note }) : null))) : h("p", { class: "muted", style: "margin:0", text: "Aucun contrôle enregistré." })),
+    ctrl ? h("p", { style: "margin:0" }, "Contrôle fiscal : ", h("button", { class: "linkbtn", type: "button", onclick: () => openControle(ctrl.id), text: `${dossierNo("CF", ctrl.id)} · ${ctrlState(ctrl)[0].toLowerCase()}` })) : null
+  ];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(r ? requalifDoc(v) : vehDoc(v), reopen), text: r ? "Requalification en image" : "Certificat en image" }),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(e), text: "Fiche de l’entreprise" }), h("span", { class: "spacer" })];
+  if (ag && v.statut === "service") {
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openVehForm(e, v), text: "Modifier" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConstat(v), text: "Contrôle de police" }));
+    if (v.source !== "entreprise" && !v.declareLe) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await saveVeh(v, { declareLe: nowISO() }, "Déclaration de l’entreprise enregistrée.")) reopen(); else b.disabled = false; }, text: "Déclaré par l’entreprise" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openVente(v), text: "Vendu" }));
+  }
+  if (dir && act.length && (v.statut === "service" || v.statut === "vendu")) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openValider(v), text: "Valider l’affectation" }));
+  if (dir && (v.statut === "service" || v.statut === "vendu")) foot.push(h("button", { class: act.some(s => s.grave) ? "btn danger small" : "btn ghost small", type: "button", onclick: () => openRequalif(v), text: "Requalifier" }));
+  if (dir && v.statut === "requalifie") {
+    if (Number(r && r.montant) > 0 && !r.rembourseLe) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openRembVeh(v), text: "Remboursement constaté" }));
+    if ((!ctrl || ctrl.statut === "sans_suite") && v.dansCharges) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => vehControle(v), text: "Contrôle fiscal" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openVehSaisi(v), text: "Véhicule saisi" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+      const cur = vehNow(v.id);
+      if (!cur || cur.statut !== "requalifie") { vehChanged(cur); return; }
+      const b = ev.currentTarget; b.disabled = true;
+      const rq = cur.requalification || {};
+      if (await saveVeh(cur, { statut: rq.statutAvant || "service", requalification: undefined, requalifAnnulee: Object.assign({}, rq, { annuleeLe: nowISO(), annuleeParNom: S.agentName || "" }) }, "Requalification annulée.")) reopen(); else b.disabled = false;
+    }, text: "Annuler la requalification" }));
+  }
+  if (dir) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+    const b = ev.currentTarget;
+    if (!b.dataset.arm) { b.dataset.arm = "1"; b.className = "btn danger small"; b.textContent = "Confirmer le retrait"; toast("Le véhicule sortira du registre (récupérable depuis le Journal). Cliquez de nouveau pour confirmer."); return; }
+    b.disabled = true;
+    if (await write(() => S.db.doc("vehicules/" + v.id).delete())) { toast("Véhicule retiré du registre."); openFiche(e); } else b.disabled = false;
+  }, text: "Retirer du registre" }));
+  openDialog({ eyebrow: `Véhicule ${vehNo(v)} · ${v.entrepriseNom}`, title: `${v.modele || "Véhicule"} · ${v.plaque}`, stampEl: stamp(vehState(v)), wide: true, body, foot });
+}
+
+// Enregistrer ou modifier un véhicule (tout agent).
+const vehKeys = k =>
+  /^(entreprise|societe|raison sociale)/.test(k) ? "entreprise" :
+  /^(plaque|immatriculation|immat)/.test(k) ? "plaque" :
+  /^(modele|vehicule|voiture|marque)/.test(k) ? "modele" :
+  /^(type|categorie|genre)/.test(k) ? "categorie" :
+  /^(prix|montant|cout|somme)/.test(k) ? "prix" :
+  /^(concession|vendeur|garage)/.test(k) ? "concession" :
+  /^(date|achete|achat le)/.test(k) ? "date" :
+  /^(usage|utilisation|affectation|activite)/.test(k) ? "usage" :
+  /^(conducteur|chauffeur|utilisateur)/.test(k) ? "conducteurs" :
+  /^(facture|capture|preuve|justificatif)/.test(k) ? "facture" :
+  /^(declarant|patron|gerant|nom)/.test(k) ? "declarant" : null;
+function catFromText(t) {
+  const n = norm(t);
+  if (!n) return null;
+  const rules = [[/poids|camion|engin|benne|tracteur/, "poids_lourd"], [/utilitaire|fourgon|van\b|pick|livraison/, "utilitaire"], [/depann|taxi|ambulan|service|bus/, "service"],
+    [/helico|avion|aerien/, "aerien"], [/bateau|nautique|jet/, "nautique"], [/prestige|supercar|luxe/, "prestige"], [/sport/, "sportive"], [/suv|4x4|4 x 4|tout terrain/, "suv"], [/moto|scooter|deux/, "moto"], [/berline|citadine|voiture|compacte|coupe/, "berline"]];
+  const m = rules.find(([re]) => re.test(n));
+  return m ? m[1] : null;
+}
+function openVehForm(e, v, pre) {
+  if (!canAgent()) return;
+  pre = pre || {};
+  const edit = !!v;
+  const ent = h("input", { id: "vf-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" }); if (e) ent.value = e.nom;
+  const pl = h("input", { id: "vf-plaque", class: "mono", autocomplete: "off", placeholder: "Ex. : 12ABC345", style: "text-transform:uppercase" });
+  const mod = h("input", { id: "vf-modele", autocomplete: "off", placeholder: "Ex. : Bison, Sultan RS…" });
+  const cat = h("select", { id: "vf-cat" }, Object.entries(VEH_CATS).map(([k, [l]]) => h("option", { value: k, text: l })));
+  const prix = h("input", { id: "vf-prix", type: "number", min: "0", step: "100", inputmode: "numeric", placeholder: "0" });
+  const date = h("input", { id: "vf-date", type: "date" }); date.value = toLocalInput(new Date()).slice(0, 10);
+  const conc = h("input", { id: "vf-conc", autocomplete: "off", placeholder: "Concession où l’achat a été fait" });
+  const usage = h("input", { id: "vf-usage", autocomplete: "off", placeholder: "Ex. : livraisons, dépannages, transport des salariés…" });
+  const cond = h("textarea", { id: "vf-cond", rows: "3", placeholder: "Un conducteur par ligne (salariés de l’entreprise)" });
+  const charges = h("input", { id: "vf-charges", type: "checkbox" }); charges.checked = true;
+  const src = h("select", { id: "vf-src" }, Object.entries(VEH_SOURCES).map(([k, l]) => h("option", { value: k, text: "Déclaré par " + l })));
+  const pretSel = h("select", { id: "vf-pret" });
+  const fac = proofFields("vf-fac", "Ou un lien vers la facture");
+  const paste = h("textarea", { id: "vf-paste", rows: "3", placeholder: "Collez ici le message « Achat d’un véhicule de société » posté sur Discord" });
+  const pmsg = h("span", { class: "hint", "aria-live": "polite" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const fillPrets = () => {
+    const en = findEnt(ent.value), keep = pretSel.value || (v && v.pretId) || "";
+    const ps = en ? pretsOf(en).filter(p => pretVerse(p) && p.objet === "vehicule") : [];
+    fill(pretSel, h("option", { value: "", text: "Payé avec l’argent de l’entreprise" }), ps.map(p => h("option", { value: p.id, text: `Prêt ${pretNo(p)} · ${PRET_OBJETS[p.objet] || "prêt"} · ${money(p.montant)}` })));
+    pretSel.value = ps.some(p => p.id === keep) ? keep : "";
+  };
+  if (v) {
+    pl.value = v.plaque || ""; mod.value = v.modele || ""; cat.value = v.categorie || "berline"; prix.value = String(v.prix || "");
+    if (v.achatLe) date.value = toLocalInput(new Date(v.achatLe)).slice(0, 10);
+    conc.value = v.concession || ""; usage.value = v.usage || ""; cond.value = (v.conducteurs || []).join("\n"); charges.checked = !!v.dansCharges; src.value = v.source || "entreprise"; ent.disabled = true;
+  } else {
+    cat.value = "utilitaire";
+    if (pre.plaque) pl.value = normPlaque(pre.plaque);
+    if (pre.source) src.value = pre.source;
+  }
+  fillPrets();
+  ent.addEventListener("input", fillPrets);
+  const parse = () => {
+    const p = parseTemplate(paste.value, vehKeys, [], ["conducteurs"]);
+    // parseTemplate retire la mise en forme Discord (« _ », « * »…) : le lien et les noms sont relus sur les lignes brutes.
+    const raw = String(paste.value || "").split(/\r?\n/), clean = x => x.replace(/^[\s*`>~|]+|[\s*`~|]+$/g, "");
+    const rawFac = raw.find(l => /^[\s*_>]*(facture|capture|preuve|justificatif)/i.test(norm(l)));
+    if (rawFac) { const m = /https?:\/\/[^\s<>*`]+/i.exec(rawFac); if (m) p.facture = m[0]; }
+    const ci = raw.findIndex(l => /^[\s*_>]*(conducteur|chauffeur|utilisateur)/i.test(norm(l)));
+    if (ci >= 0) {
+      const rc = [], after = raw[ci].includes(":") ? clean(raw[ci].slice(raw[ci].indexOf(":") + 1)) : "";
+      if (after) rc.push(...after.split(/,|;/));
+      for (let i = ci + 1; i < raw.length && /^\s*[-•·–—]/.test(raw[i]); i++) rc.push(clean(raw[i].replace(/^\s*[-•·–—]\s*/, "")));
+      p.conducteursList = rc.map(x => x.trim()).filter(Boolean); p.conducteurs = "";
+    }
+    let n = 0;
+    if (p.entreprise && !edit) { const x = findEnt(p.entreprise); ent.value = x ? x.nom : p.entreprise; fillPrets(); n++; }
+    if (p.plaque) { pl.value = normPlaque(p.plaque); n++; }
+    if (p.modele) { mod.value = p.modele; n++; }
+    if (p.categorie) { const c = catFromText(p.categorie); if (c) { cat.value = c; n++; } }
+    if (p.prix) { const a = parseAmount(p.prix); if (a != null) { prix.value = String(Math.max(0, a)); n++; } }
+    if (p.concession) { conc.value = p.concession; n++; }
+    if (p.date) {
+      const iso = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(p.date), fr = /(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?/.exec(p.date);
+      const y = iso ? Number(iso[1]) : fr && fr[3] ? (fr[3].length === 2 ? 2000 + Number(fr[3]) : Number(fr[3])) : new Date().getFullYear();
+      const mo = iso ? Number(iso[2]) : fr ? Number(fr[2]) : 0, d = iso ? Number(iso[3]) : fr ? Number(fr[1]) : 0;
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) { date.value = `${y}-${pad(mo)}-${pad(d)}`; n++; }
+    }
+    if (p.usage) { usage.value = p.usage; n++; }
+    const cl = (p.conducteursList || []).concat(p.conducteurs ? p.conducteurs.split(/,|;/) : []).map(x => x.trim()).filter(Boolean);
+    if (cl.length) { cond.value = cl.join("\n"); n++; }
+    if (p.facture) { const m = /https?:\/\/\S+/i.exec(p.facture); if (m) { fac.l.value = m[0]; n++; } }
+    if (n && !edit) src.value = "entreprise";
+    pmsg.textContent = n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Achat d’un véhicule de société ».";
+  };
+  paste.addEventListener("paste", () => setTimeout(parse, 0));
+  const save = async ev => {
+    err.textContent = "";
+    const en = v ? entOf(v) : findEnt(ent.value);
+    if (!en || !en.id) { err.textContent = "Choisissez une entreprise du registre."; ent.focus(); return; }
+    const plaque = normPlaque(pl.value);
+    if (plaque.length < 2) { err.textContent = "Indiquez la plaque du véhicule."; pl.focus(); return; }
+    const dup = vehByPlaque(plaque).find(x => x.statut === "service" && (!v || x.id !== v.id));
+    if (dup) { err.textContent = `Cette plaque est déjà au registre : ${vehNo(dup)}, ${dup.entrepriseNom}.`; pl.focus(); return; }
+    const px = Number(prix.value);
+    if (!(px >= 0) || prix.value === "") { err.textContent = "Indiquez le prix payé par l’entreprise."; prix.focus(); return; }
+    const achat = date.value ? new Date(date.value + "T12:00:00") : new Date();
+    if (!Number.isFinite(achat.getTime()) || achat.getTime() > Date.now() + 864e5) { err.textContent = "Date d’achat invalide."; date.focus(); return; }
+    if (v) { const c0 = vehNow(v.id); if (!c0 || c0.statut !== "service") { vehChanged(c0); return; } }
+    const btn = ev.currentTarget; btn.disabled = true;
+    const ref = v ? S.db.doc("vehicules/" + v.id) : S.db.collection("vehicules").doc();
+    const preuve = await fac.read(`vehicules/${ref.id}`);
+    const data = { plaque, modele: mod.value.trim(), categorie: cat.value, prix: Math.round(px), achatLe: achat.toISOString(), concession: conc.value.trim(), usage: usage.value.trim(),
+      conducteurs: cond.value.split(/\r?\n/).map(x => x.trim()).filter(Boolean), dansCharges: charges.checked, source: src.value };
+    if (pretSel.value) data.pretId = pretSel.value;
+    if (preuve) Object.assign(data, { facture: preuve, factureLe: nowISO() });
+    let ok;
+    if (v) {
+      const cur = vehNow(v.id);
+      if (!cur || cur.statut !== "service") { vehChanged(cur); return; }
+      if (!pretSel.value) data.pretId = undefined;
+      ok = await saveVeh(cur, data, "Véhicule modifié.");
+    } else {
+      const due = unpaidItems(en).reduce((s, x) => s + x.montant, 0);
+      Object.assign(data, { entrepriseId: en.id, entrepriseNom: en.nom, statut: "service", constats: [], createdAt: nowISO(), by: S.uid || null, byNom: S.agentName || "" });
+      if (due > 0 && Math.abs(Date.now() - achat.getTime()) <= 7 * 864e5) data.detteAchat = due;
+      if (data.source === "entreprise") data.declareLe = nowISO();
+      ok = await write(() => ref.set(data));
+      if (ok) toast(`Véhicule ${dossierNo("VS", ref.id)} enregistré.`);
+    }
+    if (!ok) { btn.disabled = false; return; }
+    const v2 = vehNow(ref.id) || Object.assign({ id: ref.id }, data);
+    if (!v && v2.source === "entreprise") autoPublish("vehicules", vehDoc(v2), "Certificat publié.");
+    if (pre.constat && !v) openConstat(v2); else openVeh(ref.id);
+  };
+  openDialog({
+    eyebrow: "Véhicules de société", title: v ? `Modifier ${vehNo(v)} · ${v.entrepriseNom}` : "Enregistrer un véhicule", wide: true,
+    body: [
+      !v ? h("div", { class: "field" }, h("label", { for: "vf-paste", text: "Message Discord (facultatif)" }), paste, pmsg) : null,
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "vf-ent", text: "Entreprise" }), ent), h("div", { class: "field" }, h("label", { for: "vf-plaque", text: "Plaque" }), pl)),
+      h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "vf-modele", text: "Modèle" }), mod), h("div", { class: "field" }, h("label", { for: "vf-cat", text: "Catégorie" }), cat),
+        h("div", { class: "field" }, h("label", { for: "vf-prix", text: "Prix payé" }), h("div", { class: "money", "data-cur": cur() }, prix))),
+      h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "vf-date", text: "Acheté le" }), date), h("div", { class: "field" }, h("label", { for: "vf-conc", text: "Concession" }), conc),
+        h("div", { class: "field" }, h("label", { for: "vf-pret", text: "Financement" }), pretSel)),
+      h("div", { class: "field" }, h("label", { for: "vf-usage", text: "Usage dans l’entreprise" }), usage),
+      h("div", { class: "field" }, h("label", { for: "vf-cond", text: "Conducteurs autorisés" }), cond),
+      !v || !v.facture ? sec("Facture de la concession", fac.el) : null,
+      h("div", { class: "row2", style: "align-items:end" }, h("label", { class: "switch", for: "vf-charges" }, charges, "Achat compté dans les charges déclarées"), h("div", { class: "field" }, h("label", { for: "vf-src", text: "Origine de l’information" }), src)),
+      h("p", { class: "hint", style: "margin:0", text: "Un véhicule payé par l’entreprise doit servir à son activité. Le guichet signale les achats sans rapport avec le secteur, trop chers pour le chiffre d’affaires, sans facture, faits pendant un impayé, ou un parc plus grand que l’effectif." }),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: v ? () => openVeh(v.id) : closeDialog, text: "Annuler" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ink small", type: "button", onclick: save, text: v ? "Enregistrer" : "Enregistrer le véhicule" })]
+  });
+  setTimeout(() => (v ? mod : e ? pl : ent).focus(), 30);
+}
+
+// Contrôle routier fait par la police, rapporté au guichet.
+function openConstat(v) {
+  if (!canAgent()) return;
+  const at = h("input", { id: "ct-at", type: "datetime-local" }); at.value = toLocalInput(new Date());
+  const lieu = h("input", { id: "ct-lieu", autocomplete: "off", placeholder: "Ex. : plage de Vespucci, à 23 h" });
+  const agent = h("input", { id: "ct-agent", autocomplete: "off", placeholder: "Agent de police (nom, matricule)" });
+  const cond = h("input", { id: "ct-cond", autocomplete: "off", placeholder: "Nom du conducteur" });
+  const type = h("select", { id: "ct-type" }, Object.entries(CONSTATS).map(([k, [l]]) => h("option", { value: k, text: l })));
+  const note = h("textarea", { id: "ct-note", rows: "3", placeholder: "Ce que la police a constaté : passagers, trajet, activité en cours…" });
+  const pf = proofFields("ct-pv", "Ou un lien vers le rapport de police");
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const hint = h("p", { class: "hint", style: "margin:0", "aria-live": "polite" });
+  const check = () => { const n = norm(cond.value); hint.textContent = !n ? "" : (v.conducteurs || []).some(x => norm(x) === n) ? "Conducteur autorisé par l’entreprise." : (v.conducteurs || []).length ? "Ce conducteur n’est pas dans la liste des conducteurs autorisés." : "L’entreprise n’a déclaré aucun conducteur."; };
+  cond.addEventListener("input", check);
+  const go = async ev => {
+    if (!agent.value.trim()) { err.textContent = "Indiquez l’agent de police qui a fait le contrôle."; agent.focus(); return; }
+    const cur = vehNow(v.id);
+    if (!cur || cur.statut !== "service") { vehChanged(cur); return; }
+    const b = ev.currentTarget; b.disabled = true;
+    const preuve = await pf.read(`vehicules/${v.id}`);
+    const x = { id: shortId(), at: at.value ? new Date(at.value).toISOString() : nowISO(), lieu: lieu.value.trim(), agent: agent.value.trim(), conducteur: cond.value.trim(), type: type.value, note: note.value.trim(), saisiParNom: S.agentName || "" };
+    if (preuve) x.preuve = preuve;
+    S.forceWrite = "vehicules/" + v.id;
+    if (await saveVeh(cur, { constats: (cur.constats || []).concat([x]) }, x.type === "conforme" ? "Contrôle enregistré : usage conforme." : "Contrôle défavorable enregistré.")) openVeh(v.id);
+    else b.disabled = false;
+  };
+  openDialog({
+    eyebrow: `Véhicule ${vehNo(v)} · ${v.entrepriseNom}`, title: `Contrôle de police · ${v.plaque}`,
+    body: [h("p", { style: "margin:0", text: `${v.modele || "Véhicule"} de ${v.entrepriseNom}. Conducteurs autorisés : ${(v.conducteurs || []).join(", ") || "aucun déclaré"}. Usage : ${v.usage || "non précisé"}.` }),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ct-at", text: "Date et heure" }), at), h("div", { class: "field" }, h("label", { for: "ct-lieu", text: "Lieu" }), lieu)),
+      h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "ct-agent", text: "Agent de police" }), agent), h("div", { class: "field" }, h("label", { for: "ct-cond", text: "Conducteur" }), cond),
+        h("div", { class: "field" }, h("label", { for: "ct-type", text: "Constat" }), type)), hint,
+      h("div", { class: "field" }, h("label", { for: "ct-note", text: "Observations" }), note), pf.el, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: go, text: "Enregistrer le contrôle" })]
+  });
+}
+function openVente(v) {
+  const at = h("input", { id: "vt-date", type: "date" }); at.value = toLocalInput(new Date()).slice(0, 10);
+  const px = h("input", { id: "vt-prix", type: "number", min: "0", step: "100", inputmode: "numeric", placeholder: "0" });
+  const ach = h("input", { id: "vt-ach", autocomplete: "off", placeholder: "Concession, particulier…" });
+  const dg = h("input", { id: "vt-dir", type: "checkbox" });
+  const ca = h("input", { id: "vt-ca", type: "checkbox" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = async ev => {
+    if (px.value === "" || !(Number(px.value) >= 0)) { err.textContent = "Indiquez le prix de vente."; px.focus(); return; }
+    const cur = vehNow(v.id);
+    if (!cur || cur.statut !== "service") { vehChanged(cur); return; }
+    const b = ev.currentTarget; b.disabled = true;
+    const vente = { at: new Date((at.value || toLocalInput(new Date()).slice(0, 10)) + "T12:00:00").toISOString(), prix: Math.round(Number(px.value)), acheteur: ach.value.trim(), dirigeant: dg.checked, dansCA: ca.checked, parNom: S.agentName || "" };
+    if (await saveVeh(cur, { statut: "vendu", vente }, "Vente enregistrée.")) openVeh(v.id); else b.disabled = false;
+  };
+  openDialog({ eyebrow: `Véhicule ${vehNo(v)} · ${v.entrepriseNom}`, title: `Vente · ${v.plaque}`,
+    body: [h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "vt-date", text: "Vendu le" }), at), h("div", { class: "field" }, h("label", { for: "vt-prix", text: "Prix de vente" }), h("div", { class: "money", "data-cur": cur() }, px)),
+      h("div", { class: "field" }, h("label", { for: "vt-ach", text: "Acheteur" }), ach)),
+      h("label", { class: "switch", for: "vt-dir" }, dg, "Acheteur : le dirigeant ou un proche"),
+      h("label", { class: "switch", for: "vt-ca" }, ca, "Prix de vente compté dans le chiffre d’affaires déclaré"),
+      h("p", { class: "hint", style: "margin:0", text: `Prix d’achat : ${money(v.prix)}. Vendre à bas prix au dirigeant un véhicule payé par l’entreprise est aussi un abus de biens sociaux.` }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: go, text: "Enregistrer la vente" })] });
+}
+// Direction : l'achat se justifie, les signaux vus ne reviennent plus.
+function openValider(v) {
+  const act = vehActive(v);
+  const t = h("textarea", { id: "vv-motif", rows: "3", placeholder: "Ex. : sportive de démonstration pour une concession, facture vérifiée…" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: `Véhicule ${vehNo(v)} · ${v.entrepriseNom}`, title: "Valider l’affectation · " + v.plaque,
+    body: [h("div", { class: "reasons" }, act.map(s => h("span", { class: "reason", text: s.t }))), h("div", { class: "field" }, h("label", { for: "vv-motif", text: "Pourquoi cet achat se justifie" }), t), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ink small", type: "button", onclick: async ev => {
+        if (!t.value.trim()) { err.textContent = "Indiquez le motif."; t.focus(); return; }
+        const cur = vehNow(v.id);
+        if (!cur || !(cur.statut === "service" || cur.statut === "vendu")) { vehChanged(cur); return; }
+        const b = ev.currentTarget; b.disabled = true;
+        const keys = [...new Set(((cur.validation && cur.validation.keys) || []).concat(vehActive(cur).map(s => s.k)))];
+        if (await saveVeh(cur, { validation: { at: nowISO(), byNom: S.agentName || "", motif: t.value.trim(), keys } }, "Affectation validée.")) openVeh(v.id); else b.disabled = false;
+      }, text: "Valider" })] });
+}
+// Direction : le véhicule sert au dirigeant. Il perd sa qualité de véhicule de société.
+function openRequalif(v) {
+  const e = entOf(v), act = vehActive(v);
+  const k = keyOf(new Date(v.achatLe || v.createdAt)), d = v.dansCharges ? periodDecl(e, k) : null;
+  const motif = h("textarea", { id: "rq-motif", rows: "4" });
+  motif.value = (act.length ? act : vehSignals(v)).map(s => s.t).join(". ") + (act.length || vehSignals(v).length ? "." : "");
+  const mt = h("input", { id: "rq-montant", type: "number", min: "0", step: "100", inputmode: "numeric" }); mt.value = String(v.prix || 0);
+  const dl = h("input", { id: "rq-delai", type: "number", min: "1", max: "30", step: "1" }); dl.value = "7";
+  const dejaCtrl = S.controles.find(c => c.vehiculeId === v.id && c.statut !== "sans_suite") || null;
+  const cc = h("input", { id: "rq-ctrl", type: "checkbox", disabled: !d || !!dejaCtrl }); cc.checked = !!d && !dejaCtrl && !ctrlOf(d);
+  const q = h("select", { id: "rq-qualif" }, h("option", { value: "manquement", text: QUALIF.manquement[0] }), h("option", { value: "fraude", text: QUALIF.fraude[0] }));
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = async ev => {
+    if (!motif.value.trim()) { err.textContent = "Indiquez les motifs."; motif.focus(); return; }
+    const cur = vehNow(v.id);
+    if (!cur || !(cur.statut === "service" || cur.statut === "vendu")) { vehChanged(cur); return; }
+    const b = ev.currentTarget; b.disabled = true;
+    const montant = Math.max(0, Math.round(Number(mt.value) || 0)), jours = Math.max(1, Math.min(30, Math.round(Number(dl.value) || 7)));
+    const rq = { at: nowISO(), byNom: S.agentName || "", motif: motif.value.trim(), montant, avant: new Date(Date.now() + jours * 864e5).toISOString(), statutAvant: cur.statut };
+    if (!(await saveVeh(cur, { statut: "requalifie", requalification: rq }, "Véhicule requalifié."))) { b.disabled = false; return; }
+    const v2 = vehNow(v.id) || Object.assign({}, cur, { statut: "requalifie", requalification: rq });
+    if (hookFor("entreprises")) autoPublish("vehicules", requalifDoc(v2), "Requalification notifiée.");
+    notifyPolice(`**Véhicule requalifié** · \`${v2.plaque}\` (${v2.modele || "véhicule"}) de ${v2.entrepriseNom} n’est plus un véhicule de société : il sert à l’usage personnel du dirigeant.`);
+    if (cc.checked && d) vehControle(v2, q.value); else openVeh(v.id);
+  };
+  openDialog({ eyebrow: `Véhicule ${vehNo(v)} · ${v.entrepriseNom}`, title: "Requalifier en véhicule personnel · " + v.plaque, wide: true,
+    body: [h("p", { style: "margin:0", text: "Le véhicule a été payé par l’entreprise mais sert au dirigeant. Il perd sa qualité de véhicule de société, le dirigeant rembourse son prix à l’entreprise, et la dépense sort du résultat déductible." }),
+      h("div", { class: "field" }, h("label", { for: "rq-motif", text: "Motifs" }), motif),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "rq-montant", text: "Somme que le dirigeant rembourse à l’entreprise" }), h("div", { class: "money", "data-cur": cur() }, mt)),
+        h("div", { class: "field" }, h("label", { for: "rq-delai", text: "Délai (jours)" }), dl)),
+      h("label", { class: "switch", for: "rq-ctrl" }, cc, dejaCtrl ? `Contrôle fiscal déjà ouvert pour ce véhicule : ${dossierNo("CF", dejaCtrl.id)}` : d ? `Ouvrir un contrôle fiscal pour réintégrer ${money(v.prix)} dans le résultat de ${periodPlain(k).toLowerCase()}` : v.dansCharges ? `Contrôle fiscal impossible : aucune déclaration pour ${periodPlain(k).toLowerCase()}` : "Pas de contrôle fiscal : l’achat n’est pas dans les charges déclarées"),
+      d ? h("div", { class: "field" }, h("label", { for: "rq-qualif", text: "Qualification proposée" }), q) : null,
+      h("p", { class: "hint", style: "margin:0", text: "La requalification part sur Discord (salon des entreprises) et la police est prévenue dans son salon. Sans remboursement dans le délai, l’attestation de régularité est refusée, et vous pouvez faire saisir le véhicule ou transmettre le dossier à la justice." }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Retour" }), h("span", { class: "spacer" }), h("button", { class: "btn danger small", type: "button", onclick: go, text: "Requalifier" })] });
+}
+// Contrôle fiscal prérempli : le prix du véhicule sort des charges de la période d'achat.
+function vehControle(v, qualif) {
+  const e = entOf(v), k = keyOf(new Date(v.achatLe || v.createdAt)), d = periodDecl(e, k);
+  if (!d) { toast(`Aucune déclaration pour ${periodPlain(k).toLowerCase()} : rien à rectifier.`, true); openVeh(v.id); return; }
+  const deja = S.controles.find(c => c.vehiculeId === v.id && c.statut !== "sans_suite");
+  if (deja) { toast(`Ce véhicule a déjà son contrôle fiscal : ${dossierNo("CF", deja.id)}.`, true); openControle(deja.id); return; }
+  const ch = Number(d.charges) || 0;
+  newControle(e, [d.id], { origine: "vehicules", vehiculeId: v.id, qualification: qualif || "manquement",
+    rectifications: { [d.id]: { charges: Math.max(0, ch - (Number(v.prix) || 0)), motif: `Véhicule ${v.plaque} réintégré (usage personnel du dirigeant)` } },
+    motif: `Véhicule ${v.modele || ""} ${v.plaque} (${vehNo(v)}) payé ${money(v.prix)} par l’entreprise et compté dans ses charges de ${periodPlain(k).toLowerCase()}, alors qu’il sert à l’usage personnel du dirigeant : la dépense n’est pas déductible (art. 39-1 du CGI) et constitue un avantage occulte (art. 111 c du CGI).` });
+}
+function openRembVeh(v) {
+  const at = h("input", { id: "rb-at", type: "datetime-local" }); at.value = toLocalInput(new Date());
+  const pf = proofFields("rb-pv", "Ou un lien : capture du compte de l’entreprise");
+  const go = async ev => {
+    const cur = vehNow(v.id);
+    if (!cur || cur.statut !== "requalifie" || (cur.requalification || {}).rembourseLe) { vehChanged(cur); return; }
+    const b = ev.currentTarget; b.disabled = true;
+    const preuve = await pf.read(`vehicules/${v.id}`);
+    const rq = Object.assign({}, cur.requalification, { rembourseLe: at.value ? new Date(at.value).toISOString() : nowISO(), rembourseParNom: S.agentName || "" });
+    if (preuve) rq.rembourseePreuve = preuve;
+    if (await saveVeh(cur, { requalification: rq }, "Remboursement constaté.")) openVeh(v.id); else b.disabled = false;
+  };
+  openDialog({ eyebrow: `Véhicule ${vehNo(v)} · ${v.entrepriseNom}`, title: "Remboursement par le dirigeant · " + v.plaque,
+    body: [h("p", { style: "margin:0", text: `Le dirigeant a reversé ${money((v.requalification || {}).montant)} sur le compte de l’entreprise. Vérifiez-le (relevé de compte, capture du virement).` }),
+      h("div", { class: "field" }, h("label", { for: "rb-at", text: "Constaté le" }), at), pf.el],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: go, text: "Enregistrer" })] });
+}
+function openVehSaisi(v) {
+  const t = h("input", { id: "vs-motif", autocomplete: "off", placeholder: "Ex. : saisie-vente SA-…, confiscation ordonnée par le tribunal" });
+  openDialog({ eyebrow: `Véhicule ${vehNo(v)} · ${v.entrepriseNom}`, title: "Véhicule saisi · " + v.plaque,
+    body: [h("div", { class: "field" }, h("label", { for: "vs-motif", text: "Saisie ou confiscation" }), t)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Annuler" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ink small", type: "button", onclick: async ev => {
+        const cur = vehNow(v.id);
+        if (!cur || cur.statut !== "requalifie") { vehChanged(cur); return; }
+        const b = ev.currentTarget; b.disabled = true;
+        if (await saveVeh(cur, { statut: "saisi", saisiLe: nowISO(), saisiMotif: t.value.trim(), saisiParNom: S.agentName || "" }, "Véhicule marqué saisi.")) openVeh(v.id); else b.disabled = false;
+      }, text: "Enregistrer" })] });
+}
+
+// Registre envoyé dans le salon de la police : elle y cherche une plaque.
+async function publishRegistreVeh() {
+  const list = (S.vehicules || []).filter(v => v.statut === "service" || v.statut === "requalifie").sort((a, b) => String(a.entrepriseNom).localeCompare(String(b.entrepriseNom), "fr") || String(a.plaque).localeCompare(String(b.plaque)));
+  if (!list.length) { toast("Aucun véhicule au registre.", true); return false; }
+  const lines = list.map(v => `\`${v.plaque}\` · ${v.modele || "véhicule"} · ${v.entrepriseNom}${v.statut === "requalifie" ? " · **requalifié : véhicule personnel du dirigeant**" : (v.conducteurs || []).length ? " · " + v.conducteurs.join(", ") : ""}`);
+  const parts = splitMessage(lines, `**Registre des véhicules de société** · ${fmtDateTime(new Date())}`, "— Préfecture de police · Direction des impôts et cotisations");
+  for (const p of parts) { const r = await postDiscord("police", { content: p, mentions: [] }); if (!r.ok) { toast("Discord a refusé l’envoi : " + r.error + ".", true); return false; } }
+  toast(`Registre publié : ${list.length} véhicule${plural(list.length)}.`);
+  return true;
+}
+
+// Onglet Véhicules
+function renderVehicules() {
+  if (S.tab !== "vehicules") return;
+  const box = $("#veh-list");
+  if (!S.connected || !S.loaded.has("vehicules")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.vehicules || []).slice().sort((a, b) => String(b.achatLe || b.createdAt).localeCompare(String(a.achatLe || a.createdAt)));
+  const serv = all.filter(v => v.statut === "service"), exam = all.filter(v => vehActive(v).length);
+  const rq = all.filter(v => v.statut === "requalifie"), fact = serv.filter(v => !v.facture);
+  const since = Date.now() - 30 * 864e5, bad = all.flatMap(v => (v.constats || []).filter(x => x.type !== "conforme" && new Date(x.at).getTime() >= since));
+  const dus = rq.filter(v => !(v.requalification || {}).rembourseLe).reduce((t, v) => t + (Number((v.requalification || {}).montant) || 0), 0);
+  setKpi("vk-service", String(serv.length), `${new Set(serv.map(v => v.entrepriseId)).size} entreprise${plural(new Set(serv.map(v => v.entrepriseId)).size)}`);
+  setKpi("vk-valeur", money(serv.reduce((t, v) => t + (Number(v.prix) || 0), 0)), "payés par les entreprises");
+  setKpi("vk-exam", String(exam.length), exam.length ? "achats à examiner" : "rien à examiner", exam.some(v => vehActive(v).some(s => s.grave)) ? "bad" : exam.length ? "warn" : "");
+  setKpi("vk-fact", String(fact.length), "factures attendues", fact.some(v => vehActive(v).some(s => s.k === "facture")) ? "warn" : "");
+  setKpi("vk-constat", String(bad.length), "contrôles défavorables (30 jours)", bad.length ? "bad" : "");
+  setKpi("vk-rq", String(rq.length), dus > 0 ? `${money(dus)} à rembourser` : "véhicules requalifiés", rq.some(vehRembRetard) ? "bad" : "");
+  const F = { exam, service: serv, requalifie: rq.concat(all.filter(v => v.statut === "saisi")), vendu: all.filter(v => v.statut === "vendu"), tout: all };
+  setSegCounts($("#seg-veh"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), S.vehFilter || "exam");
+  $("#veh-new").hidden = !canAgent();
+  $("#veh-pub").hidden = !(canAgent() && S.discord && S.discord.webhooks && S.discord.webhooks.police);
+  const list = F[S.vehFilter || "exam"] || all;
+  fill(box, list.length ? h("ul", { class: "ent-list" }, list.slice(0, 300).map(v => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openVeh(v.id), text: `${v.plaque} · ${v.modele || "Véhicule"}` }),
+      h("span", { class: "meta", text: `${v.entrepriseNom} · ${vehCat(v)[0].toLowerCase()} · ${money(v.prix)}${v.achatLe ? " · acheté le " + fmtDate(new Date(v.achatLe)) : ""}${vehActive(v).length ? " · " + vehActive(v)[0].t : ""}` })),
+    chip(vehState(v)),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Ouvrir" })))))
+    : h("div", { class: "empty", text: { exam: "Aucun véhicule à examiner.", service: "Aucun véhicule de société en service.", requalifie: "Aucun véhicule requalifié.", vendu: "Aucun véhicule vendu.", tout: "Aucun véhicule au registre pour l’instant." }[S.vehFilter || "exam"] }));
+  drawPlateCheck();
+}
+// Vérifier une plaque : ce que la police demande au guichet.
+function drawPlateCheck() {
+  const out = $("#veh-check-out"), q = normPlaque($("#veh-check").value);
+  if (!out) return;
+  if (!q) { fill(out); return; }
+  const hits = vehByPlaque(q);
+  if (!hits.length) {
+    fill(out, h("div", { class: "notice", style: "margin:8px 0 0;border-left-color:var(--warn)" }, h("div", { style: "flex:1" },
+      h("strong", { text: `Aucun véhicule de société ne porte la plaque ${q}. ` }), "S’il roule pour une entreprise, son achat n’a pas été déclaré."),
+      canAgent() ? h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openVehForm(null, null, { plaque: q, source: "police", constat: true }), text: "Enregistrer ce véhicule" })) : null));
+    return;
+  }
+  const v = hits[0], e = entOf(v), st = vehState(v);
+  fill(out, h("div", { class: "notice", style: `margin:8px 0 0;border-left-color:var(--${st[1] === "ok" || st[1] === "info" ? "ok" : st[1] === "muted" ? "rule" : st[1]})` }, h("div", { style: "flex:1" },
+    h("strong", { text: `${v.plaque} · ${v.modele || "véhicule"} · ${e.nom || v.entrepriseNom}. ` }),
+    v.statut === "service" ? `Véhicule de société. Conducteurs autorisés : ${(v.conducteurs || []).join(", ") || "aucun déclaré"}. Usage : ${v.usage || "non précisé"}.`
+      : v.statut === "requalifie" ? "Requalifié : ce n’est plus un véhicule de société, il sert au dirigeant." : v.statut === "vendu" ? `Vendu le ${fmtDate(new Date((v.vente || {}).at))}${(v.vente || {}).acheteur ? " à " + v.vente.acheteur : ""} : n’appartient plus à l’entreprise.` : "Saisi.",
+    " ", chip(st)),
+    h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openVeh(v.id), text: "Ouvrir" }),
+      canAgent() && v.statut === "service" ? h("button", { class: "btn ghost small", type: "button", onclick: () => openConstat(v), text: "Contrôle de police" }) : null)));
+}
+$("#seg-veh").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.vehFilter = b.dataset.f; renderVehicules(); });
+$("#veh-new").addEventListener("click", () => openVehForm(null));
+$("#veh-pub").addEventListener("click", async ev => { const b = ev.currentTarget; b.disabled = true; await publishRegistreVeh(); b.disabled = false; });
+$("#veh-check").addEventListener("input", drawPlateCheck);
+// Fiche de l'entreprise : ses véhicules.
+function vehiculesSection(e) {
+  if (!vcfg().actif) return null;
+  const vs = e.id ? vehsOf(e) : [];
+  if (!vs.length && !canAgent()) return null;
+  const nb = nbSalariesDe(e), serv = vs.filter(v => v.statut === "service");
+  return sec("Véhicules de société",
+    vs.length ? h("p", { class: "hint", style: "margin:0 0 4px", text: `${serv.length} en service pour ${nb == null ? "un effectif inconnu" : nb + " salarié" + plural(nb)} · ${money(serv.reduce((t, v) => t + (Number(v.prix) || 0), 0))} payés par l’entreprise.` }) : null,
+    vs.length ? h("ul", { class: "ent-list" }, vs.map(v => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openVeh(v.id), text: `${v.plaque} · ${v.modele || "Véhicule"}` }), h("span", { class: "meta", text: `${vehCat(v)[0].toLowerCase()} · ${money(v.prix)}${vehActive(v).length ? " · " + vehActive(v).length + " point" + plural(vehActive(v).length) + " à examiner" : ""}` })),
+      chip(vehState(v)), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucun véhicule au registre." }),
+    canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openVehForm(e), text: "Enregistrer un véhicule" }) : null);
+}
+
+// Réglages
+function renderVehSettings(force) {
+  const box = $("#card-veh");
+  if (!box || (!force && (S.vehDirty || box.contains(document.activeElement)))) return;
+  const c = vcfg();
+  $("#vh-actif").checked = !!c.actif;
+  $("#vh-fact").value = String(c.delaiFacture);
+  $("#vh-part").value = String(c.partCA);
+  $("#vh-marge").value = String(c.parcMarge);
+  $("#vh-loisir").value = String(c.secteursLoisir || "");
+}
+$("#card-veh").addEventListener("input", () => { S.vehDirty = true; $("#vh-msg").textContent = "Modifications non enregistrées."; });
+$("#vh-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const v = { actif: $("#vh-actif").checked, delaiFacture: Math.max(1, Math.min(30, Math.round(Number($("#vh-fact").value) || 3))), partCA: Math.max(0, Math.min(1000, Math.round(Number($("#vh-part").value) || 0))),
+    parcMarge: Math.max(0, Math.min(20, Math.round(Number($("#vh-marge").value) || 0))), secteursLoisir: $("#vh-loisir").value.trim() };
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { vehicules: v, updatedAt: nowISO() })));
+  if (ok) { S.vehDirty = false; $("#vh-msg").textContent = "Réglages enregistrés."; toast("Véhicules de société : réglages enregistrés."); renderVehSettings(true); }
+});
+
 /* ---------- Travail à plusieurs, en direct ---------- */
 // Chaque changement fait par un autre agent arrive tout seul : listes, tableaux de bord et
 // fenêtre ouverte se mettent à jour. Si vous étiez en train d'écrire dans cette fenêtre, rien
@@ -7611,6 +8366,10 @@ const pretLive = (kind, label, ok, again) => p => p && p.id ? { key: `pret-${kin
 refuserPret = liveView(refuserPret, pretLive("ref", "Refus du prêt", c => c.statut === "demande", c => refuserPret(c)));
 exigerPret = liveView(exigerPret, pretLive("exig", "Exigibilité du prêt", c => c.statut === "en_cours" && !c.exigibleLe, c => exigerPret(c)));
 openPretForm = liveView(openPretForm, (e, demande) => demande ? pretLive("acc", "Examen du prêt", c => c.statut === "demande", c => openPretForm(entOf(c), c))(demande) : null);
+openVeh = liveView(openVeh, id => { const v = vehNow(id); return v ? { key: "veh:" + id, label: `Véhicule ${v.plaque} · ${v.entrepriseNom}`,
+  match: c => c.path === "vehicules/" + id || entMatch(v.entrepriseId)(c), reopen: () => vehNow(id) ? openVeh(id) : gone() } : null; });
+openVehForm = liveView(openVehForm, (e, v) => v && v.id ? { key: "veh-edit:" + v.id, label: `Modification du véhicule ${v.plaque}`, match: c => c.path === "vehicules/" + v.id,
+  reopen: () => { const cur = vehNow(v.id); if (!cur) gone(); else if (cur.statut === "service") openVehForm(entOf(cur), cur); else vehChanged(cur); } } : null);
 openCloture = liveView(openCloture, key => ({ key: "clo:" + key, label: "Bilan · " + periodPlain(key),
   match: c => isCfg(c) || ["clotures", "declarations", "decisions", "echeanciers", "entreprises"].includes(c.path.split("/")[0]), reopen: () => openCloture(key) }));
 startEditDecl = (base => function (...a) { const r = base.apply(this, a); if (S.editDecl) S.editSince = Date.now(); setView(); return r; })(startEditDecl);
@@ -7840,6 +8599,7 @@ function searchIndex() {
   for (const r of S.relances) push(isMed(r) ? "Mise en demeure" : "Relance", rlNo(r), `${rlNo(r)} · ${r.entrepriseNom}`, `${rlLabel(r)} · envoyée le ${fmtDate(new Date(r.at))}`, "", () => showDocImage(relanceDoc(r)), r.at);
   for (const s of S.saisies) push("Saisie", dossierNo("SA", s.id), `${dossierNo("SA", s.id)} · ${s.entrepriseNom}`, `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)} · ${(SSTAT[s.statut] || SSTAT.notifiee)[0]}`, s.tiers, () => openSaisieDetail(s.id), s.at);
   for (const p of S.prets || []) push("Prêt", pretNo(p), `${pretNo(p)} · ${p.entrepriseNom}`, `${(pretState(p))[0]} · ${money(p.montant)}${pretVerse(p) ? " · reste " + money(pretReste(p)) : ""}`, [PRET_OBJETS[p.objet], p.precision].join(" "), () => openPret(p.id), p.at || p.demandeLe);
+  for (const v of S.vehicules || []) push("Véhicule", normPlaque(v.plaque), `${v.plaque} · ${v.modele || "Véhicule"}`, `${v.entrepriseNom} · ${vehState(v)[0]} · ${vehNo(v)}`, [vehNo(v), vehCat(v)[0], (v.conducteurs || []).join(" "), v.concession].join(" "), () => openVeh(v.id), v.achatLe || v.createdAt);
   for (const r of S.releves) push("Relevé", dossierNo("RC", r.id), `${dossierNo("RC", r.id)} · ${r.entrepriseNom}`, `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}`, r.note, () => openFiche(entOf(r)), r.at);
   for (const x of S.soupcons) push("Soupçon", dossierNo("DS", x.id), `${dossierNo("DS", x.id)} · ${x.entrepriseNom}`, `Déclaration de soupçon · ${money(x.montant)}`, "", () => showDocImage(soupconDoc(x)), x.at);
   for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
@@ -7977,7 +8737,7 @@ function showTab(name) {
   S.tab = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules"].includes(name)) schedule();
 }
 $("nav.tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } } });
 $("nav.tabs").addEventListener("keydown", e => {
@@ -7993,7 +8753,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "prets", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "prets", "vehicules", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();

@@ -26,6 +26,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v6_direct.sql` : le journal en direct, la présence des agents et les rectificatives saisies par l’Inspection
 - `supabase/v7_blanchiment.sql` : les relevés de compte faits par l’Inspection
 - `supabase/v8_prets.sql` : les demandes de prêt enregistrées par l’Inspection
+- `supabase/v9_vehicules.sql` : le registre des véhicules de société tenu par l’Inspection
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -45,7 +46,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte) et `supabase/v8_prets.sql` (demandes de prêt). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt) et `supabase/v9_vehicules.sql` (véhicules de société). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -139,7 +140,7 @@ Une alerte n’est pas une preuve : c’est une raison de faire un contrôle en 
 
 1. Si ce n’est pas déjà fait, exécutez `supabase/v3_discord.sql` dans **SQL Editor** (voir la mise en place, étape 2).
 2. Dans Discord, pour chaque salon : **Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l’URL du webhook**.
-3. Dans le guichet, **Réglages → Discord** : collez l’adresse du salon des entreprises, du salon des services publics et, si vous voulez, d’un salon des relances et d’un salon de la justice (avec le rôle à mentionner, par exemple `<@&ID du rôle des magistrats>`). Cochez ce qui doit partir tout seul, puis **Enregistrer** et **Envoyer un message d’essai**.
+3. Dans le guichet, **Réglages → Discord** : collez l’adresse du salon des entreprises, du salon des services publics et, si vous voulez, d’un salon des relances, d’un salon de la justice (avec le rôle à mentionner, par exemple `<@&ID du rôle des magistrats>`) et d’un salon de la police (certificats des véhicules de société, registre des plaques, requalifications, avec le rôle de la police à mentionner). Cochez ce qui doit partir tout seul, puis **Enregistrer** et **Envoyer un message d’essai**.
 4. Pour mentionner un patron : **Modifier l’entreprise → ID Discord du patron** (clic droit sur le membre → Copier l’identifiant, avec le mode développeur activé).
 5. Pour mentionner un service : **Réglages → Services publics**, colonne « Rôle Discord à mentionner », au format `<@&ID du rôle>` (clic droit sur le rôle → Copier l’identifiant).
 
@@ -149,7 +150,7 @@ Une entreprise est attendue à partir du début du suivi, ou de son **début d�
 
 ## Suivi dans Google Sheets
 
-La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
+La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société et les contrôles de police. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
@@ -238,6 +239,20 @@ La Préfecture peut prêter l’argent du Trésor à une entreprise pour un obje
 Une échéance en retard suit le recouvrement habituel : impayés, relance, mise en demeure, saisie, dossier de justice. Elle bloque l’attestation de régularité. Le versement du prêt et ses remboursements entrent dans la surveillance des comptes : l’argent prêté n’est pas un enrichissement inexpliqué.
 
 L’Inspection peut enregistrer une demande et l’annuler tant qu’elle n’est pas accordée. Accorder, refuser, encaisser et exiger le remboursement sont réservés à la Direction, et la base l’impose elle-même (`supabase/v8_prets.sql`). Si un autre agent accorde, refuse ou annule la demande pendant que vous l’examinez, votre clic est arrêté et la fenêtre affiche le nouvel état du prêt.
+
+## Véhicules de société (abus de biens sociaux)
+
+Les entreprises achètent leurs véhicules en concession avec l’argent de leur compte. Un véhicule payé par l’entreprise mais réservé au dirigeant est un **abus de biens sociaux** (art. L241-3 et L242-6 du Code de commerce : 5 ans d’emprisonnement et 375 000 € d’amende). Fiscalement, la dépense n’est pas une charge de l’entreprise (art. 39-1 du CGI) et l’avantage est imposé comme un revenu distribué (art. 111 c du CGI). Onglet **Véhicules**, ou la fiche de l’entreprise.
+
+1. **La déclaration d’achat** : le patron poste le modèle « Achat d’un véhicule de société » (onglet Modèles Discord) avec la facture de la concession. L’agent colle le message dans **Enregistrer un véhicule** : plaque, modèle, catégorie, prix, concession, date, usage, conducteurs autorisés, facture. Il indique si l’achat est compté dans les charges déclarées et s’il a été financé par un prêt de la Préfecture. Le **certificat d’affectation** part dans le salon de la police.
+2. **La vérification par la police** : la case **Vérifier une plaque** (ou la recherche, Ctrl+K) dit à quelle entreprise appartient le véhicule, qui peut le conduire et à quoi il sert. **Publier le registre pour la police** envoie la liste des plaques dans son salon, où la police peut chercher une plaque. Une plaque inconnue qui roule pour une entreprise est un achat non déclaré : le guichet propose de l’enregistrer.
+3. **Le contrôle de police** : l’agent saisit ce que la police a constaté (date, lieu, agent, conducteur, usage conforme, usage personnel, conducteur non autorisé, capture du rapport). Le guichet signale un conducteur qui n’est pas dans la liste.
+4. **Les points à examiner** : achat non déclaré par l’entreprise, sportive, voiture de prestige, hélicoptère ou bateau pour un secteur qui n’en a pas l’usage, prix supérieur à la moitié du chiffre d’affaires des quatre dernières périodes, facture absente après 3 jours, achat fait pendant un impayé, contrôle de police défavorable, plus de voitures que de salariés (une de plus est tolérée), revente au dirigeant à moins de la moitié du prix. Réglages → Entreprises → Véhicules de société : délais, seuils et secteurs autorisés à rouler en véhicule de loisir.
+5. **Valider l’affectation** (Direction) : l’achat se justifie, avec un motif. La validation ne couvre que ce qu’elle a vu : si le véhicule change ensuite (catégorie, prix) ou si la police fait un nouveau constat, il repasse « À examiner ».
+6. **Requalifier** (Direction) : le véhicule devient un véhicule personnel du dirigeant. Le dirigeant rembourse son prix à l’entreprise dans un délai (7 jours par défaut). La requalification part sur Discord et la police est prévenue. Si l’achat était dans les charges, un **contrôle fiscal** prérempli retire son prix des charges de la période (manquement délibéré 40 % ou manœuvres frauduleuses 80 %).
+7. **Les suites** : sans remboursement dans le délai, l’attestation de régularité est refusée et le dossier de justice propose la qualification **abus de biens sociaux** et la **confiscation des véhicules**. Le PDF ajoute une section « Véhicules de l’entreprise ». **Remboursement constaté** et **Véhicule saisi** ferment le dossier.
+
+Un prêt « achat de véhicule » est justifié par le véhicule enregistré avec ce prêt et sa facture. Dans la surveillance des comptes, un achat payé par le compte mais absent des charges explique la baisse du solde, et le remboursement du dirigeant explique la hausse. L’Inspection enregistre les véhicules, leurs factures, les contrôles de police et les ventes. Valider, requalifier, marquer saisi et retirer du registre sont réservés à la Direction, et la base l’impose elle-même (`supabase/v9_vehicules.sql`) : l’Inspection ne peut ni effacer un contrôle de police, ni revenir sur une vente. Pour publier automatiquement certificats et requalifications, cochez « Véhicules de société » dans Réglages → Discord.
 
 ## Cohérence des dossiers
 

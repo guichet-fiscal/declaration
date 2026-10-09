@@ -175,8 +175,23 @@ function actualiser() {
       ech.forEach(x => lignesPret.push([no("PR", r.id), p.entrepriseNom, x.n + "/" + ech.length, date(x.date), x.montant, x.capital || 0, x.interets || 0, x.payee ? (x.anticipe ? "Payée (anticipé)" : "Payée") : "À payer", date(x.paidAt), x.note || ""]));
       return [no("PR", r.id), p.entrepriseNom, OBJETS_PRET[p.objet] || p.objet || "", p.precision || "", p.montant || 0, (p.taux || 0) / 100, ech.length, tot, verse ? paye : 0, verse ? Math.max(0, tot - paye) : 0,
         STATUTS_PRET[p.statut] || p.statut, date(p.demandeLe), date(p.verseLe), p.verseParNom || p.demandeParNom || "",
-        p.justificatif ? (p.justificatif.preuve && p.justificatif.preuve.type === "lien" ? p.justificatif.preuve.url : "Fourni") : p.justifRequis ? "Attendu" : "Non exigé",
+        p.justificatif ? (p.justificatif.preuve && p.justificatif.preuve.type === "lien" ? p.justificatif.preuve.url : "Fourni")
+          : p.objet === "vehicule" && col("vehicules").some(x => x.data.pretId === r.id && x.data.facture && (x.data.statut === "service" || x.data.statut === "vendu")) ? "Véhicule au registre"
+          : p.justifRequis ? "Attendu" : "Non exigé",
         date(p.exigibleLe), p.exigibleMotif || p.refusMotif || p.motifDemande || ""]; }));
+  const CATS_VEH = { utilitaire: "Utilitaire ou fourgon", poids_lourd: "Poids lourd ou engin", service: "Véhicule de service", berline: "Berline ou citadine", suv: "SUV ou 4×4", moto: "Moto ou deux-roues", sportive: "Sportive", prestige: "Prestige ou supercar", aerien: "Hélicoptère ou avion", nautique: "Bateau" };
+  const STATUTS_VEH = { service: "En service", vendu: "Vendu", requalifie: "Requalifié (véhicule personnel du dirigeant)", saisi: "Saisi" };
+  const CONSTATS_VEH = { conforme: "Usage conforme", perso: "Usage personnel", conducteur: "Conducteur non autorisé", autre: "Autre irrégularité" };
+  const lignesConstat = [];
+  ecrire("Véhicules", ["N°", "Plaque", "Entreprise", "Modèle", "Catégorie", "Prix", "Acheté le", "Concession", "Usage", "Conducteurs autorisés", "Facture", "Dans les charges", "Déclaré par", "Statut", "Validé par la Direction", "Requalifié le", "À rembourser", "Remboursé le", "Vendu le", "Prix de vente", "Acheteur"],
+    col("vehicules").map(r => { const v = r.data, rq = v.requalification || {}, vt = v.vente || {};
+      (v.constats || []).forEach(x => lignesConstat.push([no("VS", r.id), v.plaque, v.entrepriseNom, date(x.at), x.lieu || "", x.agent || "", x.conducteur || "", CONSTATS_VEH[x.type] || x.type || "", x.note || ""]));
+      return [no("VS", r.id), v.plaque, v.entrepriseNom, v.modele || "", CATS_VEH[v.categorie] || v.categorie || "", v.prix || 0, date(v.achatLe), v.concession || "", v.usage || "", (v.conducteurs || []).join(", "),
+        v.facture ? (v.facture.type === "lien" ? v.facture.url : "Capture dans le guichet") : "Attendue", v.dansCharges ? "Oui" : "Non",
+        { entreprise: "Entreprise", concession: "Concession", police: "Constat de police", agent: "Agent" }[v.source] || "Entreprise", STATUTS_VEH[v.statut] || v.statut || "",
+        v.validation ? v.validation.motif || "Oui" : "", date(rq.at), rq.montant || "", date(rq.rembourseLe), date(vt.at), vt.prix != null ? vt.prix : "", vt.acheteur ? vt.acheteur + (vt.dirigeant ? " (dirigeant ou proche)" : "") : ""]; }));
+  ecrire("Contrôles de police", ["Véhicule", "Plaque", "Entreprise", "Date", "Lieu", "Agent", "Conducteur", "Constat", "Observations"], lignesConstat);
+
   ecrire("Remboursements de prêts", ["Prêt", "Entreprise", "Échéance", "Date limite", "Montant", "Dont capital", "Dont intérêts", "État", "Payée le", "Note"], lignesPret);
 
   ecrire("Journal", ["Date", "Auteur", "Action", "Type", "Dossier"],
@@ -197,7 +212,9 @@ function actualiser() {
     ["Relevés de compte", col("releves").length],
     ["Déclarations de soupçon", col("soupcons").length],
     ["Prêts accordés", col("prets").filter(r => r.data.statut === "en_cours" || r.data.statut === "rembourse").length],
-    ["Demandes de prêt en attente", col("prets").filter(r => r.data.statut === "demande").length]
+    ["Demandes de prêt en attente", col("prets").filter(r => r.data.statut === "demande").length],
+    ["Véhicules de société en service", col("vehicules").filter(r => r.data.statut === "service").length],
+    ["Véhicules requalifiés", col("vehicules").filter(r => r.data.statut === "requalifie").length]
   ]);
 }
 
