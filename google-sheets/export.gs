@@ -98,12 +98,32 @@ function actualiser() {
   ecrire("Entreprises", ["Nom", "Secteur", "Patron", "Active", "Ajoutée le"],
     col("entreprises").map(r => [r.data.nom, r.data.secteur || "", r.data.patron || "", r.data.actif === false ? "Non" : "Oui", date(r.data.createdAt)]));
 
-  ecrire("Demandes", ["N°", "Service", "Nature", "Objet", "Quantité", "Demandé", "Urgence", "Statut", "Accordé", "Motif", "Reçue le", "Décidée le"],
+  // Semaine d'une demande, comme dans le guichet : celle choisie à la saisie, sinon celle de l'accord (anciennes demandes) ou de la réception.
+  const conf = (col("config").find(r => r.id === "main") || { data: {} }).data;
+  const pad2 = n => String(n).padStart(2, "0");
+  const semaineDe = iso => {
+    const d = new Date(iso || Date.now());
+    if (conf.periodicite === "mois") return d.getFullYear() + "-" + pad2(d.getMonth() + 1);
+    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), day = t.getUTCDay() || 7;
+    t.setUTCDate(t.getUTCDate() + 4 - day);
+    const y = t.getUTCFullYear();
+    return y + "-S" + pad2(Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7));
+  };
+  const accorde = a => (a && (a.statut === "accordee" || a.statut === "partielle") ? Number(a.montantAccorde) || 0 : 0);
+  const semaineDem = (d, a) => d.periode || (accorde(a) && a.at ? semaineDe(a.at) : semaineDe(d.recueAt || d.createdAt));
+  const env = {};
+  ecrire("Demandes", ["N°", "Service", "Nature", "Objet", "Semaine", "Quantité", "Demandé", "Urgence", "Statut", "Accordé", "Motif", "Reçue le", "Décidée le"],
     col("demandes").map(r => {
-      const d = r.data, a = arbitrages[r.id], st = a ? a.statut : "attente";
-      return [no("DM", r.id), d.service, NATURES[d.nature] || d.nature, d.objet, d.quantite || "", d.montant, d.urgence, STATUTS_DEM[st] || st,
-        a && (st === "accordee" || st === "partielle") ? a.montantAccorde : 0, a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : ""];
+      const d = r.data, a = arbitrages[r.id], st = a ? a.statut : "attente", k = semaineDem(d, a), sv = d.service || "Autre";
+      const x = env[sv + "|" + k] = env[sv + "|" + k] || { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 };
+      x.n++; x.demande += Number(d.montant) || 0; x.accorde += accorde(a); if (st === "attente" || st === "etude") x.attente += Number(d.montant) || 0;
+      return [no("DM", r.id), d.service, NATURES[d.nature] || d.nature, d.objet, k, d.quantite || "", d.montant, d.urgence, STATUTS_DEM[st] || st,
+        accorde(a), a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : ""];
     }));
+  const plafond = sv => { const e = conf.enveloppes || {}; const k = Object.keys(e).find(x => x.toLowerCase() === String(sv).toLowerCase()); return k ? Number(e[k]) || 0 : ""; };
+  ecrire("Enveloppes", ["Semaine", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Plafond", "Reste"],
+    Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
+      .map(x => { const p = plafond(x.service); return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, p, p === "" ? "" : p - x.accorde]; }));
 
   const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif", defaut: "Défaut de déclaration (semaine clôturée)" };
   ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le", "Nature"],

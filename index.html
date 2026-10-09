@@ -189,6 +189,9 @@ h3{font-family:var(--f-display);font-stretch:85%;font-weight:720;font-size:16.5p
 .tip .tr b{font-family:var(--f-mono);font-weight:600;color:var(--ink)}
 .svc-list{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px solid var(--rule-2);display:grid;gap:7px;font-size:13.5px}
 .svc-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px}
+.env-table td.num .meta{display:block;font-size:11.5px}
+.env-table .env-sel{background:var(--accent-soft)}
+.env-cell{font-family:var(--f-mono);font-weight:600}
 .svc-list .mono{color:var(--ink)}
 
 /* Tableaux */
@@ -668,6 +671,7 @@ header.top{position:relative}
         <div class="seg" id="seg-dem" role="group" aria-label="Filtrer les demandes">
           <button type="button" data-f="attente" aria-pressed="true">En attente<span class="count"></span></button>
           <button type="button" data-f="traitees" aria-pressed="false">Traitées<span class="count"></span></button>
+          <button type="button" data-f="periode" aria-pressed="false">Période choisie<span class="count"></span></button>
           <button type="button" data-f="tout" aria-pressed="false">Toutes<span class="count"></span></button>
         </div>
       </div>
@@ -1158,6 +1162,11 @@ header.top{position:relative}
                 <input id="m-date" type="datetime-local">
               </div>
             </div>
+            <div class="field" style="margin-top:10px">
+              <label for="m-per">Semaine de la demande</label>
+              <select id="m-per"></select>
+              <span class="hint">Les crédits accordés seront imputés sur l’enveloppe de cette semaine.</span>
+            </div>
           </div></div>
           <div class="form-foot">
             <span id="m-err" class="err" aria-live="polite"></span>
@@ -1169,6 +1178,10 @@ header.top{position:relative}
         <div class="card">
           <h3>Budget disponible</h3>
           <dl class="kv" id="m-budget"></dl>
+        </div>
+        <div class="card" id="m-env-card" hidden>
+          <h3 id="m-env-title">Enveloppe du service</h3>
+          <dl class="kv" id="m-env"></dl>
         </div>
         <div class="card">
           <h3>Une demande complète contient</h3>
@@ -1895,16 +1908,31 @@ function periodDecls(key) {
 const secteurOf = d => { const e = d.entrepriseId && S.entreprises.find(x => x.id === d.entrepriseId); return (e && e.secteur && e.secteur.trim()) || "Non renseigné"; };
 
 /* Enveloppes des services publics */
+// Chaque demande appartient à une semaine : celle choisie à la saisie, sinon celle de sa réception.
+// Ses crédits accordés sont imputés sur l'enveloppe de cette semaine-là. Les anciennes demandes,
+// saisies sans semaine, restent imputées sur la semaine de leur accord, comme avant.
+function demPeriode(dm) { return dm.periode || keyOf(new Date(dm.recueAt || dm.createdAt || Date.now())); }
+function demImputation(dm) { const a = S.arbitrages[dm.id]; return dm.periode || (a && a.at && ["accordee", "partielle"].includes(a.statut) ? keyOf(new Date(a.at)) : demPeriode(dm)); }
+const demAccorde = dm => { const a = S.arbitrages[dm.id]; return a && (a.statut === "accordee" || a.statut === "partielle") ? Number(a.montantAccorde) || 0 : 0; };
 function envUse(key) {
   const out = {};
   for (const dm of S.demandes) {
-    const a = S.arbitrages[dm.id];
-    if (!a || !(a.statut === "accordee" || a.statut === "partielle") || !a.at || keyOf(new Date(a.at)) !== key) continue;
+    const v = demAccorde(dm);
+    if (!v || demImputation(dm) !== key) continue;
     const k = norm(dm.service || "Autre");
-    out[k] = (out[k] || 0) + (Number(a.montantAccorde) || 0);
+    out[k] = (out[k] || 0) + v;
   }
   return out;
 }
+// Bilan d'un service pour une semaine : demandé, accordé, en attente, refusé, plafond.
+function envStats(service, key) {
+  const n = norm(service), list = S.demandes.filter(dm => norm(dm.service || "Autre") === n && demImputation(dm) === key);
+  const st = dm => aStatus(dm), sum = (l, f) => l.reduce((t, x) => t + f(x), 0);
+  const cap = envCap(service), accorde = sum(list, demAccorde);
+  return { list, cap, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
+    refuse: list.filter(dm => st(dm) === "refusee").length, reste: cap ? cap - accorde : null };
+}
+const envServices = keys => { const names = cfg().services.slice(); for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && keys.includes(demImputation(dm))) names.push(dm.service); return names; };
 function envCap(service) {
   const env = cfg().enveloppes || {};
   const k = Object.keys(env).find(x => norm(x) === norm(service));
@@ -2576,10 +2604,7 @@ function treasurySeries(keys) {
   keys.forEach(k => { rec[k] = 0; dep[k] = 0; });
   for (const d of S.declarations) if (d.periode in rec) rec[d.periode] += dEncaisse(d);
   for (const p of S.penalites) if (p.statut === "payee" && p.paidAt) { const k = keyOf(new Date(p.paidAt)); if (k in rec) rec[k] += Number(p.montant) || 0; }
-  for (const dm of S.demandes) {
-    const a = S.arbitrages[dm.id];
-    if (a && (a.statut === "accordee" || a.statut === "partielle") && a.at) { const k = keyOf(new Date(a.at)); if (k in dep) dep[k] += Number(a.montantAccorde) || 0; }
-  }
+  for (const dm of S.demandes) { const v = demAccorde(dm); if (v) { const k = demImputation(dm); if (k in dep) dep[k] += v; } }
   return { rec: keys.map(k => rec[k]), dep: keys.map(k => dep[k]) };
 }
 function treasuryChart(box, legend, n, givenKeys) {
@@ -2626,22 +2651,44 @@ function renderAlerts() {
 }
 
 /* Enveloppes des services publics */
-function renderEnvelopes() {
-  const key = keyOf(new Date());
+function renderEnvelopes(k0) {
+  const key = k0 || S.dashKey || keyOf(new Date());
   const box = $("#envs");
-  $("#env-sub").textContent = `Crédits accordés pendant la période en cours (${periodLabel(key)}). Plafonds réglables dans Réglages.`;
+  $("#env-sub").textContent = `Crédits accordés sur ${periodLabel(key).replace(/^S/, "s")}, imputés sur la semaine de chaque demande. Plafonds réglables dans Réglages.`;
   if (!S.connected || !S.loaded.has("arbitrages")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
-  const use = envUse(key);
-  const names = cfg().services.slice();
-  for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && use[norm(dm.service)]) names.push(dm.service);
+  const names = envServices([key]);
   if (!names.length) { fill(box, h("div", { class: "empty", text: "Aucun service public enregistré." })); return; }
   fill(box, h("ul", { class: "env-list" }, names.map(n => {
-    const used = use[norm(n)] || 0, capV = envCap(n), ratio = capV ? used / capV : 0;
+    const x = envStats(n, key), used = x.accorde, capV = x.cap, ratio = capV ? used / capV : 0;
     const tone = !capV ? "" : ratio > 1 ? "bad" : ratio >= 0.8 ? "warn" : "";
     return h("li", {},
-      h("div", { class: "env-row" }, h("span", { text: n }), h("span", { class: "mono" + (tone ? " t-" + tone + " tone-text" : ""), text: capV ? `${money(used)} / ${money(capV)}` : `${money(used)} · sans plafond` })),
-      capV ? h("div", { class: "meter " + tone, role: "img", "aria-label": `${Math.round(ratio * 100)} % de l’enveloppe utilisée` }, h("i", { style: `width:${Math.min(100, ratio * 100)}%` })) : null);
-  })));
+      h("div", { class: "env-row" }, h("button", { class: "linkbtn", type: "button", onclick: () => openEnvSuivi(n, key), text: n }), h("span", { class: "mono" + (tone ? " t-" + tone + " tone-text" : ""), text: capV ? `${money(used)} / ${money(capV)}` : `${money(used)} · sans plafond` })),
+      capV ? h("div", { class: "meter " + tone, role: "img", "aria-label": `${Math.round(ratio * 100)} % de l’enveloppe utilisée` }, h("i", { style: `width:${Math.min(100, ratio * 100)}%` })) : null,
+      x.attente ? h("span", { class: "meta", text: `${money(x.attente)} demandés en attente${capV ? ` · il resterait ${money(capV - used - x.attente)}` : ""}` }) : null);
+  })), h("div", { class: "reg-foot" }, h("button", { class: "linkbtn", type: "button", onclick: () => openEnvSuivi(null, key), text: "Suivi des enveloppes semaine par semaine" })));
+}
+// Suivi des enveloppes : un service ou tous, sur les huit dernières semaines.
+function openEnvSuivi(service, key) {
+  const keys = recentKeys(8), sel = key && keys.includes(key) ? key : keys[0];
+  const names = service ? [service] : envServices(keys);
+  const cell = (n, k) => {
+    const x = envStats(n, k), ratio = x.cap ? x.accorde / x.cap : 0, tone = !x.cap ? "" : ratio > 1 ? "bad" : ratio >= 0.8 ? "warn" : "";
+    return h("td", { class: "num" + (k === sel ? " env-sel" : "") },
+      h("button", { class: "linkbtn env-cell" + (tone ? " t-" + tone + " tone-text" : ""), type: "button", title: `${n} · ${periodLabel(k)}`, onclick: () => openEnvSuivi(service, k), text: x.list.length || x.cap ? money(x.accorde) : "—" }),
+      x.cap ? h("span", { class: "meta", text: `/ ${money(x.cap)}` }) : null, x.attente ? h("span", { class: "meta", text: `${money(x.attente)} en attente` }) : null);
+  };
+  const tbl = h("div", { class: "tbl-wrap" }, h("table", { class: "compact env-table" },
+    h("thead", {}, h("tr", {}, h("th", { text: "Service" }), keys.slice().reverse().map(k => h("th", { class: "num" + (k === sel ? " env-sel" : ""), text: periodShort(k) })))),
+    h("tbody", {}, names.map(n => h("tr", {}, h("td", { text: n }), keys.slice().reverse().map(k => cell(n, k)))))));
+  const list = S.demandes.filter(dm => demImputation(dm) === sel && (!service || norm(dm.service) === norm(service))).sort((a, b) => String(b.recueAt || b.createdAt).localeCompare(String(a.recueAt || a.createdAt)));
+  const tot = names.reduce((t, n) => { const x = envStats(n, sel); return { d: t.d + x.demande, a: t.a + x.accorde, w: t.w + x.attente }; }, { d: 0, a: 0, w: 0 });
+  openDialog({ eyebrow: "Enveloppes des services publics", title: service ? `Enveloppe · ${service}` : "Suivi des enveloppes", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Crédits accordés par semaine, sur le plafond de chaque service. Cliquez sur une semaine pour voir ses demandes. Une demande compte pour la semaine choisie à sa saisie." }), tbl,
+      sec(`${periodLabel(sel)} · ${list.length} demande${plural(list.length)}`, kv([["Demandé", money(tot.d)], ["Accordé", money(tot.a)], tot.w ? ["En attente", money(tot.w)] : null]),
+        list.length ? h("ul", { class: "ent-list", style: "margin-top:6px" }, list.map(dm => h("li", {},
+          h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openDem(dm.id), text: `${dossierNo("DM", dm.id)} · ${dm.service}` }), h("span", { class: "meta", text: `${dm.objet || "—"} · ${money(dm.montant)} demandés${demAccorde(dm) ? " · " + money(demAccorde(dm)) + " accordés" : ""}` })),
+          chip(ASTAT[aStatus(dm)] || ASTAT.attente), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune demande cette semaine." }))],
+    foot: [service ? h("button", { class: "btn ghost small", type: "button", onclick: () => openEnvSuivi(null, sel), text: "Tous les services" }) : null, h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean) });
 }
 
 /* Tableau des déclarations */
@@ -2709,13 +2756,14 @@ function renderDemTable() {
   const F = {
     attente: all.filter(dm => ["attente", "etude"].includes(aStatus(dm))),
     traitees: all.filter(dm => !["attente", "etude"].includes(aStatus(dm))),
+    periode: all.filter(dm => demImputation(dm) === (S.dashKey || defaultKey())),
     tout: all
   };
-  setSegCounts($("#seg-dem"), { attente: F.attente.length, traitees: F.traitees.length, tout: all.length }, S.demFilter);
+  setSegCounts($("#seg-dem"), { attente: F.attente.length, traitees: F.traitees.length, periode: F.periode.length, tout: all.length }, S.demFilter);
   if (!S.connected || !S.loaded.has("demandes")) { box.replaceChildren(h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
   const list = F[S.demFilter] || all;
   if (!list.length) {
-    const msg = { attente: "Aucune demande en attente d’arbitrage.", traitees: "Aucune demande traitée pour l’instant.", tout: "Aucune demande enregistrée. Les chefs de service utilisent le modèle « Demande de moyens » sur Discord ; saisissez-la depuis l’onglet Saisir une demande." }[S.demFilter];
+    const msg = { attente: "Aucune demande en attente d’arbitrage.", traitees: "Aucune demande traitée pour l’instant.", periode: `Aucune demande pour ${periodLabel(S.dashKey || defaultKey()).toLowerCase()}.`, tout: "Aucune demande enregistrée. Les chefs de service utilisent le modèle « Demande de moyens » sur Discord ; saisissez-la depuis l’onglet Saisir une demande." }[S.demFilter];
     box.replaceChildren(h("div", { class: "empty", text: msg }));
     return;
   }
@@ -2725,6 +2773,7 @@ function renderDemTable() {
       h("td", { class: "no", text: dossierNo("DM", dm.id) }),
       h("td", {}, h("span", { style: "font-weight:600", text: dm.service || "—" }), h("span", { class: "small-meta", text: dm.demandeur || "" })),
       h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openDem(dm.id), text: dm.objet || NATURES[dm.nature] || "Demande" }), h("span", { class: "small-meta", text: NATURES[dm.nature] || "" })),
+      h("td", { text: periodShort(demImputation(dm)) }),
       h("td", {}, chip(URG[dm.urgence] || URG.normale)),
       h("td", { class: "num", text: money(dm.montant) }),
       h("td", { class: "num", text: a && a.montantAccorde != null && st !== "refusee" && st !== "etude" ? money(a.montantAccorde) : "—" }),
@@ -2732,7 +2781,7 @@ function renderDemTable() {
       h("td", { class: "act" }, writer() && ["attente", "etude"].includes(st) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openDem(dm.id), text: "Arbitrer" }) : null));
   });
   box.replaceChildren(h("div", { class: "tbl-wrap" }, h("table", {},
-    h("thead", {}, h("tr", {}, ["N°", "Service", "Objet", "Urgence", "Demandé", "Accordé", "Statut", ""].map((t, i) => h("th", { class: [4, 5].includes(i) ? "num" : null, text: t })))),
+    h("thead", {}, h("tr", {}, ["N°", "Service", "Objet", "Semaine", "Urgence", "Demandé", "Accordé", "Statut", ""].map((t, i) => h("th", { class: [5, 6].includes(i) ? "num" : null, text: t })))),
     h("tbody", {}, rows))));
 }
 $("#seg-dem").addEventListener("click", e => { const b = e.target.closest("button[data-f]"); if (!b) return; S.demFilter = b.dataset.f; render(); });
@@ -3046,6 +3095,7 @@ function openDem(id) {
       sec("Dépôt", kv([
         ["Demandeur", dm.demandeur || "—"],
         ["Reçue le", dm.recueAt ? fmtDateTime(new Date(dm.recueAt)) : "—"],
+        ["Semaine", periodLabel(demImputation(dm)) + (dm.periode ? "" : " (semaine de l’accord)")],
         a && a.at && st !== "attente" ? ["Décidée le", fmtDateTime(new Date(a.at))] : null]))),
     dm.justification ? sec("Justification", h("p", { class: "prewrap", text: dm.justification })) : null,
     a && st !== "attente" ? sec("Décision actuelle", kv([
@@ -3053,7 +3103,7 @@ function openDem(id) {
       st === "accordee" || st === "partielle" ? ["Crédits accordés", money(a.montantAccorde), "num"] : null,
       a.modifieLe ? ["Dernière modification", fmtDateTime(new Date(a.modifieLe))] : null])) : null
   ];
-  let mIn = null, cIn = null, after = null;
+  let mIn = null, cIn = null, after = null, perSel = null;
   if (w) {
     mIn = h("input", { id: "dlg-accorde", type: "number", min: "0", step: "1", inputmode: "numeric" });
     mIn.value = String(a && a.montantAccorde != null ? a.montantAccorde : (dm.montant || 0));
@@ -3061,21 +3111,24 @@ function openDem(id) {
     cIn.value = a && a.commentaire ? a.commentaire : "";
     after = h("dd", { class: "num" });
     const already = a && (st === "accordee" || st === "partielle") ? Number(a.montantAccorde) || 0 : 0;
-    // Un accord modifié garde sa date : il reste imputé sur l’enveloppe de sa période d’origine.
-    const nowK = already && a.at ? keyOf(new Date(a.at)) : keyOf(new Date()), capV = envCap(dm.service), usedNow = envUse(nowK)[norm(dm.service)] || 0;
-    const alreadyNow = already && a.at && keyOf(new Date(a.at)) === nowK ? already : 0;
-    const envDt = h("dt", { text: capV ? `Enveloppe ${dm.service} restante (${periodPlain(nowK).toLowerCase()})` : `Enveloppe ${dm.service}` });
-    const envDd = h("dd", { class: "num" });
+    // Les crédits sont imputés sur l'enveloppe de la semaine de la demande, que la Direction peut changer ici.
+    perSel = h("select", { id: "dlg-per" }); demPerOptions(perSel, demImputation(dm));
+    const capV = envCap(dm.service);
+    const envDt = h("dt", {}), envDd = h("dd", { class: "num" });
     const upd = () => {
       const v = Number(mIn.value) || 0; const s = t.solde + already - v; after.textContent = money(s); after.style.color = s < 0 ? "var(--bad)" : "";
-      if (capV) { const r = capV - (usedNow - alreadyNow + v); envDd.textContent = `${money(r)} sur ${money(capV)}`; envDd.style.color = r < 0 ? "var(--bad)" : ""; }
+      const k = perSel.value, usedK = envUse(k)[norm(dm.service)] || 0, alreadyK = already && demImputation(dm) === k ? already : 0;
+      envDt.textContent = capV ? `Enveloppe ${dm.service} restante (${periodPlain(k).toLowerCase()})` : `Enveloppe ${dm.service}`;
+      if (capV) { const r = capV - (usedK - alreadyK + v); envDd.textContent = `${money(r)} sur ${money(capV)}`; envDd.style.color = r < 0 ? "var(--bad)" : ""; }
       else envDd.textContent = "sans plafond";
     };
     mIn.addEventListener("input", upd);
+    perSel.addEventListener("change", upd);
     body.push(h("div", { class: "decide" },
       h("div", { class: "row2" },
         h("div", { class: "field" }, h("label", { for: "dlg-accorde", text: "Montant accordé" }), h("div", { class: "money", "data-cur": cur() }, mIn), h("span", { class: "hint", text: "Moins que demandé : accord partiel." })),
         h("div", { class: "field" }, h("label", { for: "dlg-motif", text: "Motif communiqué au service" }), cIn)),
+      h("div", { class: "field" }, h("label", { for: "dlg-per", text: "Imputé sur l’enveloppe de" }), perSel),
       h("dl", { class: "kv", style: "margin:0" }, h("dt", { text: "Solde du Trésor actuel" }), h("dd", { class: "num", text: money(t.solde) }), h("dt", { text: "Solde après cette décision" }), after, envDt, envDd)));
     upd();
   } else if (a && a.commentaire) body.push(sec("Motif", h("p", { class: "prewrap", text: a.commentaire })));
@@ -3088,6 +3141,11 @@ function openDem(id) {
     }
     if (statut === "refusee" || statut === "etude") m = 0;
     const keepAt = !!(a && a.at && ["accordee", "partielle"].includes(st) && ["accordee", "partielle"].includes(statut));
+    // Semaine d'imputation choisie : elle est gardée sur la demande.
+    if (perSel && perSel.value && perSel.value !== dm.periode) {
+      const cur = S.demandes.find(x => x.id === id) || dm, b = Object.assign({}, cur, { periode: perSel.value }); delete b.id;
+      if (!(await write(() => S.db.doc("demandes/" + id).set(b)))) return;
+    }
     const ok = await write(() => S.db.doc("arbitrages/" + id).set({ statut, montantAccorde: Math.round(m), commentaire: cIn ? cIn.value.trim() : "", at: keepAt ? a.at : nowISO(), modifieLe: keepAt ? nowISO() : null, by: S.uid || null }));
     if (ok) {
       const msg = keepAt ? `Accord modifié : ${money(m)}.` : { accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut];
@@ -3380,7 +3438,33 @@ $("#form-decl").addEventListener("submit", async e => {
 });
 
 /* ---------- Saisie : demande ---------- */
+function demPerOptions(sel, value) {
+  const keys = recentKeys(8), nowK = keyOf(new Date());
+  if (!keys.includes(nowK)) keys.unshift(nowK);
+  const nextK = keyOf(new Date(bounds(nowK).end.getTime() + 864e5));
+  if (!keys.includes(nextK)) keys.unshift(nextK);
+  if (value && !keys.includes(value)) keys.push(value);
+  fill(sel, keys.map(k => h("option", { value: k, text: periodLabel(k) + (k === nowK ? " · en cours" : "") })));
+  sel.value = value || nowK;
+}
+function renderDemEnv() {
+  const card = $("#m-env-card"), svc = $("#m-service").value.trim(), k = $("#m-per").value;
+  if (!svc || !k || !S.connected) { card.hidden = true; return; }
+  const x = envStats(svc, k), ed = S.editDem ? S.demandes.find(d => d.id === S.editDem) : null;
+  const own = ed && norm(ed.service) === norm(svc) && demImputation(ed) === k ? Number(ed.montant) || 0 : 0;
+  card.hidden = false;
+  $("#m-env-title").textContent = `Enveloppe ${svc} · ${periodPlain(k).toLowerCase()}`;
+  fill($("#m-env"), h("dt", { text: "Plafond" }), h("dd", { class: "num", text: x.cap ? money(x.cap) : "sans plafond" }),
+    h("dt", { text: "Déjà accordé" }), h("dd", { class: "num", text: money(x.accorde) }),
+    h("dt", { text: "Demandé, en attente" }), h("dd", { class: "num", text: money(x.attente - own) }),
+    x.cap ? h("dt", { class: "tot-dt", text: "Reste si tout est accordé" }) : null, x.cap ? h("dd", { class: "tot-dd num", style: x.cap - x.accorde - (x.attente - own) - (Number($("#m-montant").value) || 0) < 0 ? "color:var(--bad)" : null, text: money(x.cap - x.accorde - (x.attente - own) - (Number($("#m-montant").value) || 0)) }) : null);
+}
+["#m-service", "#m-montant", "#m-per"].forEach(id => $(id).addEventListener("input", renderDemEnv));
+$("#m-per").addEventListener("change", () => { $("#m-per").dataset.touched = "1"; renderDemEnv(); });
+$("#m-date").addEventListener("input", () => { if ($("#m-per").dataset.touched) return; const v = $("#m-date").value; if (v) { const k = keyOf(new Date(v)); demPerOptions($("#m-per"), k); renderDemEnv(); } });
 function renderBudgetAside() {
+  if (!$("#m-per").options.length) demPerOptions($("#m-per"), $("#m-date").value ? keyOf(new Date($("#m-date").value)) : null);
+  renderDemEnv();
   const t = treasury();
   const pend = S.demandes.filter(dm => ["attente", "etude"].includes(aStatus(dm))).reduce((s, dm) => s + (Number(dm.montant) || 0), 0);
   $("#m-budget").replaceChildren(
@@ -3396,7 +3480,8 @@ const demKeys = k =>
   /^(montant|budget|cout|prix|somme)/.test(k) ? "montant" :
   /^(urgence|priorite)/.test(k) ? "urgence" :
   /^(justification|motif|raison)/.test(k) ? "justification" :
-  /^(demandeur|nom|grade|agent)/.test(k) ? "demandeur" : null;
+  /^(demandeur|nom|grade|agent)/.test(k) ? "demandeur" :
+  /^(semaine|periode)/.test(k) ? "periode" : null;
 function parseDem() {
   const p = parseTemplate($("#m-paste").value, demKeys, ["justification"]);
   let n = 0;
@@ -3412,6 +3497,8 @@ function parseDem() {
   if (p.urgence) { const t = norm(p.urgence); $("#m-urg").value = /urgent/.test(t) ? "urgente" : /priorit|haute/.test(t) ? "prioritaire" : "normale"; n++; }
   if (p.justification) { $("#m-just").value = p.justification; n++; }
   if (p.demandeur) { $("#m-dem").value = p.demandeur; n++; }
+  if (p.periode) { const k = parsePeriode(p.periode); if (k) { demPerOptions($("#m-per"), k); $("#m-per").dataset.touched = "1"; n++; } }
+  renderDemEnv();
   $("#m-parse-msg").textContent = n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Demande de moyens ».";
 }
 $("#m-parse").addEventListener("click", parseDem);
@@ -3440,7 +3527,7 @@ $("#form-dem").addEventListener("submit", async e => {
   const body = {
     service, nature: $("#m-nature").value, objet, quantite: Math.round(qte) || null, montant: Math.round(montant),
     urgence: $("#m-urg").value, justification: $("#m-just").value.trim(), demandeur: $("#m-dem").value.trim(),
-    recueAt: recue.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
+    recueAt: recue.toISOString(), periode: $("#m-per").value || keyOf(recue), createdAt: nowISO(), saisiPar: S.uid || null
   };
   const editingDem = S.editDem ? S.demandes.find(x => x.id === S.editDem) || null : null;
   if (editingDem) Object.assign(body, { createdAt: editingDem.createdAt || nowISO(), saisiPar: editingDem.saisiPar || S.uid || null, modifieLe: nowISO() });
@@ -3463,6 +3550,7 @@ $("#form-dem").addEventListener("submit", async e => {
   $("#m-paste").value = "";
   $("#m-parse-msg").textContent = "";
   $("#m-date").value = toLocalInput(new Date());
+  delete $("#m-per").dataset.touched; demPerOptions($("#m-per"), keyOf(new Date())); renderDemEnv();
   toast(editingDem ? "Demande modifiée." : "Demande enregistrée.");
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
@@ -3484,6 +3572,7 @@ function renderTemplates() {
   $("#tpl-dem").textContent = [
     "**DEMANDE DE MOYENS**",
     "Service : ",
+    `Semaine : ${periodPlain(keyOf(new Date()))}`,
     "Nature (véhicule / équipement / salaires / fonctionnement / autre) : ",
     "Objet : ",
     "Quantité : ",
@@ -3988,7 +4077,7 @@ function decisionDoc(dm) {
   return {
     kind: "DÉCISION BUDGÉTAIRE", no: dossierNo("DM", dm.id), date: "Émise le " + longDate(a && a.at ? new Date(a.at) : new Date()),
     meta: [["Service", dm.service || "—"], ["Demandeur", dm.demandeur || "—"], ["Objet", dm.objet || "—"], ["Nature", NATURES[dm.nature] || "—"]],
-    lines: [["Quantité", String(dm.quantite || "—")], ["Montant demandé", money(dm.montant)], ["Reçue le", dm.recueAt ? longDate(new Date(dm.recueAt)) : "—"]],
+    lines: [["Quantité", String(dm.quantite || "—")], ["Montant demandé", money(dm.montant)], ["Reçue le", dm.recueAt ? longDate(new Date(dm.recueAt)) : "—"], ["Imputé sur", periodLabel(demImputation(dm))]],
     total: ["Crédits accordés", money(ok ? a.montantAccorde : 0)], note: a && a.commentaire ? a.commentaire : "", noteTitle: "Motif de la décision",
     stamp: STAMP_ARB[st] || STAMP_ARB.attente,
     footer: ok ? "Les crédits sont mis à disposition du service par la Préfecture de police, Direction des impôts et cotisations." : "Préfecture de police · Direction des impôts et cotisations.",
@@ -4897,6 +4986,7 @@ function startEditDem(dm) {
   $("#m-just").value = dm.justification || "";
   $("#m-dem").value = dm.demandeur || "";
   $("#m-date").value = toLocalInput(dm.recueAt ? new Date(dm.recueAt) : new Date());
+  demPerOptions($("#m-per"), demImputation(dm)); $("#m-per").dataset.touched = "1"; renderDemEnv();
   $("#m-receipt").hidden = true;
   editBanner("dem");
   window.scrollTo({ top: 0, behavior: "smooth" });
