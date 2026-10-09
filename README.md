@@ -25,6 +25,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v5_pieces.sql` : l’espace privé des captures d’écran des contrôles fiscaux
 - `supabase/v6_direct.sql` : le journal en direct, la présence des agents et les rectificatives saisies par l’Inspection
 - `supabase/v7_blanchiment.sql` : les relevés de compte faits par l’Inspection
+- `supabase/v8_prets.sql` : les demandes de prêt enregistrées par l’Inspection
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -44,7 +45,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents) et `supabase/v7_blanchiment.sql` (relevés de compte). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte) et `supabase/v8_prets.sql` (demandes de prêt). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -148,7 +149,7 @@ Une entreprise est attendue à partir du début du suivi, ou de son **début d�
 
 ## Suivi dans Google Sheets
 
-La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies et les dossiers transmis à la justice. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
+La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
@@ -221,6 +222,22 @@ Sur le serveur, chaque employé peut déposer chaque jour jusqu’à 10 000 € 
 5. **Déclaration de soupçon** (Direction) : sur le modèle de TRACFIN (art. L561-15 du Code monétaire et financier), elle part dans le salon de la justice avec la mention du rôle choisi. Le dossier de justice propose alors la qualification **blanchiment** (art. 324-1 du Code pénal : 5 ans et 375 000 € ; 10 ans et 750 000 € s’il est habituel ou en bande organisée, art. 324-2) et la mesure de confiscation, et son PDF ajoute la section « Compte de l’entreprise ».
 
 Un écart classé par la Direction, ou qu’un contrôle a jugé justifié, ne revient plus. Les captures vont dans l’espace privé des pièces (`supabase/v5_pieces.sql`). Réglages → Recouvrement → Surveillance des comptes : activer, écart à partir duquel alerter, dépôt possible par employé et par jour, solde obligatoire.
+
+## Prêts aux entreprises
+
+La Préfecture peut prêter l’argent du Trésor à une entreprise pour un objet précis : un véhicule, un local, du stock, de la trésorerie. Onglet **Prêts**, ou la fiche de l’entreprise.
+
+1. **La demande** : un agent (Inspection ou Direction) indique l’entreprise, l’objet, le montant, le taux et le remboursement. La simulation affiche aussitôt les intérêts, le total et les dates.
+2. **L’accord** (Direction) : **Accorder et verser**. Le capital sort du Trésor, qui doit pouvoir le couvrir, et la **convention de prêt** part sur Discord avec l’échéancier. **Refuser** demande un motif.
+3. **Le taux** : 0 % pour un prêt sans intérêts. Sinon, un taux global sur la durée : 10 % sur 20 000 € fait 22 000 € à rembourser. Les intérêts sont répartis à égalité sur les échéances.
+4. **Le remboursement** : en une fois, ou par échéances (une par semaine, ou par mois si les déclarations sont mensuelles), avec un délai avant la première. Chaque échéance encaissée remonte au Trésor et publie une quittance.
+5. **L’emploi des fonds** : par défaut, l’entreprise doit fournir le **justificatif de l’achat** (capture ou lien de la facture de la concession, par exemple) dans un délai (7 jours par défaut, modifiable pour chaque prêt). Passé ce délai, le prêt affiche « Justificatif manquant ».
+6. **L’exigibilité anticipée** (Direction) : si le justificatif manque, si l’argent a servi à autre chose ou si les échéances ne sont pas payées, **Exiger le remboursement** rend tout le capital restant dû immédiatement. Les intérêts à venir ne sont pas réclamés. La notification part sur Discord.
+7. **Le remboursement anticipé** : l’entreprise peut tout rembourser avant l’heure. Elle paie le capital restant, sans les intérêts des échéances à venir.
+
+Une échéance en retard suit le recouvrement habituel : impayés, relance, mise en demeure, saisie, dossier de justice. Elle bloque l’attestation de régularité. Le versement du prêt et ses remboursements entrent dans la surveillance des comptes : l’argent prêté n’est pas un enrichissement inexpliqué.
+
+L’Inspection peut enregistrer une demande et l’annuler tant qu’elle n’est pas accordée. Accorder, refuser, encaisser et exiger le remboursement sont réservés à la Direction, et la base l’impose elle-même (`supabase/v8_prets.sql`). Si un autre agent accorde, refuse ou annule la demande pendant que vous l’examinez, votre clic est arrêté et la fenêtre affiche le nouvel état du prêt.
 
 ## Cohérence des dossiers
 

@@ -550,6 +550,7 @@ header.top{position:relative}
     <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-prets" data-tab="prets" aria-selected="false">Prêts</button>
     <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
     <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-agent>Saisir une déclaration</button>
     <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-agent>Saisir une demande</button>
@@ -775,6 +776,36 @@ header.top{position:relative}
       <h3>Relances envoyées</h3>
       <p class="sub">Les plus récentes en premier.</p>
       <div id="rc-hist"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-prets" role="tabpanel" aria-labelledby="tab-btn-prets" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Prêts aux entreprises</h2>
+        <p class="sub">La Préfecture prête l’argent du Trésor pour un objet précis : véhicule, local, stock… avec ou sans intérêts, remboursé en une fois ou par échéances. L’entreprise prouve l’achat ; une échéance impayée suit le recouvrement habituel.</p>
+      </div>
+      <div class="toolbar"><button class="btn" type="button" id="pret-new" hidden>Nouveau prêt</button></div>
+    </div>
+    <div class="ledger">
+      <div class="kpi" id="pk-encours"><span class="l">Capital restant dû</span><span class="v">—</span><span class="s">prêts en cours</span></div>
+      <div class="kpi" id="pk-verse"><span class="l">Prêté</span><span class="v">—</span><span class="s">sorti du Trésor</span></div>
+      <div class="kpi" id="pk-rembourse"><span class="l">Remboursé</span><span class="v">—</span><span class="s">revenu au Trésor</span></div>
+      <div class="kpi" id="pk-interets"><span class="l">Intérêts</span><span class="v">—</span><span class="s">perçus</span></div>
+      <div class="kpi" id="pk-retard"><span class="l">En retard</span><span class="v">—</span><span class="s">échéances impayées</span></div>
+      <div class="kpi" id="pk-dem"><span class="l">Demandes</span><span class="v">—</span><span class="s">à examiner</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="search-row">
+        <div class="seg" id="seg-pret" role="group" aria-label="Filtrer les prêts">
+          <button type="button" data-f="cours" aria-pressed="true">En cours<span class="count"></span></button>
+          <button type="button" data-f="dem" aria-pressed="false">Demandes<span class="count"></span></button>
+          <button type="button" data-f="retard" aria-pressed="false">En retard<span class="count"></span></button>
+          <button type="button" data-f="rembourse" aria-pressed="false">Remboursés<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Tous<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="pret-list"><div class="empty">Chargement…</div></div>
     </div>
   </section>
 
@@ -1484,7 +1515,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1673,7 +1704,13 @@ function treasury() {
     if (a && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
   }
   const budget = Number(cfg().budgetInitial) || 0;
-  return { rec, dep, budget, solde: budget + rec - dep };
+  // Prêts : le capital versé sort du Trésor, les remboursements (intérêts compris) y reviennent.
+  let pv = 0, pr = 0, pd = 0;
+  for (const p of S.prets || []) if (p.statut === "en_cours" || p.statut === "rembourse") {
+    pv += Number(p.montant) || 0;
+    for (const x of p.echeances || []) { if (x.payee) pr += Number(x.montant) || 0; else if (p.statut === "en_cours") pd += Number(x.capital) || 0; }
+  }
+  return { rec, dep, budget, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, solde: budget + rec - dep - pv + pr };
 }
 const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
 const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -2217,6 +2254,7 @@ function subscribe() {
   col("transmissions", s => { S.transmissions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
   col("releves", s => { S.releves = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
@@ -2248,6 +2286,7 @@ function render() {
   renderRecouvSettings();
   renderBlSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
+  renderPrets();
   drawSync();
 }
 function fillSelect(sel, options, preferred) {
@@ -2323,7 +2362,7 @@ function renderDashboard() {
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
-  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés`, t.solde < 0 ? "bad" : "");
+  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}`, t.solde < 0 ? "bad" : "");
 
   // Entreprises à surveiller
   const reg = $("#registry");
@@ -3529,7 +3568,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -4082,6 +4121,7 @@ function openFiche(e, opts) {
     sec("Historique des déclarations", hist),
     sec("Pénalités et redressements", pens, penForm),
     compteSection(e, reopen),
+    pretsSection(e),
     ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
     (() => {
       const rl = relancesOf(e).slice(0, 6), sa = saisiesOf(e), tj = S.transmissions.filter(t => sameEnt(t, e));
@@ -4226,7 +4266,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -4268,6 +4308,16 @@ function describe(e) {
       if (x === "ajout") return `a notifié une saisie de ${money(v.montant)} à ${v.entrepriseNom}${v.tiers ? " (" + v.tiers + ")" : ""}`;
       if (x === "suppression") return `a supprimé une saisie de ${v.entrepriseNom}`;
       return a.statut === "executee" && b.statut !== "executee" ? `a exécuté la saisie de ${a.entrepriseNom} (${money(a.recouvre || 0)} recouvrés)` : a.statut === "levee" && b.statut !== "levee" ? `a donné mainlevée de la saisie de ${a.entrepriseNom}` : `a modifié la saisie de ${a.entrepriseNom}`;
+    case "prets": {
+      const nom = v.entrepriseNom || "?";
+      if (x === "suppression") return `a supprimé le prêt de ${nom}`;
+      if (x === "ajout") return v.statut === "en_cours" ? `a prêté ${money(v.montant)} à ${nom}` : `a enregistré une demande de prêt de ${money(v.montant)} pour ${nom}`;
+      if (a.statut !== b.statut) return ({ en_cours: `a accordé et versé un prêt de ${money(a.montant)} à ${nom}`, refuse: `a refusé la demande de prêt de ${nom}`, rembourse: `a enregistré le remboursement complet du prêt de ${nom}`, annule: `a annulé la demande de prêt de ${nom}` })[a.statut] || `a mis à jour le prêt de ${nom}`;
+      if (a.exigibleLe && !b.exigibleLe) return `a exigé le remboursement immédiat du prêt de ${nom}`;
+      if (a.justificatif && !b.justificatif) return `a enregistré le justificatif d’achat du prêt de ${nom}`;
+      const pa = (a.echeances || []).filter(y => y.payee).length, pb = (b.echeances || []).filter(y => y.payee).length;
+      return pa > pb ? `a encaissé ${pa - pb} échéance${plural(pa - pb)} du prêt de ${nom}` : `a mis à jour le prêt de ${nom}`;
+    }
     case "releves":
       if (x === "suppression") return `a supprimé un relevé du compte de ${v.entrepriseNom}`;
       return `a relevé le compte de ${v.entrepriseNom} : ${money(v.montant)}`;
@@ -4868,6 +4918,7 @@ const DISCORD_AUTO = [
   ["attestations", "Attestations de régularité délivrées", "entreprises"],
   ["controles", "Contrôles fiscaux : avis de vérification, proposition, mise en recouvrement", "entreprises"],
   ["saisies", "Saisies notifiées", "entreprises"],
+  ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
 ];
 function hookFor(ch) {
@@ -5065,6 +5116,7 @@ function unpaidItems(e) {
     const ec = echOf(d);
     out.push({ kind: "decl", id: d.id, ref: dossierNo("DF", d.id), label: `Avis d’imposition · ${periodPlain(d.periode)}${ec ? " · échéances en retard" : ""}`, montant: ec ? Math.min(dReste(d), echRetardMontant(d)) : dReste(d), plan: !!ec, since: (S.decisions[d.id] || {}).at });
   }
+  for (const p of pretsOf(e)) { const dues = pretDues(p); if (dues.length) out.push({ kind: "pret", id: p.id, ref: pretNo(p), label: `Prêt · ${dues.length > 1 ? dues.length + " échéances" : "échéance " + dues[0].n + "/" + p.echeances.length}${p.exigibleLe ? " (exigibilité anticipée)" : " en retard"}`, montant: dues.reduce((t, x) => t + (Number(x.montant) || 0), 0), since: dues[0].date }); }
   for (const p of pensOf(e)) if (penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), label: p.type === "redressement" ? `Redressement fiscal · ${p.motif || ""}` : `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt });
   return out.sort((a, b) => String(a.since || "").localeCompare(String(b.since || "")));
 }
@@ -5080,6 +5132,12 @@ function declSettled(d, plan) {
 function itemSettled(x) {
   if (x.kind === "decl") return declSettled(S.declarations.find(y => y.id === x.id), x.plan);
   if (x.kind === "pen") { const p = S.penalites.find(y => y.id === x.id); return !p || p.statut !== "due"; }
+  if (x.kind === "pret") {
+    // « id:a » : la part à échoir d'un dossier de justice, réglée quand tout le prêt l'est.
+    const [pid, part] = String(x.id).split(":"), p = (S.prets || []).find(y => y.id === pid);
+    if (!p || p.statut !== "en_cours") return true;
+    return part === "a" ? pretReste(p) <= 0 : !pretDues(p).length;
+  }
   // Anciennes fiches de justice : pas d'identifiant, seulement la référence.
   const d = S.declarations.find(y => dossierNo("DF", y.id) === x.ref);
   if (d) return declSettled(d, false);
@@ -5453,6 +5511,7 @@ function openSaisieDetail(id) {
         if (echOf(d) && x.plan) { const due = echRetardMontant(d); if (due > 0 && await payOverdue(d, `Recouvré par la saisie ${dossierNo("SA", id)}`)) rec += due; }
         else { const due = dReste(d); if (await decide(d, "payee", dMontant(d), `Recouvré par la saisie ${dossierNo("SA", id)}`, { quiet: true })) rec += due; }
       }
+      else if (x.kind === "pret") { const p = (S.prets || []).find(y => y.id === x.id); const dues = p ? pretDues(p) : []; const due = dues.reduce((t, y) => t + (Number(y.montant) || 0), 0); if (due > 0 && await payPret(p, dues.map(y => y.i), `Recouvré par la saisie ${dossierNo("SA", id)}`)) rec += due; }
       else { const p = S.penalites.find(y => y.id === x.id); if (p && p.statut === "due" && await setPenaltyStatus(p, "payee")) rec += Number(p.montant) || 0; }
     }
     const body = Object.assign({}, s, { statut: "executee", executeeLe: nowISO(), recouvre: rec }); delete body.id;
@@ -5566,7 +5625,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -6014,7 +6073,7 @@ function newControle(e, declIds, opts) {
   const create = async ev => {
     const ids = $$("input[data-decl]", dlg).filter(b => b.checked && !b.disabled).map(b => b.dataset.decl);
     if (!ids.length) { err.textContent = "Cochez au moins une période à contrôler."; return; }
-    ev.currentTarget.disabled = true;
+    const btn = ev.currentTarget; btn.disabled = true;
     const ref = S.db.collection("controles").doc();
     const sel = ids.map(id => S.declarations.find(d => d.id === id)).filter(Boolean);
     const c = { entrepriseId: e.id || null, entrepriseNom: e.nom, declIds: ids, periodes: [...new Set(sel.map(d => d.periode))].sort(), motif: motif.value.trim(), origine: orig.value, inspecteur: insp.value.trim(),
@@ -6025,7 +6084,7 @@ function newControle(e, declIds, opts) {
     if (opts.qualification) c.qualification = opts.qualification;
     if (opts.justif) c.justif = { ecarts: opts.justif.filter(x => ids.includes(x.declId)), delai: new Date(Date.now() + Math.max(1, Number(cfg().delaiReponseJours) || 2) * 864e5).toISOString() };
     if (susp.checked) for (const d of sel) { const st = dStatus(d); if (st === "soumise" || st === "validee") { c.suspendus.push(d.id); c.avant[d.id] = st; } }
-    if (!(await write(() => ref.set(c)))) { ev.currentTarget.disabled = false; return; }
+    if (!(await write(() => ref.set(c)))) { btn.disabled = false; return; }
     for (const id of c.suspendus) { const d = S.declarations.find(x => x.id === id); if (d) await decide(d, "controle", dMontant(d), (S.decisions[id] || {}).note || `Contrôle fiscal ${dossierNo("CF", ref.id)}`, { quiet: true }); }
     toast(`Contrôle ${dossierNo("CF", ref.id)} ouvert.`);
     autoPublish("controles", avisVerifDoc(Object.assign({ id: ref.id }, c)), "Contrôle ouvert.");
@@ -6498,6 +6557,11 @@ function justiceFacts(e) {
   const debts = [];
   for (const d of ds) if (dStatus(d) === "validee" && dReste(d) > 0) debts.push({ kind: "decl", id: d.id, ref: dossierNo("DF", d.id), nature: "Avis d’imposition" + (echOf(d) ? " (échéancier)" : ""), periode: periodPlain(d.periode), at: (S.decisions[d.id] || {}).at, montant: dMontant(d), reste: dReste(d), echu: declEchue(d) });
   for (const p of pensOf(e)) if (p.statut === "due") debts.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), nature: p.type === "redressement" ? "Redressement fiscal" : p.type === "majoration" ? "Majoration de retard" : "Pénalité", periode: p.motif || "", at: p.createdAt, montant: Number(p.montant) || 0, reste: Number(p.montant) || 0, echu: penEchue(p) });
+  for (const p of pretsOf(e)) if (p.statut === "en_cours" && pretReste(p) > 0) {
+    const due = pretDuMontant(p), reste = pretReste(p);
+    if (due > 0) debts.push({ kind: "pret", id: p.id, ref: pretNo(p), nature: "Prêt de la Préfecture", periode: (PRET_OBJETS[p.objet] || "") + " · échéances échues", at: p.verseLe, montant: Number(p.montant) || 0, reste: due, echu: true });
+    if (reste - due > 0) debts.push({ kind: "pret", id: p.id + ":a", ref: pretNo(p), nature: "Prêt de la Préfecture", periode: (PRET_OBJETS[p.objet] || "") + " · à échoir", at: p.verseLe, montant: Number(p.montant) || 0, reste: reste - due, echu: false });
+  }
   const ctrls = S.controles.filter(c => sameEnt(c, e));
   const rls = relancesOf(e).slice().reverse();
   const sais = saisiesOf(e).slice().reverse();
@@ -6515,6 +6579,10 @@ function justiceFacts(e) {
     events.push([s.at, SAISIE_TYPES[s.type] || "Saisie", `${dossierNo("SA", s.id)} · ${money(s.montant)}${s.tiers ? " · " + s.tiers : ""}`]);
     if (s.executeeLe) events.push([s.executeeLe, "Saisie exécutée", `${dossierNo("SA", s.id)} · ${money(s.recouvre || 0)} recouvrés`]);
     if (s.leveeLe) events.push([s.leveeLe, "Mainlevée de saisie", dossierNo("SA", s.id)]);
+  }
+  for (const p of pretsOf(e)) {
+    if (p.verseLe) events.push([p.verseLe, "Prêt accordé", `${pretNo(p)} · ${money(p.montant)} · ${PRET_OBJETS[p.objet] || ""}`]);
+    if (p.exigibleLe) events.push([p.exigibleLe, "Exigibilité anticipée du prêt", `${pretNo(p)} · ${p.exigibleMotif || ""}`]);
   }
   for (const r of relevesOf(e)) events.push([r.at, "Relevé du compte", `${dossierNo("RC", r.id)} · ${money(r.montant)} · ${r.agent || "agent"}`]);
   for (const x of soupconsOf(e)) events.push([x.at, "Déclaration de soupçon", `${dossierNo("DS", x.id)} · ${money(x.montant)}`]);
@@ -6771,6 +6839,342 @@ $("#r-save").addEventListener("click", async () => {
   if (ok) { S.recDirty = false; $("#r-msg").textContent = "Réglages du recouvrement enregistrés."; toast("Réglages du recouvrement enregistrés."); renderRecouvSettings(true); }
 });
 
+/* ---------- Prêts aux entreprises ---------- */
+// La Préfecture prête l'argent du Trésor à une entreprise, pour un objet précis (un véhicule, un
+// local, du stock…), avec ou sans intérêts, remboursé en une fois ou par échéances. Comme un prêt
+// public réel, il est affecté : l'entreprise prouve l'achat, faute de quoi la Direction peut exiger
+// le remboursement immédiat (exigibilité anticipée). Une échéance en retard suit le recouvrement
+// habituel : relance, mise en demeure, saisie, justice.
+const PRET_OBJETS = { vehicule: "Achat de véhicule", local: "Local ou immobilier", stock: "Stock et matériel", tresorerie: "Trésorerie", autre: "Autre" };
+const PRET_STAT = { demande: ["Demande", "info"], en_cours: ["En cours", "accent"], rembourse: ["Remboursé", "ok"], refuse: ["Refusé", "muted"], annule: ["Annulé", "muted"] };
+function pretsOf(e) { return (S.prets || []).filter(p => sameEnt(p, e)).sort((a, b) => String(b.at || b.demandeLe).localeCompare(String(a.at || a.demandeLe))); }
+const pretNo = p => dossierNo("PR", p.id);
+const pretVerse = p => p.statut === "en_cours" || p.statut === "rembourse";
+const pretPaye = p => (p.echeances || []).filter(x => x.payee).reduce((t, x) => t + (Number(x.montant) || 0), 0);
+const pretTotal = p => (p.echeances || []).reduce((t, x) => t + (Number(x.montant) || 0), 0);
+const pretReste = p => (pretVerse(p) ? Math.max(0, pretTotal(p) - pretPaye(p)) : 0);
+const pretCapitalRestant = p => (pretVerse(p) ? (p.echeances || []).filter(x => !x.payee).reduce((t, x) => t + (Number(x.capital) || 0), 0) : 0);
+// Échéances exigibles : leur date est passée, ou la Direction a prononcé l'exigibilité anticipée.
+function pretDues(p) {
+  if (p.statut !== "en_cours") return [];
+  const now = Date.now(), ex = p.exigibleLe ? new Date(p.exigibleLe).getTime() : null;
+  return (p.echeances || []).map((x, i) => Object.assign({ i }, x)).filter(x => !x.payee && (new Date(x.date).getTime() < now || (ex && ex <= now)));
+}
+const pretDuMontant = p => pretDues(p).reduce((t, x) => t + (Number(x.montant) || 0), 0);
+const justifEchu = p => p.statut === "en_cours" && p.justifRequis && !p.justificatif && p.justifAvant && new Date(p.justifAvant).getTime() < Date.now();
+function pretState(p) {
+  if (p.statut === "en_cours") {
+    if (p.exigibleLe) return ["Exigible", "bad"];
+    if (pretDues(p).length) return ["En retard", "bad"];
+    if (justifEchu(p)) return ["Justificatif manquant", "warn"];
+  }
+  return PRET_STAT[p.statut] || PRET_STAT.demande;
+}
+// Tableau d'amortissement : intérêts « tout compris » sur la durée, échéances égales.
+function pretTaux(v) { return Math.min(100, Math.max(0, Number(v) || 0)); }
+function pretPlan(montant, taux, n, firstAt, stepDays) {
+  const cap = Math.max(0, Math.round(Number(montant) || 0)), inter = Math.round(cap * pretTaux(taux) / 100), tot = cap + inter;
+  const capPer = Math.floor(cap / n), intPer = Math.floor(inter / n), out = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date(firstAt.getTime() + i * stepDays * 864e5);
+    d.setHours(23, 59, 0, 0);
+    // Les euros qui ne se divisent pas tombent sur les premières échéances : elles diffèrent d'un ou deux euros au plus.
+    const c = capPer + (i < cap - capPer * n ? 1 : 0), it = intPer + (i < inter - intPer * n ? 1 : 0);
+    out.push({ n: i + 1, date: d.toISOString(), montant: c + it, capital: c, interets: it, payee: false, paidAt: null });
+  }
+  return { cap, inter, tot, echeances: out };
+}
+const stepDaysOf = () => (cfg().periodicite === "mois" ? 30 : 7);
+
+// Documents : convention de prêt et quittances de remboursement.
+function conventionDoc(p) {
+  const e = entOf(p), plan = p.echeances || [];
+  const st = p.statut === "rembourse" ? ["REMBOURSÉ", "ok"] : p.statut === "refuse" ? ["REFUSÉ", "muted"] : p.statut === "annule" ? ["ANNULÉ", "muted"] : p.statut === "demande" ? ["DEMANDE", "info"] : p.exigibleLe ? ["EXIGIBLE", "bad"] : ["ACCORDÉ", "accent"];
+  return {
+    kind: "CONVENTION DE PRÊT", no: pretNo(p), date: p.verseLe ? "Fonds versés le " + longDate(new Date(p.verseLe)) : "Demande du " + longDate(new Date(p.demandeLe || p.at || Date.now())),
+    meta: [["Emprunteur", e.nom || p.entrepriseNom], ["Dirigeant", e.patron || "—"], ["Objet", PRET_OBJETS[p.objet] || "—"], ["Précision", p.precision || "—"]],
+    lines: [["Capital prêté", money(p.montant)], [`Intérêts (${pct(p.taux || 0)} sur la durée)`, money(Math.max(0, pretTotal(p) - (Number(p.montant) || 0)))],
+      ["Remboursement", plan.length > 1 ? `${plan.length} échéances, une par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` : "en une fois"],
+      p.justifRequis ? ["Justificatif d’achat à fournir avant le", p.justifAvant ? longDate(new Date(p.justifAvant)) : "—"] : null].filter(Boolean),
+    total: p.statut === "refuse" || p.statut === "annule" ? ["Capital demandé", money(p.montant)] : [p.statut === "rembourse" ? "Somme remboursée" : "Somme à rembourser", money(pretTotal(p))],
+    table: plan.length ? { title: "Échéancier de remboursement", head: ["Échéance", "Date limite", "Montant", "État"], rows: plan.map(x => [`${x.n} / ${plan.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : "À payer"]) } : null,
+    stamp: st,
+    footer: `Les fonds sont affectés à l’objet ci-dessus${p.justifRequis ? " : l’entreprise remet le justificatif de l’achat dans le délai indiqué" : ""}. En cas d’emploi des fonds à un autre usage ou d’échéance impayée, la Direction peut exiger le remboursement immédiat du capital restant dû, puis engager le recouvrement forcé.`,
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Convention de prêt ${pretNo(p)}** · ${e.nom || p.entrepriseNom} · ${money(p.montant)} prêtés${p.taux ? ` à ${pct(p.taux)}` : " sans intérêts"}, ${money(pretTotal(p))} à rembourser.` }
+  };
+}
+function quittancePretDoc(p, idx) {
+  const x = (p.echeances || [])[idx];
+  if (!x || !x.payee) return null;
+  const n = (p.echeances || []).length;
+  return quittanceDoc({ no: `${dossierNo("QT", p.id)}-${x.n}`, ent: entOf(p), objet: `Remboursement du prêt ${pretNo(p)} · échéance ${x.n}/${n}`, ref: pretNo(p), montant: x.montant, paidAt: x.paidAt, paidByNom: x.paidByNom,
+    detail: [["Dont capital", money(x.capital || 0), false], ["Dont intérêts", money(x.interets || 0), false], ["Reste à rembourser", money(pretReste(p)), true]] });
+}
+
+// Écritures
+async function savePret(p, patch, msg) {
+  const latest = (S.prets || []).find(x => x.id === p.id) || p;
+  const body = Object.assign({}, latest, patch); delete body.id;
+  const ok = await write(() => S.db.doc("prets/" + p.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+const pretBusy = new Set();
+async function pretOnce(id, fn) {
+  if (pretBusy.has(id)) return false;
+  pretBusy.add(id);
+  try { return await fn(); } finally { pretBusy.delete(id); }
+}
+async function payPret(p, idxs, note) { return pretOnce(p.id, () => payPret1(p, idxs, note)); }
+async function payPret1(p, idxs, note) {
+  const latest = (S.prets || []).find(x => x.id === p.id) || p;
+  if (latest.statut !== "en_cours") return false;
+  const ech = JSON.parse(JSON.stringify(latest.echeances || []));
+  const now = nowISO(), done = [];
+  for (const i of idxs) if (ech[i] && !ech[i].payee) { Object.assign(ech[i], { payee: true, paidAt: now, paidByNom: S.agentName || "", note: note || "" }); done.push(i); }
+  if (!done.length) return false;
+  const fini = ech.every(x => x.payee);
+  if (!(await savePret(latest, Object.assign({ echeances: ech }, fini ? { statut: "rembourse", rembourseLe: now } : {})))) return false;
+  const p2 = (S.prets || []).find(x => x.id === p.id);
+  if (p2) for (const i of done) { const q = quittancePretDoc(p2, i); if (q) autoPublish("quittances", q, "Remboursement encaissé."); }
+  return true;
+}
+// Remboursement anticipé : le capital restant dû, sans les intérêts des échéances à venir.
+async function rembourserAnticipe(p) { return pretOnce(p.id, () => rembourserAnticipe1(p)); }
+async function rembourserAnticipe1(p) {
+  const latest = (S.prets || []).find(x => x.id === p.id) || p;
+  if (latest.statut !== "en_cours") return false;
+  const ech = JSON.parse(JSON.stringify(latest.echeances || [])), now = Date.now(), at = nowISO();
+  let n = 0;
+  ech.forEach(x => {
+    if (x.payee) return;
+    if (new Date(x.date).getTime() > now && !latest.exigibleLe) { x.interetsRemis = x.interets || 0; x.montant = x.capital || 0; x.interets = 0; }
+    Object.assign(x, { payee: true, paidAt: at, paidByNom: S.agentName || "", anticipe: true }); n++;
+  });
+  if (!n) return false;
+  if (!(await savePret(latest, { echeances: ech, statut: "rembourse", rembourseLe: at, anticipe: true }, "Prêt remboursé par anticipation."))) return false;
+  const p2 = (S.prets || []).find(x => x.id === p.id);
+  if (p2) autoPublish("quittances", quittanceDoc({ no: `${dossierNo("QT", p.id)}-S`, ent: entOf(p2), objet: `Remboursement anticipé du prêt ${pretNo(p2)}`, ref: pretNo(p2),
+    montant: ech.filter(x => x.anticipe && x.paidAt === at).reduce((t, x) => t + (Number(x.montant) || 0), 0), paidAt: at, paidByNom: S.agentName || "" }), "Remboursement encaissé.");
+  return true;
+}
+
+// L'état du prêt au moment du clic : un autre agent a pu l'accorder, le refuser ou l'annuler entre-temps.
+function pretNow(id) { return (S.prets || []).find(x => x.id === id) || null; }
+function pretChanged(cur) {
+  toast(cur ? `Ce prêt a changé entre-temps : il est maintenant « ${(PRET_STAT[cur.statut] || PRET_STAT.demande)[0].toLowerCase()}${cur.exigibleLe && cur.statut === "en_cours" ? ", exigible" : ""} ».` : "Ce prêt vient d’être supprimé par un autre agent.", true);
+  if (cur) openPret(cur.id); else closeDialog();
+}
+
+// Fenêtre d'un prêt
+function openPret(id) {
+  const p = (S.prets || []).find(x => x.id === id);
+  if (!p) return;
+  const dir = writer(), e = entOf(p), reopen = () => openPret(id), next = (p.echeances || []).findIndex(x => !x.payee);
+  const rows = (p.echeances || []).map((x, i) => {
+    const late = !x.payee && p.statut === "en_cours" && (new Date(x.date).getTime() < Date.now() || p.exigibleLe);
+    return h("tr", {},
+      h("td", { class: "no", text: `${x.n}/${p.echeances.length}` }), h("td", { text: longDate(new Date(x.date)) }),
+      h("td", { class: "num", text: money(x.montant) }), h("td", { class: "num", text: money(x.interets || 0) }),
+      h("td", {}, chip(x.payee ? [`Payée le ${fmtDate(new Date(x.paidAt))}${x.anticipe ? " (anticipé)" : ""}`, "ok"] : late ? ["En retard", "bad"] : ["À venir", "muted"])),
+      h("td", { class: "act" },
+        x.payee ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const q = quittancePretDoc(p, i); if (q) showDocImage(q, reopen); }, text: "Quittance" }) : null,
+        dir && p.statut === "en_cours" && i === next ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await payPret(p, [i])) { toast(`Échéance ${x.n}/${p.echeances.length} encaissée.`); reopen(); } else b.disabled = false; }, text: "Encaisser" }) : null));
+  });
+  const justif = p.justificatif;
+  const jf = h("input", { id: "pr-jfile", type: "file", accept: "image/*" }), jl = h("input", { id: "pr-jlien", type: "url", autocomplete: "off", placeholder: "Ou un lien : facture, capture de l’achat…" });
+  const body = [
+    p.statut === "demande" ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Demande en attente. " }), "La Direction l’accorde (les fonds sortent alors du Trésor) ou la refuse.")) : null,
+    justifEchu(p) ? h("div", { class: "notice", style: "margin:0;border-left-color:var(--bad)" }, h("div", {}, h("strong", { text: "Justificatif d’achat non fourni. " }), `Il était attendu avant le ${longDate(new Date(p.justifAvant))}. La Direction peut exiger le remboursement immédiat du capital restant dû.`)) : null,
+    kv([["Objet", `${PRET_OBJETS[p.objet] || "—"}${p.precision ? " · " + p.precision : ""}`], ["Capital", money(p.montant)], ["Taux", p.taux ? pct(p.taux) + " sur la durée" : "sans intérêts"],
+      p.verseLe ? ["Versé le", fmtDateTime(new Date(p.verseLe)) + (p.verseParNom ? " par " + p.verseParNom : "")] : null,
+      pretVerse(p) ? ["Déjà remboursé", money(pretPaye(p))] : null, pretVerse(p) ? ["Reste à rembourser", money(pretReste(p)), "tot"] : ["Total à rembourser", money(pretTotal(p)), "tot"]]),
+    p.motifDemande ? sec("Motif de la demande", h("p", { class: "prewrap", style: "margin:0", text: p.motifDemande })) : null,
+    rows.length ? sec("Échéancier", h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+      h("thead", {}, h("tr", {}, ["", "Date limite", "Montant", "Dont intérêts", "État", ""].map((t, i) => h("th", { class: i === 2 || i === 3 ? "num" : null, text: t })))), h("tbody", {}, rows)))) : null,
+    p.justifRequis || justif ? sec("Emploi des fonds", justif
+      ? h("div", { class: "paste-row" }, h("span", { text: `Justificatif remis le ${fmtDate(new Date(justif.at))}${justif.byNom ? " (" + justif.byNom + ")" : ""}${justif.note ? " · " + justif.note : ""}` }), proofEl(justif.preuve))
+      : h("div", {}, h("p", { class: "hint", style: "margin:0 0 6px", text: p.justifAvant ? `Justificatif de l’achat attendu avant le ${longDate(new Date(p.justifAvant))}.` : "Justificatif de l’achat attendu." }),
+        dir && p.statut === "en_cours" ? h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pr-jfile", text: "Capture" }), jf), h("div", { class: "field" }, h("label", { for: "pr-jlien", text: "Ou lien" }), jl)) : null,
+        dir && p.statut === "en_cours" ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:6px", onclick: async ev => {
+          const b = ev.currentTarget; b.disabled = true;
+          const preuve = (jf.files && jf.files[0] ? await uploadProof(`prets/${p.id}`, jf.files[0]) : null) || linkProof(jl.value);
+          if (!preuve) { toast("Joignez une capture ou un lien.", true); b.disabled = false; return; }
+          if (await savePret(p, { justificatif: { at: nowISO(), byNom: S.agentName || "", preuve } }, "Justificatif enregistré.")) reopen(); else b.disabled = false;
+        }, text: "Enregistrer le justificatif" }) : null)) : null,
+    p.refusMotif ? sec("Motif du refus", h("p", { class: "prewrap", style: "margin:0", text: p.refusMotif })) : null
+  ];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(conventionDoc(p), reopen), text: "Convention en image" }),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(e), text: "Fiche de l’entreprise" }), h("span", { class: "spacer" })];
+  if (dir && p.statut === "demande") {
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => refuserPret(p), text: "Refuser" }));
+    foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => openPretForm(e, p), text: "Examiner et accorder" }));
+  }
+  if (dir && p.statut === "en_cours") {
+    if (!p.exigibleLe) foot.push(h("button", { class: justifEchu(p) ? "btn danger small" : "btn ghost small", type: "button", onclick: () => exigerPret(p), text: "Exiger le remboursement" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await rembourserAnticipe(p)) reopen(); else b.disabled = false; }, text: p.exigibleLe ? "Encaisser le solde" : "Remboursement anticipé" }));
+  }
+  if (canAgent() && p.statut === "demande") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+    const cur = pretNow(p.id);
+    if (!cur || cur.statut !== "demande") { pretChanged(cur); return; }
+    const b = ev.currentTarget; b.disabled = true;
+    if (await savePret(cur, { statut: "annule", annuleLe: nowISO(), annuleParNom: S.agentName || "" }, "Demande annulée.")) reopen(); else b.disabled = false;
+  }, text: "Annuler la demande" }));
+  openDialog({ eyebrow: `Prêt ${pretNo(p)}${p.demandeParNom ? " · demandé par " + p.demandeParNom : ""}`, title: p.entrepriseNom, stampEl: stamp(pretState(p)), wide: true, body, foot });
+}
+function refuserPret(p) {
+  const t = h("textarea", { id: "pr-refus", rows: "3", placeholder: "Motif : capacité de remboursement insuffisante, objet non justifié…" });
+  openDialog({ eyebrow: `Prêt ${pretNo(p)}`, title: "Refuser la demande · " + p.entrepriseNom, body: [h("div", { class: "field" }, h("label", { for: "pr-refus", text: "Motif" }), t)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openPret(p.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        const cur = pretNow(p.id);
+        if (!cur || cur.statut !== "demande") { pretChanged(cur); return; }
+        const b = ev.currentTarget; b.disabled = true;
+        if (await savePret(cur, { statut: "refuse", refusLe: nowISO(), refusMotif: t.value.trim(), refusParNom: S.agentName || "" }, "Demande refusée.")) openPret(p.id); else b.disabled = false;
+      }, text: "Refuser" })] });
+}
+// Exigibilité anticipée : tout le capital restant devient dû tout de suite (avec les intérêts déjà échus).
+function exigerPret(p) {
+  const t = h("textarea", { id: "pr-exig", rows: "3", placeholder: "Motif : justificatif non fourni, fonds employés à un autre usage, impayés…" });
+  if (justifEchu(p)) t.value = "Justificatif de l’achat non fourni dans le délai.";
+  openDialog({ eyebrow: `Prêt ${pretNo(p)}`, title: "Exiger le remboursement · " + p.entrepriseNom,
+    body: [h("p", { style: "margin:0", text: `Le capital restant dû (${money(pretCapitalRestant(p))}) devient exigible immédiatement. Les intérêts des échéances à venir ne sont pas réclamés. Faute de paiement, la somme suit le recouvrement : relance, mise en demeure, saisie.` }),
+      h("div", { class: "field" }, h("label", { for: "pr-exig", text: "Motif" }), t)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openPret(p.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        const latest = pretNow(p.id), now = Date.now();
+        if (!latest || latest.statut !== "en_cours" || latest.exigibleLe || pretReste(latest) <= 0) { pretChanged(latest); return; }
+        const b = ev.currentTarget; b.disabled = true;
+        const ech = JSON.parse(JSON.stringify(latest.echeances || []));
+        ech.forEach(x => { if (!x.payee && new Date(x.date).getTime() > now) { x.interetsRemis = x.interets || 0; x.montant = x.capital || 0; x.interets = 0; } });
+        if (await savePret(latest, { echeances: ech, exigibleLe: nowISO(), exigibleMotif: t.value.trim() }, "Remboursement exigé.")) {
+          const p2 = (S.prets || []).find(x => x.id === p.id);
+          if (p2) autoPublish("prets", Object.assign(conventionDoc(p2), { kind: "EXIGIBILITÉ ANTICIPÉE", note: t.value.trim(), noteTitle: "Motif", total: ["Somme exigible immédiatement", money(pretReste(p2))],
+            discord: { channel: "entreprises", mentions: [entMention(entOf(p2))], text: `**Exigibilité anticipée du prêt ${pretNo(p2)}** · ${p2.entrepriseNom} · ${money(pretReste(p2))} à rembourser immédiatement.` } }), "Exigibilité notifiée.");
+          openPret(p.id);
+        } else b.disabled = false;
+      }, text: "Exiger le remboursement" })] });
+}
+
+// Formulaire : demande (tout agent) ou accord et versement (Direction).
+function openPretForm(e, demande) {
+  const dir = writer(), c = cfg(), per = c.periodicite === "mois" ? "mois" : "semaine";
+  const ent = h("input", { id: "pf-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" }); if (e) ent.value = e.nom;
+  const obj = h("select", { id: "pf-obj" }, Object.entries(PRET_OBJETS).map(([v, l]) => h("option", { value: v, text: l })));
+  const prec = h("input", { id: "pf-prec", autocomplete: "off", placeholder: "Ex. : camion de livraison, local rue…" });
+  const mt = h("input", { id: "pf-montant", type: "number", min: "1", step: "100", inputmode: "numeric", placeholder: "0" });
+  const tx = h("input", { id: "pf-taux", type: "number", min: "0", max: "100", step: "0.5", value: "0" });
+  const mode = h("select", { id: "pf-mode" }, h("option", { value: "echeances", text: `Par échéances, une par ${per}` }), h("option", { value: "unique", text: "En une fois" }));
+  const nb = h("input", { id: "pf-n", type: "number", min: "2", max: "52", step: "1", value: "4" });
+  const first = h("input", { id: "pf-first", type: "number", min: "1", max: "12", step: "1", value: "1" });
+  const jr = h("input", { id: "pf-jreq", type: "checkbox" }); jr.checked = demande ? demande.justifRequis !== false : true;
+  const jd = h("input", { id: "pf-jdays", type: "number", min: "1", max: "60", step: "1", value: String(c.pretJustifJours || 7) });
+  const motif = h("textarea", { id: "pf-motif", rows: "2", placeholder: "Ce que l’entreprise veut financer et comment elle remboursera" });
+  if (demande) { obj.value = demande.objet || "autre"; prec.value = demande.precision || ""; mt.value = String(demande.montant || ""); tx.value = String(demande.taux || 0); motif.value = demande.motifDemande || ""; if ((demande.echeances || []).length === 1) mode.value = "unique"; else if ((demande.nb || 0) > 1) nb.value = String(demande.nb);
+    if (demande.justifJours) jd.value = String(demande.justifJours);
+    if (demande.premiere) first.value = String(demande.premiere);
+    ent.disabled = true; }
+  const sim = h("div", { class: "pret-sim", "aria-live": "polite" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const nbF = h("div", { class: "field" }, h("label", { for: "pf-n", text: "Nombre d’échéances" }), nb);
+  const plan = () => {
+    const n = mode.value === "unique" ? 1 : Math.max(2, Math.min(52, Math.round(Number(nb.value) || 2)));
+    const step = stepDaysOf(), firstAt = new Date(Date.now() + Math.max(1, Math.round(Number(first.value) || 1)) * step * 864e5);
+    return pretPlan(Number(mt.value) || 0, pretTaux(tx.value), n, firstAt, step);
+  };
+  const draw = () => {
+    nbF.hidden = mode.value === "unique";
+    const p = plan(), t = treasury();
+    fill(sim, Number(mt.value) > 0 ? [
+      kv([["Capital", money(p.cap)], ["Intérêts", money(p.inter)], ["Total à rembourser", money(p.tot), "tot"]]),
+      h("p", { class: "hint", style: "margin:6px 0 0", text: p.echeances.length > 1 ? `${p.echeances.length} échéances ${p.echeances.every(x => x.montant === p.echeances[0].montant) ? "de" : "d’environ"} ${money(p.echeances[p.echeances.length - 1].montant)}, du ${fmtDate(new Date(p.echeances[0].date))} au ${fmtDate(new Date(p.echeances[p.echeances.length - 1].date))}.` : `Remboursement en une fois le ${fmtDate(new Date(p.echeances[0].date))}.` }),
+      dir && p.cap > t.solde ? h("p", { class: "err", style: "margin:4px 0 0", text: `Le Trésor ne dispose que de ${money(t.solde)}.` }) : null] : h("p", { class: "hint", style: "margin:0", text: "Indiquez le montant pour voir l’échéancier." }));
+  };
+  [mt, tx, mode, nb, first].forEach(x => x.addEventListener("input", draw));
+  mode.addEventListener("change", draw);
+  const save = async (grant, ev) => {
+    const en = demande ? entOf(demande) : findEnt(ent.value);
+    if (!en || !en.id) { err.textContent = "Choisissez une entreprise du registre."; ent.focus(); return; }
+    const p = plan();
+    if (!(p.cap > 0)) { err.textContent = "Indiquez le montant prêté."; mt.focus(); return; }
+    if (grant && p.cap > treasury().solde) { err.textContent = `Le Trésor ne dispose que de ${money(treasury().solde)} : réduisez le montant.`; return; }
+    const cur = demande ? pretNow(demande.id) : null;
+    if (demande && (!cur || cur.statut !== "demande")) { pretChanged(cur); return; }
+    const btn = ev.currentTarget; btn.disabled = true;
+    const ref = demande ? S.db.doc("prets/" + demande.id) : S.db.collection("prets").doc();
+    const base = demande ? Object.assign({}, cur) : { entrepriseId: en.id, entrepriseNom: en.nom, demandeLe: nowISO(), demandeParNom: S.agentName || "", by: S.uid || null };
+    delete base.id;
+    const body = Object.assign(base, { objet: obj.value, precision: prec.value.trim(), montant: p.cap, taux: pretTaux(tx.value), nb: p.echeances.length, motifDemande: motif.value.trim(), echeances: p.echeances,
+      premiere: Math.max(1, Math.min(12, Math.round(Number(first.value) || 1))), justifRequis: jr.checked, justifJours: Math.max(1, Math.min(60, Math.round(Number(jd.value) || 7))) });
+    if (grant) Object.assign(body, { statut: "en_cours", at: nowISO(), verseLe: nowISO(), verseParNom: S.agentName || "", justifAvant: jr.checked ? new Date(Date.now() + body.justifJours * 864e5).toISOString() : null });
+    else body.statut = "demande";
+    if (!(await write(() => ref.set(body)))) { btn.disabled = false; return; }
+    const p2 = (S.prets || []).find(x => x.id === ref.id) || Object.assign({ id: ref.id }, body);
+    toast(grant ? `Prêt ${pretNo(p2)} accordé : ${money(p2.montant)} versés.` : `Demande de prêt ${pretNo(p2)} enregistrée.`);
+    if (grant) { autoPublish("prets", conventionDoc(p2), "Convention publiée."); showDocImage(conventionDoc(p2), () => openPret(ref.id)); }
+    else openPret(ref.id);
+  };
+  openDialog({
+    eyebrow: demande ? `Prêt ${pretNo(demande)} · demande à examiner` : "Prêts aux entreprises", title: demande ? "Accorder le prêt · " + demande.entrepriseNom : dir ? "Nouveau prêt" : "Demande de prêt", wide: true,
+    body: [
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pf-ent", text: "Entreprise" }), ent), h("div", { class: "field" }, h("label", { for: "pf-obj", text: "Objet" }), obj)),
+      h("div", { class: "field" }, h("label", { for: "pf-prec", text: "Précision" }), prec),
+      h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "pf-montant", text: "Montant prêté" }), h("div", { class: "money", "data-cur": cur() }, mt)),
+        h("div", { class: "field" }, h("label", { for: "pf-taux", text: "Intérêts sur la durée" }), h("div", { class: "money", "data-cur": "%" }, tx), h("span", { class: "hint", text: "0 % : prêt sans intérêts." })),
+        h("div", { class: "field" }, h("label", { for: "pf-mode", text: "Remboursement" }), mode)),
+      h("div", { class: "row2" }, nbF, h("div", { class: "field" }, h("label", { for: "pf-first", text: `Première échéance dans (${per}s)` }), first)),
+      h("div", { class: "row2", style: "align-items:end" }, h("label", { class: "switch", for: "pf-jreq" }, jr, "Exiger le justificatif de l’achat"), h("div", { class: "field" }, h("label", { for: "pf-jdays", text: "Délai pour le fournir (jours)" }), jd)),
+      h("div", { class: "field" }, h("label", { for: "pf-motif", text: "Motif de la demande" }), motif),
+      sec("Simulation", sim), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: demande ? () => openPret(demande.id) : closeDialog, text: "Annuler" }), h("span", { class: "spacer" }),
+      !demande ? h("button", { class: dir ? "btn ghost small" : "btn ink small", type: "button", onclick: ev => save(false, ev), text: "Enregistrer la demande" }) : null,
+      dir ? h("button", { class: "btn ink small", type: "button", onclick: ev => save(true, ev), text: "Accorder et verser" }) : null]
+  });
+  draw();
+}
+
+// Onglet Prêts
+function renderPrets() {
+  if (S.tab !== "prets") return;
+  const box = $("#pret-list");
+  if (!S.connected || !S.loaded.has("prets")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.prets || []).slice().sort((a, b) => String(b.at || b.demandeLe).localeCompare(String(a.at || a.demandeLe)));
+  const cours = all.filter(p => p.statut === "en_cours"), late = cours.filter(p => pretDues(p).length || p.exigibleLe);
+  const verse = all.filter(pretVerse).reduce((t, p) => t + (Number(p.montant) || 0), 0);
+  const rembourse = all.filter(pretVerse).reduce((t, p) => t + pretPaye(p), 0);
+  const interets = all.filter(pretVerse).reduce((t, p) => t + (p.echeances || []).filter(x => x.payee).reduce((u, x) => u + (Number(x.interets) || 0), 0), 0);
+  const encours = cours.reduce((t, p) => t + pretCapitalRestant(p), 0);
+  const dem = all.filter(p => p.statut === "demande");
+  setKpi("pk-encours", money(encours), `${cours.length} prêt${plural(cours.length)} en cours`);
+  setKpi("pk-verse", money(verse), "sortis du Trésor");
+  setKpi("pk-rembourse", money(rembourse), "revenus au Trésor");
+  setKpi("pk-interets", money(interets), "intérêts perçus", interets > 0 ? "ok" : "");
+  setKpi("pk-retard", money(late.reduce((t, p) => t + pretDuMontant(p), 0)), `${late.length} prêt${plural(late.length)} en retard`, late.length ? "bad" : "");
+  setKpi("pk-dem", String(dem.length), dem.length ? `${money(dem.reduce((t, p) => t + (Number(p.montant) || 0), 0))} demandés` : "aucune demande", dem.length ? "warn" : "");
+  const F = { cours, dem, retard: late, rembourse: all.filter(p => p.statut === "rembourse"), tout: all };
+  setSegCounts($("#seg-pret"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), S.pretFilter || "cours");
+  const list = F[S.pretFilter || "cours"] || all;
+  $("#pret-new").hidden = !canAgent();
+  $("#pret-new").textContent = writer() ? "Nouveau prêt" : "Demande de prêt";
+  fill(box, list.length ? h("ul", { class: "ent-list" }, list.map(p => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openPret(p.id), text: `${pretNo(p)} · ${p.entrepriseNom}` }),
+      h("span", { class: "meta", text: `${PRET_OBJETS[p.objet] || "Prêt"}${p.precision ? " · " + p.precision : ""} · ${money(p.montant)}${p.taux ? " à " + pct(p.taux) : ""}${pretVerse(p) ? ` · reste ${money(pretReste(p))}` : ""}` })),
+    chip(pretState(p)),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openPret(p.id), text: "Ouvrir" })))))
+    : h("div", { class: "empty", text: { cours: "Aucun prêt en cours.", dem: "Aucune demande de prêt en attente.", retard: "Aucun prêt en retard.", rembourse: "Aucun prêt remboursé pour l’instant.", tout: "Aucun prêt pour l’instant." }[S.pretFilter || "cours"] }));
+}
+$("#seg-pret").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.pretFilter = b.dataset.f; renderPrets(); });
+$("#pret-new").addEventListener("click", () => openPretForm(null));
+// Fiche de l'entreprise : ses prêts.
+function pretsSection(e) {
+  const ps = e.id ? pretsOf(e) : [];
+  if (!ps.length && !canAgent()) return null;
+  return sec("Prêts de la Préfecture",
+    ps.length ? h("ul", { class: "ent-list" }, ps.map(p => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openPret(p.id), text: `${pretNo(p)} · ${PRET_OBJETS[p.objet] || "Prêt"}` }), h("span", { class: "meta", text: `${money(p.montant)}${pretVerse(p) ? ` · reste ${money(pretReste(p))}` : ""}` })),
+      chip(pretState(p)), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucun prêt." }),
+    canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openPretForm(e), text: writer() ? "Nouveau prêt" : "Demande de prêt" }) : null);
+}
+
 /* ---------- Surveillance des comptes (lutte contre le blanchiment) ---------- */
 // Sur le serveur, chaque employé peut déposer chaque jour de l'argent sale sur le compte de
 // l'entreprise. On ne voit pas les mouvements du compte, seulement son solde : la Direction
@@ -6829,6 +7233,10 @@ function paiementsEntre(e, t0, t1) {
       t += Math.max(0, (Number(dec.avantDecision.montant) || 0) - dCredit(x));
   }
   for (const p of pensOf(e)) if (p.statut === "payee" && inR(p.paidAt)) t += Number(p.montant) || 0;
+  for (const p of pretsOf(e)) {
+    if (pretVerse(p) && inR(p.verseLe)) t -= Number(p.montant) || 0;
+    (p.echeances || []).forEach(x => { if (x.payee && inR(x.paidAt)) t += Number(x.montant) || 0; });
+  }
   return t;
 }
 // Pour la période elle-même (saisie d'une déclaration) : depuis la dernière observation connue.
@@ -7195,6 +7603,14 @@ openSaisieDetail = liveView(openSaisieDetail, id => { const s = S.saisies.find(x
   match: c => c.path === "saisies/" + id || entMatch(s.entrepriseId)(c), reopen: () => S.saisies.some(x => x.id === id) ? openSaisieDetail(id) : gone() } : null; });
 openTransmission = liveView(openTransmission, id => { const t = S.transmissions.find(x => x.id === id); return t ? { key: "tj:" + id, label: `Justice ${dossierNo("TJ", id)} · ${t.entrepriseNom}`,
   match: c => c.path === "transmissions/" + id || entMatch(t.entrepriseId)(c), reopen: () => S.transmissions.some(x => x.id === id) ? openTransmission(id) : gone() } : null; });
+openPret = liveView(openPret, id => { const p = (S.prets || []).find(x => x.id === id); return p ? { key: "pret:" + id, label: `Prêt ${pretNo(p)} · ${p.entrepriseNom}`,
+  match: c => c.path === "prets/" + id || entMatch(p.entrepriseId)(c), reopen: () => (S.prets || []).some(x => x.id === id) ? openPret(id) : gone() } : null; });
+// Refus, exigibilité, accord : la fenêtre suit le prêt ; s'il change d'état, on revient à sa fiche.
+const pretLive = (kind, label, ok, again) => p => p && p.id ? { key: `pret-${kind}:` + p.id, label: `${label} ${pretNo(p)} · ${p.entrepriseNom}`, match: c => c.path === "prets/" + p.id,
+  reopen: () => { const cur = pretNow(p.id); if (!cur) gone(); else if (ok(cur)) again(cur); else pretChanged(cur); } } : null;
+refuserPret = liveView(refuserPret, pretLive("ref", "Refus du prêt", c => c.statut === "demande", c => refuserPret(c)));
+exigerPret = liveView(exigerPret, pretLive("exig", "Exigibilité du prêt", c => c.statut === "en_cours" && !c.exigibleLe, c => exigerPret(c)));
+openPretForm = liveView(openPretForm, (e, demande) => demande ? pretLive("acc", "Examen du prêt", c => c.statut === "demande", c => openPretForm(entOf(c), c))(demande) : null);
 openCloture = liveView(openCloture, key => ({ key: "clo:" + key, label: "Bilan · " + periodPlain(key),
   match: c => isCfg(c) || ["clotures", "declarations", "decisions", "echeanciers", "entreprises"].includes(c.path.split("/")[0]), reopen: () => openCloture(key) }));
 startEditDecl = (base => function (...a) { const r = base.apply(this, a); if (S.editDecl) S.editSince = Date.now(); setView(); return r; })(startEditDecl);
@@ -7423,6 +7839,7 @@ function searchIndex() {
   for (const a of S.attestations) push("Attestation", dossierNo("AT", a.id), `${dossierNo("AT", a.id)} · ${a.entrepriseNom}`, (a.revoqueeLe ? `Révoquée le ${longDate(new Date(a.revoqueeLe))}` : `${attState(a)[0]} · jusqu’au ${longDate(new Date(a.validUntil))}`), "", () => showDocImage(attestationDoc(a)), a.at);
   for (const r of S.relances) push(isMed(r) ? "Mise en demeure" : "Relance", rlNo(r), `${rlNo(r)} · ${r.entrepriseNom}`, `${rlLabel(r)} · envoyée le ${fmtDate(new Date(r.at))}`, "", () => showDocImage(relanceDoc(r)), r.at);
   for (const s of S.saisies) push("Saisie", dossierNo("SA", s.id), `${dossierNo("SA", s.id)} · ${s.entrepriseNom}`, `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)} · ${(SSTAT[s.statut] || SSTAT.notifiee)[0]}`, s.tiers, () => openSaisieDetail(s.id), s.at);
+  for (const p of S.prets || []) push("Prêt", pretNo(p), `${pretNo(p)} · ${p.entrepriseNom}`, `${(pretState(p))[0]} · ${money(p.montant)}${pretVerse(p) ? " · reste " + money(pretReste(p)) : ""}`, [PRET_OBJETS[p.objet], p.precision].join(" "), () => openPret(p.id), p.at || p.demandeLe);
   for (const r of S.releves) push("Relevé", dossierNo("RC", r.id), `${dossierNo("RC", r.id)} · ${r.entrepriseNom}`, `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}`, r.note, () => openFiche(entOf(r)), r.at);
   for (const x of S.soupcons) push("Soupçon", dossierNo("DS", x.id), `${dossierNo("DS", x.id)} · ${x.entrepriseNom}`, `Déclaration de soupçon · ${money(x.montant)}`, "", () => showDocImage(soupconDoc(x)), x.at);
   for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
@@ -7560,7 +7977,7 @@ function showTab(name) {
   S.tab = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
-  if (["dashboard", "entreprises", "economie", "recouvrement"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets"].includes(name)) schedule();
 }
 $("nav.tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } } });
 $("nav.tabs").addEventListener("keydown", e => {
@@ -7576,7 +7993,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "prets", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();

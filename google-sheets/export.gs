@@ -166,6 +166,19 @@ function actualiser() {
   ecrire("Soupçons", ["N°", "Entreprise", "Sommes en cause", "Transmise le", "Par", "Périodes", "Faits"],
     col("soupcons").map(r => { const x = r.data; return [no("DS", r.id), x.entrepriseNom, x.montant, date(x.at), x.byNom || "", (x.ecarts || []).map(e => e.periode + " : +" + e.ecart).join(", "), x.faits || ""]; }));
 
+  const OBJETS_PRET = { vehicule: "Achat de véhicule", local: "Local ou immobilier", stock: "Stock et matériel", tresorerie: "Trésorerie", autre: "Autre" };
+  const STATUTS_PRET = { demande: "Demande", en_cours: "En cours", rembourse: "Remboursé", refuse: "Refusé", annule: "Annulé" };
+  const lignesPret = [];
+  ecrire("Prêts", ["N°", "Entreprise", "Objet", "Précision", "Capital", "Taux", "Échéances", "Total à rembourser", "Remboursé", "Reste dû", "Statut", "Demandé le", "Versé le", "Par", "Justificatif", "Exigibilité anticipée", "Motif"],
+    col("prets").map(r => { const p = r.data, ech = p.echeances || [], verse = p.statut === "en_cours" || p.statut === "rembourse";
+      const tot = ech.reduce((s, x) => s + (x.montant || 0), 0), paye = ech.filter(x => x.payee).reduce((s, x) => s + (x.montant || 0), 0);
+      ech.forEach(x => lignesPret.push([no("PR", r.id), p.entrepriseNom, x.n + "/" + ech.length, date(x.date), x.montant, x.capital || 0, x.interets || 0, x.payee ? (x.anticipe ? "Payée (anticipé)" : "Payée") : "À payer", date(x.paidAt), x.note || ""]));
+      return [no("PR", r.id), p.entrepriseNom, OBJETS_PRET[p.objet] || p.objet || "", p.precision || "", p.montant || 0, (p.taux || 0) / 100, ech.length, tot, verse ? paye : 0, verse ? Math.max(0, tot - paye) : 0,
+        STATUTS_PRET[p.statut] || p.statut, date(p.demandeLe), date(p.verseLe), p.verseParNom || p.demandeParNom || "",
+        p.justificatif ? (p.justificatif.preuve && p.justificatif.preuve.type === "lien" ? p.justificatif.preuve.url : "Fourni") : p.justifRequis ? "Attendu" : "Non exigé",
+        date(p.exigibleLe), p.exigibleMotif || p.refusMotif || p.motifDemande || ""]; }));
+  ecrire("Remboursements de prêts", ["Prêt", "Entreprise", "Échéance", "Date limite", "Montant", "Dont capital", "Dont intérêts", "État", "Payée le", "Note"], lignesPret);
+
   ecrire("Journal", ["Date", "Auteur", "Action", "Type", "Dossier"],
     (data.journal || []).map(j => [date(j.at), j.auteur || "", j.action, j.collection, j.doc_id]));
 
@@ -182,7 +195,9 @@ function actualiser() {
     ["Saisies", col("saisies").length],
     ["Dossiers transmis à la justice", col("transmissions").length],
     ["Relevés de compte", col("releves").length],
-    ["Déclarations de soupçon", col("soupcons").length]
+    ["Déclarations de soupçon", col("soupcons").length],
+    ["Prêts accordés", col("prets").filter(r => r.data.statut === "en_cours" || r.data.statut === "rembourse").length],
+    ["Demandes de prêt en attente", col("prets").filter(r => r.data.statut === "demande").length]
   ]);
 }
 
