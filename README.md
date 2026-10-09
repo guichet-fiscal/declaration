@@ -184,7 +184,7 @@ Depuis un dossier, une alerte, la fiche d’une entreprise ou **Recouvrement →
 
 1. **Ouverture** : périodes vérifiées, origine (alerte, signalement, contrôle aléatoire), inspecteur. Les avis non payés de ces périodes sont suspendus. L’**avis de vérification** peut partir sur Discord.
 2. **Instruction** : constats, notes datées, **pièces**. Les captures d’écran sont réduites et compressées (environ 200 Ko) puis rangées dans un espace privé de Supabase (1 Go gratuit, soit environ 5 000 captures ; l’espace utilisé est affiché). Un lien peut remplacer une capture : prenez le lien du message Discord, pas celui de l’image, qui expire.
-3. **Rectifications** : chiffre d’affaires, charges, salaires et salariés retenus par période ; le rappel est recalculé au barème en vigueur. Qualification : bonne foi (0 %), manquement délibéré (40 %), manœuvres frauduleuses (80 %), opposition au contrôle (100 %).
+3. **Rectifications** : chiffre d’affaires, charges, salaires et salariés retenus par période ; le rappel est recalculé au barème en vigueur. Quand le barème s’applique à chaque salaire, les salaires se rectifient salarié par salarié (corriger un salaire, retirer un salarié fictif, ajouter un salarié non déclaré) ; si seule la masse est changée, la répartition déclarée entre les salariés est gardée. Qualification : bonne foi (0 %), manquement délibéré (40 %), manœuvres frauduleuses (80 %), opposition au contrôle (100 %).
 4. **Proposition de rectification** : notifiée avec un délai de réponse (2 jours par défaut, réglable). L’entreprise accepte ou conteste ; sans réponse, elle est réputée accepter.
 5. **Mise en recouvrement** (Direction) : l’**avis de mise en recouvrement** crée la somme à payer, suivie comme une pénalité (relances, quittance). Les avis suspendus redeviennent payables. Ou bien **classement sans suite**.
 
@@ -234,7 +234,7 @@ La Préfecture peut prêter l’argent du Trésor à une entreprise pour un obje
 4. **Le remboursement** : en une fois, ou par échéances (une par semaine, ou par mois si les déclarations sont mensuelles), avec un délai avant la première. Chaque échéance encaissée remonte au Trésor et publie une quittance.
 5. **L’emploi des fonds** : par défaut, l’entreprise doit fournir le **justificatif de l’achat** (capture ou lien de la facture de la concession, par exemple) dans un délai (7 jours par défaut, modifiable pour chaque prêt). Passé ce délai, le prêt affiche « Justificatif manquant ».
 6. **L’exigibilité anticipée** (Direction) : si le justificatif manque, si l’argent a servi à autre chose ou si les échéances ne sont pas payées, **Exiger le remboursement** rend tout le capital restant dû immédiatement. Les intérêts à venir ne sont pas réclamés. La notification part sur Discord.
-7. **Le remboursement anticipé** : l’entreprise peut tout rembourser avant l’heure. Elle paie le capital restant, sans les intérêts des échéances à venir.
+7. **Le remboursement anticipé** : l’entreprise peut tout rembourser avant l’heure. Elle paie le capital restant, sans les intérêts des échéances à venir. Le montant est affiché avant de confirmer ; la Direction peut annuler un remboursement anticipé ou l’encaissement de la dernière échéance en cas d’erreur.
 
 Une échéance en retard suit le recouvrement habituel : impayés, relance, mise en demeure, saisie, dossier de justice. Elle bloque l’attestation de régularité. Le versement du prêt et ses remboursements entrent dans la surveillance des comptes : l’argent prêté n’est pas un enrichissement inexpliqué.
 
@@ -255,6 +255,9 @@ Les entreprises achètent leurs véhicules en concession avec l’argent de leur
 Un prêt « achat de véhicule » est justifié par le véhicule enregistré avec ce prêt et sa facture. Dans la surveillance des comptes, un achat payé par le compte mais absent des charges explique la baisse du solde, et le remboursement du dirigeant explique la hausse. L’Inspection enregistre les véhicules, leurs factures, les contrôles de police et les ventes. Valider, requalifier, marquer saisi et retirer du registre sont réservés à la Direction, et la base l’impose elle-même (`supabase/v9_vehicules.sql`) : l’Inspection ne peut ni effacer un contrôle de police, ni revenir sur une vente. Pour publier automatiquement certificats et requalifications, cochez « Véhicules de société » dans Réglages → Discord.
 
 ## Cohérence des dossiers
+
+- **Attestation de régularité** : une somme encore dans son délai de paiement ne l’empêche pas (comme dans la réalité), mais elle y figure comme « pas encore payée », avec sa date limite.
+- **Entreprise retirée du registre** : ses rappels, relances et mises en demeure peuvent être supprimés avec elle. Dans Recouvrement → Relances envoyées, la Direction supprime une relance (deux clics) ou toutes celles d’entreprises retirées.
 
 Chaque statut suit la vie du dossier, partout (tableau de bord, Entreprises, Recouvrement, fiche, recherche, attestation, PDF de justice) :
 
@@ -312,9 +315,13 @@ Dans le **Journal**, chaque action encore réversible porte un bouton : **Restau
 
 Pour utiliser par exemple `impots.grandparisrp.fr` :
 
-1. Sur GitHub, ouvrez **Settings → Pages → Custom domain**, saisissez l’adresse et enregistrez.
-2. Chez le gestionnaire du domaine, créez un enregistrement **CNAME** `impots` qui pointe vers `guichet-fiscal.github.io`.
-3. Dans Supabase, remplacez l’ancienne adresse par la nouvelle dans **Site URL** et **Redirect URLs**.
+Il faut un nom de domaine : celui du serveur s’il en a un (un administrateur ajoute l’enregistrement ci-dessous), ou un domaine acheté (quelques euros par an chez OVH, Gandi, Cloudflare…).
+
+1. Chez le gestionnaire du domaine, créez un enregistrement **CNAME** `impots` qui pointe vers `guichet-fiscal.github.io`.
+2. Sur GitHub, ouvrez **Settings → Pages → Custom domain**, saisissez `impots.grandparisrp.fr` et enregistrez. Attendez la coche verte (quelques minutes à quelques heures), puis cochez **Enforce HTTPS**.
+3. Dans Supabase, **Authentication → URL Configuration** : remplacez l’ancienne adresse par la nouvelle dans **Site URL** et ajoutez-la dans **Redirect URLs**. Rien à changer dans l’application Discord : son adresse de retour reste celle de Supabase.
+
+L’ancienne adresse redirige vers la nouvelle. Ceux qui ont installé le guichet comme une application la réinstallent depuis la nouvelle adresse.
 
 ## Modifier le site
 

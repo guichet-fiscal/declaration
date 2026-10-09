@@ -460,6 +460,7 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
 .checklist li::before{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;margin-top:1px}
 .checklist li.yes::before{content:"✓";background:var(--ok-soft);color:var(--ok)}
 .checklist li.no::before{content:"✕";background:var(--bad-soft);color:var(--bad)}
+.checklist li.wait::before{content:"…";background:var(--warn-soft);color:var(--warn)}
 .att-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
 .exo-line{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:14px}
 .calc dd.exo{color:var(--ok)}
@@ -476,6 +477,10 @@ fieldset.checks .switch input{margin-top:3px;flex:none}
 .notes p{margin:2px 0 0}
 .rect-table input{min-width:92px;padding:6px 8px;font-size:13.5px}
 .rect-table td:nth-child(6) input{min-width:150px}
+.rect-table tr.rect-sal>td{padding-top:0;background:var(--field)}
+.rect-sal-box{padding:8px 4px 10px}
+.rect-sal-box table input{min-width:110px}
+.rect-table input[readonly]{background:transparent;border-color:transparent;color:var(--ink-2)}
 .paste-row textarea{flex:1 1 260px}
 /* v7 : recherche rapide, application installable */
 kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--rule);border-bottom-width:2px;border-radius:4px;padding:0 5px;margin-left:8px;color:var(--ink-3);background:var(--paper)}
@@ -3569,11 +3574,19 @@ function renderSettings() {
     cb.addEventListener("change", async () => { const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ actif: cb.checked })); if (!ok) cb.checked = !cb.checked; });
     const rm = h("button", { class: "btn danger small", type: "button", text: "Retirer", disabled: !writer() });
     rm.addEventListener("click", () => {
-      const nDecl = S.declarations.filter(d => d.entrepriseId === e.id).length;
+      const nDecl = S.declarations.filter(d => d.entrepriseId === e.id).length, rls = relancesOf(e);
+      const cbR = h("input", { type: "checkbox", id: "rm-rl" }); cbR.checked = true;
       openDialog({ eyebrow: "Registre des entreprises", title: `Retirer « ${e.nom} » ?`,
-        body: [h("p", { style: "margin:0", text: nDecl ? `Ses ${nDecl} déclaration${plural(nDecl)} restent dans l’historique, marquée${plural(nDecl)} « non enregistrée ». Pour une entreprise fermée temporairement, décochez plutôt « Active ».` : "Elle n’a encore aucune déclaration." })],
+        body: [h("p", { style: "margin:0", text: nDecl ? `Ses ${nDecl} déclaration${plural(nDecl)} restent dans l’historique, marquée${plural(nDecl)} « non enregistrée ». Pour une entreprise fermée temporairement, décochez plutôt « Active ».` : "Elle n’a encore aucune déclaration." }),
+          rls.length ? h("label", { class: "switch", for: "rm-rl" }, cbR, `Supprimer aussi ses ${rls.length} rappel${plural(rls.length)}, relance${plural(rls.length)} et mise${plural(rls.length)} en demeure`) : null],
         foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }),
-          h("button", { class: "btn danger small", type: "button", onclick: async () => { if (await write(() => S.db.doc("entreprises/" + e.id).delete())) { closeDialog(); toast("Entreprise retirée."); } }, text: "Retirer" })] });
+          h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+            const b = ev.currentTarget; b.disabled = true;
+            if (!(await write(() => S.db.doc("entreprises/" + e.id).delete()))) { b.disabled = false; return; }
+            let n = 0;
+            if (rls.length && cbR.checked) for (const r of rls) if (await write(() => S.db.doc("relances/" + r.id).delete())) n++;
+            closeDialog(); toast(`Entreprise retirée${n ? ` avec ${n} relance${plural(n)}` : ""}.`);
+          }, text: "Retirer" })] });
     });
     return h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), " ", pingTag(e), (exoSituation(e) || {}).on ? h("span", { class: "tag ok", text: "exonérée" }) : null, h("span", { class: "meta", text: [e.secteur, e.patron, e.debutActivite && keyStart(e.debutActivite) > startTime() ? "depuis " + periodPlain(e.debutActivite).toLowerCase() : ""].filter(Boolean).join(" · ") || "—" })),
@@ -5519,11 +5532,22 @@ function renderRecouvrement() {
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openTransmission(t.id), text: "Ouvrir" }))))) : h("div", { class: "empty", text: "Aucun dossier transmis à la justice." }), rcMore("tj", ts.length));
 
   const hist = S.relances.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
-  fill($("#rc-hist"), hist.length ? h("ul", { class: "ent-list" }, hist.slice(0, S.rcAll.hist ? 500 : RC_LIMIT).map(r => h("li", {},
-    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${r.entrepriseNom}` }),
+  // Relances d'une entreprise retirée du registre : elles n'ont plus d'objet.
+  const orphan = r => r.entrepriseId && !S.entreprises.some(e => e.id === r.entrepriseId);
+  const orphans = hist.filter(orphan);
+  fill($("#rc-hist"), orphans.length && dir ? h("div", { class: "notice", style: "margin:0 0 10px" }, h("div", { style: "flex:1" }, h("strong", { text: `${orphans.length} relance${plural(orphans.length)} d’entreprise${plural(orphans.length)} retirée${plural(orphans.length)} du registre. ` }), "Elles ne servent plus à rien."),
+      h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; let n = 0; for (const r of orphans) if (await write(() => S.db.doc("relances/" + r.id).delete())) n++; toast(`${n} relance${plural(n)} supprimée${plural(n)}.`); }, text: "Les supprimer" }))) : null,
+    hist.length ? h("ul", { class: "ent-list" }, hist.slice(0, S.rcAll.hist ? 500 : RC_LIMIT).map(r => h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${r.entrepriseNom}` }), orphan(r) ? h("span", { class: "tag", text: "entreprise retirée" }) : null,
       h("span", { class: "meta", text: `${rlLabel(r)} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · ${fmtDateTime(new Date(r.at))}${r.byNom ? " · " + r.byNom : ""}${r.groupee ? " · groupée" : ""}` })),
     rlStateChip(r),
-    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Image" }))))) : h("div", { class: "empty", text: "Aucune relance envoyée pour l’instant." }), rcMore("hist", hist.length));
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Image" }),
+      dir ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+        const b = ev.currentTarget;
+        if (!b.dataset.arm) { b.dataset.arm = "1"; b.className = "btn danger small"; b.textContent = "Confirmer"; return; }
+        b.disabled = true;
+        if (await write(() => S.db.doc("relances/" + r.id).delete())) toast(`${rlLabel(r)} ${rlNo(r)} supprimée.`); else b.disabled = false;
+      }, text: "Supprimer" }) : null)))) : h("div", { class: "empty", text: "Aucune relance envoyée pour l’instant." }), rcMore("hist", hist.length));
 }
 $("#rc-retards-all").addEventListener("click", () => relanceAll("declaration"));
 $("#rc-impayes-all").addEventListener("click", () => relanceAll("paiement"));
@@ -5871,7 +5895,7 @@ function regularite(e) {
   for (const v of vehsOf(e)) if (vehRembRetard(v)) manques.push(`Véhicule ${v.plaque} requalifié : le dirigeant n’a pas remboursé ${money(v.requalification.montant)} à l’entreprise`);
   if (e.actif === false) manques.push("Entreprise inactive");
   if (!e.id) manques.push("Entreprise absente du registre");
-  return { ok: !manques.length, manques, attendues: exp.length, deposees: exp.filter(k => hasDecl(e, k)).length, sanctionnees: exp.filter(k => !hasDecl(e, k) && defautOf(e, k)).length, echeancier: ech, unpaid, miss };
+  return { ok: !manques.length, manques, attendues: exp.length, deposees: exp.filter(k => hasDecl(e, k)).length, sanctionnees: exp.filter(k => !hasDecl(e, k) && defautOf(e, k)).length, echeancier: ech, unpaid, miss, aEchoir: e.id ? aEchoirItems(e) : [] };
 }
 const attValid = a => !a.revoqueeLe && new Date(a.validUntil).getTime() > Date.now();
 const attState = a => (a.revoqueeLe ? ["Révoquée", "bad"] : attValid(a) ? ["Valable", "ok"] : ["Expirée", "muted"]);
@@ -5884,12 +5908,15 @@ function attestationDoc(a, e) {
     ["Impôts et cotisations échus", "payés"],
     ["Pénalités échues", "payées"]];
   if (a.echeancier) lines.push(["Paiement en plusieurs fois en cours", "respecté"]);
+  // Ce qui n'est pas encore exigible n'est pas payé : l'attestation le dit, avec sa date.
+  const ap = a.aPayer || [], apSum = ap.reduce((t, x) => t + (Number(x.montant) || 0), 0), apLim = ap.length ? ap.map(x => x.exigible).sort().slice(-1)[0] : null;
+  if (ap.length) lines.push([`Pas encore payé, dans le délai (${ap.map(x => x.ref).join(", ")})`, money(apSum), true]);
   return {
     kind: "ATTESTATION DE RÉGULARITÉ", no: dossierNo("AT", a.id), date: "Délivrée le " + longDate(new Date(a.at)),
     meta: [["Entreprise", e.nom || a.entrepriseNom], ["Patron", e.patron || "—"], ["Secteur", e.secteur || "—"], ["Délivrée par", a.byNom || "Direction des impôts et cotisations"]],
     lines,
     total: [revoked ? "Révoquée le" : expired ? "Expirée le" : "Valable jusqu’au", longDate(new Date(revoked ? a.revoqueeLe : a.validUntil))],
-    note: `La Direction des impôts et cotisations atteste qu’à la date de délivrance, l’entreprise ${e.nom || a.entrepriseNom} a déposé toutes ses déclarations fiscales et sociales échues et a payé les impôts, cotisations et pénalités exigibles.${revoked && a.motifRevocation ? " Motif de la révocation : " + a.motifRevocation + "." : ""}`,
+    note: `La Direction des impôts et cotisations atteste qu’à la date de délivrance, l’entreprise ${e.nom || a.entrepriseNom} a déposé toutes ses déclarations fiscales et sociales échues et a payé les impôts, cotisations et pénalités exigibles.${ap.length ? ` ${money(apSum)} restent à payer : ${ap.map(x => x.label.replace(/^Avis d’imposition · /, "avis de la ").toLowerCase()).join(", ")}, dans le délai de paiement, au plus tard le ${longDate(new Date(apLim))}.` : ""}${revoked && a.motifRevocation ? " Motif de la révocation : " + a.motifRevocation + "." : ""}`,
     noteTitle: "Attestation",
     stamp: revoked ? ["RÉVOQUÉE", "bad"] : expired ? ["EXPIRÉE", "muted"] : ["EN RÈGLE", "ok"],
     footer: `Pour vérifier cette attestation, donnez son numéro ${dossierNo("AT", a.id)} à la Préfecture de police, Direction des impôts et cotisations.`,
@@ -5925,6 +5952,7 @@ function openAttestation(e, back) {
     h("li", { class: r.miss.length ? "no" : "yes", text: r.attendues ? `Déclarations : ${r.deposees} déposée${plural(r.deposees)} sur ${r.attendues} attendue${plural(r.attendues)}${r.miss.length ? " (manque " + r.miss.map(periodPlain).join(", ") + ")" : ""}` : "Aucune déclaration encore attendue" }),
     h("li", { class: r.unpaid.length ? "no" : "yes", text: r.unpaid.length ? `Échus non payés : ${money(r.unpaid.reduce((s, x) => s + x.montant, 0))} (${r.unpaid.map(x => x.ref).join(", ")})` : "Impôts, cotisations et pénalités échus : payés" }),
     r.echeancier ? h("li", { class: "yes", text: "Paiement en plusieurs fois en cours, échéances respectées" }) : null,
+    r.aEchoir.length ? h("li", { class: "wait", text: `Pas encore payé, mais dans le délai de paiement : ${money(r.aEchoir.reduce((s, x) => s + x.montant, 0))} (${r.aEchoir.map(x => `${x.ref}, exigible le ${fmtDateTime(new Date(x.exigible))}`).join(" ; ")}). Cela n’empêche pas l’attestation, mais la somme y figurera comme non payée.` }) : null,
     S.saisies.some(x => sameEnt(x, e) && x.statut === "notifiee") ? h("li", { class: "no", text: "Saisie en cours" }) : null,
     S.transmissions.some(x => sameEnt(x, e) && x.statut === "transmis") ? h("li", { class: "no", text: "Dossier transmis à la justice en cours" }) : null,
     e.actif === false ? h("li", { class: "no", text: "Entreprise inactive" }) : null);
@@ -5932,7 +5960,8 @@ function openAttestation(e, back) {
   const issue = async ev => {
     ev.currentTarget.disabled = true;
     const ref = S.db.collection("attestations").doc();
-    const a = { entrepriseId: e.id, entrepriseNom: e.nom, at: nowISO(), validUntil: new Date(Date.now() + days * 864e5).toISOString(), attendues: r.attendues, deposees: r.deposees, sanctionnees: r.sanctionnees || 0, echeancier: r.echeancier, by: S.uid || null, byNom: S.agentName || "" };
+    const a = { entrepriseId: e.id, entrepriseNom: e.nom, at: nowISO(), validUntil: new Date(Date.now() + days * 864e5).toISOString(), attendues: r.attendues, deposees: r.deposees, sanctionnees: r.sanctionnees || 0, echeancier: r.echeancier,
+      aPayer: r.aEchoir.map(x => ({ ref: x.ref, label: x.label, montant: x.montant, exigible: x.exigible })), by: S.uid || null, byNom: S.agentName || "" };
     if (!(await write(() => ref.set(a)))) { reopen(); return; }
     const doc = attestationDoc(Object.assign({ id: ref.id }, a), e);
     toast(`Attestation ${dossierNo("AT", ref.id)} délivrée.`);
@@ -6135,19 +6164,37 @@ function droitsSur(d, ca, ch, ms, nb, sal) {
   const r = applyExo(compute(ca, ch, ms, false, conf, nb, sal), entOf(d), d.periode, conf, false);
   return r.impot + r.cotisations;
 }
+// Salaires retenus quand le contrôle ne donne que la masse et l'effectif : la répartition des
+// salaires déclarés est gardée (proportionnellement), et les salariés en plus se partagent le surplus.
+// Le barème « chaque salaire séparément » s'applique alors à des salaires réalistes, pas à un bloc.
+function salairesRetenus(list, ms, nb) {
+  const n0 = list.length, dm = list.reduce((s, x) => s + (Number(x.salaire) || 0), 0);
+  nb = Math.max(0, Math.round(Number(nb) || 0));
+  if (nb === n0 && ms === dm) return list;
+  if (nb === 0) return ms > 0 ? [{ nom: "Salaires non déclarés", salaire: ms }] : [];
+  if (nb === n0) return dm > 0 ? list.map(x => ({ nom: x.nom, salaire: Math.round((Number(x.salaire) || 0) * ms / dm) })) : list.map(x => ({ nom: x.nom, salaire: Math.round(ms / nb) }));
+  if (nb > n0 && ms >= dm) { const k = nb - n0, each = Math.round((ms - dm) / k); return list.concat(Array.from({ length: k }, (_, i) => ({ nom: `Salarié non déclaré ${i + 1}`, salaire: each }))); }
+  return Array.from({ length: nb }, (_, i) => ({ nom: (list[i] && list[i].nom) || `Salarié ${i + 1}`, salaire: Math.round(ms / nb) }));
+}
+const salMs = l => l.reduce((s, x) => s + Math.max(0, Number(x.salaire) || 0), 0);
 function rectifCalc(c) {
   const lines = (c.declIds || []).map(id => {
     const d = S.declarations.find(x => x.id === id);
     if (!d) return null;
     const r = (c.rectifications || {})[id] || {};
     const pick = (k, dk) => (r[k] != null && r[k] !== "" && Number.isFinite(Number(r[k])) ? Number(r[k]) : Number(d[dk]) || 0);
-    const ca = pick("ca", "ca"), ch = pick("charges", "charges"), ms = pick("masse", "masse"), nb = pick("nb", "nbSalaries");
+    const ca = pick("ca", "ca"), ch = pick("charges", "charges");
     const dm = Number(d.masse) || 0;
-    // Salaires détaillés : un complément « non déclaré » s'ajoute si la masse retenue est plus forte.
-    const sal = d.salaries && d.salaries.length ? (ms === dm ? d.salaries : ms > dm ? d.salaries.concat([{ nom: "Salaires non déclarés", salaire: ms - dm }]) : null) : null;
+    // Salaires retenus salarié par salarié (saisis dans le contrôle), sinon déduits de la masse et de l'effectif retenus.
+    let ms, nb, sal;
+    if (!c.calcV && (c.statut === "propose" || c.statut === "recouvre")) {
+      ms = pick("masse", "masse"); nb = pick("nb", "nbSalaries");
+      sal = d.salaries && d.salaries.length ? (ms === dm ? d.salaries : ms > dm ? d.salaries.concat([{ nom: "Salaires non déclarés", salaire: ms - dm }]) : null) : null;
+    } else if (Array.isArray(r.salaries)) { sal = r.salaries.map(x => ({ nom: x.nom || "", salaire: Math.max(0, Math.round(Number(x.salaire) || 0)) })); ms = salMs(sal); nb = sal.length; }
+    else { ms = pick("masse", "masse"); nb = pick("nb", "nbSalaries"); sal = d.salaries && d.salaries.length ? salairesRetenus(d.salaries, ms, r.nb != null && r.nb !== "" ? nb : d.salaries.length) : null; }
     const bd = droitsSur(d, Number(d.ca) || 0, Number(d.charges) || 0, dm, Number(d.nbSalaries) || 0, d.salaries);
     const rd = droitsSur(d, ca, ch, ms, nb, sal);
-    return { d, ca, ch, ms, nb, motif: r.motif || "", baseDroits: bd, retenuDroits: rd, droits: Math.max(0, rd - bd) };
+    return { d, ca, ch, ms, nb, sal, motif: r.motif || "", baseDroits: bd, retenuDroits: rd, droits: Math.max(0, rd - bd) };
   }).filter(Boolean);
   const taux = (QUALIF[c.qualification] || QUALIF.bonne_foi)[1];
   const droits = lines.reduce((s, l) => s + l.droits, 0), majoration = Math.round(droits * taux / 100);
@@ -6231,7 +6278,7 @@ function newControle(e, declIds, opts) {
     const ref = S.db.collection("controles").doc();
     const sel = ids.map(id => S.declarations.find(d => d.id === id)).filter(Boolean);
     const c = { entrepriseId: e.id || null, entrepriseNom: e.nom, declIds: ids, periodes: [...new Set(sel.map(d => d.periode))].sort(), motif: motif.value.trim(), origine: orig.value, inspecteur: insp.value.trim(),
-      statut: "ouvert", ouvertLe: nowISO(), ouvertPar: S.agentName || "", by: S.uid || null, notes: [], pieces: [], rectifications: {}, qualification: "bonne_foi", suspendus: [] };
+      statut: "ouvert", ouvertLe: nowISO(), ouvertPar: S.agentName || "", by: S.uid || null, notes: [], pieces: [], rectifications: {}, qualification: "bonne_foi", suspendus: [], calcV: 2 };
     // On garde l'état de chaque avis avant suspension pour le rétablir exactement à la fin du contrôle.
     c.avant = {};
     if (opts.rectifications) for (const id of ids) if (opts.rectifications[id]) c.rectifications[id] = opts.rectifications[id];
@@ -6374,19 +6421,52 @@ function openControle(id) {
   const qual = h("select", { id: "ct-qual", disabled: !(ag && live) }, Object.entries(QUALIF).map(([v, [l]]) => h("option", { value: v, text: l })));
   qual.value = c.qualification || "bonne_foi";
   const numIn2 = (dk, v, l) => { const i = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "data-k": dk, "aria-label": l, disabled: !(ag && live) }); i.value = v == null ? "" : String(v); return i; };
+  // Barème « chaque salaire séparément » : les salaires se rectifient salarié par salarié.
+  const perSal = l => cfg().baremeMode !== "unique" && cfg().baremeCotBase === "individuel" && Array.isArray(l.d.salaries) && l.d.salaries.length > 0;
+  const salRow = (id, nom, decl, ret, extra) => h("tr", { "data-sal-row": id },
+    h("td", {}, extra ? Object.assign(h("input", { "data-f": "nom", autocomplete: "off", placeholder: "Nom du salarié", disabled: !(ag && live), "aria-label": "Nom du salarié" }), { value: nom || "" }) : h("span", { "data-f": "nom", text: nom || "Salarié" })),
+    h("td", { class: "num", text: decl == null ? "non déclaré" : money(decl) }),
+    h("td", {}, Object.assign(h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "data-f": "salaire", disabled: !(ag && live), "aria-label": "Salaire retenu" }), { value: ret == null ? "" : String(ret) })),
+    h("td", { class: "act" }, ag && live ? h("button", { class: "btn ghost small", type: "button", "data-sal-del": "1", text: "Retirer" }) : null));
+  const salEditor = l => {
+    const r = c.rectifications[l.d.id] || {}, declared = l.d.salaries;
+    const ret = Array.isArray(r.salaries) ? r.salaries : null;
+    const rows = ret ? ret.map((x, i) => { const dx = declared.find(y => y.nom && y.nom === x.nom); return salRow(l.d.id, x.nom, dx ? dx.salaire : null, x.salaire, !dx); })
+      : declared.map(x => salRow(l.d.id, x.nom, x.salaire, x.salaire, false));
+    return h("tr", { class: "rect-sal", "data-sal": l.d.id }, h("td", { colspan: "7" },
+      h("div", { class: "rect-sal-box" },
+        h("p", { class: "hint", style: "margin:0 0 6px", text: "Barème appliqué à chaque salaire : corrigez le salaire de chaque salarié, retirez un salarié fictif ou ajoutez un salarié non déclaré. La masse et l’effectif retenus se calculent tout seuls." }),
+        h("table", { class: "compact" }, h("thead", {}, h("tr", {}, ["Salarié", "Déclaré", "Retenu", ""].map((t, i) => h("th", { class: i === 1 ? "num" : null, text: t })))), h("tbody", {}, rows)),
+        ag && live ? h("button", { class: "btn ghost small", type: "button", "data-sal-add": l.d.id, style: "margin-top:6px", text: "Ajouter un salarié non déclaré" }) : null)));
+  };
   const rectTable = h("table", { class: "compact rect-table" },
     h("thead", {}, h("tr", {}, ["Période", "CA retenu", "Charges retenues", "Salaires retenus", "Salariés", "Motif", "Rappel"].map((t, i) => h("th", { class: i === 6 ? "num" : null, text: t })))),
-    h("tbody", {}, k0.lines.map(l => h("tr", { "data-rect": l.d.id },
+    h("tbody", {}, k0.lines.flatMap(l => [h("tr", { "data-rect": l.d.id },
       h("td", { text: periodPlain(l.d.periode) }),
       h("td", {}, numIn2("ca", l.ca, "Chiffre d’affaires retenu")), h("td", {}, numIn2("charges", l.ch, "Charges retenues")),
-      h("td", {}, numIn2("masse", l.ms, "Salaires retenus")), h("td", {}, numIn2("nb", l.nb, "Salariés retenus")),
+      h("td", {}, Object.assign(numIn2("masse", l.ms, "Salaires retenus"), perSal(l) ? { readOnly: true, title: "Somme des salaires retenus ci-dessous" } : {})),
+      h("td", {}, Object.assign(numIn2("nb", l.nb, "Salariés retenus"), perSal(l) ? { readOnly: true, title: "Nombre de salariés retenus ci-dessous" } : {})),
       h("td", {}, Object.assign(h("input", { "data-k": "motif", autocomplete: "off", placeholder: "Ex. : ventes non déclarées", disabled: !(ag && live), "aria-label": "Motif de la rectification" }), { value: l.motif })),
-      h("td", { class: "num rc-droits", text: money(l.droits) })))));
+      h("td", { class: "num rc-droits", text: money(l.droits) })), perSal(l) ? salEditor(l) : null].filter(Boolean))));
+  rectTable.addEventListener("click", ev => {
+    const add = ev.target.closest("[data-sal-add]"), del = ev.target.closest("[data-sal-del]");
+    if (add) { const tb = $(`tr[data-sal="${add.dataset.salAdd}"] tbody`, rectTable); tb.append(salRow(add.dataset.salAdd, "", null, "", true)); $("tr:last-child input[data-f=nom]", tb).focus(); refresh(); }
+    if (del) { del.closest("tr").remove(); refresh(); }
+  });
   const refresh = () => {
     c.qualification = qual.value;
     $$("tr[data-rect]", rectTable).forEach(tr => {
       const r = c.rectifications[tr.dataset.rect] = c.rectifications[tr.dataset.rect] || {};
-      $$("input[data-k]", tr).forEach(i => { if (i.dataset.k === "motif") r.motif = i.value.trim(); else r[i.dataset.k] = i.value === "" ? null : Number(i.value); });
+      $$("input[data-k]", tr).forEach(i => { if (i.dataset.k === "motif") r.motif = i.value.trim(); else if (!i.readOnly) r[i.dataset.k] = i.value === "" ? null : Number(i.value); });
+      const box = $(`tr[data-sal="${tr.dataset.rect}"]`, rectTable);
+      if (box) {
+        const d = S.declarations.find(x => x.id === tr.dataset.rect) || { salaries: [] };
+        const list = $$("tr[data-sal-row]", box).map(row => { const n = $("[data-f=nom]", row); return { nom: (n.value != null ? n.value : n.textContent).trim(), salaire: Math.max(0, Math.round(Number($("input[data-f=salaire]", row).value) || 0)) }; });
+        const same = list.length === d.salaries.length && list.every((x, i) => x.nom === d.salaries[i].nom && x.salaire === Math.round(Number(d.salaries[i].salaire) || 0));
+        if (same) { delete r.salaries; r.masse = null; r.nb = null; } else { r.salaries = list; r.masse = salMs(list); r.nb = list.length; }
+        $("input[data-k=masse]", tr).value = String(same ? Number(d.masse) || 0 : r.masse);
+        $("input[data-k=nb]", tr).value = String(same ? Number(d.nbSalaries) || list.length : r.nb);
+      }
     });
     const k = rectifCalc(c);
     $$("tr[data-rect]", rectTable).forEach(tr => { const l = k.lines.find(x => x.d.id === tr.dataset.rect); $(".rc-droits", tr).textContent = l ? money(l.droits) : "—"; });
@@ -6400,7 +6480,7 @@ function openControle(id) {
 
   const motifIn = h("textarea", { id: "ct-motif", rows: "2", disabled: !(ag && live), placeholder: "Ce que le contrôle a établi" });
   motifIn.value = c.motif || "";
-  const collect = () => { refresh(); const k = rectifCalc(c); return { motif: motifIn.value.trim(), qualification: c.qualification, rectifications: c.rectifications, droits: k.droits, majoration: k.majoration, total: k.total }; };
+  const collect = () => { refresh(); const k = rectifCalc(c); const v = { motif: motifIn.value.trim(), qualification: c.qualification, rectifications: c.rectifications, droits: k.droits, majoration: k.majoration, total: k.total }; if (live) { v.calcV = 2; c.calcV = 2; } return v; };
 
   const body = [
     sec("Périmètre", perim),
@@ -7092,6 +7172,7 @@ function quittancePretDoc(p, idx) {
 async function savePret(p, patch, msg) {
   const latest = (S.prets || []).find(x => x.id === p.id) || p;
   const body = Object.assign({}, latest, patch); delete body.id;
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
   const ok = await write(() => S.db.doc("prets/" + p.id).set(body));
   if (ok && msg) toast(msg);
   return ok;
@@ -7129,7 +7210,9 @@ async function rembourserAnticipe1(p) {
     Object.assign(x, { payee: true, paidAt: at, paidByNom: S.agentName || "", anticipe: true }); n++;
   });
   if (!n) return false;
-  if (!(await savePret(latest, { echeances: ech, statut: "rembourse", rembourseLe: at, anticipe: true }, "Prêt remboursé par anticipation."))) return false;
+  // L'état d'avant est gardé : la Direction peut annuler un remboursement anticipé enregistré par erreur.
+  const avant = { echeances: JSON.parse(JSON.stringify(latest.echeances || [])), at };
+  if (!(await savePret(latest, { echeances: ech, statut: "rembourse", rembourseLe: at, anticipe: true, anticipeAvant: avant }, "Prêt remboursé par anticipation."))) return false;
   const p2 = (S.prets || []).find(x => x.id === p.id);
   if (p2) autoPublish("quittances", quittanceDoc({ no: `${dossierNo("QT", p.id)}-S`, ent: entOf(p2), objet: `Remboursement anticipé du prêt ${pretNo(p2)}`, ref: pretNo(p2),
     montant: ech.filter(x => x.anticipe && x.paidAt === at).reduce((t, x) => t + (Number(x.montant) || 0), 0), paidAt: at, paidByNom: S.agentName || "" }), "Remboursement encaissé.");
@@ -7143,11 +7226,53 @@ function pretChanged(cur) {
   if (cur) openPret(cur.id); else closeDialog();
 }
 
+// Remboursement anticipé : montant à encaisser, puis confirmation.
+function anticipeCalcul(p) {
+  const now = Date.now(), ex = !!p.exigibleLe;
+  let capital = 0, interets = 0, remis = 0;
+  for (const x of p.echeances || []) {
+    if (x.payee) continue;
+    if (new Date(x.date).getTime() > now && !ex) { capital += Number(x.capital) || 0; remis += Number(x.interets) || 0; }
+    else { capital += Number(x.capital) || 0; interets += (Number(x.montant) || 0) - (Number(x.capital) || 0); }
+  }
+  return { capital, interets, remis, total: capital + interets };
+}
+function openAnticipe(p) {
+  const cur = pretNow(p.id);
+  if (!cur || cur.statut !== "en_cours") { pretChanged(cur); return; }
+  const k = anticipeCalcul(cur), n = (cur.echeances || []).filter(x => !x.payee).length;
+  openDialog({ eyebrow: `Prêt ${pretNo(cur)} · ${cur.entrepriseNom}`, title: cur.exigibleLe ? "Encaisser le solde" : "Remboursement anticipé",
+    body: [kv([["Capital restant", money(k.capital)], k.interets ? ["Intérêts des échéances déjà passées", money(k.interets)] : null, k.remis ? ["Intérêts à venir, non réclamés", money(k.remis)] : null, ["À encaisser", money(k.total), "tot"]]),
+      h("p", { class: "hint", style: "margin:0", text: `Les ${n} échéance${plural(n)} restante${plural(n)} ser${n > 1 ? "ont" : "a"} marquée${plural(n)} payée${plural(n)} et la quittance partira sur Discord. En cas d’erreur, la Direction peut annuler ce remboursement depuis la fenêtre du prêt.` })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openPret(p.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ink small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await rembourserAnticipe(cur)) openPret(p.id); else { b.disabled = false; pretChanged(pretNow(p.id)); } }, text: `Encaisser ${money(k.total)}` })] });
+}
+async function annulerAnticipe(p) {
+  return pretOnce(p.id, async () => {
+    const cur = pretNow(p.id);
+    if (!cur || cur.statut !== "rembourse" || !cur.anticipeAvant) { pretChanged(cur); return false; }
+    const ok = await savePret(cur, { echeances: cur.anticipeAvant.echeances, statut: "en_cours", rembourseLe: undefined, anticipe: undefined, anticipeAvant: undefined, anticipeAnnule: { at: nowISO(), byNom: S.agentName || "", encaisseLe: cur.anticipeAvant.at } }, "Remboursement anticipé annulé : les échéances restent dues.");
+    if (ok) toast("La quittance déjà publiée sur Discord n’est pas retirée : signalez l’annulation dans le salon.");
+    return ok;
+  });
+}
+async function annulerEcheancePret(p, i) {
+  return pretOnce(p.id, async () => {
+    const cur = pretNow(p.id);
+    if (!cur || !(cur.statut === "en_cours" || cur.statut === "rembourse")) { pretChanged(cur); return false; }
+    const ech = JSON.parse(JSON.stringify(cur.echeances || []));
+    if (!ech[i] || !ech[i].payee || ech[i].anticipe) return false;
+    Object.assign(ech[i], { payee: false, paidAt: null, paidByNom: "", note: "" });
+    return savePret(cur, { echeances: ech, statut: "en_cours", rembourseLe: undefined }, `Encaissement de l’échéance ${ech[i].n}/${ech.length} annulé.`);
+  });
+}
+
 // Fenêtre d'un prêt
 function openPret(id) {
   const p = (S.prets || []).find(x => x.id === id);
   if (!p) return;
   const dir = writer(), e = entOf(p), reopen = () => openPret(id), next = (p.echeances || []).findIndex(x => !x.payee);
+  const lastPaid = (p.echeances || []).reduce((k, x, i) => (x.payee ? i : k), -1);
   const rows = (p.echeances || []).map((x, i) => {
     const late = !x.payee && p.statut === "en_cours" && (new Date(x.date).getTime() < Date.now() || p.exigibleLe);
     return h("tr", {},
@@ -7156,7 +7281,8 @@ function openPret(id) {
       h("td", {}, chip(x.payee ? [`Payée le ${fmtDate(new Date(x.paidAt))}${x.anticipe ? " (anticipé)" : ""}`, "ok"] : late ? ["En retard", "bad"] : ["À venir", "muted"])),
       h("td", { class: "act" },
         x.payee ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const q = quittancePretDoc(p, i); if (q) showDocImage(q, reopen); }, text: "Quittance" }) : null,
-        dir && p.statut === "en_cours" && i === next ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await payPret(p, [i])) { toast(`Échéance ${x.n}/${p.echeances.length} encaissée.`); reopen(); } else b.disabled = false; }, text: "Encaisser" }) : null));
+        dir && p.statut === "en_cours" && i === next ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await payPret(p, [i])) { toast(`Échéance ${x.n}/${p.echeances.length} encaissée.`); reopen(); } else b.disabled = false; }, text: "Encaisser" }) : null,
+        dir && x.payee && !x.anticipe && i === lastPaid && (p.statut === "en_cours" || p.statut === "rembourse") ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await annulerEcheancePret(p, i)) reopen(); else b.disabled = false; }, text: "Annuler l’encaissement" }) : null));
   });
   const justif = p.justificatif, vj = !justif ? pretVehJustif(p) : null;
   const jf = h("input", { id: "pr-jfile", type: "file", accept: "image/*" }), jl = h("input", { id: "pr-jlien", type: "url", autocomplete: "off", placeholder: "Ou un lien : facture, capture de l’achat…" });
@@ -7190,8 +7316,9 @@ function openPret(id) {
   }
   if (dir && p.statut === "en_cours") {
     if (!p.exigibleLe) foot.push(h("button", { class: justifEchu(p) ? "btn danger small" : "btn ghost small", type: "button", onclick: () => exigerPret(p), text: "Exiger le remboursement" }));
-    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await rembourserAnticipe(p)) reopen(); else b.disabled = false; }, text: p.exigibleLe ? "Encaisser le solde" : "Remboursement anticipé" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openAnticipe(p), text: p.exigibleLe ? "Encaisser le solde" : "Remboursement anticipé" }));
   }
+  if (dir && p.statut === "rembourse" && p.anticipe && p.anticipeAvant) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await annulerAnticipe(p)) reopen(); else b.disabled = false; }, text: "Annuler le remboursement anticipé" }));
   if (canAgent() && p.statut === "demande") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
     const cur = pretNow(p.id);
     if (!cur || cur.statut !== "demande") { pretChanged(cur); return; }
