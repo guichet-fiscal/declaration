@@ -404,6 +404,10 @@ table.compact td{padding:8px 10px}
 @media (max-width:620px){.journal-list li{grid-template-columns:minmax(0,1fr)}}
 .avis-preview{display:block;width:100%;max-width:760px;margin:0 auto;border:1px solid var(--rule);border-radius:6px;background:#fbfaf6}
 .env-editor{display:grid;gap:8px}
+.env-week{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:4px}
+.env-week label{font-weight:600;font-size:13px}
+.env-week select{width:auto;min-width:200px}
+.env-week .hint{flex-basis:100%}
 .env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 150px 170px;gap:10px;align-items:center}
 @media (max-width:620px){.env-head{display:none}.env-edit{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.env-edit label{grid-column:1/-1}}
 .env-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650;margin-top:6px}
@@ -1524,12 +1528,17 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <div class="set-page" id="set-page-services" data-sg="services" role="tabpanel" aria-labelledby="set-tab-services" hidden>
           <div class="card">
             <h3>Services publics et enveloppes</h3>
-            <p class="sub">Un service par ligne. Donnez à chacun un plafond de crédits par période : le tableau de bord montre ce qu’il a déjà consommé. Laissez vide pour ne pas plafonner.</p>
+            <p class="sub">Un service par ligne. Les plafonds se règlent semaine par semaine : choisissez la semaine, puis le plafond de chaque service. Une semaine sans plafonds propres reprend ceux de la dernière semaine réglée. Laissez vide pour ne pas plafonner.</p>
             <div class="set-form">
               <textarea id="s-services" rows="7" aria-label="Services publics, un par ligne"></textarea>
+              <div class="env-week">
+                <label for="s-env-sem">Plafonds de la période</label>
+                <select id="s-env-sem"></select>
+                <span id="s-env-from" class="hint" aria-live="polite"></span>
+              </div>
               <div class="env-editor" id="env-editor"></div>
               <div class="paste-row">
-                <button class="btn" type="button" id="s-svc-save">Enregistrer les services</button>
+                <button class="btn" type="button" id="s-svc-save">Enregistrer les services et les plafonds</button>
                 <span id="s-svc-msg" class="hint" aria-live="polite"></span>
               </div>
             </div>
@@ -1657,7 +1666,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 /* ---------- État ---------- */
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
-  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
+  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, enveloppesSemaines: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
   exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
   delaiMiseEnDemeureJours: 2, majorationImpaye: 10, majorationOffice: 40, tiersDefaut: "", justiceDestinataire: "Procureur de la République près le tribunal judiciaire",
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
@@ -1674,12 +1683,13 @@ const S = {
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
   journal: [], journalLoaded: false, journalError: null, journalBusy: false, jLimit: 100,
   exportKeys: [], keysError: null,
-  setDirty: false, svcDirty: false, envDirty: false, barDirty: false, editDecl: null, editDem: null
+  setDirty: false, svcDirty: false, envDirty: false, capDirty: false, envKey: null, envReload: false, barDirty: false, editDecl: null, editDem: null
 };
 const cfg = () => {
   const c = Object.assign({}, DEFAULTS, S.config || {});
   if (!Array.isArray(c.services) || !c.services.length) c.services = DEFAULTS.services.slice();
   if (!c.enveloppes || typeof c.enveloppes !== "object") c.enveloppes = {};
+  if (!c.enveloppesSemaines || typeof c.enveloppesSemaines !== "object" || Array.isArray(c.enveloppesSemaines)) c.enveloppesSemaines = {};
   return c;
 };
 // writer() : la Direction. canAgent() : la Direction ou l’Inspection.
@@ -2005,13 +2015,24 @@ function envUse(key) {
 function envStats(service, key) {
   const n = norm(service), list = S.demandes.filter(dm => norm(dm.service || "Autre") === n && demImputation(dm) === key);
   const st = dm => aStatus(dm), sum = (l, f) => l.reduce((t, x) => t + f(x), 0);
-  const cap = envCap(service), accorde = sum(list, demAccorde);
+  const cap = envCap(service, key), accorde = sum(list, demAccorde);
   return { list, cap, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
     refuse: list.filter(dm => st(dm) === "refusee").length, reste: cap ? cap - accorde : null };
 }
 const envServices = keys => { const names = cfg().services.slice(); for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && keys.includes(demImputation(dm))) names.push(dm.service); return names; };
-function envCap(service) {
-  const env = cfg().enveloppes || {};
+// Plafonds des enveloppes : réglés semaine par semaine. Une semaine sans plafonds propres reprend ceux
+// de la dernière semaine réglée avant elle ; avant toute semaine réglée, les plafonds d'origine.
+const envKind = k => (/-S\d{2}$/.test(k || "") ? "S" : "M");
+const perNom = k => { const b = bounds(k); return b && b.week ? "la semaine " + b.week : periodLabel(k); };
+function envCapsFor(key) {
+  const c = cfg(), m = c.enveloppesSemaines;
+  if (key && m[key] && typeof m[key] === "object") return { caps: m[key], from: key, own: true };
+  const prev = Object.keys(m).filter(k => envKind(k) === envKind(key) && (!key || k < key) && m[k] && typeof m[k] === "object").sort().pop();
+  if (prev) return { caps: m[prev], from: prev, own: false };
+  return { caps: c.enveloppes || {}, from: null, own: false };
+}
+function envCap(service, key) {
+  const env = envCapsFor(key || keyOf(new Date())).caps || {};
   const k = Object.keys(env).find(x => norm(x) === norm(service));
   return k ? Number(env[k]) || 0 : 0;
 }
@@ -2733,7 +2754,7 @@ function renderAlerts() {
 function renderEnvelopes(k0) {
   const key = k0 || S.dashKey || keyOf(new Date());
   const box = $("#envs");
-  $("#env-sub").textContent = `Crédits accordés sur ${periodLabel(key).replace(/^S/, "s")}, imputés sur la semaine de chaque demande. Plafonds réglables dans Réglages.`;
+  $("#env-sub").textContent = `Crédits accordés sur ${periodLabel(key).replace(/^S/, "s")}, imputés sur la semaine de chaque demande. Plafonds de cette semaine, réglables dans Réglages → Services publics.`;
   if (!S.connected || !S.loaded.has("arbitrages")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
   const names = envServices([key]);
   if (!names.length) { fill(box, h("div", { class: "empty", text: "Aucun service public enregistré." })); return; }
@@ -2762,7 +2783,7 @@ function openEnvSuivi(service, key) {
   const list = S.demandes.filter(dm => demImputation(dm) === sel && (!service || norm(dm.service) === norm(service))).sort((a, b) => String(b.recueAt || b.createdAt).localeCompare(String(a.recueAt || a.createdAt)));
   const tot = names.reduce((t, n) => { const x = envStats(n, sel); return { d: t.d + x.demande, a: t.a + x.accorde, w: t.w + x.attente }; }, { d: 0, a: 0, w: 0 });
   openDialog({ eyebrow: "Enveloppes des services publics", title: service ? `Enveloppe · ${service}` : "Suivi des enveloppes", wide: true,
-    body: [h("p", { class: "hint", style: "margin:0", text: "Crédits accordés par semaine, sur le plafond de chaque service. Cliquez sur une semaine pour voir ses demandes. Une demande compte pour la semaine choisie à sa saisie." }), tbl,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Crédits accordés par semaine, sur le plafond de chaque service pour cette semaine. Cliquez sur une semaine pour voir ses demandes. Une demande compte pour la semaine choisie à sa saisie." }), tbl,
       sec(`${periodLabel(sel)} · ${list.length} demande${plural(list.length)}`, kv([["Demandé", money(tot.d)], ["Accordé", money(tot.a)], tot.w ? ["En attente", money(tot.w)] : null]),
         list.length ? h("ul", { class: "ent-list", style: "margin-top:6px" }, list.map(dm => h("li", {},
           h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openDem(dm.id), text: `${dossierNo("DM", dm.id)} · ${dm.service}` }), h("span", { class: "meta", text: `${dm.objet || "—"} · ${money(dm.montant)} demandés${demAccorde(dm) ? " · " + money(demAccorde(dm)) + " accordés" : ""}` })),
@@ -3192,11 +3213,10 @@ function openDem(id) {
     const already = a && (st === "accordee" || st === "partielle") ? Number(a.montantAccorde) || 0 : 0;
     // Les crédits sont imputés sur l'enveloppe de la semaine de la demande, que la Direction peut changer ici.
     perSel = h("select", { id: "dlg-per" }); demPerOptions(perSel, demImputation(dm));
-    const capV = envCap(dm.service);
     const envDt = h("dt", {}), envDd = h("dd", { class: "num" });
     const upd = () => {
       const v = Number(mIn.value) || 0; const s = t.solde + already - v; after.textContent = money(s); after.style.color = s < 0 ? "var(--bad)" : "";
-      const k = perSel.value, usedK = envUse(k)[norm(dm.service)] || 0, alreadyK = already && demImputation(dm) === k ? already : 0;
+      const k = perSel.value, capV = envCap(dm.service, k), usedK = envUse(k)[norm(dm.service)] || 0, alreadyK = already && demImputation(dm) === k ? already : 0;
       envDt.textContent = capV ? `Enveloppe ${dm.service} restante (${periodPlain(k).toLowerCase()})` : `Enveloppe ${dm.service}`;
       if (capV) { const r = capV - (usedK - alreadyK + v); envDd.textContent = `${money(r)} sur ${money(capV)}`; envDd.style.color = r < 0 ? "var(--bad)" : ""; }
       else envDd.textContent = "sans plafond";
@@ -3799,8 +3819,12 @@ $("#s-svc-save").addEventListener("click", async () => {
     if (!parseMention(v)) { $("#s-svc-msg").textContent = `${i.dataset.svcM} : mention Discord invalide. Écrivez <@&ID> pour un rôle, ou l’ID d’un membre.`; i.focus(); return; }
     ments[i.dataset.svcM] = normMention(v);
   }
-  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, enveloppes: env, servicesMentions: ments, updatedAt: nowISO() })));
-  if (ok) { S.svcDirty = false; S.envDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés, ${Object.keys(env).length} avec un plafond.`; renderEnvEditor(true); }
+  const key = S.envKey || keyOf(new Date());
+  const patch = { services: list, servicesMentions: ments, updatedAt: nowISO() };
+  // Les plafonds ne sont écrits pour la période choisie que s'ils ont été touchés (ou si la période en a déjà).
+  if (S.capDirty || cfg().enveloppesSemaines[key]) patch.enveloppesSemaines = Object.assign({}, cfg().enveloppesSemaines, { [key]: env });
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, patch)));
+  if (ok) { S.svcDirty = false; S.envDirty = false; S.capDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés${patch.enveloppesSemaines ? `, plafonds de ${perNom(key)} : ${Object.keys(env).length} service${plural(Object.keys(env).length)} plafonné${plural(Object.keys(env).length)}` : ""}.`; renderEnvEditor(true); }
 });
 $("#form-ent").addEventListener("submit", async e => {
   e.preventDefault();
@@ -4626,7 +4650,7 @@ function describe(e) {
       if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -4648,7 +4672,7 @@ const FIELD_LABEL = {
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
   salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", delaiMiseEnDemeureJours: "Délai des mises en demeure", majorationImpaye: "Majoration pour paiement tardif", majorationOffice: "Majoration de taxation d’office", tiersDefaut: "Tiers détenteur", justiceDestinataire: "Destinataire des dossiers de justice", tiers: "Tiers détenteur", recouvre: "Recouvré", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
-  services: "Services", enveloppes: "Enveloppes", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
+  services: "Services", enveloppes: "Enveloppes", enveloppesSemaines: "Plafonds par période", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
 };
@@ -4750,17 +4774,47 @@ $("#form-key").addEventListener("submit", async e => {
 
 /* ---------- Enveloppes : édition dans les réglages ---------- */
 const parseServices = () => Array.from(new Set($("#s-services").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean)));
+// Périodes proposées pour régler les plafonds : les huit dernières, la période en cours et les quatre suivantes.
+function envWeekOptions(value) {
+  const sel = $("#s-env-sem"), nowK = keyOf(new Date()), keys = recentKeys(8).slice().reverse();
+  if (!keys.includes(nowK)) keys.push(nowK);
+  let k = nowK;
+  for (let i = 0; i < 4; i++) { k = nextKeyOf(k); if (k && !keys.includes(k)) keys.push(k); }
+  for (const x of Object.keys(cfg().enveloppesSemaines)) if (envKind(x) === envKind(nowK) && !keys.includes(x)) keys.push(x);
+  keys.sort();
+  const own = cfg().enveloppesSemaines;
+  fill(sel, keys.map(x => h("option", { value: x, text: periodLabel(x) + (x === nowK ? " · en cours" : "") + (own[x] ? " · réglée" : "") })));
+  sel.value = value && keys.includes(value) ? value : nowK;
+  return sel.value;
+}
+function envWeekNote(key) {
+  const r = envCapsFor(key), el = $("#s-env-from");
+  fill(el, r.own ? "Plafonds propres à cette période. " : r.from ? `Pas de plafonds propres : ceux réglés pour ${perNom(r.from)} s’appliquent. ` : "Pas encore de plafonds réglés par période : les plafonds d’origine s’appliquent. ",
+    r.own && writer() ? h("button", { class: "linkbtn", type: "button", onclick: envWeekReset, text: "Revenir aux plafonds précédents" }) : null);
+}
+async function envWeekReset() {
+  const key = S.envKey;
+  if (!writer() || !key) return;
+  const m = Object.assign({}, cfg().enveloppesSemaines); delete m[key];
+  if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { enveloppesSemaines: m, updatedAt: nowISO() })))) {
+    S.envDirty = false; S.capDirty = false; S.envReload = true; $("#s-svc-msg").textContent = `${periodPlain(key)} : plafonds précédents rétablis.`; renderEnvEditor(true);
+  }
+}
 function renderEnvEditor(force) {
   const box = $("#env-editor");
-  if (!force && (S.envDirty || box.contains(document.activeElement))) return;
+  if (!force && (S.envDirty || box.contains(document.activeElement) || document.activeElement === $("#s-env-sem"))) return;
   const names = S.svcDirty ? parseServices() : cfg().services;
-  const env = cfg().enveloppes || {};
+  S.envKey = envWeekOptions(S.envKey);
+  envWeekNote(S.envKey);
+  const env = envCapsFor(S.envKey).caps || {};
   const prev = {};
-  $$("input[data-svc]", box).forEach(i => { prev[i.dataset.svc] = i.value; });
+  // Ce que l'agent a tapé et pas encore enregistré est gardé ; sinon, les valeurs enregistrées font foi.
+  if (S.capDirty && !S.envReload) $$("input[data-svc]", box).forEach(i => { prev[i.dataset.svc] = i.value; });
+  S.envReload = false;
   const prevM = {};
-  $$("input[data-svc-m]", box).forEach(i => { prevM[i.dataset.svcM] = i.value; });
+  if (S.envDirty) $$("input[data-svc-m]", box).forEach(i => { prevM[i.dataset.svcM] = i.value; });
   fill(box,
-    h("div", { class: "env-head" }, h("span", { text: "Service" }), h("span", { text: `Plafond par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` }), h("span", { text: "Rôle Discord à mentionner" })),
+    h("div", { class: "env-head" }, h("span", { text: "Service" }), h("span", { text: `Plafond · ${periodPlain(S.envKey).toLowerCase()}` }), h("span", { text: "Rôle Discord à mentionner" })),
     names.map((n, i) => {
       const inp = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", id: "env-" + i, "data-svc": n, placeholder: "Sans plafond", "aria-label": "Plafond de " + n });
       const k = Object.keys(env).find(x => norm(x) === norm(n));
@@ -4770,7 +4824,18 @@ function renderEnvEditor(force) {
       return h("div", { class: "env-edit" }, h("label", { for: "env-" + i, text: n }), h("div", { class: "money", "data-cur": cur() }, inp), men);
     }));
 }
-$("#env-editor").addEventListener("input", () => { S.envDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
+$("#env-editor").addEventListener("input", e => { S.envDirty = true; if (e.target.matches("input[data-svc]")) S.capDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
+$("#s-env-sem").addEventListener("change", () => {
+  const sel = $("#s-env-sem");
+  // Plafonds tapés et pas enregistrés : un premier changement de période prévient, un second les abandonne.
+  if (S.capDirty && S.capWarn !== sel.value) {
+    S.capWarn = sel.value; sel.value = S.envKey;
+    $("#s-svc-msg").textContent = `Enregistrez d’abord les plafonds de ${perNom(S.envKey)}. Choisissez de nouveau ${perNom(S.capWarn)} pour les abandonner.`;
+    return;
+  }
+  S.capWarn = null; S.capDirty = false;
+  S.envKey = sel.value; S.envReload = true; renderEnvEditor(true);
+});
 
 /* ---------- Barèmes progressifs par tranches ---------- */
 function normBrackets(list) {

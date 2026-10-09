@@ -120,10 +120,19 @@ function actualiser() {
       return [no("DM", r.id), d.service, NATURES[d.nature] || d.nature, d.objet, k, d.quantite || "", d.montant, d.urgence, STATUTS_DEM[st] || st,
         accorde(a), a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : ""];
     }));
-  const plafond = sv => { const e = conf.enveloppes || {}; const k = Object.keys(e).find(x => x.toLowerCase() === String(sv).toLowerCase()); return k ? Number(e[k]) || 0 : ""; };
+  // Plafonds réglés période par période ; une période sans plafonds propres reprend ceux de la dernière période réglée.
+  const parSemaine = conf.enveloppesSemaines && typeof conf.enveloppesSemaines === "object" ? conf.enveloppesSemaines : {};
+  const sorte = k => (/-S\d{2}$/.test(k) ? "S" : "M");
+  const plafondsDe = k => {
+    if (parSemaine[k]) return parSemaine[k];
+    const avant = Object.keys(parSemaine).filter(x => sorte(x) === sorte(k) && x < k).sort().pop();
+    return avant ? parSemaine[avant] : conf.enveloppes || {};
+  };
+  const plafond = (sv, k) => { const e = plafondsDe(k) || {}; const c = Object.keys(e).find(x => x.toLowerCase() === String(sv).toLowerCase()); return c ? Number(e[c]) || 0 : ""; };
+  Object.keys(parSemaine).forEach(k => Object.keys(parSemaine[k] || {}).forEach(sv => { if (!env[sv + "|" + k]) env[sv + "|" + k] = { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 }; }));
   ecrire("Enveloppes", ["Semaine", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Plafond", "Reste"],
     Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
-      .map(x => { const p = plafond(x.service); return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, p, p === "" ? "" : p - x.accorde]; }));
+      .map(x => { const p = plafond(x.service, x.k); return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, p, p === "" ? "" : p - x.accorde]; }));
 
   const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif", defaut: "Défaut de déclaration (semaine clôturée)" };
   ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le", "Nature"],
