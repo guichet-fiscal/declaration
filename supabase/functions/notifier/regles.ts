@@ -2,7 +2,7 @@
 // Guichet fiscal : quelles notifications envoyer, et avec quel texte.
 // Fonctions pures (aucun accès au réseau ni à la base) : testables à part.
 
-export const TYPES = ["declaration", "paiement", "demande", "pret", "controle", "vehicule", "delais"];
+export const TYPES = ["declaration", "paiement", "demande", "pret", "controle", "vehicule", "convocation", "delais"];
 
 const NF = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 const money = (n) => NF.format(Math.round(Number(n) || 0)).replace(/ | /g, " ") + " €";
@@ -15,6 +15,8 @@ function periode(k) {
   return m ? mois[Number(m[2]) - 1] + " " + m[1] : String(k || "");
 }
 const CONSTATS = { perso: "usage personnel", conducteur: "conducteur non autorisé", autre: "irrégularité" };
+const MOTIFS = { collecte: "collecte des impôts", controle: "contrôle fiscal", audition: "audition", autre: "convocation" };
+const heure = (iso) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Paris" }).replace(":", " h ") : ""; };
 const recent = (iso, jours) => { const t = new Date(iso || 0).getTime(); return Number.isFinite(t) && Date.now() - t < jours * 864e5; };
 
 // Un changement du registre → au plus une notification { type, title, body, url, tag }.
@@ -50,6 +52,12 @@ export function evenement(e, ctx) {
       if (!ins && n.statut !== b.statut && T[n.statut]) return { type: "controle", title: T[n.statut], body: `${n.entrepriseNom || "Entreprise"} · ${no("CF", id)}${n.total ? " · " + money(n.total) : ""}`, url: `#ouvrir=controles/${id}`, tag: "ctrl-" + id };
       return null;
     }
+    case "convocations": {
+      const motif = n.motif === "autre" && n.objet ? n.objet : MOTIFS[n.motif] || "convocation";
+      if (!ins && n.statut === "absente" && b.statut !== "absente") return { type: "convocation", title: "Absence à une convocation", body: `${n.entrepriseNom || "Entreprise"} · ${motif} · ${no("CV", id)} : sanction à décider`, url: `#ouvrir=convocations/${id}`, tag: "conv-" + id };
+      if (!ins && n.motif === "collecte" && n.statut === "honoree" && b.statut !== "honoree" && !n.collecte) return { type: "convocation", title: "Collecte à encaisser", body: `${n.entrepriseNom || "Entreprise"} · ${money(n.montant)} · ${no("CV", id)}`, url: `#ouvrir=convocations/${id}`, tag: "conv-" + id };
+      return null;
+    }
     case "vehicules": {
       const nc = n.constats || [], oc = b.constats || [];
       if (nc.length > oc.length) {
@@ -77,6 +85,9 @@ export function delais(rows, depuis, maintenant) {
   for (const r of by("controles")) { const x = r.data || {}; if (x.statut === "propose" && inWin(x.delaiReponse)) out.push(`${no("CF", r.id)} · ${x.entrepriseNom || ""} : délai de réponse au contrôle expiré`); }
   for (const r of by("decisions")) { const x = r.data || {}; if (x.statut === "validee" && x.at && inWin(new Date(x.at).getTime() + payMs)) { const d = decl.get(r.id) || {}; out.push(`${no("DF", r.id)} · ${d.entrepriseNom || ""} : avis de ${money(x.montant)} désormais exigible`); } }
   for (const r of by("prets")) { const x = r.data || {}; if (x.statut === "en_cours") for (const e of x.echeances || []) if (!e.payee && inWin(e.date)) out.push(`${no("PR", r.id)} · ${x.entrepriseNom || ""} : échéance ${e.n}/${(x.echeances || []).length} non payée`); }
+  // Rendez-vous de l'heure qui vient (le passage horaire précédent ne les a pas encore annoncés).
+  const proche = (t) => { const x = new Date(t || 0).getTime(); return Number.isFinite(x) && x > maintenant && x <= maintenant + (maintenant - depuis); };
+  for (const r of by("convocations")) { const x = r.data || {}; if (x.statut === "convoquee" && proche(x.date)) out.push(`${no("CV", r.id)} · ${x.entrepriseNom || ""} : ${x.motif === "autre" && x.objet ? x.objet : MOTIFS[x.motif] || "convocation"} à ${heure(x.date)}`); }
   if (!out.length) return null;
-  return { type: "delais", title: out.length === 1 ? "Délai expiré" : `${out.length} délais expirés`, body: out.slice(0, 4).join("\n") + (out.length > 4 ? `\n+ ${out.length - 4} autre${out.length - 4 > 1 ? "s" : ""}` : ""), url: "#recouvrement", tag: "delais-" + Math.floor(maintenant / 36e5) };
+  return { type: "delais", title: out.length === 1 ? "Délai à surveiller" : `${out.length} délais à surveiller`, body: out.slice(0, 4).join("\n") + (out.length > 4 ? `\n+ ${out.length - 4} autre${out.length - 4 > 1 ? "s" : ""}` : ""), url: "#recouvrement", tag: "delais-" + Math.floor(maintenant / 36e5) };
 }

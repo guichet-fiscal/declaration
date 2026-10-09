@@ -28,6 +28,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v8_prets.sql` : les demandes de prêt enregistrées par l’Inspection
 - `supabase/v9_vehicules.sql` : le registre des véhicules de société tenu par l’Inspection
 - `supabase/v10_notifications.sql` : les abonnements aux notifications et l’appel du service d’envoi
+- `supabase/v11_convocations.sql` : les convocations (droits de l’Inspection, verrou contre les décisions prises deux fois)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
@@ -48,7 +49,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société) et `supabase/v10_notifications.sql` (notifications). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications) et `supabase/v11_convocations.sql` (convocations). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -257,6 +258,20 @@ Les entreprises achètent leurs véhicules en concession avec l’argent de leur
 
 Un prêt « achat de véhicule » est justifié par le véhicule enregistré avec ce prêt et sa facture. Dans la surveillance des comptes, un achat payé par le compte mais absent des charges explique la baisse du solde, et le remboursement du dirigeant explique la hausse. L’Inspection enregistre les véhicules, leurs factures, les contrôles de police et les ventes. Valider, requalifier, marquer saisi et retirer du registre sont réservés à la Direction, et la base l’impose elle-même (`supabase/v9_vehicules.sql`) : l’Inspection ne peut ni effacer un contrôle de police, ni revenir sur une vente. Pour publier automatiquement certificats et requalifications, cochez « Véhicules de société » dans Réglages → Discord.
 
+## Convocations et collecte des impôts
+
+Onglet **Convocations**, la fiche de l’entreprise, un contrôle fiscal ou **Recouvrement → Impayés → Collecte**. Une convocation fixe un rendez-vous à une entreprise et part sur Discord avec la mention du patron.
+
+1. **Collecte des impôts** : le transporteur de fonds (Trans’Fond) passe au siège de l’entreprise pour collecter les sommes dues, cochées une à une (avis exigibles ou encore dans leur délai, pénalités, échéances). **Planifier une collecte** convoque plusieurs entreprises à la suite, de 15 en 15 minutes (réglable), et publie un seul **ordre de collecte** sur Discord.
+2. **Autres motifs** : contrôle fiscal (relié au contrôle), audition, ou motif libre, au lieu des convocations (la Préfecture par défaut).
+3. **Le jour du rendez-vous** : **Présent** (nom et qualité : patron, personne ayant accès au coffre ou autre représentant) ou **Absent**. Pour une collecte, la Direction encaisse dans le même geste les sommes remises au convoyeur : quittances publiées, l’entreprise ne doit plus rien.
+4. **Absence** : pour une collecte, majoration de 10 % des sommes encore dues ce jour-là (figée au constat), puis nouvelle convocation qui reprend les sommes et la majoration ; pour un autre motif, amende fixe (5 000 € par défaut). La Direction l’inflige ou en dispense l’entreprise, avec un motif. L’absence et la collecte entrent dans la chronologie du dossier de justice.
+5. **Report ou annulation** : avant le rendez-vous, avec un motif ; la nouvelle convocation renvoie à l’ancienne.
+
+Une même somme n’est jamais prévue dans deux collectes : tant qu’une collecte est à venir ou pas encore encaissée, l’entreprise n’est pas reconvoquée pour une collecte. Les taux annoncés sur la convocation restent ceux du jour où elle a été émise. Réglages → Recouvrement → Convocations et collecte : majoration, amende, minutes entre deux passages, transporteur de fonds, lieu des convocations. Discord : cochez « Convocations » dans la publication automatique.
+
+L’Inspection convoque, constate la présence ou l’absence, reporte et annule ; encaisser une collecte, sanctionner ou dispenser et supprimer sont réservés à la Direction. La base l’impose elle-même (`supabase/v11_convocations.sql`), et refuse aussi qu’une convocation déjà traitée change d’état, qu’une sanction décidée change, ou que deux agents encaissent la même collecte en même temps. Pour corriger une erreur, la Direction supprime la convocation et en émet une nouvelle.
+
 ## Cohérence des dossiers
 
 - **Attestation de régularité** : une somme encore dans son délai de paiement ne l’empêche pas (comme dans la réalité), mais elle y figure comme « pas encore payée », avec sa date limite.
@@ -297,14 +312,14 @@ La présence, le journal en direct et le remplacement d’une déclaration par u
 
 ## Notifications sur téléphone et ordinateur
 
-Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), délais expirés (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
+Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), convocations (absence à sanctionner, collecte à encaisser), délais (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, rendez-vous de l’heure à venir, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
 
 Sur iPhone et iPad (iOS 16.4 ou plus récent), installez d’abord le guichet sur l’écran d’accueil (Safari → Partager → « Sur l’écran d’accueil ») et ouvrez-le depuis son icône : Apple ne permet les notifications qu’aux applications installées. Sur Android et sur ordinateur, Chrome, Edge, Firefox et Safari les reçoivent directement.
 
 Mise en place, une seule fois :
 
-1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais.
-2. Dans Supabase, **Edge Functions → Deploy a new function → Via Editor** : nommez-la `notifier`, collez `supabase/functions/notifier/index.ts` puis ajoutez le fichier `regles.ts` du même dossier, et déployez. Dans les réglages de la fonction, désactivez **Verify JWT** (la base s’authentifie avec sa propre clé).
+1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais. `supabase/v11_convocations.sql` y ajoute les convocations.
+2. Dans Supabase, **Edge Functions → Deploy a new function → Via Editor** : nommez-la `notifier`, collez `supabase/functions/notifier/index.ts` puis ajoutez le fichier `regles.ts` du même dossier, et déployez. Dans les réglages de la fonction, désactivez **Verify JWT** (la base s’authentifie avec sa propre clé). Après une mise à jour de ces deux fichiers (comme celle des convocations), ouvrez la fonction `notifier` → **Code**, remplacez leur contenu et redéployez.
 3. Dans le guichet, cloche du bandeau → **Activer sur cet appareil** → **Envoyer un essai**.
 
 Aucune clé n’est à copier : la clé qui protège le service et les clés d’envoi sont créées toutes seules et restent dans une table que seuls la base et le service lisent.

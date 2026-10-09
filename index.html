@@ -404,6 +404,8 @@ table.compact td{padding:8px 10px}
 @media (max-width:620px){.journal-list li{grid-template-columns:minmax(0,1fr)}}
 .avis-preview{display:block;width:100%;max-width:760px;margin:0 auto;border:1px solid var(--rule);border-radius:6px;background:#fbfaf6}
 .env-editor{display:grid;gap:8px}
+.tour-plan{margin:4px 0 0;padding-left:22px;display:grid;gap:4px;font-size:13.5px}
+.tour-plan .mono{font-weight:600}
 .env-week{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:4px}
 .env-week label{font-weight:600;font-size:13px}
 .env-week select{width:auto;min-width:200px}
@@ -639,6 +641,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-convocations" data-tab="convocations" aria-selected="false">Convocations</button>
     <button class="tab" role="tab" type="button" id="tab-btn-prets" data-tab="prets" aria-selected="false">Prêts</button>
     <button class="tab" role="tab" type="button" id="tab-btn-vehicules" data-tab="vehicules" aria-selected="false">Véhicules</button>
     <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
@@ -870,6 +873,34 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     </div>
   </section>
 
+  <section class="panel" id="tab-convocations" role="tabpanel" aria-labelledby="tab-btn-convocations" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Convocations</h2>
+        <p class="sub">Collecte des impôts par le transporteur de fonds, contrôle fiscal, audition : chaque rendez-vous est notifié à l’entreprise. Pour une collecte, le patron ou une personne ayant accès au coffre doit être présent ; une absence majore les sommes à collecter. Pour les autres convocations, une absence peut valoir une amende.</p>
+      </div>
+      <div class="toolbar"><button class="btn ghost" type="button" id="conv-new" hidden>Convoquer</button><button class="btn" type="button" id="conv-tour" hidden>Planifier une collecte</button></div>
+    </div>
+    <div class="ledger">
+      <div class="kpi" id="ck-avenir"><span class="l">À venir</span><span class="v">—</span><span class="s">rendez-vous</span></div>
+      <div class="kpi" id="ck-constat"><span class="l">À constater</span><span class="v">—</span><span class="s">rendez-vous passés</span></div>
+      <div class="kpi" id="ck-traiter"><span class="l">À traiter</span><span class="v">—</span><span class="s">collectes et absences</span></div>
+      <div class="kpi" id="ck-collecte"><span class="l">Collecté</span><span class="v">—</span><span class="s">cette semaine</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="search-row">
+        <div class="seg" id="seg-conv" role="group" aria-label="Filtrer les convocations">
+          <button type="button" data-f="avenir" aria-pressed="true">À venir<span class="count"></span></button>
+          <button type="button" data-f="constat" aria-pressed="false">À constater<span class="count"></span></button>
+          <button type="button" data-f="traiter" aria-pressed="false">À traiter<span class="count"></span></button>
+          <button type="button" data-f="passees" aria-pressed="false">Passées<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Toutes<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="conv-list"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
   <section class="panel" id="tab-prets" role="tabpanel" aria-labelledby="tab-btn-prets" hidden>
     <div class="panel-head">
       <div>
@@ -1012,6 +1043,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
           <option value="controles">Contrôles fiscaux</option>
           <option value="saisies">Saisies</option>
           <option value="transmissions">Justice</option>
+          <option value="convocations">Convocations</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1475,6 +1507,25 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               </div>
             </div>
           </div>
+          <div class="card" id="card-conv">
+            <h3>Convocations et collecte</h3>
+            <p class="sub">Le transporteur de fonds passe chez les entreprises pour collecter les impôts. Le patron ou une personne ayant accès au coffre doit être présent.</p>
+            <div class="set-form">
+              <div class="row3" style="align-items:end">
+                <div class="field"><label for="scv-maj">Majoration si absence à une collecte</label><div class="money" data-cur="%"><input id="scv-maj" type="number" min="0" max="100" step="1"></div><span class="hint">Appliquée aux sommes à collecter.</span></div>
+                <div class="field"><label for="scv-amende">Amende si absence à une autre convocation</label><div class="money" data-cur="€"><input id="scv-amende" type="number" min="0" step="500"></div><span class="hint">Contrôle fiscal, audition…</span></div>
+                <div class="field"><label for="scv-pas">Minutes entre deux passages</label><input id="scv-pas" type="number" min="5" max="120" step="5"><span class="hint">Pour planifier une collecte.</span></div>
+              </div>
+              <div class="row2">
+                <div class="field"><label for="scv-trans">Transporteur de fonds</label><select id="scv-trans"></select><span class="hint">L’entreprise qui collecte (Trans’Fond).</span></div>
+                <div class="field"><label for="scv-lieu">Lieu des convocations</label><input id="scv-lieu" autocomplete="off"><span class="hint">Une collecte a lieu au siège de l’entreprise.</span></div>
+              </div>
+              <div class="paste-row">
+                <button class="btn" type="button" id="scv-save">Enregistrer</button>
+                <span id="scv-msg" class="hint" aria-live="polite"></span>
+              </div>
+            </div>
+          </div>
           <div class="card" id="card-bl">
             <h3>Surveillance des comptes</h3>
             <p class="sub">Contre le blanchiment : chaque employé peut déposer de l’argent sale sur le compte de l’entreprise. Le guichet compare le solde du compte à ce que les déclarations expliquent.</p>
@@ -1668,7 +1719,8 @@ const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
   budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, enveloppesSemaines: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
   exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
-  delaiMiseEnDemeureJours: 2, majorationImpaye: 10, majorationOffice: 40, tiersDefaut: "", justiceDestinataire: "Procureur de la République près le tribunal judiciaire",
+  delaiMiseEnDemeureJours: 2, majorationImpaye: 10, majorationOffice: 40,
+  convMajoration: 10, convAmende: 5000, convLieu: "Préfecture de police, Direction des impôts et cotisations", convIntervalle: 15, convTransporteur: "", tiersDefaut: "", justiceDestinataire: "Procureur de la République près le tribunal judiciaire",
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
   baremeIS: [{ jusqua: 20000, taux: 0 }, { jusqua: 100000, taux: 12 }, { jusqua: 300000, taux: 22 }, { jusqua: 600000, taux: 30 }, { jusqua: 1000000, taux: 38 }, { jusqua: null, taux: 45 }],
   baremeCot: [{ jusqua: 20000, taux: 0 }, { jusqua: 60000, taux: 18 }, { jusqua: 100000, taux: 32 }, { jusqua: 130000, taux: 38 }, { jusqua: 150000, taux: 44 }, { jusqua: null, taux: 80, libelle: "Surtaxe infraction" }],
@@ -1677,7 +1729,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -2447,6 +2499,7 @@ function subscribe() {
   col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2475,11 +2528,13 @@ function render() {
   renderDiscordSettings();
   renderExoSettings();
   renderRecouvSettings();
+  renderConvSettings();
   renderBlSettings();
   renderVehSettings();
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
   renderPrets();
   renderVehicules();
+  renderConvocations();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
 }
@@ -3849,7 +3904,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -4248,11 +4303,11 @@ async function payEcheance(d, idx) {
 }
 const nextEcheance = e => e.echeances.findIndex(x => !x.payee);
 // Encaisse les échéances passées et non payées (saisie sur un paiement en plusieurs fois).
-async function payOverdue(d, note) {
+async function payOverdue(d, note, cutoff) {
   const e = echOf(d);
   if (!e) return false;
   const body = JSON.parse(JSON.stringify(e)); delete body.id;
-  const now = Date.now(), idx = [];
+  const now = cutoff || Date.now(), idx = [];
   body.echeances.forEach((x, i) => { if (!x.payee && new Date(x.date).getTime() < now) { x.payee = true; x.paidAt = nowISO(); x.paidByNom = S.agentName || ""; x.note = note || ""; idx.push(i); } });
   if (!idx.length) return false;
   if (!(await write(() => S.db.doc("echeanciers/" + d.id).set(body)))) return false;
@@ -4403,6 +4458,7 @@ function openFiche(e, opts) {
     sec("Historique des déclarations", hist),
     sec("Pénalités et redressements", pens, penForm),
     compteSection(e, reopen),
+    convocationsSection(e),
     pretsSection(e),
     vehiculesSection(e),
     ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
@@ -4421,6 +4477,7 @@ function openFiche(e, opts) {
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e, () => openFiche(S.entreprises.find(x => x.id === e.id) || e)), text: "Modifier l’entreprise" }) : null,
     e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openAttestation(e, reopen), text: "Attestation de régularité" }) : null,
     canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(e), text: "Contrôle fiscal" }) : null,
+    canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(e), text: "Convoquer" }) : null,
     w && unpaidItems(e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisie(e), text: "Saisie" }) : null,
     w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }) : null,
     h("span", { class: "spacer" }),
@@ -4549,7 +4606,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -4650,9 +4707,18 @@ function describe(e) {
       if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
+    }
+    case "convocations": {
+      const cv = v || {}, no = dossierNo("CV", e.doc_id), nom = cv.entrepriseNom || "";
+      if (x === "ajout") return `a convoqué ${nom} (${no} · ${(CONV_MOTIFS[cv.motif] || "convocation").toLowerCase()})`;
+      if (x === "suppression") return `a supprimé la convocation ${no} de ${nom}`;
+      if (a.statut !== b.statut) return { honoree: `a constaté la présence de ${nom} (${no})`, absente: `a constaté l’absence de ${nom} (${no})`, annulee: `a annulé la convocation ${no} de ${nom}` }[a.statut] || `a modifié la convocation ${no}`;
+      if (a.collecte && !b.collecte) return `a encaissé la collecte ${no} de ${nom} (${money(a.collecte.montant)})`;
+      if (a.sanction && !b.sanction) return a.sanction.dispense ? `a dispensé ${nom} de sanction (${no})` : `a sanctionné l’absence de ${nom} (${no} · ${money(a.sanction.montant)})`;
+      return `a modifié la convocation ${no} de ${nom}`;
     }
     case "meta": return "a téléchargé une sauvegarde du registre";
     case "agents": {
@@ -4672,7 +4738,7 @@ const FIELD_LABEL = {
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
   salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", delaiMiseEnDemeureJours: "Délai des mises en demeure", majorationImpaye: "Majoration pour paiement tardif", majorationOffice: "Majoration de taxation d’office", tiersDefaut: "Tiers détenteur", justiceDestinataire: "Destinataire des dossiers de justice", tiers: "Tiers détenteur", recouvre: "Recouvré", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
-  services: "Services", enveloppes: "Enveloppes", enveloppesSemaines: "Plafonds par période", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
+  services: "Services", enveloppes: "Enveloppes", enveloppesSemaines: "Plafonds par période", convMajoration: "Majoration d’absence (collecte)", convAmende: "Amende d’absence", convIntervalle: "Minutes entre deux passages", convLieu: "Lieu des convocations", convTransporteur: "Transporteur de fonds", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
 };
@@ -5169,6 +5235,7 @@ function editEntreprise(e, back) {
       for (const ct of S.controles) if (ct.entrepriseId === e.id && ct.entrepriseNom !== n) jobs.push(["controles", ct.id]);
       for (const sa of S.saisies) if (sa.entrepriseId === e.id && sa.entrepriseNom !== n) jobs.push(["saisies", sa.id]);
       for (const tj of S.transmissions) if (tj.entrepriseId === e.id && tj.entrepriseNom !== n) jobs.push(["transmissions", tj.id]);
+      for (const cv of S.convocations || []) if (cv.entrepriseId === e.id && cv.entrepriseNom !== n) jobs.push(["convocations", cv.id]);
       let done = 0;
       for (const [col, id] of jobs) { await write(() => S.db.doc(col + "/" + id).update({ entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -5256,6 +5323,7 @@ const DISCORD_AUTO = [
   ["attestations", "Attestations de régularité délivrées", "entreprises"],
   ["controles", "Contrôles fiscaux : avis de vérification, proposition, mise en recouvrement", "entreprises"],
   ["saisies", "Saisies notifiées", "entreprises"],
+  ["convocations", "Convocations, ordres de collecte et constats d’absence", "entreprises"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
@@ -5734,6 +5802,7 @@ function renderRecouvrement() {
       ag ? h("div", { class: "row-actions" },
         free.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(xf, "paiement", "relance"), text: "Relancer" }) : null,
         free.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => relanceOne(xf, "paiement", "mise_en_demeure"), text: "Mise en demeure" }) : null,
+        free.length && !convPendingOf(x.e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(x.e, { motif: "collecte" }), text: "Collecte" }) : null,
         dir && toMaj.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => majorerImpayes(x), text: `Majorer de ${pct(c.majorationImpaye)}` }) : null,
         dir && free.length ? h("button", { class: medOk ? "btn small" : "btn ghost small", type: "button", title: medOk ? "" : "Dans la procédure réelle, la saisie suit une mise en demeure de payer restée sans effet", onclick: () => openSaisie(x.e), text: "Saisir" }) : null,
         sa ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisieDetail(sa.id), text: "Voir la saisie" }) : null,
@@ -5912,18 +5981,7 @@ function openSaisieDetail(id) {
   const dir = writer(), reopen = () => openSaisieDetail(id);
   const exec = async ev => {
     ev.currentTarget.disabled = true;
-    let rec = 0;
-    for (const x of s.items || []) {
-      if (x.kind === "decl") {
-        const d = S.declarations.find(y => y.id === x.id);
-        if (!d || dStatus(d) !== "validee" || dReste(d) <= 0) continue;
-        // Échéancier : la saisie couvre les échéances visées, pas celles qui ne sont pas encore dues.
-        if (echOf(d) && x.plan) { const due = echRetardMontant(d); if (due > 0 && await payOverdue(d, `Recouvré par la saisie ${dossierNo("SA", id)}`)) rec += due; }
-        else { const due = dReste(d); if (await decide(d, "payee", dMontant(d), `Recouvré par la saisie ${dossierNo("SA", id)}`, { quiet: true })) rec += due; }
-      }
-      else if (x.kind === "pret") { const p = (S.prets || []).find(y => y.id === x.id); const dues = p ? pretDues(p) : []; const due = dues.reduce((t, y) => t + (Number(y.montant) || 0), 0); if (due > 0 && await payPret(p, dues.map(y => y.i), `Recouvré par la saisie ${dossierNo("SA", id)}`)) rec += due; }
-      else { const p = S.penalites.find(y => y.id === x.id); if (p && p.statut === "due" && await setPenaltyStatus(p, "payee")) rec += Number(p.montant) || 0; }
-    }
+    const rec = await encaisserItems(s.items, `Recouvré par la saisie ${dossierNo("SA", id)}`);
     const body = Object.assign({}, s, { statut: "executee", executeeLe: nowISO(), recouvre: rec }); delete body.id;
     if (await write(() => S.db.doc("saisies/" + id).set(body))) { toast(`Saisie exécutée : ${money(rec)} recouvrés.`); reopen(); }
   };
@@ -5944,6 +6002,577 @@ function openSaisieDetail(id) {
       dir && s.statut === "notifiee" ? h("button", { class: saisieOpen(s) ? "btn ghost small" : "btn ink small", type: "button", onclick: lift, text: "Mainlevée" }) : null,
       dir && s.statut === "notifiee" && saisieOpen(s) ? h("button", { class: "btn ink small", type: "button", onclick: exec, text: "Saisie exécutée" }) : null].filter(Boolean)
   });
+}
+
+// Encaisse des sommes encore dues (avis, échéances, prêts, pénalités) et délivre leurs quittances.
+// Sert à la saisie exécutée et à la collecte. Renvoie le total encaissé.
+// exact (collecte) : seulement les échéances figées sur la convocation, pas celles échues depuis.
+async function encaisserItems(items, note, exact) {
+  let rec = 0;
+  for (const x of items || []) {
+    if (x.kind === "decl") {
+      const d = S.declarations.find(y => y.id === x.id);
+      if (!d || dStatus(d) !== "validee" || dReste(d) <= 0) continue;
+      // Échéancier : seules les échéances visées (passées) sont encaissées, pas celles à venir.
+      if (echOf(d) && x.plan) {
+        const cut = exact && x.jusqua ? new Date(x.jusqua).getTime() : 0;
+        const due = cut ? convItemDu(x) : echRetardMontant(d);
+        if (due > 0 && await payOverdue(d, note, cut || undefined)) rec += due;
+      }
+      else { const due = dReste(d); if (await decide(d, "payee", dMontant(d), note, { quiet: true })) rec += due; }
+    }
+    else if (x.kind === "pret") {
+      const p = (S.prets || []).find(y => y.id === x.id);
+      const dues = !p ? [] : exact && Array.isArray(x.idx) ? x.idx.map(i => Object.assign({ i }, (p.echeances || [])[i] || {})).filter(y => y.montant !== undefined && !y.payee) : pretDues(p);
+      const due = dues.reduce((t, y) => t + (Number(y.montant) || 0), 0);
+      if (due > 0 && await payPret(p, dues.map(y => y.i), note)) rec += due;
+    }
+    else { const p = S.penalites.find(y => y.id === x.id); if (p && p.statut === "due" && await setPenaltyStatus(p, "payee")) rec += Number(p.montant) || 0; }
+  }
+  return rec;
+}
+
+/* ---------- Convocations ---------- */
+// Une convocation fixe un rendez-vous à une entreprise : collecte des impôts par le transporteur de
+// fonds (Trans'Fond), contrôle fiscal, audition ou autre motif. Le patron doit être présent ; pour une
+// collecte, toute personne ayant accès au coffre de l'entreprise peut le remplacer. Une absence est
+// sanctionnée : majoration des sommes à collecter (collecte), amende fixe (autres convocations).
+// L'Inspection convoque et constate ; la Direction encaisse la collecte et inflige la sanction.
+const CONV_MOTIFS = { collecte: "Collecte des impôts", controle: "Contrôle fiscal", audition: "Audition", autre: "Autre motif" };
+const CONV_STAT = { convoquee: ["Convoquée", "info"], honoree: ["Honorée", "ok"], absente: ["Absence", "bad"], annulee: ["Annulée", "muted"] };
+const CONV_QUALITES = { patron: "Patron", coffre: "Personne ayant accès au coffre", representant: "Autre représentant" };
+const convNo = c => dossierNo("CV", c.id);
+const convsOf = e => (S.convocations || []).filter(c => sameEnt(c, e)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+const convNow = id => (S.convocations || []).find(c => c.id === id) || null;
+function convCfg() {
+  const c = cfg(), n = (v, d) => (Number.isFinite(Number(v)) && v !== "" && v !== null && v !== undefined ? Number(v) : d);
+  return { maj: n(c.convMajoration, 10), amende: n(c.convAmende, 5000), lieu: c.convLieu || DEFAULTS.convLieu, pas: Math.max(5, n(c.convIntervalle, 15)), transporteur: c.convTransporteur || "" };
+}
+// Transporteur de fonds : celui des réglages, sinon l'entreprise dont le nom évoque Trans'Fond.
+function transporteur() {
+  const id = convCfg().transporteur;
+  return (id && S.entreprises.find(e => e.id === id)) || S.entreprises.find(e => /trans\W*fond|brinks|convoy/.test(norm(e.nom))) || null;
+}
+const convMotif = c => (c.motif === "autre" && c.objet ? c.objet : CONV_MOTIFS[c.motif] || "Convocation");
+const convWhen = c => fmtDateTime(new Date(c.date));
+const convShort = c => { const d = new Date(c.date); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} à ${pad(d.getHours())} h ${pad(d.getMinutes())}`; };
+const convPassee = c => c.statut === "convoquee" && new Date(c.date).getTime() < Date.now();
+const convASanctionner = c => c.statut === "absente" && !c.sanction && convSanction(c).montant > 0;
+const convEnCours = c => !!(c.collecte && c.collecte.enCours);
+const convAEncaisser = c => c.motif === "collecte" && c.statut === "honoree" && (c.collecte ? convEnCours(c) : (c.items || []).some(i => convItemDu(i) > 0));
+// Collecte à venir ou pas encore encaissée : ses sommes ne peuvent pas être collectées une seconde fois.
+const convPending = c => c.motif === "collecte" && (c.statut === "convoquee" || convAEncaisser(c));
+const convPendingOf = (e, exceptId) => (S.convocations || []).filter(c => sameEnt(c, e) && c.id !== exceptId && convPending(c));
+function convState(c) {
+  if (convPassee(c)) return ["Présence à constater", "warn"];
+  if (convASanctionner(c)) return ["Absence à sanctionner", "bad"];
+  if (convEnCours(c)) return ["Encaissement en cours", "warn"];
+  if (convAEncaisser(c)) return ["Collecte à encaisser", "warn"];
+  if (c.statut === "absente" && c.sanction && c.sanction.dispense) return ["Absence dispensée", "muted"];
+  if (c.statut === "honoree" && c.collecte) return ["Collecte faite", "ok"];
+  return CONV_STAT[c.statut] || CONV_STAT.convoquee;
+}
+// Sommes à collecter : exigibles ou encore dans leur délai, hors celles déjà sous une saisie ou déjà
+// prévues dans une autre collecte (à venir, ou faite mais pas encore encaissée).
+function convItems(e, exceptId) {
+  const held = convPendingOf(e, exceptId).flatMap(c => c.items || []);
+  const out = [];
+  for (const x of unpaidItems(e).concat(aEchoirItems(e))) if (!saisieOfItem(x) && !held.some(y => sameItem(y, x)) && !out.some(y => y.kind === x.kind && y.id === x.id)) out.push(x);
+  return out;
+}
+// Ce qui est figé sur la convocation pour chaque somme : pour un prêt, les échéances échues ce jour-là ;
+// pour un paiement en plusieurs fois, la date jusqu'à laquelle les échéances sont collectées.
+function convItemSnap(x) {
+  const o = { ref: x.ref, label: x.label, montant: x.montant, kind: x.kind, id: x.id, plan: !!x.plan };
+  if (x.kind === "pret") { const p = (S.prets || []).find(y => y.id === x.id); o.idx = p ? pretDues(p).map(y => y.i) : []; }
+  if (x.kind === "decl" && x.plan) o.jusqua = nowISO();
+  return o;
+}
+// Ce qui reste dû sur une somme d'une collecte, sans dépasser ce que la convocation annonçait.
+function convItemDu(x) {
+  if (x.kind === "decl") {
+    const d = S.declarations.find(y => y.id === x.id);
+    if (!d || dStatus(d) !== "validee") return 0;
+    const ec = echOf(d);
+    if (ec && x.plan) { const cut = x.jusqua ? new Date(x.jusqua).getTime() : Date.now(); return Math.min(Number(x.montant) || 0, ec.echeances.filter(y => !y.payee && new Date(y.date).getTime() < cut).reduce((t, y) => t + (Number(y.montant) || 0), 0)); }
+    return Math.max(0, Math.min(Number(x.montant) || 0, dReste(d)));
+  }
+  if (x.kind === "pret") {
+    const p = (S.prets || []).find(y => y.id === x.id);
+    if (!p || p.statut !== "en_cours") return 0;
+    const list = Array.isArray(x.idx) ? x.idx.map(i => (p.echeances || [])[i]).filter(y => y && !y.payee) : pretDues(p);
+    return Math.min(Number(x.montant) || 0, list.reduce((t, y) => t + (Number(y.montant) || 0), 0));
+  }
+  if (x.kind === "pen") { const p = S.penalites.find(y => y.id === x.id); return p && p.statut === "due" ? Number(p.montant) || 0 : 0; }
+  return itemSettled(x) ? 0 : Number(x.montant) || 0;
+}
+const convDu = c => (c.items || []).reduce((t, i) => t + convItemDu(i), 0);
+// Taux en vigueur à la convocation (annoncés sur le document), pas ceux d'aujourd'hui.
+const isNum = v => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+const convMaj = c => (isNum(c.majPct) ? Number(c.majPct) : convCfg().maj);
+const convAmende = c => (isNum(c.amende) ? Number(c.amende) : convCfg().amende);
+// Sanction d'une absence : majoration des sommes encore dues au moment de l'absence (figée au constat),
+// ou amende fixe pour les autres convocations.
+function convSanction(c) {
+  const ab = c.absence || {};
+  if (c.motif === "collecte") {
+    const m = convMaj(c), label = `Majoration de ${pct(m)} des sommes à collecter`;
+    if (isNum(ab.montant)) return { montant: Math.round(Number(ab.montant)), base: Number(ab.base) || 0, label };
+    const base = convDu(c); return { montant: Math.round(base * m / 100), base, label };
+  }
+  return { montant: Math.round(convAmende(c)), base: 0, label: "Amende pour absence à une convocation" };
+}
+function convocationDoc(c) {
+  const e = entOf(c), col = c.motif === "collecte", out = c.statut !== "convoquee";
+  const tr = col ? (S.entreprises.find(x => x.id === c.transporteurId) || null) : null;
+  return {
+    kind: "CONVOCATION", no: convNo(c), date: "Émise le " + longDate(new Date(c.at)),
+    meta: [["Entreprise", e.nom || c.entrepriseNom], ["Convoqué", col ? `${c.convoque || e.patron || "Le patron"} ou une personne ayant accès au coffre` : c.convoque || e.patron || "Le patron"],
+      ["Rendez-vous", convWhen(c)], ["Lieu", c.lieu || "—"], ["Objet", convMotif(c)], ["Suivi par", c.byNom || "Direction des impôts et cotisations"]],
+    lines: col ? (c.items || []).map(x => [`${x.label} (${x.ref})`, money(x.montant)])
+      : [["Motif", convMotif(c) + (c.objet && c.motif !== "autre" ? " : " + c.objet : "")]].concat(c.controleId ? [["Contrôle fiscal", dossierNo("CF", c.controleId)]] : []),
+    total: col ? ["Somme à remettre au convoyeur", money(c.montant)] : ["Rendez-vous", convShort(c)],
+    stamp: out ? (c.statut === "honoree" ? ["HONORÉE", "ok"] : c.statut === "absente" ? ["ABSENCE", "bad"] : ["ANNULÉE", "muted"]) : ["CONVOCATION", "accent"],
+    footer: col
+      ? `Ce jour-là, un convoyeur de ${c.transporteurNom || (tr && tr.nom) || "Trans’Fond"} se présentera au lieu indiqué pour collecter les sommes ci-dessus, contre quittance. Le patron, ou une personne ayant accès au coffre de l’entreprise, doit être présent. En cas d’absence, les sommes à collecter seront majorées de ${pct(convMaj(c))} et une nouvelle convocation sera adressée.`
+      : `Présentez-vous à l’heure et au lieu indiqués, avec les documents de l’entreprise (registres, factures, relevés du compte). En cas d’absence sans motif légitime, une amende de ${money(convAmende(c))} pourra être infligée.`,
+    discord: { channel: "entreprises", mentions: [entMention(e), col && tr ? entMention(tr) : ""].filter(Boolean),
+      text: `**Convocation ${convNo(c)}** · ${e.nom || c.entrepriseNom} · ${convMotif(c)} · ${convWhen(c)} · ${c.lieu || ""}${col ? ` · ${money(c.montant)} à remettre` : ""}` }
+  };
+}
+function carenceDoc(c) {
+  const e = entOf(c), s = c.sanction && !c.sanction.dispense ? c.sanction : convSanction(c), col = c.motif === "collecte";
+  return {
+    kind: "CONSTAT D’ABSENCE", no: convNo(c), date: "Constatée le " + longDate(new Date((c.absence || {}).at || Date.now())),
+    meta: [["Entreprise", e.nom || c.entrepriseNom], ["Convoqué", c.convoque || e.patron || "—"], ["Rendez-vous", convWhen(c)], ["Lieu", c.lieu || "—"], ["Objet", convMotif(c)], ["Constaté par", (c.absence || {}).byNom || "—"]],
+    lines: (col ? (c.items || []).map(x => [`${x.label} (${x.ref})`, money(x.montant)]) : [["Motif", convMotif(c)]]).concat((c.absence || {}).note ? [["Observation", c.absence.note]] : []),
+    total: c.sanction && c.sanction.dispense ? ["Sanction", "Dispensée"] : [col ? `Majoration (${pct(convMaj(c))})` : (c.sanction ? "Amende infligée" : "Amende encourue"), money(s.montant)],
+    stamp: ["ABSENCE", "bad"],
+    footer: c.sanction && c.sanction.dispense
+      ? `L’entreprise ne s’est pas présentée. La Direction l’a dispensée de sanction${c.sanction.motif ? " : " + c.sanction.motif : ""}.`
+      : col
+        ? `Personne ayant accès au coffre de l’entreprise n’était présent à l’heure de la collecte. ${c.sanction ? "Les sommes à collecter sont majorées" : "Les sommes à collecter seront majorées sur décision de la Direction"} et une nouvelle convocation est adressée.`
+        : `L’entreprise ne s’est pas présentée à la convocation. ${c.sanction ? "La Direction lui a infligé l’amende ci-dessus." : "La Direction peut lui infliger l’amende ci-dessus."}`,
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Absence constatée ${convNo(c)}** · ${e.nom || c.entrepriseNom} · ${convMotif(c)} du ${convWhen(c)}` }
+  };
+}
+function tourneeDoc(list) {
+  const tr = S.entreprises.find(x => x.id === list[0].transporteurId) || null, d0 = new Date(list[0].date);
+  const ments = list.map(c => entMention(entOf(c))).concat(tr ? [entMention(tr)] : []).filter(Boolean);
+  return {
+    kind: "ORDRE DE COLLECTE", no: dossierNo("OC", list[0].tourneeId || list[0].id), date: "Établi le " + longDate(new Date(list[0].at)),
+    meta: [["Transporteur", list[0].transporteurNom || (tr && tr.nom) || "Trans’Fond"], ["Date", longDate(d0)], ["Passages", String(list.length)], ["Établi par", list[0].byNom || "Direction des impôts et cotisations"]],
+    lines: list.map(c => [`${convShort(c).split(" à ")[1]} · ${c.entrepriseNom} (${convNo(c)})`, money(c.montant)]),
+    total: ["Total à collecter", money(list.reduce((t, c) => t + (Number(c.montant) || 0), 0))],
+    stamp: ["COLLECTE", "accent"],
+    footer: "Le convoyeur se présente à chaque entreprise à l’heure indiquée et collecte les sommes contre quittance. Le patron ou une personne ayant accès au coffre doit être présent ; une absence entraîne une majoration et une nouvelle convocation.",
+    discord: { channel: "entreprises", mentions: [...new Set(ments)], text: `**Ordre de collecte** · ${longDate(d0)} · ${list.length} passage${plural(list.length)} · ${money(list.reduce((t, c) => t + (Number(c.montant) || 0), 0))}` }
+  };
+}
+async function saveConv(c, patch, msg) {
+  const latest = convNow(c.id) || c;
+  const body = Object.assign({}, latest, patch); delete body.id;
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+  const ok = await write(() => S.db.doc("convocations/" + c.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+const convBusy = new Set();
+async function convOnce(id, fn) { if (convBusy.has(id)) return false; convBusy.add(id); try { return await fn(); } finally { convBusy.delete(id); } }
+// L'état a changé pendant que la fenêtre était ouverte (un autre agent) : on le dit et on rouvre.
+function convChanged(id, want) {
+  const cur = convNow(id);
+  if (!cur) { closeDialog(); toast("Cette convocation vient d’être supprimée par un autre agent.", true); return true; }
+  if (want && !want(cur)) { toast("Un autre agent vient de traiter cette convocation : voici son état.", true); openConv(id); return true; }
+  return false;
+}
+
+// Nouvelle convocation (ou report d'une convocation : opts.from).
+function openConvForm(e, opts) {
+  if (!canAgent()) return;
+  opts = opts || {};
+  const from = opts.from ? convNow(opts.from.id) || opts.from : null;
+  if (!e) { pickEntreprise("Convoquer une entreprise", x => openConvForm(x, opts)); return; }
+  const k = convCfg(), tr = transporteur();
+  const motif = h("select", {}, Object.entries(CONV_MOTIFS).map(([v, l]) => h("option", { value: v, text: l })));
+  motif.value = opts.motif || (from && from.motif) || "collecte";
+  const objet = h("input", { autocomplete: "off", placeholder: "Précisez le motif" });
+  objet.value = (from && from.objet) || opts.objet || "";
+  const when = h("input", { type: "datetime-local" });
+  const d0 = opts.date ? new Date(opts.date) : from ? new Date(Math.max(Date.now() + 3600e3, new Date(from.date).getTime() + 864e5)) : new Date(Date.now() + 864e5);
+  if (!opts.date) d0.setMinutes(d0.getMinutes() < 30 ? 0 : 30, 0, 0);
+  when.value = toLocalInput(d0);
+  const lieu = h("input", { autocomplete: "off" });
+  const conv = h("input", { autocomplete: "off", placeholder: "Nom du patron" });
+  conv.value = (from && from.convoque) || e.patron || "";
+  const trSel = h("select", {}, h("option", { value: "", text: "— Choisir —" }), S.entreprises.slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(x => h("option", { value: x.id, text: x.nom })));
+  trSel.value = (from && from.transporteurId) || (tr && tr.id) || "";
+  const all = convItems(e, from ? from.id : null);
+  const keep = from && from.motif === "collecte" && (from.items || []).length ? from.items.filter(i => convItemDu(i) > 0) : null;
+  // Nouvelle convocation après une absence : les sommes restantes, plus la majoration de cette absence.
+  const majDe = x => x.kind === "pen" && from && ((S.penalites.find(p => p.id === x.id) || {}).convocationId === from.id);
+  const boxes = all.map((x, i) => { const cb = h("input", { type: "checkbox", id: "cv-it-" + i }); cb.checked = keep ? keep.some(y => sameItem(y, x)) || majDe(x) : true; return [x, cb]; });
+  const totalEl = h("strong", { class: "mono" });
+  const updTotal = () => { totalEl.textContent = money(boxes.filter(([, cb]) => cb.checked).reduce((t, [x]) => t + x.montant, 0)); };
+  boxes.forEach(([, cb]) => cb.addEventListener("change", updTotal)); updTotal();
+  const colBox = h("div", {},
+    h("div", { class: "row2" }, field("cv-tr", "Transporteur de fonds", trSel), h("div", { class: "field" }, h("label", { text: "Somme à collecter" }), totalEl)),
+    all.length ? sec("Sommes à collecter", h("div", { class: "checks-col" }, boxes.map(([x, cb], i) => h("label", { class: "switch", for: "cv-it-" + i }, cb, `${x.ref} · ${x.label} · ${money(x.montant)}${x.exigible ? " · exigible le " + fmtDate(new Date(x.exigible)) : ""}`))))
+      : h("p", { class: "hint", style: "margin:0", text: "Aucune somme due pour l’instant : la collecte ne portera sur rien. Choisissez un autre motif, ou attendez l’émission des avis." }));
+  const objF = field("cv-obj", "Précision", objet);
+  const hint = h("p", { class: "hint", style: "margin:0" });
+  const sync = () => {
+    const col = motif.value === "collecte";
+    colBox.hidden = !col; objF.querySelector("label").textContent = motif.value === "autre" ? "Motif de la convocation" : "Précision (facultatif)";
+    hint.textContent = col ? `Le patron ou une personne ayant accès au coffre doit être présent ; une absence majore les sommes à collecter de ${pct(k.maj)} et entraîne une nouvelle convocation.` : `Une absence sans motif légitime peut valoir une amende de ${money(k.amende)} (Réglages → Recouvrement).`;
+    if (!lieu.dataset.touched) lieu.value = col ? "Siège de l’entreprise" : k.lieu;
+  };
+  lieu.addEventListener("input", () => { lieu.dataset.touched = "1"; });
+  if (from) { lieu.value = from.lieu || ""; lieu.dataset.touched = "1"; }
+  motif.addEventListener("change", sync); sync();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const report = !!from && from.statut === "convoquee";
+  const go = h("button", { class: "btn ink small", type: "button", text: report ? "Reporter la convocation" : from ? "Convoquer de nouveau" : "Convoquer" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const t = new Date(when.value);
+    if (!when.value || !Number.isFinite(t.getTime())) { err.textContent = "Indiquez la date et l’heure du rendez-vous."; when.focus(); return; }
+    if (t.getTime() < Date.now() - 60e3) { err.textContent = "Le rendez-vous est déjà passé : choisissez une date à venir."; when.focus(); return; }
+    if (motif.value === "autre" && !objet.value.trim()) { err.textContent = "Précisez le motif de la convocation."; objet.focus(); return; }
+    const col = motif.value === "collecte";
+    const chosen = col ? boxes.filter(([, cb]) => cb.checked).map(([x]) => x) : [];
+    if (col && !chosen.length) { err.textContent = "Cochez au moins une somme à collecter."; return; }
+    const trE = col ? S.entreprises.find(x => x.id === trSel.value) || null : null;
+    if (col && !trE) { err.textContent = "Choisissez le transporteur de fonds (Réglages → Recouvrement pour le retenir)."; trSel.focus(); return; }
+    const other = col ? convPendingOf(e, from ? from.id : null)[0] : null;
+    if (other) { err.textContent = `Une collecte est déjà prévue pour cette entreprise (${convNo(other)}, ${convWhen(other)}) ou attend son encaissement : reportez-la plutôt.`; return; }
+    if (from && convChanged(from.id, x => x.statut === from.statut && !x.remplaceePar)) return;
+    go.disabled = true;
+    const ref = S.db.collection("convocations").doc();
+    const c = { entrepriseId: e.id || null, entrepriseNom: e.nom, motif: motif.value, objet: objet.value.trim(), controleId: opts.controleId || (from && from.controleId) || null,
+      date: t.toISOString(), lieu: lieu.value.trim() || (col ? "Siège de l’entreprise" : k.lieu), convoque: conv.value.trim(),
+      items: chosen.map(convItemSnap), montant: chosen.reduce((s, x) => s + x.montant, 0),
+      transporteurId: trE ? trE.id : null, transporteurNom: trE ? trE.nom : "", remplace: from ? from.id : null, majPct: k.maj, amende: k.amende,
+      statut: "convoquee", at: nowISO(), by: S.uid || null, byNom: S.agentName || "" };
+    // L'ancienne convocation est mise à jour d'abord : si un autre agent l'a traitée entre-temps, la base
+    // refuse et rien n'est créé en double.
+    if (from) {
+      const patch = from.statut === "convoquee" ? { statut: "annulee", annulation: { at: nowISO(), motif: `Reportée au ${fmtDateTime(t)} (${dossierNo("CV", ref.id)})`, byNom: S.agentName || "" }, remplaceePar: ref.id } : { remplaceePar: ref.id };
+      if (!(await saveConv(from, patch))) { go.disabled = false; return; }
+    }
+    if (!(await write(() => ref.set(c)))) { if (from) await saveConv(from, { remplaceePar: undefined }); go.disabled = false; return; }
+    const doc = convocationDoc(Object.assign({ id: ref.id }, c));
+    toast(`Convocation ${dossierNo("CV", ref.id)} enregistrée.`);
+    autoPublish("convocations", doc, "Convocation envoyée.");
+    showDocImage(doc, () => openConv(ref.id));
+  });
+  openDialog({
+    eyebrow: report ? `Report de la convocation ${convNo(from)}` : from ? `Après la convocation ${convNo(from)}` : "Convocation", title: "Convoquer · " + e.nom,
+    body: [
+      h("div", { class: "row2" }, field("cv-motif", "Motif", motif), objF),
+      h("div", { class: "row3" }, field("cv-date", "Date et heure", when), field("cv-lieu", "Lieu", lieu), field("cv-conv", "Convoqué", conv)),
+      colBox, hint, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => from ? openConv(from.id) : closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+}
+
+// Tournée de collecte : une date, un transporteur, plusieurs entreprises convoquées à la suite.
+function openTournee() {
+  if (!canAgent()) return;
+  const k = convCfg(), tr = transporteur();
+  const rows = S.entreprises.filter(e => e.actif !== false).map(e => { const items = convItems(e); return { e, items, total: items.reduce((t, x) => t + x.montant, 0) }; })
+    .filter(x => x.items.length && !convPendingOf(x.e).length)
+    .sort((a, b) => b.total - a.total);
+  const deja = S.entreprises.filter(e => convPendingOf(e).length);
+  const when = h("input", { type: "datetime-local" });
+  const d0 = new Date(Date.now() + 864e5); d0.setHours(21, 0, 0, 0); when.value = toLocalInput(d0);
+  const pas = h("input", { type: "number", min: "5", max: "120", step: "5", inputmode: "numeric" }); pas.value = String(k.pas);
+  const trSel = h("select", {}, h("option", { value: "", text: "— Choisir —" }), S.entreprises.slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(x => h("option", { value: x.id, text: x.nom })));
+  trSel.value = tr ? tr.id : "";
+  const boxes = rows.map((x, i) => { const cb = h("input", { type: "checkbox", id: "tn-" + i }); cb.checked = true; return [x, cb]; });
+  const plan = h("ol", { class: "tour-plan" });
+  const sum = h("p", { class: "hint", style: "margin:0" });
+  const upd = () => {
+    const t = new Date(when.value), step = Math.max(5, Number(pas.value) || k.pas), on = boxes.filter(([, cb]) => cb.checked);
+    fill(plan, on.map(([x], i) => { const ti = new Date(t.getTime() + i * step * 60e3); return h("li", {}, h("span", { class: "mono", text: Number.isFinite(ti.getTime()) ? `${pad(ti.getHours())} h ${pad(ti.getMinutes())}` : "—" }), ` ${x.e.nom} · ${money(x.total)}`); }));
+    sum.textContent = on.length ? `${on.length} passage${plural(on.length)}, ${money(on.reduce((s, [x]) => s + x.total, 0))} à collecter.` : "Aucune entreprise cochée.";
+  };
+  [when, pas].forEach(i => i.addEventListener("input", upd)); boxes.forEach(([, cb]) => cb.addEventListener("change", upd)); upd();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Convoquer les entreprises" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const t = new Date(when.value), step = Math.max(5, Number(pas.value) || k.pas), on = boxes.filter(([, cb]) => cb.checked).map(([x]) => x);
+    if (!when.value || !Number.isFinite(t.getTime()) || t.getTime() < Date.now() - 60e3) { err.textContent = "Choisissez une date et une heure de départ à venir."; when.focus(); return; }
+    if (!on.length) { err.textContent = "Cochez au moins une entreprise."; return; }
+    const trE = S.entreprises.find(x => x.id === trSel.value) || null;
+    if (!trE) { err.textContent = "Choisissez le transporteur de fonds."; trSel.focus(); return; }
+    go.disabled = true;
+    const tourneeId = S.db.collection("convocations").doc().id, made = [];
+    for (const [i, x] of on.entries()) {
+      const ref = S.db.collection("convocations").doc();
+      const c = { entrepriseId: x.e.id || null, entrepriseNom: x.e.nom, motif: "collecte", objet: "", controleId: null,
+        date: new Date(t.getTime() + i * step * 60e3).toISOString(), lieu: "Siège de l’entreprise", convoque: x.e.patron || "",
+        items: x.items.map(convItemSnap), montant: x.total,
+        transporteurId: trE.id, transporteurNom: trE.nom, tourneeId, remplace: null, majPct: k.maj, amende: k.amende, statut: "convoquee", at: nowISO(), by: S.uid || null, byNom: S.agentName || "" };
+      if (await write(() => ref.set(c))) made.push(Object.assign({ id: ref.id }, c));
+      go.textContent = `Convocations : ${made.length} / ${on.length}`;
+    }
+    if (!made.length) { go.disabled = false; go.textContent = "Convoquer les entreprises"; return; }
+    toast(`${made.length} entreprise${plural(made.length)} convoquée${plural(made.length)} pour la collecte.`);
+    const doc = tourneeDoc(made);
+    autoPublish("convocations", doc, "Ordre de collecte publié.");
+    S.convFilter = "avenir"; showTab("convocations");
+    showDocImage(doc, () => { closeDialog(); renderConvocations(); });
+  });
+  openDialog({
+    eyebrow: "Collecte des impôts", title: "Planifier une collecte", wide: true,
+    body: [
+      h("p", { class: "hint", style: "margin:0", text: "Le transporteur passe chez chaque entreprise à la suite, à l’heure indiquée. Chacune reçoit sa convocation ; le patron ou une personne ayant accès au coffre doit être présent." }),
+      h("div", { class: "row3" }, field("tn-date", "Premier passage", when), field("tn-pas", "Minutes entre deux passages", pas), field("tn-tr", "Transporteur de fonds", trSel)),
+      rows.length ? sec("Entreprises qui doivent de l’argent", h("div", { class: "checks-col" }, boxes.map(([x, cb], i) => h("label", { class: "switch", for: "tn-" + i }, cb, `${x.e.nom} · ${money(x.total)} · ${x.items.length} somme${plural(x.items.length)}`))))
+        : h("div", { class: "empty", text: "Aucune entreprise ne doit d’argent pour l’instant." }),
+      deja.length ? h("p", { class: "hint", style: "margin:0", text: `Collecte déjà prévue ou à encaisser : ${deja.map(e => e.nom).join(", ")}.` }) : null,
+      rows.length ? sec("Ordre de passage", plan, sum) : null,
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), rows.length ? go : null].filter(Boolean)
+  });
+}
+
+// Fiche d'une convocation.
+function openConv(id) {
+  const c = convNow(id);
+  if (!c) return;
+  const e = entOf(c), ag = canAgent(), dir = writer(), reopen = () => openConv(id), col = c.motif === "collecte", st = convState(c);
+  const s = c.sanction, sp = convSanction(c), pen = s && s.penaliteId ? S.penalites.find(p => p.id === s.penaliteId) : null;
+  const body = [
+    convPassee(c) ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Rendez-vous passé. " }), "Constatez la présence ou l’absence.")) : null,
+    kv([["Objet", convMotif(c) + (c.objet && c.motif !== "autre" ? " · " + c.objet : "")], ["Rendez-vous", convWhen(c)], ["Lieu", c.lieu || "—"],
+      ["Convoqué", col ? `${c.convoque || e.patron || "Le patron"} ou une personne ayant accès au coffre` : c.convoque || e.patron || "—"],
+      col ? ["Transporteur", c.transporteurNom || "—"] : null,
+      c.controleId ? ["Contrôle fiscal", h("button", { class: "linkbtn", type: "button", onclick: () => openControle(c.controleId), text: dossierNo("CF", c.controleId) })] : null,
+      ["Convoquée par", `${c.byNom || "—"} le ${fmtDate(new Date(c.at))}`],
+      c.remplace ? ["Remplace", convNow(c.remplace) ? h("button", { class: "linkbtn", type: "button", onclick: () => openConv(c.remplace), text: dossierNo("CV", c.remplace) }) : dossierNo("CV", c.remplace) + " (supprimée)"] : null,
+      c.remplaceePar ? ["Suivie de", convNow(c.remplaceePar) ? h("button", { class: "linkbtn", type: "button", onclick: () => openConv(c.remplaceePar), text: dossierNo("CV", c.remplaceePar) }) : dossierNo("CV", c.remplaceePar) + " (supprimée)"] : null,
+      col ? ["Somme à collecter", money(c.montant), "tot"] : null]),
+    col && (c.items || []).length ? sec("Sommes à collecter", h("ul", { class: "access" }, c.items.map(x => h("li", { text: `${x.ref} · ${x.label} · ${money(x.montant)}${itemSettled(x) ? " · réglée" : ""}` })))) : null,
+    c.presence ? sec("Présence", kv([["Présent", `${c.presence.nom || "—"} (${CONV_QUALITES[c.presence.qualite] || "—"})`], ["Constatée par", `${c.presence.byNom || "—"} le ${fmtDateTime(new Date(c.presence.at))}`], c.presence.note ? ["Observation", c.presence.note] : null])) : null,
+    c.collecte ? sec("Collecte", kv([["Encaissé", money(c.collecte.montant), "tot"], ["Par", `${c.collecte.byNom || "—"} le ${fmtDateTime(new Date(c.collecte.at))}`]])) : null,
+    c.absence ? sec("Absence", kv([["Constatée par", `${c.absence.byNom || "—"} le ${fmtDateTime(new Date(c.absence.at))}`], c.absence.note ? ["Observation", c.absence.note] : null,
+      s && s.dispense ? ["Sanction", `dispensée par ${s.byNom || "la Direction"} : ${s.motif || ""}`] : s ? ["Sanction", `${dossierNo("PN", s.penaliteId)} · ${money(s.montant)}${pen ? " · " + (PSTAT[pen.statut] || PSTAT.due)[0].toLowerCase() : ""}`] : ["Sanction encourue", `${sp.label} : ${money(sp.montant)}`]])) : null,
+    c.annulation ? sec("Annulation", kv([["Motif", c.annulation.motif || "—"], ["Par", `${c.annulation.byNom || "—"} le ${fmtDateTime(new Date(c.annulation.at))}`]])) : null,
+    convAEncaisser(c) && !dir ? h("p", { class: "hint", style: "margin:0", text: "La Direction encaisse les sommes collectées et délivre les quittances." }) : null,
+    convASanctionner(c) && !dir ? h("p", { class: "hint", style: "margin:0", text: "La Direction inflige la sanction ou en dispense l’entreprise." }) : null
+  ];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(convocationDoc(c), reopen), text: "Convocation en image" })];
+  if (c.statut === "absente") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(carenceDoc(c), reopen), text: "Constat d’absence" }));
+  foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(e), text: "Fiche de l’entreprise" }), h("span", { class: "spacer" }));
+  if (ag && c.statut === "convoquee") {
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConvAnnul(c), text: "Annuler" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(e, { from: c }), text: "Reporter" }));
+    // Présence et absence se constatent au moment du rendez-vous (présence : une demi-heure avant au plus tôt).
+    const t0 = new Date(c.date).getTime();
+    if (t0 <= Date.now() + 5 * 60e3) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConvAbsence(c), text: "Absent" }));
+    if (t0 <= Date.now() + 30 * 60e3) foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => openConvPresence(c), text: "Présent" }));
+  }
+  if (dir && convAEncaisser(c)) foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => openConvPresence(c, true), text: convEnCours(c) ? "Reprendre l’encaissement" : "Encaisser la collecte" }));
+  if (dir && convASanctionner(c)) {
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConvDispense(c), text: "Dispenser" }));
+    foot.push(h("button", { class: "btn ink small", type: "button", onclick: ev => sanctionnerConv(c, ev.currentTarget), text: `Infliger ${money(sp.montant)}` }));
+  }
+  if (ag && c.statut === "absente" && col && !c.remplaceePar) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(e, { from: c }), text: "Convoquer de nouveau" }));
+  if (dir && !c.sanction && !c.collecte) foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => openConvDelete(c), text: "Supprimer" }));
+  openDialog({ eyebrow: `Convocation ${convNo(c)} · ${convMotif(c)}`, title: c.entrepriseNom, stampEl: stamp(st), body, foot });
+}
+function openConvDelete(c) {
+  openDialog({ eyebrow: `Convocation ${convNo(c)}`, title: "Supprimer la convocation ?", body: [h("p", { style: "margin:0", text: "Elle disparaît des listes et de la fiche de l’entreprise ; le journal garde sa trace. Pour un rendez-vous qui n’aura pas lieu, « Annuler » est préférable : l’entreprise garde la trace de l’annulation." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConv(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; if (await write(() => S.db.doc("convocations/" + c.id).delete())) { closeDialog(); toast("Convocation supprimée."); } }, text: "Supprimer" })] });
+}
+function openConvAnnul(c) {
+  const motif = h("textarea", { rows: "2", placeholder: "Ex. : rendez-vous déplacé à la demande de la Direction" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: `Convocation ${convNo(c)}`, title: "Annuler la convocation", body: [field("cv-ann", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConv(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+        if (convChanged(c.id, x => x.statut === "convoquee")) return;
+        ev.currentTarget.disabled = true;
+        if (await convOnce(c.id, () => saveConv(c, { statut: "annulee", annulation: { at: nowISO(), motif: motif.value.trim(), byNom: S.agentName || "" } }, "Convocation annulée."))) openConv(c.id);
+      }, text: "Annuler la convocation" })] });
+}
+// Présence (et, pour la Direction, encaissement de la collecte dans le même geste).
+// L'encaissement est réservé d'abord (collecte « en cours » avec un jeton) : un second agent qui
+// encaisserait la même collecte au même moment est arrêté par la base (supabase/v11_convocations.sql).
+function openConvPresence(c, encaisserSeul) {
+  const dir = writer(), col = c.motif === "collecte", done = c.statut === "honoree";
+  const nom = h("input", { autocomplete: "off", placeholder: "Nom RP de la personne présente" });
+  nom.value = c.presence ? c.presence.nom || "" : c.convoque || "";
+  const qual = h("select", {}, Object.entries(CONV_QUALITES).map(([v, l]) => h("option", { value: v, text: l })));
+  qual.value = c.presence ? c.presence.qualite : "patron";
+  const note = h("textarea", { rows: "2", placeholder: "Facultatif" });
+  const due = (c.items || []).filter(i => convItemDu(i) > 0);
+  const boxes = due.map((x, i) => { const cb = h("input", { type: "checkbox", id: "cvp-" + i }); cb.checked = true; return [x, cb]; });
+  const cash = h("input", { type: "checkbox", id: "cvp-cash" }); cash.checked = due.length > 0;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button" });
+  const sync = () => { go.textContent = encaisserSeul ? "Encaisser" : col && dir && cash.checked ? "Enregistrer la présence et encaisser" : "Enregistrer la présence"; boxes.forEach(([, cb]) => { cb.disabled = !cash.checked; }); };
+  cash.addEventListener("change", sync);
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    if (!encaisserSeul && !nom.value.trim()) { err.textContent = "Indiquez le nom de la personne présente."; nom.focus(); return; }
+    if (convChanged(c.id, x => (encaisserSeul ? convAEncaisser(x) : x.statut === "convoquee"))) return;
+    const cashing = col && dir && cash.checked && due.length > 0;
+    const chosen = cashing ? boxes.filter(([, cb]) => cb.checked).map(([x]) => x) : [];
+    if (cashing && !chosen.length) { err.textContent = encaisserSeul ? "Cochez au moins une somme collectée." : "Cochez au moins une somme collectée, ou décochez « Encaisser les sommes collectées »."; return; }
+    if (encaisserSeul && !cashing && !convEnCours(c)) { err.textContent = "Rien à encaisser."; return; }
+    go.disabled = true;
+    const res = await convOnce(c.id, async () => {
+      if (!encaisserSeul && !(await saveConv(c, { statut: "honoree", presence: { at: nowISO(), nom: nom.value.trim(), qualite: qual.value, note: note.value.trim(), byNom: S.agentName || "" } }, "Présence enregistrée."))) return false;
+      if (!chosen.length) {
+        // Encaissement interrompu (fenêtre fermée) et plus rien de dû : on le clôt.
+        const cur0 = convNow(c.id) || c;
+        if (encaisserSeul && convEnCours(cur0)) return saveConv(cur0, { collecte: { jeton: cur0.collecte.jeton, at: nowISO(), montant: Number(cur0.collecte.montant) || 0, items: [], byNom: S.agentName || "" } }, "Encaissement clos.");
+        return true;
+      }
+      const cur = convNow(c.id) || c;
+      const reprise = convEnCours(cur), jeton = reprise ? cur.collecte.jeton : Math.random().toString(36).slice(2, 12);
+      if (!reprise && !(await saveConv(cur, { collecte: { enCours: true, jeton, at: nowISO(), byNom: S.agentName || "" } }))) return false;
+      const rec = await encaisserItems(chosen, `Collecté par ${c.transporteurNom || "le transporteur de fonds"} · convocation ${convNo(c)}`, true);
+      const left = chosen.filter(x => convItemDu(x) > 0);
+      if (!rec && left.length) {
+        await saveConv(convNow(c.id) || cur, { collecte: undefined });
+        toast("Aucune somme n’a pu être encaissée : réessayez.", true);
+        return false;
+      }
+      if (!(await saveConv(convNow(c.id) || cur, { collecte: { jeton, at: nowISO(), montant: rec, items: chosen.map(x => x.ref), byNom: S.agentName || "" } }, `Collecte encaissée : ${money(rec)}.`))) return false;
+      if (left.length) toast(`${left.length} somme${plural(left.length)} non encaissée${plural(left.length)} : ${left.map(x => x.ref).join(", ")}. Encaissez-l${left.length > 1 ? "es" : "a"} depuis ${left.length > 1 ? "leur" : "son"} dossier.`, true);
+      return true;
+    });
+    if (!res) { go.disabled = false; return; }
+    openConv(c.id);
+  });
+  openDialog({ eyebrow: `Convocation ${convNo(c)} · ${convWhen(c)}`, title: encaisserSeul ? (convEnCours(c) ? "Reprendre l’encaissement" : "Encaisser la collecte") : "Constater la présence",
+    body: [
+      encaisserSeul ? null : h("div", { class: "row2" }, field("cvp-nom", "Personne présente", nom), field("cvp-q", "Qualité", qual)),
+      encaisserSeul ? null : field("cvp-note", "Observation", note),
+      encaisserSeul && convEnCours(c) ? h("p", { class: "hint", style: "margin:0", text: `Encaissement commencé par ${c.collecte.byNom || "un agent"} le ${fmtDateTime(new Date(c.collecte.at))} et pas terminé. Cochez les sommes qui restent à encaisser.` }) : null,
+      col && !dir ? h("p", { class: "hint", style: "margin:0", text: "La Direction encaissera ensuite les sommes collectées et délivrera les quittances." }) : null,
+      col && dir && due.length ? h("div", {}, encaisserSeul ? null : h("label", { class: "switch", for: "cvp-cash" }, cash, "Encaisser les sommes collectées"),
+        h("div", { class: "checks-col", style: "margin-top:6px" }, boxes.map(([x, cb], i) => h("label", { class: "switch", for: "cvp-" + i }, cb, `${x.ref} · ${x.label} · ${money(convItemDu(x))}`)))) : null,
+      col && dir && !due.length ? h("p", { class: "hint", style: "margin:0", text: "Toutes les sommes visées sont déjà réglées : rien à encaisser." }) : null,
+      done && !encaisserSeul ? h("p", { class: "hint", text: "Présence déjà enregistrée." }) : null,
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConv(c.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+  sync();
+}
+function openConvAbsence(c) {
+  const dir = writer(), col = c.motif === "collecte", sp = convSanction(c);
+  const note = h("textarea", { rows: "2", placeholder: "Ex. : personne au siège à 21 h 10, convoyeur reparti à 21 h 20" });
+  const apply = h("input", { type: "checkbox", id: "cva-apply" }); apply.checked = sp.montant > 0;
+  const again = h("input", { type: "checkbox", id: "cva-again" }); again.checked = col;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn danger small", type: "button", text: "Constater l’absence" });
+  go.addEventListener("click", async () => {
+    if (convChanged(c.id, x => x.statut === "convoquee")) return;
+    go.disabled = true;
+    const sp0 = convSanction(convNow(c.id) || c);
+    const ok = await convOnce(c.id, () => saveConv(c, { statut: "absente", absence: { at: nowISO(), note: note.value.trim(), byNom: S.agentName || "", base: sp0.base, montant: sp0.montant } }, "Absence constatée."));
+    if (!ok) { go.disabled = false; return; }
+    const c2 = convNow(c.id) || Object.assign({}, c, { statut: "absente" });
+    if (dir && apply.checked && sp.montant > 0) await sanctionnerConv(c2, null, true);
+    autoPublish("convocations", carenceDoc(convNow(c.id) || c2), "Constat d’absence publié.");
+    if (again.checked) openConvForm(entOf(c), { from: convNow(c.id) || c2 }); else openConv(c.id);
+  });
+  openDialog({ eyebrow: `Convocation ${convNo(c)} · ${convWhen(c)}`, title: "Constater l’absence",
+    body: [
+      h("p", { style: "margin:0", text: col ? "Personne ayant accès au coffre de l’entreprise n’est présent pour la collecte." : "Personne de l’entreprise ne s’est présenté à la convocation." }),
+      field("cva-note", "Observation", note),
+      kv([[sp.label, money(sp.montant), "tot"]].concat(col ? [["Sommes encore dues", money(sp.base)]] : [])),
+      dir ? h("label", { class: "switch", for: "cva-apply" }, apply, `Infliger maintenant ${col ? "la majoration" : "l’amende"} de ${money(sp.montant)}`) : h("p", { class: "hint", style: "margin:0", text: "La Direction infligera la sanction ou en dispensera l’entreprise." }),
+      col ? h("label", { class: "switch", for: "cva-again" }, again, "Convoquer de nouveau pour la collecte") : null,
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConv(c.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+// La pénalité a un identifiant fixe (cv-<convocation>) : un second clic, une nouvelle tentative après
+// une erreur ou un second agent retrouvent la même pénalité au lieu d'en créer une autre.
+async function sanctionnerConv(c, btn, quiet) {
+  if (!writer()) return false;
+  if (btn) btn.disabled = true;
+  const res = await convOnce("s:" + c.id, async () => {
+    const cur = convNow(c.id) || c;
+    if (cur.statut !== "absente" || cur.sanction) { if (!quiet) toast("Cette absence est déjà traitée.", true); return "deja"; }
+    const sp = convSanction(cur), e = entOf(cur), pid = "cv-" + cur.id;
+    if (!(sp.montant > 0)) { toast("Rien à infliger : les sommes à collecter étaient déjà réglées.", true); return false; }
+    const motif = `Absence à la convocation ${convNo(cur)} (${convMotif(cur).toLowerCase()} du ${fmtDate(new Date(cur.date))})`;
+    if (!S.penalites.some(p => p.id === pid && p.statut !== "annulee")) {
+      const p = { entrepriseId: e.id || cur.entrepriseId || null, entrepriseNom: e.nom || cur.entrepriseNom, motif, montant: sp.montant, statut: "due", type: "convocation", convocationId: cur.id, declId: null, createdAt: nowISO(), by: S.uid || null };
+      if (!(await write(() => S.db.doc("penalites/" + pid).set(p)))) return false;
+    }
+    if (!(await saveConv(cur, { sanction: { penaliteId: pid, montant: sp.montant, at: nowISO(), byNom: S.agentName || "" } }, `${cur.motif === "collecte" ? "Majoration" : "Amende"} de ${money(sp.montant)} infligée.`))) return false;
+    // Collecte déjà reprogrammée : la majoration s'ajoute à ce que la prochaine collecte prendra.
+    const next = cur.remplaceePar ? convNow(cur.remplaceePar) : null;
+    if (cur.motif === "collecte" && next && next.motif === "collecte" && next.statut === "convoquee" && !(next.items || []).some(i => i.kind === "pen" && i.id === pid))
+      await saveConv(next, { items: (next.items || []).concat([{ ref: dossierNo("PN", pid), label: "Pénalité · " + motif, montant: sp.montant, kind: "pen", id: pid, plan: false }]), montant: (Number(next.montant) || 0) + sp.montant });
+    const p2 = S.penalites.find(x => x.id === pid); if (p2) autoPublish("penalites", penaltyDoc(p2), "Pénalité infligée.");
+    return true;
+  });
+  if (btn && res !== true) btn.disabled = false;
+  if (!quiet) openConv(c.id);
+  return res === true;
+}
+function openConvDispense(c) {
+  const motif = h("textarea", { rows: "2", placeholder: "Ex. : absence justifiée, panne de véhicule prouvée" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: `Convocation ${convNo(c)}`, title: "Dispenser de sanction", body: [field("cv-disp", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConv(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn small", type: "button", onclick: async ev => {
+        if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+        if (convChanged(c.id, x => convASanctionner(x))) return;
+        if (S.penalites.some(p => p.id === "cv-" + c.id && p.statut === "due")) { err.textContent = "Une sanction vient d’être infligée pour cette absence : annulez la pénalité si vous voulez en dispenser l’entreprise."; return; }
+        ev.currentTarget.disabled = true;
+        if (await convOnce("s:" + c.id, () => saveConv(c, { sanction: { dispense: true, motif: motif.value.trim(), at: nowISO(), byNom: S.agentName || "" } }, "Entreprise dispensée de sanction."))) openConv(c.id);
+      }, text: "Dispenser" })] });
+}
+
+// Onglet Convocations.
+function renderConvocations() {
+  if (S.tab !== "convocations") return;
+  const box = $("#conv-list");
+  if (!S.connected || !S.loaded.has("convocations")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.convocations || []).slice();
+  const now = Date.now(), asc = (a, b) => String(a.date).localeCompare(String(b.date)), desc = (a, b) => String(b.date).localeCompare(String(a.date));
+  const avenir = all.filter(c => c.statut === "convoquee" && new Date(c.date).getTime() >= now).sort(asc);
+  const aConstater = all.filter(convPassee).sort(asc);
+  const aTraiter = all.filter(c => convASanctionner(c) || convAEncaisser(c)).sort(desc);
+  const passees = all.filter(c => c.statut !== "convoquee").sort(desc);
+  const wk = keyOf(new Date()), b = bounds(wk);
+  const colWk = all.filter(c => c.collecte && new Date(c.collecte.at) >= b.start && new Date(c.collecte.at) <= b.end);
+  setKpi("ck-avenir", String(avenir.length), avenir.length ? "prochaine " + convShort(avenir[0]) : "aucune", "");
+  setKpi("ck-constat", String(aConstater.length), "rendez-vous passés", aConstater.length ? "warn" : "");
+  setKpi("ck-traiter", String(aTraiter.length), "collectes à encaisser, absences à sanctionner", aTraiter.length ? "bad" : "");
+  setKpi("ck-collecte", money(colWk.reduce((t, c) => t + (Number(c.collecte.montant) || 0), 0)), `${colWk.length} collecte${plural(colWk.length)} cette semaine`, colWk.length ? "ok" : "");
+  const F = { avenir, constat: aConstater, traiter: aTraiter, passees, tout: all.slice().sort(desc) };
+  const f = F[S.convFilter] ? S.convFilter : "avenir";
+  setSegCounts($("#seg-conv"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), f);
+  $("#conv-new").hidden = !canAgent(); $("#conv-tour").hidden = !canAgent();
+  const list = F[f];
+  fill(box, list.length ? h("ul", { class: "ent-list" }, list.slice(0, 300).map(c => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(c.id), text: `${convShort(c)} · ${c.entrepriseNom}` }),
+      h("span", { class: "meta", text: `${convNo(c)} · ${convMotif(c)}${c.motif === "collecte" ? " · " + money(c.montant) : ""} · ${c.lieu || ""}` })),
+    chip(convState(c)),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openConv(c.id), text: "Ouvrir" })))))
+    : h("div", { class: "empty", text: { avenir: "Aucune convocation à venir.", constat: "Aucune présence à constater.", traiter: "Rien à encaisser ni à sanctionner.", passees: "Aucune convocation passée.", tout: "Aucune convocation pour l’instant." }[f] }));
+}
+// Fiche de l'entreprise : ses convocations.
+function convocationsSection(e) {
+  const cs = e.id ? convsOf(e) : [];
+  if (!cs.length && !canAgent()) return null;
+  return sec("Convocations",
+    cs.length ? h("ul", { class: "ent-list" }, cs.slice(0, 8).map(c => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(c.id), text: `${convNo(c)} · ${convMotif(c)}` }), h("span", { class: "meta", text: `${convWhen(c)}${c.motif === "collecte" ? " · " + money(c.montant) : ""}` })),
+      chip(convState(c)), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune convocation." }),
+    canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openConvForm(e), text: "Convoquer" }) : null);
 }
 
 /* ---------- Clôture des semaines ---------- */
@@ -6035,7 +6664,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -6787,6 +7416,9 @@ function openControle(id) {
     autoPublish("controles", doc, "Redressement mis en recouvrement.");
     showDocImage(doc, reopen);
   }, text: "Mettre en recouvrement" }));
+  const cvs = (S.convocations || []).filter(x => x.controleId === id).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  if (cvs.length) body.push(sec("Convocations", h("ul", { class: "ent-list" }, cvs.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(x.id), text: `${convNo(x)} · ${convWhen(x)}` }), h("span", { class: "meta", text: x.lieu || "" })), chip(convState(x)), h("span", {}))))));
+  if (ag && (c.statut === "ouvert" || c.statut === "propose")) foot.splice(foot.findIndex(b => b.classList && b.classList.contains("spacer")), 0, h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(entOf(c0), { motif: "controle", controleId: id }), text: "Convoquer" }));
   openDialog({ eyebrow: `Contrôle fiscal ${dossierNo("CF", id)} · ouvert le ${fmtDate(new Date(c.ouvertLe))}${c.inspecteur ? " · " + c.inspecteur : ""}`, title: c.entrepriseNom, wide: true, stampEl: stamp(ctrlState(c)), body, foot });
 }
 function closeSansSuite(c0, patch, restoreAvis) {
@@ -7028,7 +7660,7 @@ function justiceFacts(e) {
   const ds = declsOf(e).sort((a, b) => String(a.periode).localeCompare(String(b.periode)));
   const debts = [];
   for (const d of ds) if (dStatus(d) === "validee" && dReste(d) > 0) debts.push({ kind: "decl", id: d.id, ref: dossierNo("DF", d.id), nature: "Avis d’imposition" + (echOf(d) ? " (échéancier)" : ""), periode: periodPlain(d.periode), at: (S.decisions[d.id] || {}).at, montant: dMontant(d), reste: dReste(d), echu: declEchue(d) });
-  for (const p of pensOf(e)) if (p.statut === "due") debts.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), nature: p.type === "redressement" ? "Redressement fiscal" : p.type === "majoration" ? "Majoration de retard" : "Pénalité", periode: p.motif || "", at: p.createdAt, montant: Number(p.montant) || 0, reste: Number(p.montant) || 0, echu: penEchue(p) });
+  for (const p of pensOf(e)) if (p.statut === "due") debts.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), nature: p.type === "redressement" ? "Redressement fiscal" : p.type === "majoration" ? "Majoration de retard" : p.type === "convocation" ? "Absence à une convocation" : "Pénalité", periode: p.motif || "", at: p.createdAt, montant: Number(p.montant) || 0, reste: Number(p.montant) || 0, echu: penEchue(p) });
   for (const p of pretsOf(e)) if (p.statut === "en_cours" && pretReste(p) > 0) {
     const due = pretDuMontant(p), reste = pretReste(p);
     if (due > 0) debts.push({ kind: "pret", id: p.id, ref: pretNo(p), nature: "Prêt de la Préfecture", periode: (PRET_OBJETS[p.objet] || "") + " · échéances échues", at: p.verseLe, montant: Number(p.montant) || 0, reste: due, echu: true });
@@ -7040,7 +7672,7 @@ function justiceFacts(e) {
   const events = [];
   for (const d of ds) { const dec = S.decisions[d.id]; if (dec && dec.at && ["validee", "payee", "controle"].includes(dec.statut)) events.push([dec.at, "Avis d’imposition émis", `${dossierNo("DF", d.id)} · ${periodPlain(d.periode)} · ${money(dMontant(d))}`]); if (d.taxationOffice) events.push([d.createdAt, "Taxation d’office", `${periodPlain(d.periode)} · majoration de ${pct(d.majPct)}`]); }
   for (const r of rls) events.push([r.at, rlLabel(r), `${rlNo(r)} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · à régulariser avant le ${fmtDate(new Date(r.echeance))}${r.byNom ? " · " + r.byNom : ""}`]);
-  for (const p of pensOf(e)) events.push([p.createdAt, p.type === "redressement" ? "Avis de mise en recouvrement" : p.type === "majoration" ? "Majoration pour paiement tardif" : "Pénalité infligée", `${p.motif || ""} · ${money(p.montant)} · ${(PSTAT[p.statut] || PSTAT.due)[0].toLowerCase()}`]);
+  for (const p of pensOf(e)) events.push([p.createdAt, p.type === "redressement" ? "Avis de mise en recouvrement" : p.type === "majoration" ? "Majoration pour paiement tardif" : p.type === "convocation" ? "Sanction d’une absence à une convocation" : "Pénalité infligée", `${p.motif || ""} · ${money(p.montant)} · ${(PSTAT[p.statut] || PSTAT.due)[0].toLowerCase()}`]);
   for (const c of ctrls) {
     events.push([c.ouvertLe, "Avis de vérification", `${dossierNo("CF", c.id)} · ${(c.periodes || []).map(periodPlain).join(", ")}`]);
     if (c.proposeLe) events.push([c.proposeLe, "Proposition de rectification", `${dossierNo("CF", c.id)} · ${money(c.total)}`]);
@@ -7055,6 +7687,12 @@ function justiceFacts(e) {
   for (const p of pretsOf(e)) {
     if (p.verseLe) events.push([p.verseLe, "Prêt accordé", `${pretNo(p)} · ${money(p.montant)} · ${PRET_OBJETS[p.objet] || ""}`]);
     if (p.exigibleLe) events.push([p.exigibleLe, "Exigibilité anticipée du prêt", `${pretNo(p)} · ${p.exigibleMotif || ""}`]);
+  }
+  for (const c of convsOf(e)) {
+    if (c.statut === "annulee") continue;
+    events.push([c.at, "Convocation", `${convNo(c)} · ${convMotif(c)} · rendez-vous le ${fmtDateTime(new Date(c.date))}${c.motif === "collecte" ? " · " + money(c.montant) + " à collecter" : ""}`]);
+    if (c.absence) events.push([c.absence.at, "Absence à la convocation", `${convNo(c)} · ${convMotif(c)}${c.absence.note ? " · " + c.absence.note : ""}`]);
+    if (c.collecte) events.push([c.collecte.at, "Collecte effectuée", `${convNo(c)} · ${money(c.collecte.montant)} collectés`]);
   }
   for (const r of relevesOf(e)) events.push([r.at, "Relevé du compte", `${dossierNo("RC", r.id)} · ${money(r.montant)} · ${r.agent || "agent"}`]);
   for (const x of soupconsOf(e)) events.push([x.at, "Déclaration de soupçon", `${dossierNo("DS", x.id)} · ${money(x.montant)}`]);
@@ -7316,6 +7954,31 @@ function renderRecouvSettings(force) {
   $("#r-tiers").value = c.tiersDefaut || "";
   $("#r-dest").value = c.justiceDestinataire || "";
 }
+function renderConvSettings(force) {
+  const box = $("#card-conv");
+  if (!box || (!force && (S.convDirty || box.contains(document.activeElement)))) return;
+  const k = convCfg(), tr = transporteur();
+  $("#scv-maj").value = String(k.maj);
+  $("#scv-amende").value = String(k.amende);
+  $("#scv-pas").value = String(k.pas);
+  $("#scv-lieu").value = k.lieu;
+  fill($("#scv-trans"), h("option", { value: "", text: "— Choisir —" }), S.entreprises.slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(e => h("option", { value: e.id, text: e.nom })));
+  $("#scv-trans").value = tr ? tr.id : "";
+  $$("#card-conv input, #card-conv select, #scv-save").forEach(i => { i.disabled = !writer(); });
+}
+$("#card-conv").addEventListener("input", () => { S.convDirty = true; $("#scv-msg").textContent = "Modifications non enregistrées."; });
+$("#scv-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const v = {
+    convMajoration: Math.min(100, Math.max(0, Number($("#scv-maj").value) || 0)),
+    convAmende: Math.max(0, Math.round(Number($("#scv-amende").value) || 0)),
+    convIntervalle: Math.min(120, Math.max(5, Math.round(Number($("#scv-pas").value) || 15))),
+    convLieu: $("#scv-lieu").value.trim() || DEFAULTS.convLieu,
+    convTransporteur: $("#scv-trans").value || ""
+  };
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
+  if (ok) { S.convDirty = false; $("#scv-msg").textContent = "Réglages des convocations enregistrés."; toast("Réglages des convocations enregistrés."); renderConvSettings(true); }
+});
 $("#card-recouv").addEventListener("input", () => { S.recDirty = true; $("#r-msg").textContent = "Modifications non enregistrées."; });
 $("#r-save").addEventListener("click", async () => {
   if (!writer()) return;
@@ -7701,6 +8364,9 @@ function renderPrets() {
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openPret(p.id), text: "Ouvrir" })))))
     : h("div", { class: "empty", text: { cours: "Aucun prêt en cours.", dem: "Aucune demande de prêt en attente.", retard: "Aucun prêt en retard.", rembourse: "Aucun prêt remboursé pour l’instant.", tout: "Aucun prêt pour l’instant." }[S.pretFilter || "cours"] }));
 }
+$("#seg-conv").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.convFilter = b.dataset.f; renderConvocations(); });
+$("#conv-new").addEventListener("click", () => openConvForm(null));
+$("#conv-tour").addEventListener("click", () => openTournee());
 $("#seg-pret").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.pretFilter = b.dataset.f; renderPrets(); });
 $("#pret-new").addEventListener("click", () => openPretForm(null));
 // Fiche de l'entreprise : ses prêts.
@@ -8715,9 +9381,10 @@ const NOTIF_TYPES = [
   ["pret", "Demande de prêt", "Une demande de prêt attend la décision de la Direction."],
   ["controle", "Contrôle fiscal", "Réponse d’une entreprise, proposition notifiée, mise en recouvrement, classement."],
   ["vehicule", "Véhicules de société", "Contrôle de police défavorable, véhicule non déclaré ou requalifié."],
+  ["convocation", "Convocations", "Absence à sanctionner, collecte à encaisser, rendez-vous de l’heure à venir."],
   ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt (vérifié chaque heure)."]
 ];
-const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "delais"], inspecteur: ["declaration", "controle", "vehicule", "delais"], lecture: ["delais"] };
+const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "delais"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais"], lecture: ["delais"] };
 const notifUrl = () => String((window.GUICHET_CONFIG || {}).supabaseUrl || "").replace(/\/$/, "") + "/functions/v1/notifier";
 const notifSupport = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 function appareilNom() {
@@ -8823,7 +9490,7 @@ function ouvrirDossier(spec) {
   const [, col, id] = m, need = col === "penalites" ? "penalites" : col === "decisions" ? "declarations" : col;
   if (!S.connected || !S.loaded.has(need)) { S.pendingOpen = spec; return false; }
   S.pendingOpen = null;
-  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules" }[col] || "dashboard";
+  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations" }[col] || "dashboard";
   showTab(tab);
   try { history.replaceState(null, "", "#" + tab); } catch (e) { /* sans historique */ }
   if (col === "declarations" || col === "decisions") { if (S.declarations.some(d => d.id === id)) { openDecl(id); return true; } }
@@ -8831,6 +9498,7 @@ function ouvrirDossier(spec) {
   else if (col === "prets") { if ((S.prets || []).some(d => d.id === id)) { openPret(id); return true; } }
   else if (col === "controles") { if (S.controles.some(d => d.id === id)) { openControle(id); return true; } }
   else if (col === "vehicules") { if ((S.vehicules || []).some(d => d.id === id)) { openVeh(id); return true; } }
+  else if (col === "convocations") { if ((S.convocations || []).some(d => d.id === id)) { openConv(id); return true; } }
   else if (col === "penalites") { const p = S.penalites.find(d => d.id === id); if (p) { openFiche(entOf(p)); return true; } }
   toast("Ce dossier n’existe plus.", true);
   return false;
@@ -8933,6 +9601,8 @@ openSaisieDetail = liveView(openSaisieDetail, id => { const s = S.saisies.find(x
   match: c => c.path === "saisies/" + id || entMatch(s.entrepriseId)(c), reopen: () => S.saisies.some(x => x.id === id) ? openSaisieDetail(id) : gone() } : null; });
 openTransmission = liveView(openTransmission, id => { const t = S.transmissions.find(x => x.id === id); return t ? { key: "tj:" + id, label: `Justice ${dossierNo("TJ", id)} · ${t.entrepriseNom}`,
   match: c => c.path === "transmissions/" + id || entMatch(t.entrepriseId)(c), reopen: () => S.transmissions.some(x => x.id === id) ? openTransmission(id) : gone() } : null; });
+openConv = liveView(openConv, id => { const c = convNow(id); return c ? { key: "conv:" + id, label: `Convocation ${convNo(c)} · ${c.entrepriseNom}`,
+  match: x => x.path === "convocations/" + id || entMatch(c.entrepriseId)(x), reopen: () => convNow(id) ? openConv(id) : gone() } : null; });
 openPret = liveView(openPret, id => { const p = (S.prets || []).find(x => x.id === id); return p ? { key: "pret:" + id, label: `Prêt ${pretNo(p)} · ${p.entrepriseNom}`,
   match: c => c.path === "prets/" + id || entMatch(p.entrepriseId)(c), reopen: () => (S.prets || []).some(x => x.id === id) ? openPret(id) : gone() } : null; });
 // Refus, exigibilité, accord : la fenêtre suit le prêt ; s'il change d'état, on revient à sa fiche.
@@ -9173,6 +9843,7 @@ function searchIndex() {
   for (const a of S.attestations) push("Attestation", dossierNo("AT", a.id), `${dossierNo("AT", a.id)} · ${a.entrepriseNom}`, (a.revoqueeLe ? `Révoquée le ${longDate(new Date(a.revoqueeLe))}` : `${attState(a)[0]} · jusqu’au ${longDate(new Date(a.validUntil))}`), "", () => showDocImage(attestationDoc(a)), a.at);
   for (const r of S.relances) push(isMed(r) ? "Mise en demeure" : "Relance", rlNo(r), `${rlNo(r)} · ${r.entrepriseNom}`, `${rlLabel(r)} · envoyée le ${fmtDate(new Date(r.at))}`, "", () => showDocImage(relanceDoc(r)), r.at);
   for (const s of S.saisies) push("Saisie", dossierNo("SA", s.id), `${dossierNo("SA", s.id)} · ${s.entrepriseNom}`, `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)} · ${(SSTAT[s.statut] || SSTAT.notifiee)[0]}`, s.tiers, () => openSaisieDetail(s.id), s.at);
+  for (const c of S.convocations || []) push("Convocation", convNo(c), `${convNo(c)} · ${c.entrepriseNom}`, `${convMotif(c)} · ${convWhen(c)} · ${convState(c)[0]}`, c.lieu || "", () => openConv(c.id), c.at);
   for (const p of S.prets || []) push("Prêt", pretNo(p), `${pretNo(p)} · ${p.entrepriseNom}`, `${(pretState(p))[0]} · ${money(p.montant)}${pretVerse(p) ? " · reste " + money(pretReste(p)) : ""}`, [PRET_OBJETS[p.objet], p.precision].join(" "), () => openPret(p.id), p.at || p.demandeLe);
   for (const v of S.vehicules || []) push("Véhicule", normPlaque(v.plaque), `${v.plaque} · ${v.modele || "Véhicule"}`, `${v.entrepriseNom} · ${vehState(v)[0]} · ${vehNo(v)}`, [vehNo(v), vehCat(v)[0], (v.conducteurs || []).join(" "), v.concession].join(" "), () => openVeh(v.id), v.achatLe || v.createdAt);
   for (const r of S.releves) push("Relevé", dossierNo("RC", r.id), `${dossierNo("RC", r.id)} · ${r.entrepriseNom}`, `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}`, r.note, () => openFiche(entOf(r)), r.at);
@@ -9312,7 +9983,7 @@ function showTab(name) {
   S.tab = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations"].includes(name)) schedule();
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
   const rail = $("nav.tabs .wrap"), cur = $(`.tab[data-tab="${name}"]`);
   if (rail && cur && rail.scrollWidth > rail.clientWidth) {
@@ -9345,7 +10016,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "prets", "vehicules", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "convocations", "prets", "vehicules", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();

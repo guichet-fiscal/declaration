@@ -134,7 +134,7 @@ function actualiser() {
     Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
       .map(x => { const p = plafond(x.service, x.k); return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, p, p === "" ? "" : p - x.accorde]; }));
 
-  const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif", defaut: "Défaut de déclaration (semaine clôturée)" };
+  const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif", defaut: "Défaut de déclaration (semaine clôturée)", convocation: "Absence à une convocation" };
   ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le", "Nature"],
     col("penalites").map(r => [no(r.data.type === "redressement" ? "AMR" : "PN", r.id), r.data.entrepriseNom, r.data.motif, r.data.montant, STATUTS_PEN[r.data.statut] || r.data.statut,
       date(r.data.createdAt), date(r.data.paidAt), NATURES_PEN[r.data.type] || "Pénalité"]));
@@ -221,6 +221,18 @@ function actualiser() {
         v.validation ? v.validation.motif || "Oui" : "", date(rq.at), rq.montant || "", date(rq.rembourseLe), date(vt.at), vt.prix != null ? vt.prix : "", vt.acheteur ? vt.acheteur + (vt.dirigeant ? " (dirigeant ou proche)" : "") : ""]; }));
   ecrire("Contrôles de police", ["Véhicule", "Plaque", "Entreprise", "Date", "Lieu", "Agent", "Conducteur", "Constat", "Observations"], lignesConstat);
 
+  const MOTIFS_CV = { collecte: "Collecte des impôts", controle: "Contrôle fiscal", audition: "Audition", autre: "Autre motif" };
+  const ETATS_CV = { convoquee: "Convoquée", honoree: "Honorée", absente: "Absence", annulee: "Annulée" };
+  const QUALITES_CV = { patron: "Patron", coffre: "Personne ayant accès au coffre", representant: "Autre représentant" };
+  ecrire("Convocations", ["N°", "Entreprise", "Motif", "Rendez-vous", "Lieu", "Convoqué", "À collecter", "Transporteur", "État", "Présent", "Qualité", "Collecté", "Sanction", "Convoquée par", "Le"],
+    col("convocations").map(r => {
+      const c = r.data, s = c.sanction || null;
+      return [no("CV", r.id), c.entrepriseNom, c.motif === "autre" && c.objet ? c.objet : MOTIFS_CV[c.motif] || c.motif, date(c.date), c.lieu || "", c.convoque || "",
+        c.motif === "collecte" ? c.montant : "", c.transporteurNom || "", (c.collecte && c.collecte.enCours ? "Encaissement en cours" : ETATS_CV[c.statut] || c.statut),
+        c.presence ? c.presence.nom || "" : "", c.presence ? QUALITES_CV[c.presence.qualite] || "" : "", c.collecte && !c.collecte.enCours ? c.collecte.montant : "",
+        s ? (s.dispense ? "Dispensée : " + (s.motif || "") : s.montant) : (c.statut === "absente" ? "À décider" : ""), c.byNom || "", date(c.at)];
+    }));
+
   ecrire("Remboursements de prêts", ["Prêt", "Entreprise", "Échéance", "Date limite", "Montant", "Dont capital", "Dont intérêts", "État", "Payée le", "Note"], lignesPret);
 
   ecrire("Journal", ["Date", "Auteur", "Action", "Type", "Dossier"],
@@ -243,7 +255,9 @@ function actualiser() {
     ["Prêts accordés", col("prets").filter(r => r.data.statut === "en_cours" || r.data.statut === "rembourse").length],
     ["Demandes de prêt en attente", col("prets").filter(r => r.data.statut === "demande").length],
     ["Véhicules de société en service", col("vehicules").filter(r => r.data.statut === "service").length],
-    ["Véhicules requalifiés", col("vehicules").filter(r => r.data.statut === "requalifie").length]
+    ["Véhicules requalifiés", col("vehicules").filter(r => r.data.statut === "requalifie").length],
+    ["Convocations à venir", col("convocations").filter(r => r.data.statut === "convoquee").length],
+    ["Collectes encaissées", col("convocations").filter(r => r.data.collecte && !r.data.collecte.enCours).reduce((t, r) => t + (Number(r.data.collecte.montant) || 0), 0)]
   ]);
 }
 

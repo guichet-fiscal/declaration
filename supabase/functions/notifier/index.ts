@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       if (cle !== c.secret) return json({ error: "clé refusée" }, 401);
       if (body.type === "delais") {
         const now = Date.now();
-        const { data } = await db.from("registre").select("collection,id,data").in("collection", ["config", "relances", "controles", "decisions", "declarations", "prets"]);
+        const { data } = await db.from("registre").select("collection,id,data").in("collection", ["config", "relances", "controles", "decisions", "declarations", "prets", "convocations"]);
         const msg = delais(data || [], now - 3600e3, now);
         if (!msg) return json({ ok: true, envoyes: 0 });
         return json({ ok: true, envoyes: await envoyer(c, await destinataires("delais", null), msg) });
