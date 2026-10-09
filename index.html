@@ -558,6 +558,11 @@ nav.tabs .wrap.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 
 nav.tabs .wrap.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px);mask-image:linear-gradient(90deg,transparent,#000 56px)}
 nav.tabs .wrap.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent)}
 @media (min-width:900px){.tab{padding:7px 12px}nav.tabs .wrap{gap:2px}}
+#notif-btn.on{background:rgba(255,255,255,.14)}
+.notif-list{display:grid;gap:8px;margin-top:6px}
+.notif-list label{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:start;font-weight:600;font-size:14px;color:var(--ink)}
+.notif-list label input{width:auto;margin-top:3px;grid-row:span 2}
+.notif-list .hint{font-weight:400}
 .theme-btn{display:inline-grid;place-items:center;width:34px;height:34px;padding:0;border-radius:999px}
 .theme-btn svg{width:17px;height:17px}
 main .wrap{padding-block:26px 72px}
@@ -616,6 +621,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <button class="btn ghost small" type="button" id="btn-install" hidden>Installer l’appli</button>
       <button class="btn ghost small" type="button" id="btn-search" aria-keyshortcuts="Control+K" title="Rechercher (Ctrl + K ou /)" hidden>Rechercher<kbd>Ctrl K</kbd></button>
       <button class="btn ghost small presence" type="button" id="presence" aria-haspopup="true" hidden>En ligne</button>
+      <button class="btn ghost small theme-btn" type="button" id="notif-btn" aria-label="Notifications" title="Notifications sur cet appareil" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></button>
       <button class="btn ghost small theme-btn" type="button" id="theme-btn" aria-label="Thème : comme l’appareil"></button>
       <span class="role" id="role">Connexion au registre…</span>
       <button class="btn ghost small" type="button" id="logout" hidden>Se déconnecter</button>
@@ -2082,6 +2088,7 @@ function applyRole() {
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   $("#logout").hidden = !S.sb || !S.uid;
   $("#btn-search").hidden = !S.connected;
+  $("#notif-btn").hidden = !S.connected || !S.role;
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
@@ -2453,6 +2460,7 @@ function render() {
   renderPrets();
   renderVehicules();
   drawSync();
+  if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -8631,6 +8639,139 @@ $("#vh-save").addEventListener("click", async () => {
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { vehicules: v, updatedAt: nowISO() })));
   if (ok) { S.vehDirty = false; $("#vh-msg").textContent = "Réglages enregistrés."; toast("Véhicules de société : réglages enregistrés."); renderVehSettings(true); }
 });
+
+/* ---------- Notifications sur l'appareil ---------- */
+// Chaque agent choisit, appareil par appareil, ce qu'il veut recevoir. L'envoi part du service
+// « notifier » de Supabase (mise à jour 10), qui suit les changements du registre.
+const NOTIF_TYPES = [
+  ["declaration", "Déclaration déposée", "Une entreprise a déposé une déclaration à valider."],
+  ["paiement", "Paiement encaissé", "Un autre agent a encaissé un avis ou une pénalité."],
+  ["demande", "Demande de moyens", "Un service public a déposé une demande."],
+  ["pret", "Demande de prêt", "Une demande de prêt attend la décision de la Direction."],
+  ["controle", "Contrôle fiscal", "Réponse d’une entreprise, proposition notifiée, mise en recouvrement, classement."],
+  ["vehicule", "Véhicules de société", "Contrôle de police défavorable, véhicule non déclaré ou requalifié."],
+  ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt (vérifié chaque heure)."]
+];
+const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "delais"], inspecteur: ["declaration", "controle", "vehicule", "delais"], lecture: ["delais"] };
+const notifUrl = () => String((window.GUICHET_CONFIG || {}).supabaseUrl || "").replace(/\/$/, "") + "/functions/v1/notifier";
+const notifSupport = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+function appareilNom() {
+  const u = navigator.userAgent;
+  const os = /iPhone/.test(u) ? "iPhone" : /iPad/.test(u) ? "iPad" : /Android/.test(u) ? "Android" : /Windows/.test(u) ? "Windows" : /Mac OS X/.test(u) ? "Mac" : /Linux/.test(u) ? "Linux" : "Appareil";
+  const nav = /Edg\//.test(u) ? "Edge" : /OPR\//.test(u) ? "Opera" : /Firefox\//.test(u) ? "Firefox" : /Chrome\//.test(u) ? "Chrome" : /Safari\//.test(u) ? "Safari" : "";
+  return [os, nav].filter(Boolean).join(" · ");
+}
+function b64ToU8(b64) { const p = "=".repeat((4 - (b64.length % 4)) % 4), s = atob((b64 + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(s, c => c.charCodeAt(0)); }
+async function swReg() {
+  let r = await navigator.serviceWorker.getRegistration();
+  if (!r) r = await navigator.serviceWorker.register("sw.js");
+  return navigator.serviceWorker.ready.then(x => x || r);
+}
+async function notifEtat() {
+  const st = { support: notifSupport(), perm: "Notification" in window ? Notification.permission : "default", sub: null, row: null, table: true };
+  if (!st.support) return st;
+  try { const r = await swReg(); st.sub = await r.pushManager.getSubscription(); } catch (e) { st.sub = null; }
+  if (st.sub) {
+    const { data, error } = await S.sb.from("notif_abonnements").select("*").eq("endpoint", st.sub.endpoint);
+    if (error) st.table = !tableMissing(error); else st.row = (data || [])[0] || null;
+  }
+  return st;
+}
+async function notifCle() {
+  let r;
+  try { r = await fetch(notifUrl(), { headers: { apikey: (window.GUICHET_CONFIG || {}).supabaseKey || "" } }); } catch (e) { throw new Error("Le service d’envoi est injoignable depuis ce navigateur."); }
+  if (r.status === 404) throw new Error("Le service d’envoi n’est pas encore installé dans Supabase (Edge Functions → notifier).");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.publicKey) throw new Error(j.error ? "Service d’envoi : " + j.error : "Le service d’envoi ne répond pas correctement.");
+  return j.publicKey;
+}
+async function notifEnregistrer(sub, prefs) {
+  const j = sub.toJSON();
+  const { error } = await S.sb.from("notif_abonnements").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, prefs, appareil: appareilNom(), modifie_le: nowISO() }, { onConflict: "endpoint" });
+  if (error) throw new Error(tableMissing(error) ? "Exécutez d’abord supabase/v10_notifications.sql dans Supabase." : "Enregistrement refusé : " + (error.message || "erreur"));
+}
+async function notifActiver(prefs) {
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") throw new Error(perm === "denied" ? "Les notifications sont bloquées pour ce site : autorisez-les dans les réglages du navigateur ou du téléphone, puis réessayez." : "Autorisation non donnée.");
+  const key = await notifCle(), reg = await swReg();
+  let sub = await reg.pushManager.getSubscription();
+  if (sub) { try { await sub.unsubscribe(); } catch (e) { /* ancien abonnement */ } }
+  sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(key) });
+  await notifEnregistrer(sub, prefs);
+  return sub;
+}
+async function notifEssai(endpoint) {
+  const { data } = await S.sb.auth.getSession();
+  const tok = data && data.session ? data.session.access_token : "";
+  const r = await fetch(notifUrl(), { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + tok, apikey: (window.GUICHET_CONFIG || {}).supabaseKey || "" }, body: JSON.stringify({ endpoint }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error ? "Service d’envoi : " + j.error : "Le service d’envoi n’a pas répondu.");
+  return j.envoyes || 0;
+}
+async function openNotifs() {
+  const st = await notifEtat();
+  const on = !!(st.sub && st.row);
+  const prefs = on ? st.row.prefs || [] : (NOTIF_DEFAUT[S.role] || NOTIF_DEFAUT.lecture);
+  const boxes = NOTIF_TYPES.map(([k, l, d]) => { const cb = h("input", { type: "checkbox", id: "nt-" + k, "data-k": k, disabled: !st.support }); cb.checked = prefs.includes(k); return h("label", { for: "nt-" + k }, cb, h("span", { text: l }), h("span", { class: "hint", text: d })); });
+  const chosen = () => boxes.map(b => $("input", b)).filter(i => i.checked).map(i => i.dataset.k);
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const busy = async (btn, fn) => { btn.disabled = true; err.textContent = ""; try { await fn(); } catch (e) { err.textContent = e.message || String(e); } btn.disabled = false; };
+  let msg;
+  if (!st.support) msg = isIOS() && !isStandalone()
+    ? ["Sur iPhone et iPad, installez d’abord le guichet sur l’écran d’accueil : dans Safari, bouton Partager → « Sur l’écran d’accueil ». Ouvrez-le ensuite depuis son icône et revenez ici (iOS 16.4 ou plus récent).", "warn"]
+    : ["Ce navigateur ne reçoit pas les notifications. Essayez avec Chrome, Edge, Firefox ou Safari à jour.", "warn"];
+  else if (!st.table) msg = ["Les notifications ne sont pas encore installées : exécutez supabase/v10_notifications.sql dans Supabase, puis déployez le service « notifier ».", "warn"];
+  else if (st.perm === "denied") msg = ["Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur (icône à gauche de l’adresse) ou du téléphone, puis revenez ici.", "bad"];
+  else if (on) msg = [`Activées sur cet appareil (${st.row.appareil || appareilNom()}). Les notifications de vos propres actions ne vous sont pas envoyées.`, "ok"];
+  else msg = ["Pas encore activées sur cet appareil. Cochez ce que vous voulez recevoir, puis « Activer sur cet appareil ». Le navigateur vous demandera l’autorisation.", "info"];
+  const tone = { ok: "var(--ok)", warn: "var(--warn)", bad: "var(--bad)", info: "var(--accent)" }[msg[1]];
+  const foot = [];
+  if (on) {
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: ev => busy(ev.currentTarget, async () => { const n = await notifEssai(st.sub.endpoint); toast(n ? "Notification d’essai envoyée." : "Aucun appareil n’a reçu l’essai : désactivez puis réactivez les notifications.", !n); }), text: "Envoyer un essai" }));
+    foot.push(h("button", { class: "btn ghost small", type: "button", onclick: ev => busy(ev.currentTarget, async () => {
+      await S.sb.from("notif_abonnements").delete().eq("endpoint", st.sub.endpoint);
+      try { await st.sub.unsubscribe(); } catch (e) { /* déjà désabonné */ }
+      toast("Notifications désactivées sur cet appareil."); openNotifs();
+    }), text: "Désactiver sur cet appareil" }));
+  }
+  foot.push(h("span", { class: "spacer" }));
+  if (st.support && st.table && st.perm !== "denied") foot.push(h("button", { class: "btn ink small", type: "button", onclick: ev => busy(ev.currentTarget, async () => {
+    const p = chosen();
+    if (!p.length) throw new Error("Cochez au moins une notification, ou désactivez-les sur cet appareil.");
+    if (on) { await notifEnregistrer(st.sub, p); toast("Choix enregistrés."); }
+    else { await notifActiver(p); toast("Notifications activées sur cet appareil."); }
+    openNotifs();
+  }), text: on ? "Enregistrer mes choix" : "Activer sur cet appareil" }));
+  openDialog({ eyebrow: "Notifications sur cet appareil", title: "Notifications",
+    body: [h("div", { class: "notice", style: `margin:0;border-left-color:${tone}` }, h("div", { text: msg[0] })),
+      sec("Me prévenir quand", h("div", { class: "notif-list" }, boxes)),
+      h("p", { class: "hint", style: "margin:0", text: "Chaque appareil a ses propres choix : activez les notifications sur votre téléphone et sur votre ordinateur séparément. Un clic sur une notification ouvre le dossier concerné." }), err],
+    foot });
+  $("#notif-btn").classList.toggle("on", on);
+}
+$("#notif-btn").addEventListener("click", openNotifs);
+
+// Un clic sur une notification ouvre le dossier : « #ouvrir=collection/id ».
+function ouvrirDossier(spec) {
+  const m = /^([a-z]+)\/(.+)$/.exec(String(spec || ""));
+  if (!m) return false;
+  const [, col, id] = m, need = col === "penalites" ? "penalites" : col === "decisions" ? "declarations" : col;
+  if (!S.connected || !S.loaded.has(need)) { S.pendingOpen = spec; return false; }
+  S.pendingOpen = null;
+  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules" }[col] || "dashboard";
+  showTab(tab);
+  try { history.replaceState(null, "", "#" + tab); } catch (e) { /* sans historique */ }
+  if (col === "declarations" || col === "decisions") { if (S.declarations.some(d => d.id === id)) { openDecl(id); return true; } }
+  else if (col === "demandes") { if (S.demandes.some(d => d.id === id)) { openDem(id); return true; } }
+  else if (col === "prets") { if ((S.prets || []).some(d => d.id === id)) { openPret(id); return true; } }
+  else if (col === "controles") { if (S.controles.some(d => d.id === id)) { openControle(id); return true; } }
+  else if (col === "vehicules") { if ((S.vehicules || []).some(d => d.id === id)) { openVeh(id); return true; } }
+  else if (col === "penalites") { const p = S.penalites.find(d => d.id === id); if (p) { openFiche(entOf(p)); return true; } }
+  toast("Ce dossier n’existe plus.", true);
+  return false;
+}
+{ const m = /^#ouvrir=(.+)$/.exec(location.hash || ""); if (m) S.pendingOpen = decodeURIComponent(m[1]); }
+if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", ev => { const d = ev.data || {}; if (d.type === "ouvrir" && d.url) { const m = /#ouvrir=(.+)$/.exec(d.url); if (m) ouvrirDossier(decodeURIComponent(m[1])); else { const t = /#([a-z]+)$/.exec(d.url); if (t) showTab(t[1]); } } });
 
 /* ---------- Thème : clair, sombre ou comme l'appareil ---------- */
 const THEME_ICONS = {

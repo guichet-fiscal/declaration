@@ -27,6 +27,8 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v7_blanchiment.sql` : les relevés de compte faits par l’Inspection
 - `supabase/v8_prets.sql` : les demandes de prêt enregistrées par l’Inspection
 - `supabase/v9_vehicules.sql` : le registre des véhicules de société tenu par l’Inspection
+- `supabase/v10_notifications.sql` : les abonnements aux notifications et l’appel du service d’envoi
+- `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
 ---
@@ -46,7 +48,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt) et `supabase/v9_vehicules.sql` (véhicules de société). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société) et `supabase/v10_notifications.sql` (notifications). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -292,6 +294,20 @@ La présence, le journal en direct et le remplacement d’une déclaration par u
 ## Recherche rapide
 
 **Rechercher** en haut de page, ou **Ctrl + K** (⌘ + K sur Mac), ou la touche **/** : un seul champ pour retrouver une entreprise (par son nom, son secteur, son patron ou l’identifiant Discord du patron), une semaine, ou n’importe quel dossier par son numéro : déclaration `DF-`, quittance `QT-`, pénalité `PN-`, redressement `AMR-`, contrôle `CF-`, attestation `AT-`, relance `RL-`, mise en demeure `MED-`, saisie `SA-`, dossier de justice `TJ-`, demande `DM-`. Les six derniers caractères du numéro suffisent, les accents et majuscules ne comptent pas. **Entrée** ouvre le premier résultat, les flèches parcourent la liste, **Échap** ferme.
+
+## Notifications sur téléphone et ordinateur
+
+Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), délais expirés (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
+
+Sur iPhone et iPad (iOS 16.4 ou plus récent), installez d’abord le guichet sur l’écran d’accueil (Safari → Partager → « Sur l’écran d’accueil ») et ouvrez-le depuis son icône : Apple ne permet les notifications qu’aux applications installées. Sur Android et sur ordinateur, Chrome, Edge, Firefox et Safari les reçoivent directement.
+
+Mise en place, une seule fois :
+
+1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais.
+2. Dans Supabase, **Edge Functions → Deploy a new function → Via Editor** : nommez-la `notifier`, collez `supabase/functions/notifier/index.ts` puis ajoutez le fichier `regles.ts` du même dossier, et déployez. Dans les réglages de la fonction, désactivez **Verify JWT** (la base s’authentifie avec sa propre clé).
+3. Dans le guichet, cloche du bandeau → **Activer sur cet appareil** → **Envoyer un essai**.
+
+Aucune clé n’est à copier : la clé qui protège le service et les clés d’envoi sont créées toutes seules et restent dans une table que seuls la base et le service lisent.
 
 ## Apparence et mode sombre
 
