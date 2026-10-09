@@ -293,6 +293,10 @@ La présence, le journal en direct et le remplacement d’une déclaration par u
 
 **Rechercher** en haut de page, ou **Ctrl + K** (⌘ + K sur Mac), ou la touche **/** : un seul champ pour retrouver une entreprise (par son nom, son secteur, son patron ou l’identifiant Discord du patron), une semaine, ou n’importe quel dossier par son numéro : déclaration `DF-`, quittance `QT-`, pénalité `PN-`, redressement `AMR-`, contrôle `CF-`, attestation `AT-`, relance `RL-`, mise en demeure `MED-`, saisie `SA-`, dossier de justice `TJ-`, demande `DM-`. Les six derniers caractères du numéro suffisent, les accents et majuscules ne comptent pas. **Entrée** ouvre le premier résultat, les flèches parcourent la liste, **Échap** ferme.
 
+## Apparence et mode sombre
+
+Le bouton rond du bandeau, à côté de votre rôle, change le thème : **comme l’appareil** (clair le jour, sombre si le téléphone ou l’ordinateur est réglé en sombre), **clair** ou **sombre**. Le choix est gardé sur cet appareil. Sur téléphone, les fenêtres s’ouvrent comme des volets depuis le bas de l’écran, et la barre d’onglets se fait défiler du doigt (un fondu indique qu’il reste des onglets).
+
 ## Installer comme une application
 
 Le guichet s’installe sur un ordinateur ou un téléphone et s’ouvre alors dans sa propre fenêtre, avec son icône, sans barre d’adresse.

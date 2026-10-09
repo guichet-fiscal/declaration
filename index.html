@@ -8,8 +8,12 @@
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#142024" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#14275a" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1832" media="(prefers-color-scheme: dark)">
+<script>
+  // Thème choisi par l'agent (clair, sombre, ou comme l'appareil), appliqué avant l'affichage.
+  try { var t = localStorage.getItem("guichet-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) { /* stockage indisponible : thème de l'appareil */ }
+</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -20,50 +24,53 @@
 <style>
 /* Layout : guichet administratif — en-tête sobre, onglets-guichets, formulaires en cases numérotées (liasse), tableau de bord tenu comme un registre */
 :root{
-  --paper:#edf1f0; --sheet:#ffffff; --field:#f6f8f8;
-  --ink:#122229; --ink-2:#465a61; --ink-3:#6a7d83;
-  --rule:#cfd9d8; --rule-2:#e3e9e8;
-  --accent:#23408e; --accent-ink:#ffffff; --accent-soft:#e7ecf8;
+  --paper:#eceff5; --sheet:#ffffff; --field:#f5f7fa;
+  --ink:#131b2c; --ink-2:#475369; --ink-3:#69758b;
+  --rule:#d6dce7; --rule-2:#e7ebf2;
+  --accent:#23408e; --accent-ink:#ffffff; --accent-soft:#e8edf9;
+  --bar:#14275a; --bar-2:#1b3170; --bar-ink:#f2f5fc; --bar-ink-2:#b8c3dc; --bar-line:rgba(255,255,255,.16);
   --ok:#1b7044; --ok-soft:#e0f1e7;
   --warn:#8f5700; --warn-soft:#faeed6;
   --bad:#ae261d; --bad-soft:#fae3e1;
   --info:#22569f; --info-soft:#e2ebf9;
-  --muted-soft:#e6eceb;
+  --muted-soft:#e8ecf2;
   --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
-  --shadow:0 10px 30px rgba(10,25,30,.14);
+  --shadow:0 18px 48px rgba(16,26,52,.18);
   --f-display:"Archivo","Arial Narrow",system-ui,sans-serif;
   --f-body:"Archivo",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --r:6px;
+  --r:12px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --paper:#0d1416; --sheet:#142024; --field:#0f191c;
-    --ink:#e1e9e8; --ink-2:#a1b2b4; --ink-3:#7f9295;
-    --rule:#2a3a3f; --rule-2:#1e2b2f;
-    --accent:#91a7ff; --accent-ink:#0f1733; --accent-soft:#1d2748;
+    --paper:#0a101c; --sheet:#111a2a; --field:#0d1524;
+    --ink:#e6ebf4; --ink-2:#a8b3c7; --ink-3:#7c889e;
+    --rule:#26324a; --rule-2:#1a2438;
+    --accent:#93a9ff; --accent-ink:#0c1430; --accent-soft:#1b2648;
+    --bar:#0e1832; --bar-2:#16234a; --bar-ink:#e6ebf4; --bar-ink-2:#93a0bb; --bar-line:rgba(255,255,255,.12);
     --ok:#5ac28a; --ok-soft:#14321f;
     --warn:#e5a83e; --warn-soft:#36290f;
     --bad:#f07b70; --bad-soft:#3a1916;
     --info:#82aaf2; --info-soft:#172745;
-    --muted-soft:#1d292d;
+    --muted-soft:#1a2335;
     --s1:#3987e5; --s2:#d95926; --s3:#199e70;
-    --shadow:0 10px 30px rgba(0,0,0,.5);
+    --shadow:0 18px 48px rgba(0,0,0,.55);
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0d1416; --sheet:#142024; --field:#0f191c;
-  --ink:#e1e9e8; --ink-2:#a1b2b4; --ink-3:#7f9295;
-  --rule:#2a3a3f; --rule-2:#1e2b2f;
-  --accent:#91a7ff; --accent-ink:#0f1733; --accent-soft:#1d2748;
+  --paper:#0a101c; --sheet:#111a2a; --field:#0d1524;
+  --ink:#e6ebf4; --ink-2:#a8b3c7; --ink-3:#7c889e;
+  --rule:#26324a; --rule-2:#1a2438;
+  --accent:#93a9ff; --accent-ink:#0c1430; --accent-soft:#1b2648;
+  --bar:#0e1832; --bar-2:#16234a; --bar-ink:#e6ebf4; --bar-ink-2:#93a0bb; --bar-line:rgba(255,255,255,.12);
   --ok:#5ac28a; --ok-soft:#14321f;
   --warn:#e5a83e; --warn-soft:#36290f;
   --bad:#f07b70; --bad-soft:#3a1916;
   --info:#82aaf2; --info-soft:#172745;
-  --muted-soft:#1d292d;
+  --muted-soft:#1a2335;
   --s1:#3987e5; --s2:#d95926; --s3:#199e70;
-  --shadow:0 10px 30px rgba(0,0,0,.5);
+  --shadow:0 18px 48px rgba(0,0,0,.55);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -529,6 +536,69 @@ header.top{position:relative}
 /* surveillance des comptes */
 .proof-img{display:block;max-width:220px;max-height:140px;border:1px solid var(--rule);border-radius:6px;object-fit:contain;background:var(--field)}
 .mini-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px;font-weight:650}
+/* v10 : interface modernisée. Le bandeau bleu nuit porte l'identité ; le reste se tait. */
+header.top{background:var(--bar);border-bottom:0;color:var(--bar-ink)}
+header.top .eyebrow{color:var(--bar-ink-2);text-transform:none;letter-spacing:.01em;font-size:12.5px;font-weight:550}
+header.top h1{color:var(--bar-ink)}
+header.top .logo{box-shadow:0 0 0 2px var(--bar-line)}
+header.top .btn.ghost{color:var(--bar-ink);border-color:var(--bar-line);background:transparent}
+header.top .btn.ghost:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.32)}
+header.top kbd{background:transparent;color:var(--bar-ink-2);border-color:var(--bar-line)}
+header.top .role{background:rgba(255,255,255,.1);color:var(--bar-ink)}
+header.top .role.admin{background:var(--bar-ink);color:var(--bar)}
+header.top .presence::before{background:var(--bar-ink-2)}
+header.top .presence.has-peers::before{background:#5ad18f}
+nav.tabs{background:var(--bar);border-bottom:0;box-shadow:0 1px 0 rgba(0,0,0,.12),0 6px 16px -10px rgba(10,20,45,.45)}
+nav.tabs .wrap{gap:4px;padding-block:0 10px}
+.tab{color:var(--bar-ink-2);border:0;border-radius:999px;padding:7px 14px;font-size:14px}
+.tab:hover{color:var(--bar-ink);background:rgba(255,255,255,.08)}
+.tab[aria-selected="true"]{color:var(--bar);background:var(--bar-ink)}
+.tab:focus-visible{outline:2px solid var(--bar-ink);outline-offset:2px}
+nav.tabs .wrap.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 56px),transparent)}
+nav.tabs .wrap.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px);mask-image:linear-gradient(90deg,transparent,#000 56px)}
+nav.tabs .wrap.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent)}
+@media (min-width:900px){.tab{padding:7px 12px}nav.tabs .wrap{gap:2px}}
+.theme-btn{display:inline-grid;place-items:center;width:34px;height:34px;padding:0;border-radius:999px}
+.theme-btn svg{width:17px;height:17px}
+main .wrap{padding-block:26px 72px}
+h2{font-size:26px}
+.card{border-radius:var(--r);padding:18px 20px 20px;border-color:var(--rule-2)}
+.ledger{border-radius:var(--r);border-color:var(--rule-2)}
+.kpi{padding:16px 18px 17px}
+.kpi .l,th,.dlg-sec h4,.mini-title,.pop-title,.env-head,.br-head,.calc-detail h4,.sal-head,.bareme .br-cap,.eyebrow{text-transform:none;letter-spacing:.005em}
+.kpi .l{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.kpi .v{font-size:clamp(18px,1.9vw,23px)}
+th{font-size:12.5px;font-weight:600;color:var(--ink-3)}
+tbody tr:hover>td{background:var(--field)}
+.dlg-sec h4,.mini-title,.pop-title,.env-head,.br-head,.calc-detail h4,.sal-head,.bareme .br-cap{font-size:12.5px;font-weight:650;color:var(--ink-2)}
+.eyebrow{font-size:12.5px;font-weight:550}
+.btn{border-radius:9px;padding:9px 16px}
+.btn.small{border-radius:8px;padding:6px 11px}
+.icon-btn{border-radius:9px}
+input,select,textarea{border-radius:9px;border-color:var(--rule)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.seg button{padding:6px 12px}
+.notice,.receipt,.decide,.liasse,details.paste,.prewrap,pre.tpl,.tip,.pop{border-radius:var(--r)}
+.toast{border-radius:10px;padding:11px 18px}
+dialog{border-radius:16px;border-color:var(--rule-2);width:min(680px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.dlg-head{padding:20px 22px 14px;border-bottom-color:var(--rule-2)}
+.dlg-body{padding:18px 22px 20px}
+.dlg-foot{padding:14px 22px;border-top-color:var(--rule-2)}
+.dlg-title{font-size:21px}
+.gate-card{border-radius:16px}
+/* Téléphone : les fenêtres s'ouvrent comme des volets, depuis le bas. */
+@media (max-width:560px){
+  dialog{width:100%;max-width:100%;max-height:92vh;margin:auto 0 0;border-radius:18px 18px 0 0;border-bottom:0}
+  dialog[open]{animation:sheet-up .22s ease-out}
+  .dlg-head{padding:16px 16px 12px}
+  .dlg-body{padding:14px 16px 16px}
+  .dlg-foot{padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+  main .wrap{padding-block:18px 64px}
+  .tab{padding:7px 12px;font-size:13.5px}
+}
+@keyframes sheet-up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){dialog[open]{animation:none}}
 </style>
 </head>
 <body data-gate="chargement">
@@ -546,6 +616,7 @@ header.top{position:relative}
       <button class="btn ghost small" type="button" id="btn-install" hidden>Installer l’appli</button>
       <button class="btn ghost small" type="button" id="btn-search" aria-keyshortcuts="Control+K" title="Rechercher (Ctrl + K ou /)" hidden>Rechercher<kbd>Ctrl K</kbd></button>
       <button class="btn ghost small presence" type="button" id="presence" aria-haspopup="true" hidden>En ligne</button>
+      <button class="btn ghost small theme-btn" type="button" id="theme-btn" aria-label="Thème : comme l’appareil"></button>
       <span class="role" id="role">Connexion au registre…</span>
       <button class="btn ghost small" type="button" id="logout" hidden>Se déconnecter</button>
     </div>
@@ -8561,6 +8632,29 @@ $("#vh-save").addEventListener("click", async () => {
   if (ok) { S.vehDirty = false; $("#vh-msg").textContent = "Réglages enregistrés."; toast("Véhicules de société : réglages enregistrés."); renderVehSettings(true); }
 });
 
+/* ---------- Thème : clair, sombre ou comme l'appareil ---------- */
+const THEME_ICONS = {
+  auto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17A8.5 8.5 0 0 0 12 3.5z" fill="currentColor" stroke="none"/></svg>',
+  light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>',
+  dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>'
+};
+const THEME_LABEL = { auto: "comme l’appareil", light: "clair", dark: "sombre" };
+const THEME_BAR = { light: "#14275a", dark: "#0e1832" };
+function themeNow() { let t = null; try { t = localStorage.getItem("guichet-theme"); } catch (e) { t = null; } return t === "light" || t === "dark" ? t : "auto"; }
+function applyTheme(t) {
+  const r = document.documentElement;
+  if (t === "light" || t === "dark") r.setAttribute("data-theme", t); else r.removeAttribute("data-theme");
+  try { if (t === "auto") localStorage.removeItem("guichet-theme"); else localStorage.setItem("guichet-theme", t); } catch (e) { /* choix gardé pour cette visite seulement */ }
+  // Barre du téléphone : la couleur du bandeau du thème affiché.
+  $$('meta[name="theme-color"]').forEach(m => { const scheme = /dark/.test(m.media) ? "dark" : "light"; m.content = THEME_BAR[t === "auto" ? scheme : t]; });
+  const b = $("#theme-btn"), next = { auto: "light", light: "dark", dark: "auto" }[t];
+  if (b) { b.innerHTML = THEME_ICONS[t]; b.setAttribute("aria-label", `Thème : ${THEME_LABEL[t]}. Passer au thème ${THEME_LABEL[next]}`); b.title = `Thème ${THEME_LABEL[t]} (cliquer : ${THEME_LABEL[next]})`; }
+  // Les graphiques reprennent les couleurs du thème.
+  if (typeof render === "function" && S.connected) { try { render(); } catch (e) { /* affiché au prochain rendu */ } }
+}
+$("#theme-btn").addEventListener("click", () => { const t = themeNow(), next = { auto: "light", light: "dark", dark: "auto" }[t]; applyTheme(next); toast(`Thème ${THEME_LABEL[next]}.`); });
+applyTheme(themeNow());
+
 /* ---------- Travail à plusieurs, en direct ---------- */
 // Chaque changement fait par un autre agent arrive tout seul : listes, tableaux de bord et
 // fenêtre ouverte se mettent à jour. Si vous étiez en train d'écrire dans cette fenêtre, rien
@@ -9013,7 +9107,24 @@ function showTab(name) {
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
   if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules"].includes(name)) schedule();
+  // L'onglet choisi reste visible dans la barre, même quand elle défile.
+  const rail = $("nav.tabs .wrap"), cur = $(`.tab[data-tab="${name}"]`);
+  if (rail && cur && rail.scrollWidth > rail.clientWidth) {
+    const a = cur.getBoundingClientRect(), w = rail.getBoundingClientRect();
+    if (a.left < w.left + 48) rail.scrollBy({ left: a.left - w.left - 56, behavior: "smooth" });
+    else if (a.right > w.right - 48) rail.scrollBy({ left: a.right - w.right + 56, behavior: "smooth" });
+  }
+  tabsFade();
 }
+// Barre d'onglets plus large que l'écran : un fondu indique qu'il en reste à droite ou à gauche.
+function tabsFade() {
+  const w = $("nav.tabs .wrap");
+  if (!w) return;
+  w.classList.toggle("fade-r", w.scrollWidth - w.clientWidth - w.scrollLeft > 4);
+  w.classList.toggle("fade-l", w.scrollLeft > 4);
+}
+$("nav.tabs .wrap").addEventListener("scroll", tabsFade, { passive: true });
+window.addEventListener("resize", tabsFade);
 $("nav.tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } } });
 $("nav.tabs").addEventListener("keydown", e => {
   if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
