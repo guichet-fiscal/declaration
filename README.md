@@ -29,6 +29,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v9_vehicules.sql` : le registre des véhicules de société tenu par l’Inspection
 - `supabase/v10_notifications.sql` : les abonnements aux notifications et l’appel du service d’envoi
 - `supabase/v11_convocations.sql` : les convocations (droits de l’Inspection, verrou contre les décisions prises deux fois)
+- `supabase/v12_contrats.sql` : les contrats d’achat (projets de l’Inspection, contrat signé figé, paiements jamais effacés)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
@@ -49,7 +50,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications) et `supabase/v11_convocations.sql` (convocations). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations) et `supabase/v12_contrats.sql` (contrats d’achat). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -154,7 +155,7 @@ Une entreprise est attendue à partir du début du suivi, ou de son **début d�
 
 ## Suivi dans Google Sheets
 
-La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société et les contrôles de police. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
+La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société, les contrôles de police, les convocations, les contrats d’achat et leurs paiements. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
@@ -272,6 +273,18 @@ Une même somme n’est jamais prévue dans deux collectes : tant qu’une colle
 
 L’Inspection convoque, constate la présence ou l’absence, reporte et annule ; encaisser une collecte, sanctionner ou dispenser et supprimer sont réservés à la Direction. La base l’impose elle-même (`supabase/v11_convocations.sql`), et refuse aussi qu’une convocation déjà traitée change d’état, qu’une sanction décidée change, ou que deux agents encaissent la même collecte en même temps. Pour corriger une erreur, la Direction supprime la convocation et en émet une nouvelle.
 
+## Contrats d’achat
+
+Onglet **Contrats**, ou la fiche de l’entreprise fournisseur. La Préfecture achète auprès des entreprises du serveur, pour elle-même ou pour un service public : véhicules à la concession, armes à l’armurerie, équipement, dépannages, transport de fonds.
+
+1. **Commande** : des lignes (désignation, quantité, prix). Pour un service, elle est imputée sur son enveloppe de la semaine choisie dès la signature, ou financée par une demande de moyens déjà accordée (sans compter deux fois). Puis **Constater la livraison** et **Payer** : le Trésor verse la somme et un **ordre de paiement** part sur Discord. Une livraison non conforme peut être refusée tant que rien n’est payé : le contrat est résilié et l’enveloppe libérée.
+2. **Marché à prix unitaire** : un prix par prestation (intervention, collecte…), une durée et, si besoin, un plafond. Chaque paiement est imputé sur l’enveloppe du service la semaine où il est fait ; un dépassement demande une confirmation.
+3. **Transport de fonds** : **Marché de transport de fonds** prépare le marché avec Trans’Fond, payé par collecte. Les collectes encaissées depuis le début du marché apparaissent d’elles-mêmes, **Payer les collectes** les règle en une fois. Une collecte payée ne l’est jamais une deuxième fois, même sur un autre marché ; celles qui dépasseraient le plafond restent signalées. Une case permet de payer aussi les passages où l’entreprise était absente.
+
+Les sommes versées sont déduites du solde du Trésor et comptées dans le suivi des enveloppes. Si une entreprise déclare un chiffre d’affaires inférieur à ce que la Préfecture lui a payé sur la période, une alerte le signale. Discord : cochez « Contrats » dans la publication automatique.
+
+L’Inspection prépare et modifie des projets, et peut les abandonner ; signer, constater une livraison, payer, résilier et clore un marché sont réservés à la Direction. La base l’impose elle-même (`supabase/v12_contrats.sql`) : un contrat signé ne se modifie plus et ne se supprime plus, un paiement enregistré n’est jamais réécrit ni effacé, deux paiements simultanés ne s’écrasent pas, et l’état d’un contrat n’avance que dans un sens. Pour changer un contrat signé, résiliez-le et faites-en un nouveau.
+
 ## Cohérence des dossiers
 
 - **Attestation de régularité** : une somme encore dans son délai de paiement ne l’empêche pas (comme dans la réalité), mais elle y figure comme « pas encore payée », avec sa date limite.
@@ -312,14 +325,14 @@ La présence, le journal en direct et le remplacement d’une déclaration par u
 
 ## Notifications sur téléphone et ordinateur
 
-Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), convocations (absence à sanctionner, collecte à encaisser), délais (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, rendez-vous de l’heure à venir, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
+Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), convocations (absence à sanctionner, collecte à encaisser), contrats d’achat (projet à signer), délais (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, rendez-vous de l’heure à venir, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
 
 Sur iPhone et iPad (iOS 16.4 ou plus récent), installez d’abord le guichet sur l’écran d’accueil (Safari → Partager → « Sur l’écran d’accueil ») et ouvrez-le depuis son icône : Apple ne permet les notifications qu’aux applications installées. Sur Android et sur ordinateur, Chrome, Edge, Firefox et Safari les reçoivent directement.
 
 Mise en place, une seule fois :
 
-1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais. `supabase/v11_convocations.sql` y ajoute les convocations.
-2. Dans Supabase, **Edge Functions → Deploy a new function → Via Editor** : nommez-la `notifier`, collez `supabase/functions/notifier/index.ts` puis ajoutez le fichier `regles.ts` du même dossier, et déployez. Dans les réglages de la fonction, désactivez **Verify JWT** (la base s’authentifie avec sa propre clé). Après une mise à jour de ces deux fichiers (comme celle des convocations), ouvrez la fonction `notifier` → **Code**, remplacez leur contenu et redéployez.
+1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais. `supabase/v11_convocations.sql` y ajoute les convocations, `supabase/v12_contrats.sql` les contrats.
+2. Dans Supabase, **Edge Functions → Deploy a new function → Via Editor** : nommez-la `notifier`, collez `supabase/functions/notifier/index.ts` puis ajoutez le fichier `regles.ts` du même dossier, et déployez. Dans les réglages de la fonction, désactivez **Verify JWT** (la base s’authentifie avec sa propre clé). Après une mise à jour de ces deux fichiers (comme celles des convocations et des contrats), ouvrez la fonction `notifier` → **Code**, remplacez leur contenu et redéployez.
 3. Dans le guichet, cloche du bandeau → **Activer sur cet appareil** → **Envoyer un essai**.
 
 Aucune clé n’est à copier : la clé qui protège le service et les clés d’envoi sont créées toutes seules et restent dans une table que seuls la base et le service lisent.

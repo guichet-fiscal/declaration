@@ -130,9 +130,21 @@ function actualiser() {
   };
   const plafond = (sv, k) => { const e = plafondsDe(k) || {}; const c = Object.keys(e).find(x => x.toLowerCase() === String(sv).toLowerCase()); return c ? Number(e[c]) || 0 : ""; };
   Object.keys(parSemaine).forEach(k => Object.keys(parSemaine[k] || {}).forEach(sv => { if (!env[sv + "|" + k]) env[sv + "|" + k] = { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 }; }));
-  ecrire("Enveloppes", ["Semaine", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Plafond", "Reste"],
+  // Achats sous contrat d'un service (hors achats financés par une demande) : une commande compte dès sa
+  // signature sur la semaine choisie, un marché à chaque paiement sur la semaine du paiement.
+  const envDe = (sv, k) => {
+    const cle = Object.keys(env).find(x => x.toLowerCase() === (sv + "|" + k).toLowerCase());
+    return cle ? env[cle] : (env[sv + "|" + k] = { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 });
+  };
+  col("contrats").forEach(r => {
+    const c = r.data, sv = c.acheteur && c.acheteur.type === "service" ? c.acheteur.service : "";
+    if (!sv || c.demandeId || c.statut === "projet" || c.statut === "annule") return;
+    if (c.type === "commande") { if (c.periode && c.statut !== "resilie") { const x = envDe(sv, c.periode); x.achete = (x.achete || 0) + (Number(c.montant) || 0); } }
+    else (c.paiements || []).forEach(p => { const x = envDe(sv, p.periode || semaineDe(p.at)); x.achete = (x.achete || 0) + (Number(p.montant) || 0); });
+  });
+  ecrire("Enveloppes", ["Semaine", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Acheté sous contrat", "Plafond", "Reste"],
     Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
-      .map(x => { const p = plafond(x.service, x.k); return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, p, p === "" ? "" : p - x.accorde]; }));
+      .map(x => { const p = plafond(x.service, x.k), achete = x.achete || 0; return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, achete, p, p === "" ? "" : p - x.accorde - achete]; }));
 
   const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif", defaut: "Défaut de déclaration (semaine clôturée)", convocation: "Absence à une convocation" };
   ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le", "Nature"],
@@ -233,6 +245,25 @@ function actualiser() {
         s ? (s.dispense ? "Dispensée : " + (s.motif || "") : s.montant) : (c.statut === "absente" ? "À décider" : ""), c.byNom || "", date(c.at)];
     }));
 
+  const TYPES_CT = { commande: "Commande", cadre: "Marché à prix unitaire" };
+  const CATS_CT = { vehicules: "Véhicules", armement: "Armement", equipement: "Équipement", transport_fonds: "Transport de fonds", reparations: "Réparations et dépannage", services: "Prestations de services", autre: "Autre" };
+  const ETATS_CT = { projet: "Projet", signe: "Signé", livre: "Livré, à payer", paye: "Payé", en_cours: "En cours", termine: "Terminé", resilie: "Résilié", annule: "Abandonné" };
+  const acheteurCt = c => (c.acheteur && c.acheteur.type === "service" ? c.acheteur.service : "Préfecture (Trésor)");
+  const payeCt = c => (c.paiements || []).reduce((t, p) => t + (Number(p.montant) || 0), 0);
+  const lignesPaiementCt = [];
+  ecrire("Contrats", ["N°", "Fournisseur", "Acheteur", "Type", "Catégorie", "Objet", "Montant", "Prix unitaire", "Unité", "Plafond", "Payé sur", "État", "Payé", "Préparé par", "Signé le", "Signé par", "Début", "Fin", "Livraison constatée le", "Résiliation"],
+    col("contrats").map(r => {
+      const c = r.data, cadre = c.type === "cadre", sv = c.acheteur && c.acheteur.type === "service" ? c.acheteur.service : "";
+      (c.paiements || []).forEach((p, i) => lignesPaiementCt.push([no("CT", r.id) + "-" + (i + 1), no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), p.montant, p.periode || semaineDe(p.at), date(p.at), p.byNom || "",
+        p.convocations ? p.convocations.length + " collecte" + (p.convocations.length > 1 ? "s" : "") : cadre ? (p.quantite || 1) + " " + (c.unite || "prestation") + ((p.quantite || 1) > 1 ? "s" : "") : c.objet || "Commande", p.note || ""]));
+      return [no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), TYPES_CT[c.type] || c.type || "", CATS_CT[c.categorie] || c.categorie || "", c.objet || "",
+        cadre ? "" : c.montant, cadre ? c.prixUnitaire : "", cadre ? c.unite || "" : "", cadre && c.plafond ? c.plafond : "",
+        sv ? (c.demandeId ? "Demande " + no("DM", c.demandeId) : cadre ? "Enveloppe " + sv + " (semaine du paiement)" : "Enveloppe " + sv + " · " + (c.periode || "")) : "Trésor",
+        ETATS_CT[c.statut] || c.statut || "", payeCt(c), c.byNom || "", date(c.signeLe), c.signeParNom || "", date(c.debut), date(c.fin),
+        c.livraison ? date(c.livraison.at) : "", c.resiliation ? (c.resiliation.livraisonRefusee ? "Livraison refusée : " : "") + (c.resiliation.motif || "") : ""];
+    }));
+  ecrire("Paiements des contrats", ["Ordre", "Contrat", "Bénéficiaire", "Acheteur", "Montant", "Semaine", "Payé le", "Par", "Objet", "Observation"], lignesPaiementCt);
+
   ecrire("Remboursements de prêts", ["Prêt", "Entreprise", "Échéance", "Date limite", "Montant", "Dont capital", "Dont intérêts", "État", "Payée le", "Note"], lignesPret);
 
   ecrire("Journal", ["Date", "Auteur", "Action", "Type", "Dossier"],
@@ -257,7 +288,10 @@ function actualiser() {
     ["Véhicules de société en service", col("vehicules").filter(r => r.data.statut === "service").length],
     ["Véhicules requalifiés", col("vehicules").filter(r => r.data.statut === "requalifie").length],
     ["Convocations à venir", col("convocations").filter(r => r.data.statut === "convoquee").length],
-    ["Collectes encaissées", col("convocations").filter(r => r.data.collecte && !r.data.collecte.enCours).reduce((t, r) => t + (Number(r.data.collecte.montant) || 0), 0)]
+    ["Collectes encaissées", col("convocations").filter(r => r.data.collecte && !r.data.collecte.enCours).reduce((t, r) => t + (Number(r.data.collecte.montant) || 0), 0)],
+    ["Contrats signés", col("contrats").filter(r => ["signe", "livre", "paye", "en_cours", "termine", "resilie"].indexOf(r.data.statut) >= 0 && r.data.signeLe).length],
+    ["Projets de contrat à signer", col("contrats").filter(r => r.data.statut === "projet").length],
+    ["Payé au titre des contrats", col("contrats").reduce((t, r) => t + payeCt(r.data), 0)]
   ]);
 }
 

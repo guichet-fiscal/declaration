@@ -2,7 +2,7 @@
 // Guichet fiscal : quelles notifications envoyer, et avec quel texte.
 // Fonctions pures (aucun accès au réseau ni à la base) : testables à part.
 
-export const TYPES = ["declaration", "paiement", "demande", "pret", "controle", "vehicule", "convocation", "delais"];
+export const TYPES = ["declaration", "paiement", "demande", "pret", "controle", "vehicule", "convocation", "contrat", "delais"];
 
 const NF = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 const money = (n) => NF.format(Math.round(Number(n) || 0)).replace(/ | /g, " ") + " €";
@@ -58,6 +58,14 @@ export function evenement(e, ctx) {
       if (!ins && n.motif === "collecte" && n.statut === "honoree" && b.statut !== "honoree" && !n.collecte) return { type: "convocation", title: "Collecte à encaisser", body: `${n.entrepriseNom || "Entreprise"} · ${money(n.montant)} · ${no("CV", id)}`, url: `#ouvrir=convocations/${id}`, tag: "conv-" + id };
       return null;
     }
+    case "contrats":
+      // Un projet préparé (souvent par l'Inspection) attend la signature de la Direction.
+      if (ins && n.statut === "projet" && recent(n.at, 2)) {
+        const prix = n.type === "cadre" ? `${money(n.prixUnitaire)} par ${n.unite || "prestation"}` : money(n.montant);
+        const pour = n.acheteur && n.acheteur.type === "service" ? n.acheteur.service : "Préfecture";
+        return { type: "contrat", title: "Projet de contrat à signer", body: `${n.fournisseurNom || "Fournisseur"} · ${pour} · ${n.objet ? n.objet + " · " : ""}${prix}`, url: `#ouvrir=contrats/${id}`, tag: "ct-" + id };
+      }
+      return null;
     case "vehicules": {
       const nc = n.constats || [], oc = b.constats || [];
       if (nc.length > oc.length) {

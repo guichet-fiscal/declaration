@@ -405,6 +405,10 @@ table.compact td{padding:8px 10px}
 .avis-preview{display:block;width:100%;max-width:760px;margin:0 auto;border:1px solid var(--rule);border-radius:6px;background:#fbfaf6}
 .env-editor{display:grid;gap:8px}
 .tour-plan{margin:4px 0 0;padding-left:22px;display:grid;gap:4px;font-size:13.5px}
+.ct-lignes{display:grid;gap:8px}
+.ct-head,.ct-ligne{display:grid;grid-template-columns:minmax(0,1fr) 90px 150px auto;gap:8px;align-items:center}
+.ct-head{font-size:12px;color:var(--ink-3);font-weight:600;margin-top:6px}
+@media (max-width:620px){.ct-head{display:none}.ct-ligne{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ct-ligne>input:first-child{grid-column:1/-1}}
 .tour-plan .mono{font-weight:600}
 .env-week{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:4px}
 .env-week label{font-weight:600;font-size:13px}
@@ -642,6 +646,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
     <button class="tab" role="tab" type="button" id="tab-btn-convocations" data-tab="convocations" aria-selected="false">Convocations</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-contrats" data-tab="contrats" aria-selected="false">Contrats</button>
     <button class="tab" role="tab" type="button" id="tab-btn-prets" data-tab="prets" aria-selected="false">Prêts</button>
     <button class="tab" role="tab" type="button" id="tab-btn-vehicules" data-tab="vehicules" aria-selected="false">Véhicules</button>
     <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
@@ -706,7 +711,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
         <div class="card-head">
           <div>
             <h3>Trésor</h3>
-            <p class="sub" id="dash-tr-sub">Recettes encaissées et crédits accordés, 8 dernières périodes.</p>
+            <p class="sub" id="dash-tr-sub">Recettes encaissées, crédits accordés et achats payés, 8 dernières périodes.</p>
           </div>
         </div>
         <div class="legend" id="legend"></div>
@@ -901,6 +906,34 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     </div>
   </section>
 
+  <section class="panel" id="tab-contrats" role="tabpanel" aria-labelledby="tab-btn-contrats" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Contrats d’achat</h2>
+        <p class="sub">La Préfecture achète auprès des entreprises du serveur : véhicules à la concession, armes à l’armurerie, équipement, transport de fonds payé par collecte… L’achat d’un service public est imputé sur son enveloppe de la semaine ; celui de la Préfecture, sur le Trésor. L’Inspection prépare, la Direction signe, constate la livraison et paie.</p>
+      </div>
+      <div class="toolbar"><button class="btn ghost" type="button" id="ct-tf" hidden>Marché de transport de fonds</button><button class="btn" type="button" id="ct-new" hidden>Nouveau contrat</button></div>
+    </div>
+    <div class="ledger">
+      <div class="kpi" id="tk-projets"><span class="l">Projets</span><span class="v">—</span><span class="s">à signer</span></div>
+      <div class="kpi" id="tk-cours"><span class="l">En cours</span><span class="v">—</span><span class="s">signés</span></div>
+      <div class="kpi" id="tk-apayer"><span class="l">À payer</span><span class="v">—</span><span class="s">livrés ou collectes faites</span></div>
+      <div class="kpi" id="tk-paye"><span class="l">Payé</span><span class="v">—</span><span class="s">cette semaine</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="search-row">
+        <div class="seg" id="seg-ct" role="group" aria-label="Filtrer les contrats">
+          <button type="button" data-f="cours" aria-pressed="true">En cours<span class="count"></span></button>
+          <button type="button" data-f="projets" aria-pressed="false">Projets<span class="count"></span></button>
+          <button type="button" data-f="apayer" aria-pressed="false">À payer<span class="count"></span></button>
+          <button type="button" data-f="payes" aria-pressed="false">Payés<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Tous<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="ct-list"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
   <section class="panel" id="tab-prets" role="tabpanel" aria-labelledby="tab-btn-prets" hidden>
     <div class="panel-head">
       <div>
@@ -1044,6 +1077,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
           <option value="saisies">Saisies</option>
           <option value="transmissions">Justice</option>
           <option value="convocations">Convocations</option>
+          <option value="contrats">Contrats</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1729,7 +1763,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -1925,7 +1959,9 @@ function treasury() {
     pv += Number(p.montant) || 0;
     for (const x of p.echeances || []) { if (x.payee) pr += Number(x.montant) || 0; else if (p.statut === "en_cours") pd += Number(x.capital) || 0; }
   }
-  return { rec, dep, budget, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, solde: budget + rec - dep - pv + pr };
+  let achats = 0;
+  for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) achats += Number(p.montant) || 0;
+  return { rec, dep, budget, achats, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, solde: budget + rec - dep - achats - pv + pr };
 }
 const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
 const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -1983,6 +2019,8 @@ function alertsFor(d) {
   if (ca === 0 && nb > 0) out.push("Aucun chiffre d’affaires avec des salariés");
   if (hist.slice(-3).concat([d]).filter(x => x.enRetard).length >= 2) out.push("Retards répétés");
   if (d.detail) for (const t of (d.detail.cot || []).concat(d.detail.is || [])) if (t.libelle && t.base > 0) out.push(`${t.libelle} : au-delà de ${money(t.de)}`);
+  const pp = (S.contrats || []).length ? paiementsPrefecture(entOf(d), d.periode) : 0;
+  if (pp > 0 && ca < pp) out.push(`Chiffre d’affaires inférieur aux paiements de la Préfecture (${money(pp)})`);
   out.push(...blanchimentSignals(d));
   return out;
 }
@@ -2061,17 +2099,20 @@ function envUse(key) {
     const k = norm(dm.service || "Autre");
     out[k] = (out[k] || 0) + v;
   }
+  // Achats sous contrat imputés sur l'enveloppe du service.
+  const svcs = new Map(); for (const c of S.contrats || []) { const s = ctService(c); if (s && !svcs.has(norm(s))) svcs.set(norm(s), s); }
+  for (const [k, s] of svcs) for (const x of ctImputations(s, key)) out[k] = (out[k] || 0) + x.montant;
   return out;
 }
 // Bilan d'un service pour une semaine : demandé, accordé, en attente, refusé, plafond.
 function envStats(service, key) {
   const n = norm(service), list = S.demandes.filter(dm => norm(dm.service || "Autre") === n && demImputation(dm) === key);
   const st = dm => aStatus(dm), sum = (l, f) => l.reduce((t, x) => t + f(x), 0);
-  const cap = envCap(service, key), accorde = sum(list, demAccorde);
-  return { list, cap, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
+  const achats = ctImputations(service, key), cap = envCap(service, key), accorde = sum(list, demAccorde) + achats.reduce((t, x) => t + x.montant, 0);
+  return { list, achats, cap, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
     refuse: list.filter(dm => st(dm) === "refusee").length, reste: cap ? cap - accorde : null };
 }
-const envServices = keys => { const names = cfg().services.slice(); for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && keys.includes(demImputation(dm))) names.push(dm.service); return names; };
+const envServices = keys => { const names = cfg().services.slice(); for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && keys.includes(demImputation(dm))) names.push(dm.service); for (const c of S.contrats || []) { const s = ctService(c); if (s && !names.some(n => norm(n) === norm(s)) && keys.some(k => ctImputations(s, k).length)) names.push(s); } return names; };
 // Plafonds des enveloppes : réglés semaine par semaine. Une semaine sans plafonds propres reprend ceux
 // de la dernière semaine réglée avant elle ; avant toute semaine réglée, les plafonds d'origine.
 const envKind = k => (/-S\d{2}$/.test(k || "") ? "S" : "M");
@@ -2500,6 +2541,7 @@ function subscribe() {
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2535,6 +2577,7 @@ function render() {
   renderPrets();
   renderVehicules();
   renderConvocations();
+  renderContrats();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
 }
@@ -2611,7 +2654,7 @@ function renderDashboard() {
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
-  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}`, t.solde < 0 ? "bad" : "");
+  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}`, t.solde < 0 ? "bad" : "");
 
   // Entreprises à surveiller
   const reg = $("#registry");
@@ -2760,6 +2803,7 @@ function treasurySeries(keys) {
   for (const d of S.declarations) if (d.periode in rec) rec[d.periode] += dEncaisse(d);
   for (const p of S.penalites) if (p.statut === "payee" && p.paidAt) { const k = keyOf(new Date(p.paidAt)); if (k in rec) rec[k] += Number(p.montant) || 0; }
   for (const dm of S.demandes) { const v = demAccorde(dm); if (v) { const k = demImputation(dm); if (k in dep) dep[k] += v; } }
+  for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) { const k = p.periode || keyOf(new Date(p.at)); if (k in dep) dep[k] += Number(p.montant) || 0; }
   return { rec: keys.map(k => rec[k]), dep: keys.map(k => dep[k]) };
 }
 function treasuryChart(box, legend, n, givenKeys) {
@@ -2768,16 +2812,16 @@ function treasuryChart(box, legend, n, givenKeys) {
   const sum = a => a.reduce((s, v) => s + v, 0);
   fill(legend,
     h("span", {}, h("i", { style: "background:var(--s1)" }), "Recettes encaissées ", h("b", { text: money(sum(t.rec)) })),
-    h("span", {}, h("i", { style: "background:var(--s2)" }), "Crédits accordés ", h("b", { text: money(sum(t.dep)) })));
+    h("span", {}, h("i", { style: "background:var(--s2)" }), "Crédits et achats ", h("b", { text: money(sum(t.dep)) })));
   drawCols(box, {
     short: keys.map(periodShort), full: keys.map(periodLabel),
-    series: [{ name: "Recettes encaissées", cls: "b1", values: t.rec }, { name: "Crédits accordés", cls: "b2", values: t.dep }],
-    label: `Recettes encaissées et crédits accordés, ${spanLabel(keys, n)}`, empty: "Aucun mouvement sur ces périodes pour l’instant."
+    series: [{ name: "Recettes encaissées", cls: "b1", values: t.rec }, { name: "Crédits et achats", cls: "b2", values: t.dep }],
+    label: `Recettes encaissées, crédits accordés et achats payés, ${spanLabel(keys, n)}`, empty: "Aucun mouvement sur ces périodes pour l’instant."
   });
 }
 function renderChart() {
   treasuryChart($("#chart"), $("#legend"), 8);
-  $("#dash-tr-sub").textContent = `Recettes encaissées et crédits accordés, ${spanLabel(recentKeys(8), 8)}.`;
+  $("#dash-tr-sub").textContent = `Recettes encaissées, crédits accordés et achats payés, ${spanLabel(recentKeys(8), 8)}.`;
   $("#svc-list").hidden = true;
 }
 
@@ -2829,7 +2873,7 @@ function openEnvSuivi(service, key) {
   const cell = (n, k) => {
     const x = envStats(n, k), ratio = x.cap ? x.accorde / x.cap : 0, tone = !x.cap ? "" : ratio > 1 ? "bad" : ratio >= 0.8 ? "warn" : "";
     return h("td", { class: "num" + (k === sel ? " env-sel" : "") },
-      h("button", { class: "linkbtn env-cell" + (tone ? " t-" + tone + " tone-text" : ""), type: "button", title: `${n} · ${periodLabel(k)}`, onclick: () => openEnvSuivi(service, k), text: x.list.length || x.cap ? money(x.accorde) : "—" }),
+      h("button", { class: "linkbtn env-cell" + (tone ? " t-" + tone + " tone-text" : ""), type: "button", title: `${n} · ${periodLabel(k)}`, onclick: () => openEnvSuivi(service, k), text: x.list.length || x.cap || (x.achats && x.achats.length) ? money(x.accorde) : "—" }),
       x.cap ? h("span", { class: "meta", text: `/ ${money(x.cap)}` }) : null, x.attente ? h("span", { class: "meta", text: `${money(x.attente)} en attente` }) : null);
   };
   const tbl = h("div", { class: "tbl-wrap" }, h("table", { class: "compact env-table" },
@@ -2839,7 +2883,8 @@ function openEnvSuivi(service, key) {
   const tot = names.reduce((t, n) => { const x = envStats(n, sel); return { d: t.d + x.demande, a: t.a + x.accorde, w: t.w + x.attente }; }, { d: 0, a: 0, w: 0 });
   openDialog({ eyebrow: "Enveloppes des services publics", title: service ? `Enveloppe · ${service}` : "Suivi des enveloppes", wide: true,
     body: [h("p", { class: "hint", style: "margin:0", text: "Crédits accordés par semaine, sur le plafond de chaque service pour cette semaine. Cliquez sur une semaine pour voir ses demandes. Une demande compte pour la semaine choisie à sa saisie." }), tbl,
-      sec(`${periodLabel(sel)} · ${list.length} demande${plural(list.length)}`, kv([["Demandé", money(tot.d)], ["Accordé", money(tot.a)], tot.w ? ["En attente", money(tot.w)] : null]),
+      (() => { const ach = names.flatMap(n => ctImputations(n, sel)); return ach.length ? sec(`${periodLabel(sel)} · achats sous contrat`, h("ul", { class: "ent-list", style: "margin-top:6px" }, ach.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openContrat(x.c.id), text: `${ctNo(x.c)} · ${ctService(x.c)}` }), h("span", { class: "meta", text: `${x.c.fournisseurNom} · ${x.c.objet || CT_CATS[x.c.categorie] || ""}` })), h("strong", { class: "mono", text: money(x.montant) }), h("span", {}))))) : null; })(),
+      sec(`${periodLabel(sel)} · ${list.length} demande${plural(list.length)}`, kv([["Demandé", money(tot.d)], ["Accordé et acheté", money(tot.a)], tot.w ? ["En attente", money(tot.w)] : null]),
         list.length ? h("ul", { class: "ent-list", style: "margin-top:6px" }, list.map(dm => h("li", {},
           h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openDem(dm.id), text: `${dossierNo("DM", dm.id)} · ${dm.service}` }), h("span", { class: "meta", text: `${dm.objet || "—"} · ${money(dm.montant)} demandés${demAccorde(dm) ? " · " + money(demAccorde(dm)) + " accordés" : ""}` })),
           chip(ASTAT[aStatus(dm)] || ASTAT.attente), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune demande cette semaine." }))],
@@ -3609,7 +3654,7 @@ function renderDemEnv() {
   card.hidden = false;
   $("#m-env-title").textContent = `Enveloppe ${svc} · ${periodPlain(k).toLowerCase()}`;
   fill($("#m-env"), h("dt", { text: "Plafond" }), h("dd", { class: "num", text: x.cap ? money(x.cap) : "sans plafond" }),
-    h("dt", { text: "Déjà accordé" }), h("dd", { class: "num", text: money(x.accorde) }),
+    h("dt", { text: x.achats && x.achats.length ? "Déjà accordé ou acheté" : "Déjà accordé" }), h("dd", { class: "num", text: money(x.accorde) }),
     h("dt", { text: "Demandé, en attente" }), h("dd", { class: "num", text: money(x.attente - own) }),
     x.cap ? h("dt", { class: "tot-dt", text: "Reste si tout est accordé" }) : null, x.cap ? h("dd", { class: "tot-dd num", style: x.cap - x.accorde - (x.attente - own) - (Number($("#m-montant").value) || 0) < 0 ? "color:var(--bad)" : null, text: money(x.cap - x.accorde - (x.attente - own) - (Number($("#m-montant").value) || 0)) }) : null);
 }
@@ -3904,7 +3949,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -4459,6 +4504,7 @@ function openFiche(e, opts) {
     sec("Pénalités et redressements", pens, penForm),
     compteSection(e, reopen),
     convocationsSection(e),
+    contratsSection(e),
     pretsSection(e),
     vehiculesSection(e),
     ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
@@ -4606,7 +4652,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -4719,6 +4765,14 @@ function describe(e) {
       if (a.collecte && !b.collecte) return `a encaissé la collecte ${no} de ${nom} (${money(a.collecte.montant)})`;
       if (a.sanction && !b.sanction) return a.sanction.dispense ? `a dispensé ${nom} de sanction (${no})` : `a sanctionné l’absence de ${nom} (${no} · ${money(a.sanction.montant)})`;
       return `a modifié la convocation ${no} de ${nom}`;
+    }
+    case "contrats": {
+      const ct = v || {}, no = dossierNo("CT", e.doc_id), qui = `${ct.fournisseurNom || ""}${ct.acheteur && ct.acheteur.service ? " pour " + ct.acheteur.service : ""}`;
+      if (x === "ajout") return ct.statut === "projet" ? `a préparé le contrat ${no} avec ${qui}` : `a signé le contrat ${no} avec ${qui}`;
+      if (x === "suppression") return `a supprimé le contrat ${no}`;
+      if ((a.paiements || []).length > (b.paiements || []).length) { const p = a.paiements[a.paiements.length - 1] || {}; return `a payé ${money(p.montant)} à ${ct.fournisseurNom || ""} (${no})`; }
+      if (a.statut !== b.statut) return { signe: `a signé le contrat ${no} avec ${qui}`, en_cours: `a signé le marché ${no} avec ${qui}`, livre: `a constaté la livraison du contrat ${no}`, resilie: a.resiliation && a.resiliation.livraisonRefusee ? `a refusé la livraison du contrat ${no}` : `a résilié le contrat ${no}`, termine: `a clos le marché ${no}`, annule: `a abandonné le projet ${no}` }[a.statut] || `a modifié le contrat ${no}`;
+      return `a modifié le contrat ${no}`;
     }
     case "meta": return "a téléchargé une sauvegarde du registre";
     case "agents": {
@@ -5236,8 +5290,9 @@ function editEntreprise(e, back) {
       for (const sa of S.saisies) if (sa.entrepriseId === e.id && sa.entrepriseNom !== n) jobs.push(["saisies", sa.id]);
       for (const tj of S.transmissions) if (tj.entrepriseId === e.id && tj.entrepriseNom !== n) jobs.push(["transmissions", tj.id]);
       for (const cv of S.convocations || []) if (cv.entrepriseId === e.id && cv.entrepriseNom !== n) jobs.push(["convocations", cv.id]);
+      for (const ct of S.contrats || []) if (ct.fournisseurId === e.id && ct.fournisseurNom !== n) jobs.push(["contrats", ct.id, { fournisseurNom: n }]);
       let done = 0;
-      for (const [col, id] of jobs) { await write(() => S.db.doc(col + "/" + id).update({ entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
+      for (const [col, id, patch] of jobs) { await write(() => S.db.doc(col + "/" + id).update(patch || { entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
     toast(`« ${n} » mise à jour.`);
     if (back) back(); else closeDialog();
@@ -5324,6 +5379,7 @@ const DISCORD_AUTO = [
   ["controles", "Contrôles fiscaux : avis de vérification, proposition, mise en recouvrement", "entreprises"],
   ["saisies", "Saisies notifiées", "entreprises"],
   ["convocations", "Convocations, ordres de collecte et constats d’absence", "entreprises"],
+  ["contrats", "Contrats signés et ordres de paiement", "entreprises"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
@@ -6575,6 +6631,408 @@ function convocationsSection(e) {
     canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openConvForm(e), text: "Convoquer" }) : null);
 }
 
+/* ---------- Contrats d'achat ---------- */
+// La Préfecture achète auprès des entreprises du serveur : une commande ponctuelle (véhicules à la
+// concession, armes à l'armurerie, équipement…) ou un marché à prix unitaire (transport de fonds payé
+// par collecte, dépannages…). L'acheteur est la Préfecture elle-même (le Trésor paie) ou un service
+// public : l'achat est alors imputé sur l'enveloppe du service pour la semaine choisie, sauf s'il est
+// financé par une demande de moyens déjà accordée (ses crédits sont déjà sortis du Trésor).
+// L'Inspection prépare un projet ; la Direction signe, constate la livraison et paie.
+const CT_TYPES = { commande: "Commande", cadre: "Marché à prix unitaire" };
+const CT_CATS = { vehicules: "Véhicules", armement: "Armement", equipement: "Équipement", transport_fonds: "Transport de fonds", reparations: "Réparations et dépannage", services: "Prestations de services", autre: "Autre" };
+const CT_STAT = { projet: ["Projet", "info"], signe: ["Signé", "accent"], livre: ["Livré, à payer", "warn"], paye: ["Payé", "ok"], en_cours: ["En cours", "accent"], termine: ["Terminé", "muted"], resilie: ["Résilié", "muted"], annule: ["Abandonné", "muted"] };
+const ctNo = c => dossierNo("CT", c.id);
+const ctNow = id => (S.contrats || []).find(c => c.id === id) || null;
+const ctVivant = c => !["projet", "annule"].includes(c.statut);
+const ctService = c => (c.acheteur && c.acheteur.type === "service" ? c.acheteur.service || "" : "");
+const ctAcheteur = c => ctService(c) || "Préfecture de police (Trésor)";
+const ctPaye = c => (c.paiements || []).reduce((t, p) => t + (Number(p.montant) || 0), 0);
+const ctsOf = e => (S.contrats || []).filter(c => c.fournisseurId ? c.fournisseurId === e.id : norm(c.fournisseurNom) === norm(e.nom)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+// Imputation sur l'enveloppe d'un service : une commande compte pour son montant dès la signature,
+// sur la semaine choisie ; un marché, à chaque paiement, sur la semaine du paiement.
+function ctImputations(service, key) {
+  const n = norm(service), out = [];
+  for (const c of S.contrats || []) {
+    if (!ctVivant(c) || !ctService(c) || norm(ctService(c)) !== n || c.demandeId) continue;
+    if (c.type === "commande") { if (c.periode === key && c.statut !== "resilie") out.push({ c, montant: Number(c.montant) || 0 }); }
+    else for (const p of c.paiements || []) if ((p.periode || keyOf(new Date(p.at))) === key) out.push({ c, montant: Number(p.montant) || 0 });
+  }
+  return out;
+}
+// Ce qu'une entreprise a reçu de la Préfecture sur une période (pour vérifier son chiffre d'affaires).
+function paiementsPrefecture(e, key) {
+  if (!e) return 0;
+  let t = 0;
+  for (const c of ctsOf(e)) for (const p of c.paiements || []) if ((p.periode || keyOf(new Date(p.at))) === key) t += Number(p.montant) || 0;
+  return t;
+}
+// Transport de fonds : collectes faites par le fournisseur pendant le marché (et passages sans collecte
+// si le marché les paie), payées ou non.
+function ctCollectes(c) {
+  if (c.categorie !== "transport_fonds") return { faites: [], aPayer: [], payables: [], horsPlafond: 0 };
+  const deb = new Date(c.debut || c.signeLe || c.at).getTime(), fin = c.fin ? new Date(c.fin).getTime() + 864e5 - 1 : Infinity;
+  // Une collecte payée par un marché, quel qu'il soit, ne l'est plus par un autre.
+  const payes = new Set((S.contrats || []).flatMap(x => (x.paiements || []).flatMap(p => p.convocations || [])));
+  const faites = (S.convocations || []).filter(v => v.transporteurId === c.fournisseurId && v.motif === "collecte" && (
+    (v.collecte && !v.collecte.enCours && (Number(v.collecte.montant) > 0 || c.passagesAbsents) && (t => t >= deb && t <= fin)(new Date(v.collecte.at).getTime())) ||
+    (c.passagesAbsents && v.statut === "absente" && v.absence && (t => t >= deb && t <= fin)(new Date(v.absence.at).getTime()))))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const aPayer = faites.filter(v => !payes.has(v.id));
+  // Plafond du marché : on ne paie que les collectes qu'il couvre encore.
+  const pu = Number(c.prixUnitaire) || 0, room = c.plafond ? Math.max(0, Number(c.plafond) - ctPaye(c)) : Infinity;
+  const payables = pu > 0 ? aPayer.slice(0, room === Infinity ? aPayer.length : Math.floor(room / pu)) : [];
+  return { faites, aPayer, payables, horsPlafond: aPayer.length - payables.length };
+}
+const ctAPayer = c => {
+  if (c.statut === "livre") return Math.max(0, (Number(c.montant) || 0) - ctPaye(c));
+  if (c.statut === "en_cours" && c.categorie === "transport_fonds") return ctCollectes(c).payables.length * (Number(c.prixUnitaire) || 0);
+  return 0;
+};
+// Résiliation : une commande tant que rien n'est payé ; un marché une fois ses prestations dues payées.
+const ctResiliable = c => (["signe", "livre"].includes(c.statut) && !ctPaye(c)) || (c.statut === "en_cours" && !ctAPayer(c));
+function ctState(c) {
+  if (c.statut === "en_cours" && ctAPayer(c) > 0) return ["Collectes à payer", "warn"];
+  return CT_STAT[c.statut] || CT_STAT.projet;
+}
+function contratDoc(c) {
+  const f = S.entreprises.find(e => e.id === c.fournisseurId) || { nom: c.fournisseurNom }, svc = ctService(c), cadre = c.type === "cadre";
+  const imput = svc ? (c.demandeId ? `Crédits de la demande ${dossierNo("DM", c.demandeId)} (${svc})` : `Enveloppe ${svc}${cadre ? "" : " · " + periodPlain(c.periode).toLowerCase()}`) : "Trésor de la Préfecture";
+  return {
+    kind: cadre ? "MARCHÉ À PRIX UNITAIRE" : "CONTRAT D’ACHAT", no: ctNo(c), date: c.signeLe ? "Signé le " + longDate(new Date(c.signeLe)) : "Projet du " + longDate(new Date(c.at)),
+    meta: [["Acheteur", svc ? `${svc} (Préfecture de police)` : "Préfecture de police"], ["Fournisseur", `${f.nom}${f.patron ? " · " + f.patron : ""}`], ["Objet", c.objet || CT_CATS[c.categorie] || "—"],
+      ["Paiement sur", imput], cadre ? ["Durée", `${c.debut ? "du " + fmtDate(new Date(c.debut)) : "dès la signature"}${c.fin ? " au " + fmtDate(new Date(c.fin)) : ", sans terme fixé"}`] : ["Livraison", c.livraison ? "constatée le " + fmtDate(new Date(c.livraison.at)) : c.delai || "à convenir"],
+      ["Signé par", c.signeParNom || "—"]],
+    lines: cadre ? [[`Prix par ${c.unite || "prestation"}`, money(c.prixUnitaire)]].concat(c.plafond ? [["Plafond du marché", money(c.plafond)]] : []).concat(c.conditions ? [["Conditions", c.conditions]] : [])
+      : (c.lignes || []).map(l => [`${l.designation}${Number(l.quantite) > 1 ? ` · ${l.quantite} × ${money(l.prixUnitaire)}` : ""}`, money((Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0))]).concat(c.conditions ? [["Conditions", c.conditions]] : []),
+    total: cadre ? [`Prix par ${c.unite || "prestation"}`, money(c.prixUnitaire)] : ["Montant du contrat", money(c.montant)],
+    stamp: { projet: ["PROJET", "muted"], annule: ["ABANDONNÉ", "muted"], paye: ["PAYÉ", "ok"], termine: ["TERMINÉ", "muted"], resilie: ["RÉSILIÉ", "muted"] }[c.statut] || ["SIGNÉ", "accent"],
+    footer: cadre
+      ? `Le fournisseur exécute les prestations à la demande de l’acheteur. Chaque ${c.unite || "prestation"} réalisée est payée au prix ci-dessus par la Préfecture de police, sur ordre de paiement. Le marché peut être résilié en cas de manquement.`
+      : "Le fournisseur livre la commande ci-dessus à l’acheteur. Le paiement intervient après la livraison constatée par la Préfecture de police, sur ordre de paiement. Toute livraison non conforme peut être refusée.",
+    discord: { channel: "entreprises", mentions: [entMention(f), svc ? svcMention(svc) : ""].filter(Boolean), text: `**${cadre ? "Marché" : "Contrat d’achat"} ${ctNo(c)}** · ${ctAcheteur(c)} · ${f.nom} · ${c.objet || CT_CATS[c.categorie] || ""}${cadre ? ` · ${money(c.prixUnitaire)} par ${c.unite || "prestation"}` : " · " + money(c.montant)}` }
+  };
+}
+function paiementDoc(c, p) {
+  const f = S.entreprises.find(e => e.id === c.fournisseurId) || { nom: c.fournisseurNom }, i = (c.paiements || []).indexOf(p) + 1, svc = ctService(c);
+  const lines = p.convocations && p.convocations.length
+    ? p.convocations.map(id => { const v = (S.convocations || []).find(x => x.id === id); return [`${v ? `${convShort(v)} · ${v.entrepriseNom}` : "Collecte"} (${dossierNo("CV", id)})`, money(c.prixUnitaire)]; })
+    : c.type === "cadre" ? [[`${p.quantite || 1} ${c.unite || "prestation"}${Number(p.quantite) > 1 ? "s" : ""} × ${money(c.prixUnitaire)}`, money(p.montant)]] : [[c.objet || "Commande", money(p.montant)]];
+  return {
+    kind: "ORDRE DE PAIEMENT", no: `${ctNo(c)}-${i}`, date: "Payé le " + longDate(new Date(p.at)),
+    meta: [["Bénéficiaire", f.nom], ["Contrat", `${ctNo(c)} · ${c.objet || CT_CATS[c.categorie] || ""}`], ["Imputation", svc ? (c.demandeId ? `Demande ${dossierNo("DM", c.demandeId)}` : `Enveloppe ${svc} · ${periodPlain(p.periode || keyOf(new Date(p.at))).toLowerCase()}`) : "Trésor de la Préfecture"], ["Ordonné par", p.byNom || "Direction"]],
+    lines: lines.concat(p.note ? [["Observation", p.note]] : []),
+    total: ["Somme versée", money(p.montant)],
+    stamp: ["PAYÉ", "ok"],
+    footer: "Somme versée par la Préfecture de police au titre du contrat ci-dessus. Elle entre dans le chiffre d’affaires du bénéficiaire et doit figurer dans sa déclaration de la période.",
+    discord: { channel: "entreprises", mentions: [entMention(f)].filter(Boolean), text: `**Ordre de paiement ${ctNo(c)}-${i}** · ${f.nom} · ${money(p.montant)} au titre du ${c.type === "cadre" ? "marché" : "contrat"} ${ctNo(c)}` }
+  };
+}
+async function saveCt(c, patch, msg) {
+  const latest = ctNow(c.id) || c;
+  const body = Object.assign({}, latest, patch); delete body.id;
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+  const ok = await write(() => S.db.doc("contrats/" + c.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+const ctBusy = new Set();
+async function ctOnce(id, fn) { if (ctBusy.has(id)) return false; ctBusy.add(id); try { return await fn(); } finally { ctBusy.delete(id); } }
+function ctChanged(id, want) {
+  const cur = ctNow(id);
+  if (!cur) { closeDialog(); toast("Ce contrat vient d’être supprimé par un autre agent.", true); return true; }
+  if (want && !want(cur)) { toast("Un autre agent vient de modifier ce contrat : voici son état.", true); openContrat(id); return true; }
+  return false;
+}
+
+// Nouveau contrat, ou modification d'un projet (opts.edit).
+function openContratForm(e, opts) {
+  if (!canAgent()) return;
+  opts = opts || {};
+  const ed = opts.edit ? ctNow(opts.edit.id) || opts.edit : null;
+  const ents = S.entreprises.slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  const four = h("select", {}, h("option", { value: "", text: "— Choisir l’entreprise —" }), ents.map(x => h("option", { value: x.id, text: x.nom })));
+  four.value = ed ? ed.fournisseurId || "" : e ? e.id : opts.categorie === "transport_fonds" && transporteur() ? transporteur().id : "";
+  const svcList = cfg().services.slice(); if (ed && ctService(ed) && !svcList.some(x => norm(x) === norm(ctService(ed)))) svcList.push(ctService(ed));
+  const ach = h("select", {}, h("option", { value: "", text: "Préfecture de police (Trésor)" }), svcList.map(s => h("option", { value: s, text: s })));
+  ach.value = ed ? ctService(ed) : opts.service || "";
+  const type = h("select", {}, Object.entries(CT_TYPES).map(([v, l]) => h("option", { value: v, text: l })));
+  type.value = ed ? ed.type : opts.categorie === "transport_fonds" ? "cadre" : "commande";
+  const cat = h("select", {}, Object.entries(CT_CATS).map(([v, l]) => h("option", { value: v, text: l })));
+  cat.value = ed ? ed.categorie : opts.categorie || "equipement";
+  const objet = h("input", { autocomplete: "off", placeholder: "Ex. : 2 véhicules d’intervention, transport de fonds des collectes" });
+  objet.value = ed ? ed.objet || "" : "";
+  const cond = h("textarea", { rows: "2", placeholder: "Délai de livraison, garantie, pénalités de retard… (facultatif)" });
+  cond.value = ed ? ed.conditions || "" : "";
+  // Commande : lignes
+  const rowsBox = h("div", { class: "ct-lignes" });
+  const totalEl = h("strong", { class: "mono" });
+  const addRow = l => {
+    const d = h("input", { autocomplete: "off", placeholder: "Désignation", "aria-label": "Désignation" }), q = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric", "aria-label": "Quantité" }), pu = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "aria-label": "Prix unitaire", placeholder: "Prix unitaire" });
+    d.value = l ? l.designation || "" : ""; q.value = l ? String(l.quantite || 1) : "1"; pu.value = l && l.prixUnitaire != null ? String(l.prixUnitaire) : "";
+    const rm = h("button", { class: "btn ghost small", type: "button", "aria-label": "Retirer la ligne", text: "Retirer" });
+    const row = h("div", { class: "ct-ligne" }, d, q, h("div", { class: "money", "data-cur": cur() }, pu), rm);
+    rm.addEventListener("click", () => { row.remove(); updTotal(); });
+    [q, pu].forEach(i => i.addEventListener("input", updTotal));
+    rowsBox.append(row);
+  };
+  const lignesOf = () => $$(".ct-ligne", rowsBox).map(r => { const [d, q, pu] = $$("input", r); return { designation: d.value.trim(), quantite: Math.max(0, Math.round(Number(q.value) || 0)), prixUnitaire: Math.max(0, Math.round(Number(pu.value) || 0)) }; }).filter(l => l.designation || l.prixUnitaire);
+  const totalOf = () => lignesOf().reduce((t, l) => t + l.quantite * l.prixUnitaire, 0);
+  const updTotal = () => { totalEl.textContent = money(totalOf()); renderEnv(); };
+  (ed && ed.lignes && ed.lignes.length ? ed.lignes : [null]).forEach(addRow);
+  const commandeBox = h("div", {}, h("div", { class: "ct-head", "aria-hidden": "true" }, h("span", { text: "Désignation" }), h("span", { text: "Quantité" }), h("span", { text: "Prix unitaire" }), h("span", {})), rowsBox,
+    h("div", { class: "paste-row" }, h("button", { class: "btn ghost small", type: "button", onclick: () => addRow(null), text: "Ajouter une ligne" }), h("span", { class: "spacer" }), h("span", { class: "hint", text: "Total" }), totalEl));
+  // Marché : prix unitaire
+  const pu = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" }); pu.value = ed && ed.prixUnitaire != null ? String(ed.prixUnitaire) : "";
+  const unite = h("input", { autocomplete: "off", placeholder: "collecte, intervention…" }); unite.value = ed ? ed.unite || "" : "";
+  const debut = h("input", { type: "date" }), fin = h("input", { type: "date" });
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  debut.value = ed && ed.debut ? ymd(new Date(ed.debut)) : ymd(new Date()); fin.value = ed && ed.fin ? ymd(new Date(ed.fin)) : "";
+  const plafond = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "Facultatif" }); plafond.value = ed && ed.plafond ? String(ed.plafond) : "";
+  const absents = h("input", { type: "checkbox", id: "ct-abs" }); absents.checked = !!(ed && ed.passagesAbsents);
+  const absL = h("label", { class: "switch", for: "ct-abs" }, absents, "Payer aussi les passages où l’entreprise était absente");
+  const cadreBox = h("div", {},
+    h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "ct-pu", text: "Prix unitaire" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(pu, { id: "ct-pu" }))), field("ct-unite", "Unité", unite), h("div", { class: "field" }, h("label", { for: "ct-plaf", text: "Plafond du marché" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(plafond, { id: "ct-plaf" })))),
+    h("div", { class: "row2" }, field("ct-deb", "Début", debut), field("ct-fin", "Fin (facultatif)", fin)), absL);
+  // Imputation (service acheteur)
+  const per = h("select", {}); demPerOptions(per, ed && ed.periode ? ed.periode : null);
+  const dem = h("select", {});
+  const envBox = h("dl", { class: "kv" });
+  const impBox = h("div", {}, h("div", { class: "row2" }, field("ct-per", "Semaine d’imputation", per), field("ct-dem", "Financement", dem)), envBox);
+  const fillDem = () => {
+    const s = ach.value, list = S.demandes.filter(dm => norm(dm.service) === norm(s) && demAccorde(dm) > 0);
+    fill(dem, h("option", { value: "", text: "Enveloppe du service" }), list.map(dm => h("option", { value: dm.id, text: `Demande ${dossierNo("DM", dm.id)} · ${dm.objet || ""} · ${money(demAccorde(dm))} accordés` })));
+    dem.value = ed && ed.demandeId && list.some(dm => dm.id === ed.demandeId) ? ed.demandeId : "";
+  };
+  const renderEnv = () => {
+    const s = ach.value, cadre = type.value === "cadre";
+    if (!s || cadre || dem.value) { fill(envBox); return; }
+    const x = envStats(s, per.value), own = ed && ed.periode === per.value && ctVivant(ed) && !ed.demandeId ? Number(ed.montant) || 0 : 0, reste = x.cap ? x.cap - x.accorde + own - totalOf() : null;
+    fill(envBox, h("dt", { text: `Enveloppe ${s} · ${periodPlain(per.value).toLowerCase()}` }), h("dd", { class: "num", text: x.cap ? `${money(x.cap - x.accorde + own)} disponibles sur ${money(x.cap)}` : "sans plafond" }),
+      reste != null ? h("dt", { text: "Après ce contrat" }) : null, reste != null ? h("dd", { class: "num", style: reste < 0 ? "color:var(--bad)" : null, text: money(reste) }) : null);
+  };
+  const sync = () => {
+    const cadre = type.value === "cadre", tf = cat.value === "transport_fonds";
+    if (tf && type.value !== "cadre") { type.value = "cadre"; return sync(); }
+    commandeBox.hidden = cadre; cadreBox.hidden = !cadre; absL.hidden = !tf;
+    if (tf && !unite.value) unite.value = "collecte";
+    impBox.hidden = !ach.value || cadre; per.closest(".field").hidden = cadre;
+    fillDem(); renderEnv();
+  };
+  [type, cat, ach].forEach(i => i.addEventListener("change", sync)); per.addEventListener("change", renderEnv); dem.addEventListener("change", renderEnv);
+  const resetForce = () => { forceCb.checked = false; forceL.hidden = true; };
+  [type, cat, ach, per, dem].forEach(i => i.addEventListener("change", resetForce)); rowsBox.addEventListener("input", resetForce);
+  sync(); updTotal();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const forceCb = h("input", { type: "checkbox", id: "ct-force" }), forceL = h("div", { class: "err", hidden: true });
+  const save = async signer => {
+    err.textContent = "";
+    const f = S.entreprises.find(x => x.id === four.value);
+    if (!f) { err.textContent = "Choisissez l’entreprise fournisseur."; four.focus(); return; }
+    const cadre = type.value === "cadre", lignes = cadre ? [] : lignesOf(), montant = cadre ? 0 : totalOf();
+    if (!cadre && (!lignes.length || montant <= 0 || lignes.some(l => !l.designation || !l.quantite))) { err.textContent = "Indiquez au moins une ligne complète : désignation, quantité et prix."; return; }
+    if (cadre && !(Number(pu.value) > 0)) { err.textContent = "Indiquez le prix unitaire du marché."; pu.focus(); return; }
+    if (cadre && fin.value && debut.value && fin.value < debut.value) { err.textContent = "La fin du marché précède son début."; fin.focus(); return; }
+    const svc = ach.value;
+    if (signer && svc && !cadre && !dem.value) {
+      const x = envStats(svc, per.value), own = ed && ed.periode === per.value && ctVivant(ed) && !ed.demandeId ? Number(ed.montant) || 0 : 0, over = x.accorde - own + montant - (x.cap || 0);
+      if (x.cap && over > 0 && !forceCb.checked) {
+        fill(forceL, `L’enveloppe ${svc} de ${perNom(per.value)} serait dépassée de ${money(over)}. `, h("label", { class: "switch", for: "ct-force" }, forceCb, "Signer quand même"));
+        forceL.hidden = false; return;
+      }
+    }
+    if (dem.value) { const dm = S.demandes.find(d => d.id === dem.value); const used = (S.contrats || []).filter(c => c.demandeId === dem.value && ctVivant(c) && c.statut !== "resilie" && (!ed || c.id !== ed.id)).reduce((t, c) => t + (Number(c.montant) || 0), 0); if (dm && !cadre && used + montant > demAccorde(dm)) { err.textContent = `La demande ${dossierNo("DM", dm.id)} n’a plus que ${money(demAccorde(dm) - used)} de crédits disponibles.`; return; } }
+    if (ed && ctChanged(ed.id, x => x.statut === "projet")) return;
+    const body = {
+      fournisseurId: f.id, fournisseurNom: f.nom, acheteur: svc ? { type: "service", service: svc } : { type: "tresor" }, type: type.value, categorie: cat.value, objet: objet.value.trim(), conditions: cond.value.trim(),
+      lignes, montant, prixUnitaire: cadre ? Math.round(Number(pu.value)) : null, unite: cadre ? unite.value.trim() || "prestation" : "", plafond: cadre && Number(plafond.value) > 0 ? Math.round(Number(plafond.value)) : null,
+      debut: cadre && debut.value ? new Date(debut.value + "T00:00").toISOString() : null, fin: cadre && fin.value ? new Date(fin.value + "T00:00").toISOString() : null, passagesAbsents: cadre && cat.value === "transport_fonds" && absents.checked,
+      periode: svc && !cadre && !dem.value ? per.value : null, demandeId: svc && !cadre && dem.value ? dem.value : null,
+      statut: signer ? (cadre ? "en_cours" : "signe") : "projet", paiements: ed ? ed.paiements || [] : [],
+      at: ed ? ed.at : nowISO(), by: ed ? ed.by : S.uid || null, byNom: ed ? ed.byNom : S.agentName || ""
+    };
+    if (signer) Object.assign(body, { signeLe: nowISO(), signeParNom: S.agentName || "" });
+    const ref = ed ? S.db.doc("contrats/" + ed.id) : S.db.collection("contrats").doc();
+    if (!(await write(() => ref.set(body)))) return;
+    const id = ed ? ed.id : ref.id, c = Object.assign({ id }, body);
+    toast(signer ? `${cadre ? "Marché" : "Contrat"} ${ctNo(c)} signé.` : `Projet ${ctNo(c)} enregistré.`);
+    if (signer) { autoPublish("contrats", contratDoc(c), "Contrat publié."); showDocImage(contratDoc(c), () => openContrat(id)); }
+    else openContrat(id);
+  };
+  openDialog({
+    eyebrow: ed ? `Projet ${ctNo(ed)}` : "Contrats d’achat", title: ed ? "Modifier le projet" : "Nouveau contrat", wide: true,
+    body: [
+      h("div", { class: "row3" }, field("ct-four", "Fournisseur", four), field("ct-ach", "Acheteur", ach), field("ct-type", "Type", type)),
+      h("div", { class: "row2" }, field("ct-cat", "Catégorie", cat), field("ct-obj", "Objet", objet)),
+      commandeBox, cadreBox, impBox, field("ct-cond", "Conditions", cond), forceL,
+      h("p", { class: "hint", style: "margin:0", text: writer() ? "Signé, le contrat part sur Discord et engage l’acheteur. Une commande pour un service est imputée sur son enveloppe dès la signature ; le paiement suit la livraison." : "L’Inspection prépare le projet ; la Direction le signe, constate la livraison et paie." }),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => ed ? openContrat(ed.id) : closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }),
+      h("button", { class: writer() ? "btn ghost small" : "btn ink small", type: "button", onclick: () => save(false), text: "Enregistrer le projet" }),
+      writer() ? h("button", { class: "btn ink small", type: "button", onclick: () => save(true), text: "Signer le contrat" }) : null].filter(Boolean)
+  });
+}
+
+function openContrat(id) {
+  const c = ctNow(id);
+  if (!c) return;
+  const dir = writer(), ag = canAgent(), reopen = () => openContrat(id), cadre = c.type === "cadre", svc = ctService(c);
+  const f = S.entreprises.find(e => e.id === c.fournisseurId) || null;
+  const col = ctCollectes(c), aPayer = ctAPayer(c), paye = ctPaye(c);
+  const body = [
+    kv([["Fournisseur", f ? h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(f), text: f.nom }) : c.fournisseurNom], ["Acheteur", ctAcheteur(c)],
+      ["Type", `${CT_TYPES[c.type] || "Contrat"} · ${CT_CATS[c.categorie] || ""}`], c.objet ? ["Objet", c.objet] : null,
+      svc ? ["Paiement sur", c.demandeId ? `crédits de la demande ${dossierNo("DM", c.demandeId)}` : cadre ? `enveloppe ${svc}, semaine de chaque paiement` : `enveloppe ${svc} · ${periodPlain(c.periode).toLowerCase()}`] : ["Paiement sur", "Trésor de la Préfecture"],
+      cadre ? ["Prix", `${money(c.prixUnitaire)} par ${c.unite || "prestation"}${c.plafond ? ` · plafond ${money(c.plafond)}` : ""}`] : ["Montant", money(c.montant)],
+      cadre ? ["Durée", `${c.debut ? "du " + fmtDate(new Date(c.debut)) : "dès la signature"}${c.fin ? " au " + fmtDate(new Date(c.fin)) : ", sans terme"}`] : null,
+      ["Préparé par", `${c.byNom || "—"} le ${fmtDate(new Date(c.at))}`], c.signeLe ? ["Signé par", `${c.signeParNom || "—"} le ${fmtDate(new Date(c.signeLe))}`] : null,
+      c.livraison ? ["Livraison", `constatée le ${fmtDateTime(new Date(c.livraison.at))} par ${c.livraison.byNom || "—"}${c.livraison.note ? " · " + c.livraison.note : ""}`] : null,
+      c.resiliation ? [c.resiliation.livraisonRefusee ? "Livraison refusée" : "Résiliation", `${fmtDate(new Date(c.resiliation.at))} · ${c.resiliation.motif || ""}`] : null,
+      ["Payé", money(paye), "tot"], aPayer ? ["Reste à payer", money(aPayer), "tot"] : null]),
+    !cadre && (c.lignes || []).length ? sec("Lignes", h("ul", { class: "access" }, c.lignes.map(l => h("li", { text: `${l.designation} · ${l.quantite} × ${money(l.prixUnitaire)} = ${money(l.quantite * l.prixUnitaire)}` })))) : null,
+    c.conditions ? sec("Conditions", h("p", { class: "prewrap", style: "margin:0", text: c.conditions })) : null,
+    c.categorie === "transport_fonds" ? sec(`Collectes faites · ${col.faites.length}`, col.faites.length ? h("ul", { class: "access" }, col.faites.slice(-30).map(v => h("li", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(v.id), text: `${convShort(v)} · ${v.entrepriseNom}` }), ` · ${v.statut === "absente" ? "passage sans collecte" : money(v.collecte ? v.collecte.montant : 0) + " collectés"} · ${col.aPayer.includes(v) ? "à payer" : "payée"}`)))
+      : h("p", { class: "muted", style: "margin:0", text: "Aucune collecte encaissée depuis le début du marché." })) : null,
+    (c.paiements || []).length ? sec("Paiements", h("ul", { class: "ent-list" }, c.paiements.map((p, i) => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${ctNo(c)}-${i + 1} · ${money(p.montant)}` }), h("span", { class: "meta", text: `${fmtDateTime(new Date(p.at))} · ${p.byNom || ""}${p.note ? " · " + p.note : ""}` })), h("span", {}),
+      h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(paiementDoc(c, p), reopen), text: "Ordre de paiement" })))))) : null
+  ];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(contratDoc(c), reopen), text: cadre ? "Marché en image" : "Contrat en image" }), h("span", { class: "spacer" })];
+  if (c.statut === "projet") {
+    if (ag) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => ctAbandon(c), text: "Abandonner" }));
+    if (ag) foot.push(h("button", { class: dir ? "btn ghost small" : "btn ink small", type: "button", onclick: () => openContratForm(null, { edit: c }), text: dir ? "Modifier ou signer" : "Modifier" }));
+  }
+  if (dir && ctResiliable(c)) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => ctResilier(c), text: c.statut === "livre" ? "Refuser la livraison" : "Résilier" }));
+  if (dir && c.statut === "en_cours") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => ctClore(c), text: "Clore le marché" }));
+  if (dir && c.statut === "signe") foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => ctLivraison(c), text: "Constater la livraison" }));
+  if (dir && c.statut === "livre") foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => ctPayer(c), text: `Payer ${money(aPayer)}` }));
+  if (dir && c.statut === "en_cours" && (c.categorie !== "transport_fonds" || aPayer > 0)) foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => ctPayer(c), text: c.categorie === "transport_fonds" ? `Payer les collectes (${money(aPayer)})` : "Payer des prestations" }));
+  openDialog({ eyebrow: `${CT_TYPES[c.type] || "Contrat"} ${ctNo(c)}`, title: `${c.fournisseurNom} · ${ctAcheteur(c)}`, wide: true, stampEl: stamp(ctState(c)), body, foot });
+}
+function ctAbandon(c) {
+  if (ctChanged(c.id, x => x.statut === "projet")) return;
+  openDialog({ eyebrow: `Projet ${ctNo(c)}`, title: "Abandonner le projet ?", body: [h("p", { style: "margin:0", text: "Le projet reste dans l’historique, marqué « abandonné ». Rien n’a été engagé." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => { const btn = ev.currentTarget; btn.disabled = true; if (await saveCt(c, { statut: "annule" }, "Projet abandonné.")) openContrat(c.id); else btn.disabled = false; }, text: "Abandonner" })] });
+}
+function ctResilier(c) {
+  const motif = h("textarea", { rows: "2", placeholder: "Ex. : livraison jamais faite, prix non respecté" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const marche = c.statut === "en_cours", liv = c.statut === "livre";
+  openDialog({ eyebrow: `${CT_TYPES[c.type]} ${ctNo(c)}`, title: liv ? "Refuser la livraison" : "Résilier",
+    body: [h("p", { style: "margin:0", text: marche ? (ctPaye(c) ? "Les prestations déjà payées restent acquises ; plus rien ne sera payé sur ce marché." : "Plus rien ne sera payé sur ce marché.") : `Rien n’a été payé : le contrat est résilié${ctService(c) && !c.demandeId ? " et l’enveloppe du service libérée" : ""}.` }), field("ct-res", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+        if (ctChanged(c.id, ctResiliable)) return;
+        const btn = ev.currentTarget; btn.disabled = true;
+        if (await saveCt(c, { statut: "resilie", resiliation: { at: nowISO(), motif: motif.value.trim(), byNom: S.agentName || "", livraisonRefusee: liv } }, liv ? "Livraison refusée, contrat résilié." : "Contrat résilié.")) openContrat(c.id); else btn.disabled = false;
+      }, text: liv ? "Refuser la livraison" : "Résilier" })] });
+}
+async function ctClore(c) {
+  if (ctChanged(c.id, x => x.statut === "en_cours")) return;
+  if (ctAPayer(c) > 0) { toast("Payez d’abord les collectes faites, puis clôturez le marché.", true); return; }
+  if (ctCollectes(c).horsPlafond) toast("Les collectes au-delà du plafond ne seront pas payées sur ce marché.", true);
+  if (await saveCt(c, { statut: "termine", termineLe: nowISO() }, "Marché clos.")) openContrat(c.id);
+}
+function ctLivraison(c) {
+  const note = h("textarea", { rows: "2", placeholder: "Ex. : 2 véhicules remis au commissariat, conformes" });
+  const pay = h("input", { type: "checkbox", id: "ct-pay" }); pay.checked = true;
+  openDialog({ eyebrow: `Contrat ${ctNo(c)}`, title: "Constater la livraison", body: [field("ct-liv", "Observation", note), h("label", { class: "switch", for: "ct-pay" }, pay, `Payer aussitôt ${money(c.montant)}`)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ink small", type: "button", onclick: async ev => {
+        if (ctChanged(c.id, x => x.statut === "signe")) return;
+        const btn = ev.currentTarget; btn.disabled = true;
+        if (!(await saveCt(c, { statut: "livre", livraison: { at: nowISO(), note: note.value.trim(), byNom: S.agentName || "" } }, "Livraison constatée."))) { btn.disabled = false; return; }
+        if (pay.checked) ctPayer(ctNow(c.id) || c); else openContrat(c.id);
+      }, text: "Constater la livraison" })] });
+}
+// Paiement : le Trésor doit pouvoir le couvrir (sauf achat financé par une demande déjà accordée).
+// Chaque paiement est ajouté à la liste, jamais remplacé : deux paiements simultanés, le second est arrêté.
+function ctPayer(c) {
+  c = ctNow(c.id) || c;
+  const cadre = c.type === "cadre", tf = c.categorie === "transport_fonds", col = ctCollectes(c);
+  const qte = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric" }); qte.value = "1";
+  const note = h("input", { autocomplete: "off", placeholder: "Facultatif" });
+  const montantOf = () => !cadre ? ctAPayer(c) : tf ? col.payables.length * (Number(c.prixUnitaire) || 0) : Math.max(0, Math.round(Number(qte.value) || 0)) * (Number(c.prixUnitaire) || 0);
+  const totalEl = h("strong", { class: "mono" }); const upd = () => { totalEl.textContent = money(montantOf()); }; qte.addEventListener("input", upd); upd();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const forceP = h("input", { type: "checkbox", id: "ct-forcep" }), forceL = h("div", { class: "err", hidden: true });
+  qte.addEventListener("input", () => { forceP.checked = false; forceL.hidden = true; });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Payer" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const m = montantOf();
+    if (!(m > 0)) { err.textContent = "Rien à payer."; return; }
+    if (ctChanged(c.id, x => x.statut === c.statut && (x.paiements || []).length === (c.paiements || []).length)) return;
+    if (cadre && c.plafond && ctPaye(c) + m > c.plafond) { err.textContent = `Le plafond du marché (${money(c.plafond)}) serait dépassé : il reste ${money(Math.max(0, c.plafond - ctPaye(c)))}.`; return; }
+    const svcP = ctService(c), wkP = keyOf(new Date());
+    if (cadre && svcP && !c.demandeId) { const x = envStats(svcP, wkP), over = x.accorde + m - (x.cap || 0); if (x.cap && over > 0 && !forceP.checked) { fill(forceL, `L’enveloppe ${svcP} de ${perNom(wkP)} serait dépassée de ${money(over)}. `, h("label", { class: "switch", for: "ct-forcep" }, forceP, "Payer quand même")); forceL.hidden = false; return; } }
+    if (!c.demandeId && m > treasury().solde) { err.textContent = `Le Trésor ne dispose que de ${money(treasury().solde)}.`; return; }
+    go.disabled = true;
+    const ok = await ctOnce(c.id, async () => {
+      const cur = ctNow(c.id) || c, at = nowISO();
+      const p = { at, montant: m, periode: keyOf(new Date(at)), byNom: S.agentName || "", note: note.value.trim() };
+      if (tf && cadre) p.convocations = col.payables.map(v => v.id);
+      else if (cadre) p.quantite = Math.max(1, Math.round(Number(qte.value) || 1));
+      const patch = { paiements: (cur.paiements || []).concat([p]) };
+      if (!cadre) patch.statut = "paye";
+      if (!(await saveCt(cur, patch, `Paiement de ${money(m)} enregistré.`))) return false;
+      const c2 = ctNow(c.id); if (c2) autoPublish("contrats", paiementDoc(c2, c2.paiements[c2.paiements.length - 1]), "Ordre de paiement publié.");
+      return true;
+    });
+    if (!ok) { go.disabled = false; return; }
+    const c3 = ctNow(c.id); if (c3) showDocImage(paiementDoc(c3, c3.paiements[c3.paiements.length - 1]), () => openContrat(c.id)); else openContrat(c.id);
+  });
+  openDialog({ eyebrow: `${CT_TYPES[c.type]} ${ctNo(c)} · ${c.fournisseurNom}`, title: "Payer",
+    body: [
+      tf && cadre ? (col.payables.length ? sec(`${col.payables.length} collecte${plural(col.payables.length)} à payer`, h("ul", { class: "access" }, col.payables.map(v => h("li", { text: `${convShort(v)} · ${v.entrepriseNom} · ${dossierNo("CV", v.id)}` }))))
+        : h("p", { class: "hint", style: "margin:0", text: "Aucune collecte encaissée à payer pour l’instant." })) : null,
+      tf && col.horsPlafond ? h("p", { class: "hint", style: "margin:0", text: `${col.horsPlafond} collecte${plural(col.horsPlafond)} dépasse${col.horsPlafond > 1 ? "nt" : ""} le plafond du marché : elle${col.horsPlafond > 1 ? "s" : ""} ne peu${col.horsPlafond > 1 ? "vent" : "t"} pas être payée${plural(col.horsPlafond)} sur ce marché.` }) : null,
+      cadre && !tf ? field("ct-qte", `Nombre ${/^[aeiouyhéèê]/i.test(c.unite || "prestation") ? "d’" : "de "}${c.unite || "prestation"}s à payer`, qte) : null,
+      field("ct-note", "Observation", note),
+      forceL,
+      kv([["Somme versée", totalEl, "tot"], ["Payé sur", c.demandeId ? `crédits de la demande ${dossierNo("DM", c.demandeId)}` : ctService(c) ? `Trésor, imputé sur l’enveloppe ${ctService(c)}` : "Trésor de la Préfecture"], c.demandeId ? null : ["Trésor disponible", money(treasury().solde)]]),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+
+// Onglet Contrats.
+function renderContrats() {
+  if (S.tab !== "contrats") return;
+  const box = $("#ct-list");
+  if (!S.connected || !S.loaded.has("contrats")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.contrats || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const wk = keyOf(new Date());
+  const projets = all.filter(c => c.statut === "projet"), cours = all.filter(c => ["signe", "livre", "en_cours"].includes(c.statut)), apayer = all.filter(c => ctAPayer(c) > 0), payes = all.filter(c => ["paye", "termine"].includes(c.statut));
+  const payeWk = all.flatMap(c => (c.paiements || []).filter(p => (p.periode || keyOf(new Date(p.at))) === wk)).reduce((t, p) => t + (Number(p.montant) || 0), 0);
+  const engage = all.filter(c => c.type === "commande" && ["signe", "livre"].includes(c.statut)).reduce((t, c) => t + Math.max(0, (Number(c.montant) || 0) - ctPaye(c)), 0);
+  setKpi("tk-projets", String(projets.length), projets.length ? "à signer" : "aucun projet", projets.length ? "warn" : "");
+  setKpi("tk-cours", String(cours.length), `${money(engage)} engagés, pas encore payés`, "");
+  setKpi("tk-apayer", money(apayer.reduce((t, c) => t + ctAPayer(c), 0)), `${apayer.length} contrat${plural(apayer.length)} livré${plural(apayer.length)} ou collectes faites`, apayer.length ? "warn" : "");
+  setKpi("tk-paye", money(payeWk), "payés cette semaine", payeWk ? "ok" : "");
+  const F = { cours, projets, apayer, payes, tout: all };
+  const f = F[S.ctFilter] ? S.ctFilter : "cours";
+  setSegCounts($("#seg-ct"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), f);
+  $("#ct-new").hidden = !canAgent(); $("#ct-tf").hidden = !writer() || all.some(c => c.categorie === "transport_fonds" && ["en_cours", "projet"].includes(c.statut));
+  const list = F[f];
+  fill(box, list.length ? h("ul", { class: "ent-list" }, list.slice(0, 300).map(c => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openContrat(c.id), text: `${ctNo(c)} · ${c.fournisseurNom}` }),
+      h("span", { class: "meta", text: `${ctAcheteur(c)} · ${c.objet || CT_CATS[c.categorie] || ""} · ${c.type === "cadre" ? money(c.prixUnitaire) + " par " + (c.unite || "prestation") : money(c.montant)}` })),
+    chip(ctState(c)),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Ouvrir" })))))
+    : h("div", { class: "empty", text: { cours: "Aucun contrat en cours.", projets: "Aucun projet à signer.", apayer: "Rien à payer.", payes: "Aucun contrat payé pour l’instant.", tout: "Aucun contrat pour l’instant." }[f] }));
+}
+// Fiche de l'entreprise : contrats dont elle est le fournisseur.
+function contratsSection(e) {
+  const cs = e.id ? ctsOf(e) : [];
+  if (!cs.length && !canAgent()) return null;
+  const recu = cs.reduce((t, c) => t + ctPaye(c), 0);
+  return sec("Contrats avec la Préfecture" + (recu ? ` · ${money(recu)} reçus` : ""),
+    cs.length ? h("ul", { class: "ent-list" }, cs.slice(0, 8).map(c => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openContrat(c.id), text: `${ctNo(c)} · ${c.objet || CT_CATS[c.categorie] || ""}` }), h("span", { class: "meta", text: `${ctAcheteur(c)} · ${c.type === "cadre" ? money(c.prixUnitaire) + " par " + (c.unite || "prestation") : money(c.montant)}` })),
+      chip(ctState(c)), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucun contrat." }),
+    canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openContratForm(e), text: "Nouveau contrat" }) : null);
+}
+
 /* ---------- Clôture des semaines ---------- */
 // Une période clôturée est verrouillée par la base (supabase/v4_inspection_cloture.sql) :
 // plus de déclaration ajoutée, modifiée ou supprimée, plus de changement de montant d'avis.
@@ -6664,7 +7122,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -8364,6 +8822,9 @@ function renderPrets() {
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openPret(p.id), text: "Ouvrir" })))))
     : h("div", { class: "empty", text: { cours: "Aucun prêt en cours.", dem: "Aucune demande de prêt en attente.", retard: "Aucun prêt en retard.", rembourse: "Aucun prêt remboursé pour l’instant.", tout: "Aucun prêt pour l’instant." }[S.pretFilter || "cours"] }));
 }
+$("#seg-ct").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.ctFilter = b.dataset.f; renderContrats(); });
+$("#ct-new").addEventListener("click", () => openContratForm(null));
+$("#ct-tf").addEventListener("click", () => openContratForm(transporteur(), { categorie: "transport_fonds" }));
 $("#seg-conv").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.convFilter = b.dataset.f; renderConvocations(); });
 $("#conv-new").addEventListener("click", () => openConvForm(null));
 $("#conv-tour").addEventListener("click", () => openTournee());
@@ -9382,9 +9843,10 @@ const NOTIF_TYPES = [
   ["controle", "Contrôle fiscal", "Réponse d’une entreprise, proposition notifiée, mise en recouvrement, classement."],
   ["vehicule", "Véhicules de société", "Contrôle de police défavorable, véhicule non déclaré ou requalifié."],
   ["convocation", "Convocations", "Absence à sanctionner, collecte à encaisser, rendez-vous de l’heure à venir."],
+  ["contrat", "Contrats d’achat", "Un projet de contrat attend la signature de la Direction."],
   ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt (vérifié chaque heure)."]
 ];
-const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "delais"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais"], lecture: ["delais"] };
+const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "contrat", "delais"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais"], lecture: ["delais"] };
 const notifUrl = () => String((window.GUICHET_CONFIG || {}).supabaseUrl || "").replace(/\/$/, "") + "/functions/v1/notifier";
 const notifSupport = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 function appareilNom() {
@@ -9490,7 +9952,7 @@ function ouvrirDossier(spec) {
   const [, col, id] = m, need = col === "penalites" ? "penalites" : col === "decisions" ? "declarations" : col;
   if (!S.connected || !S.loaded.has(need)) { S.pendingOpen = spec; return false; }
   S.pendingOpen = null;
-  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations" }[col] || "dashboard";
+  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations", contrats: "contrats" }[col] || "dashboard";
   showTab(tab);
   try { history.replaceState(null, "", "#" + tab); } catch (e) { /* sans historique */ }
   if (col === "declarations" || col === "decisions") { if (S.declarations.some(d => d.id === id)) { openDecl(id); return true; } }
@@ -9499,6 +9961,7 @@ function ouvrirDossier(spec) {
   else if (col === "controles") { if (S.controles.some(d => d.id === id)) { openControle(id); return true; } }
   else if (col === "vehicules") { if ((S.vehicules || []).some(d => d.id === id)) { openVeh(id); return true; } }
   else if (col === "convocations") { if ((S.convocations || []).some(d => d.id === id)) { openConv(id); return true; } }
+  else if (col === "contrats") { if ((S.contrats || []).some(d => d.id === id)) { openContrat(id); return true; } }
   else if (col === "penalites") { const p = S.penalites.find(d => d.id === id); if (p) { openFiche(entOf(p)); return true; } }
   toast("Ce dossier n’existe plus.", true);
   return false;
@@ -9601,6 +10064,8 @@ openSaisieDetail = liveView(openSaisieDetail, id => { const s = S.saisies.find(x
   match: c => c.path === "saisies/" + id || entMatch(s.entrepriseId)(c), reopen: () => S.saisies.some(x => x.id === id) ? openSaisieDetail(id) : gone() } : null; });
 openTransmission = liveView(openTransmission, id => { const t = S.transmissions.find(x => x.id === id); return t ? { key: "tj:" + id, label: `Justice ${dossierNo("TJ", id)} · ${t.entrepriseNom}`,
   match: c => c.path === "transmissions/" + id || entMatch(t.entrepriseId)(c), reopen: () => S.transmissions.some(x => x.id === id) ? openTransmission(id) : gone() } : null; });
+openContrat = liveView(openContrat, id => { const c = ctNow(id); return c ? { key: "ct:" + id, label: `Contrat ${ctNo(c)} · ${c.fournisseurNom}`,
+  match: x => x.path === "contrats/" + id || x.path.startsWith("convocations/") || entMatch(c.fournisseurId)(x), reopen: () => ctNow(id) ? openContrat(id) : gone() } : null; });
 openConv = liveView(openConv, id => { const c = convNow(id); return c ? { key: "conv:" + id, label: `Convocation ${convNo(c)} · ${c.entrepriseNom}`,
   match: x => x.path === "convocations/" + id || entMatch(c.entrepriseId)(x), reopen: () => convNow(id) ? openConv(id) : gone() } : null; });
 openPret = liveView(openPret, id => { const p = (S.prets || []).find(x => x.id === id); return p ? { key: "pret:" + id, label: `Prêt ${pretNo(p)} · ${p.entrepriseNom}`,
@@ -9843,6 +10308,7 @@ function searchIndex() {
   for (const a of S.attestations) push("Attestation", dossierNo("AT", a.id), `${dossierNo("AT", a.id)} · ${a.entrepriseNom}`, (a.revoqueeLe ? `Révoquée le ${longDate(new Date(a.revoqueeLe))}` : `${attState(a)[0]} · jusqu’au ${longDate(new Date(a.validUntil))}`), "", () => showDocImage(attestationDoc(a)), a.at);
   for (const r of S.relances) push(isMed(r) ? "Mise en demeure" : "Relance", rlNo(r), `${rlNo(r)} · ${r.entrepriseNom}`, `${rlLabel(r)} · envoyée le ${fmtDate(new Date(r.at))}`, "", () => showDocImage(relanceDoc(r)), r.at);
   for (const s of S.saisies) push("Saisie", dossierNo("SA", s.id), `${dossierNo("SA", s.id)} · ${s.entrepriseNom}`, `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)} · ${(SSTAT[s.statut] || SSTAT.notifiee)[0]}`, s.tiers, () => openSaisieDetail(s.id), s.at);
+  for (const c of S.contrats || []) push("Contrat", ctNo(c), `${ctNo(c)} · ${c.fournisseurNom}`, `${ctState(c)[0]} · ${ctAcheteur(c)} · ${c.type === "cadre" ? money(c.prixUnitaire) + " par " + (c.unite || "prestation") : money(c.montant)}`, `${c.objet || ""} ${CT_CATS[c.categorie] || ""}`, () => openContrat(c.id), c.at);
   for (const c of S.convocations || []) push("Convocation", convNo(c), `${convNo(c)} · ${c.entrepriseNom}`, `${convMotif(c)} · ${convWhen(c)} · ${convState(c)[0]}`, c.lieu || "", () => openConv(c.id), c.at);
   for (const p of S.prets || []) push("Prêt", pretNo(p), `${pretNo(p)} · ${p.entrepriseNom}`, `${(pretState(p))[0]} · ${money(p.montant)}${pretVerse(p) ? " · reste " + money(pretReste(p)) : ""}`, [PRET_OBJETS[p.objet], p.precision].join(" "), () => openPret(p.id), p.at || p.demandeLe);
   for (const v of S.vehicules || []) push("Véhicule", normPlaque(v.plaque), `${v.plaque} · ${v.modele || "Véhicule"}`, `${v.entrepriseNom} · ${vehState(v)[0]} · ${vehNo(v)}`, [vehNo(v), vehCat(v)[0], (v.conducteurs || []).join(" "), v.concession].join(" "), () => openVeh(v.id), v.achatLe || v.createdAt);
@@ -9983,7 +10449,7 @@ function showTab(name) {
   S.tab = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats"].includes(name)) schedule();
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
   const rail = $("nav.tabs .wrap"), cur = $(`.tab[data-tab="${name}"]`);
   if (rail && cur && rail.scrollWidth > rail.clientWidth) {
@@ -10016,7 +10482,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "convocations", "prets", "vehicules", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "prets", "vehicules", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();
