@@ -30,6 +30,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v10_notifications.sql` : les abonnements aux notifications et l’appel du service d’envoi
 - `supabase/v11_convocations.sql` : les convocations (droits de l’Inspection, verrou contre les décisions prises deux fois)
 - `supabase/v12_contrats.sql` : les contrats d’achat (projets de l’Inspection, contrat signé figé, paiements jamais effacés)
+- `supabase/v13_conventions.sql` : les conventions de partenariat et les prestations offertes (l’Inspection note, la Direction valide)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
@@ -50,7 +51,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations) et `supabase/v12_contrats.sql` (contrats d’achat). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat) et `supabase/v13_conventions.sql` (conventions de partenariat). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -155,7 +156,7 @@ Une entreprise est attendue à partir du début du suivi, ou de son **début d�
 
 ## Suivi dans Google Sheets
 
-La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société, les contrôles de police, les convocations, les contrats d’achat et leurs paiements. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
+La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société, les contrôles de police, les convocations, les contrats d’achat et leurs paiements, les conventions de partenariat et les prestations offertes. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
@@ -285,6 +286,16 @@ Les sommes versées sont déduites du solde du Trésor et comptées dans le suiv
 
 L’Inspection prépare et modifie des projets, et peut les abandonner ; signer, constater une livraison, payer, résilier et clore un marché sont réservés à la Direction. La base l’impose elle-même (`supabase/v12_contrats.sql`) : un contrat signé ne se modifie plus et ne se supprime plus, un paiement enregistré n’est jamais réécrit ni effacé, deux paiements simultanés ne s’écrasent pas, et l’état d’un contrat n’avance que dans un sens. Pour changer un contrat signé, résiliez-le et faites-en un nouveau.
 
+## Conventions de partenariat
+
+Onglet **Contrats**, partie **Conventions de partenariat**, ou la fiche de l’entreprise. Une entreprise (dépanneur, garage, restaurant…) s’engage à servir les services publics gratuitement ou à prix réduit pendant une durée.
+
+1. **La convention** : l’entreprise, la personne qui signe pour elle, les services publics bénéficiaires (tous ou certains), les avantages (gratuit, remise en %, prix fixe), le début, la fin et des conditions libres. L’Inspection prépare le projet, la Direction le signe : la convention part sur Discord. À son terme, **Renouveler** prépare la suivante.
+2. **Les prestations offertes** : **Noter une prestation** enregistre le service servi, la date, le prix normal et ce que le service a payé (calculé d’après l’avantage choisi). Notée par l’Inspection, elle attend la validation de la Direction (partie « Prestations à valider », bouton **Tout valider**) ; notée par la Direction, elle est validée d’office. Une prestation hors de la durée de la convention, ou après sa résiliation, est refusée.
+3. **La réduction d’impôt** : sur le modèle du mécénat en nature, l’entreprise déduit de son impôt 60 % de la valeur offerte (taux figé dans la convention à la signature). La réduction s’applique d’elle-même à ses déclarations, sur l’impôt seulement, sans dépasser l’impôt de la période ni le plafond par période (20 000 € par défaut) ; le reste est reporté. Elle figure sur l’aperçu du calcul, l’avis et Discord. Une prestation ne réduit pas l’impôt d’une période qui la précède. Si une prestation déjà déduite est annulée, la réduction correspondante est reprise (ajoutée à l’impôt) sur la prochaine déclaration de l’entreprise ; une déclaration remise à valider ou une rectificative qui remplace l’ancienne voit sa réduction recalculée. Pas de réduction sur une imposition d’office. Réglages → Avantages fiscaux : taux, plafond, ou désactiver la réduction.
+
+Discord : cochez « Conventions de partenariat signées » dans la publication automatique. La base protège les conventions (`supabase/v13_conventions.sql`) : une convention signée ne se modifie plus et ne se supprime plus, une prestation validée garde ses montants et ne se supprime pas (on l’annule, avec un motif), et les états n’avancent que dans un sens.
+
 ## Cohérence des dossiers
 
 - **Attestation de régularité** : une somme encore dans son délai de paiement ne l’empêche pas (comme dans la réalité), mais elle y figure comme « pas encore payée », avec sa date limite.
@@ -325,13 +336,13 @@ La présence, le journal en direct et le remplacement d’une déclaration par u
 
 ## Notifications sur téléphone et ordinateur
 
-Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), convocations (absence à sanctionner, collecte à encaisser), contrats d’achat (projet à signer), délais (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, rendez-vous de l’heure à venir, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
+Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), convocations (absence à sanctionner, collecte à encaisser), contrats et partenariats (projet de contrat ou de convention à signer, prestation offerte à valider), délais (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, rendez-vous de l’heure à venir, conventions arrivées à terme, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
 
 Sur iPhone et iPad (iOS 16.4 ou plus récent), installez d’abord le guichet sur l’écran d’accueil (Safari → Partager → « Sur l’écran d’accueil ») et ouvrez-le depuis son icône : Apple ne permet les notifications qu’aux applications installées. Sur Android et sur ordinateur, Chrome, Edge, Firefox et Safari les reçoivent directement.
 
 Mise en place, une seule fois :
 
-1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais. `supabase/v11_convocations.sql` y ajoute les convocations, `supabase/v12_contrats.sql` les contrats.
+1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais. `supabase/v11_convocations.sql` y ajoute les convocations, `supabase/v12_contrats.sql` les contrats, `supabase/v13_conventions.sql` les conventions.
 2. Dans Supabase, **Edge Functions → Deploy a new function → Via Editor** : nommez-la `notifier`, collez `supabase/functions/notifier/index.ts` puis ajoutez le fichier `regles.ts` du même dossier, et déployez. Dans les réglages de la fonction, désactivez **Verify JWT** (la base s’authentifie avec sa propre clé). Après une mise à jour de ces deux fichiers (comme celles des convocations et des contrats), ouvrez la fonction `notifier` → **Code**, remplacez leur contenu et redéployez.
 3. Dans le guichet, cloche du bandeau → **Activer sur cet appareil** → **Envoyer un essai**.
 

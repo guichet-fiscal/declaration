@@ -66,6 +66,13 @@ export function evenement(e, ctx) {
         return { type: "contrat", title: "Projet de contrat à signer", body: `${n.fournisseurNom || "Fournisseur"} · ${pour} · ${n.objet ? n.objet + " · " : ""}${prix}`, url: `#ouvrir=contrats/${id}`, tag: "ct-" + id };
       }
       return null;
+    case "conventions":
+      if (ins && n.statut === "projet" && recent(n.at, 2)) return { type: "contrat", title: "Projet de convention à signer", body: `${n.entrepriseNom || "Entreprise"} · ${n.services && n.services.length ? n.services.join(", ") : "tous les services publics"}${n.objet ? " · " + n.objet : ""}`, url: `#ouvrir=conventions/${id}`, tag: "cp-" + id };
+      return null;
+    case "prestations":
+      // Notée par l'Inspection, la prestation attend la validation de la Direction.
+      if (ins && n.statut === "a_valider" && recent(n.at, 2)) return { type: "contrat", title: "Prestation offerte à valider", body: `${n.entrepriseNom || "Entreprise"} · ${n.service || "service public"}${n.objet ? " · " + n.objet : ""} · ${money(Math.max(0, (Number(n.valeur) || 0) - (Number(n.paye) || 0)))} offerts`, url: `#ouvrir=prestations/${id}`, tag: "ps-" + id };
+      return null;
     case "vehicules": {
       const nc = n.constats || [], oc = b.constats || [];
       if (nc.length > oc.length) {
@@ -95,6 +102,7 @@ export function delais(rows, depuis, maintenant) {
   for (const r of by("prets")) { const x = r.data || {}; if (x.statut === "en_cours") for (const e of x.echeances || []) if (!e.payee && inWin(e.date)) out.push(`${no("PR", r.id)} · ${x.entrepriseNom || ""} : échéance ${e.n}/${(x.echeances || []).length} non payée`); }
   // Rendez-vous de l'heure qui vient (le passage horaire précédent ne les a pas encore annoncés).
   const proche = (t) => { const x = new Date(t || 0).getTime(); return Number.isFinite(x) && x > maintenant && x <= maintenant + (maintenant - depuis); };
+  for (const r of by("conventions")) { const x = r.data || {}; if (x.statut === "signee" && x.fin && inWin(new Date(x.fin).getTime() + 864e5)) out.push(`${no("CP", r.id)} · ${x.entrepriseNom || ""} : convention de partenariat arrivée à terme`); }
   for (const r of by("convocations")) { const x = r.data || {}; if (x.statut === "convoquee" && proche(x.date)) out.push(`${no("CV", r.id)} · ${x.entrepriseNom || ""} : ${x.motif === "autre" && x.objet ? x.objet : MOTIFS[x.motif] || "convocation"} à ${heure(x.date)}`); }
   if (!out.length) return null;
   return { type: "delais", title: out.length === 1 ? "Délai à surveiller" : `${out.length} délais à surveiller`, body: out.slice(0, 4).join("\n") + (out.length > 4 ? `\n+ ${out.length - 4} autre${out.length - 4 > 1 ? "s" : ""}` : ""), url: "#recouvrement", tag: "delais-" + Math.floor(maintenant / 36e5) };

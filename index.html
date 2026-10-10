@@ -409,6 +409,9 @@ table.compact td{padding:8px 10px}
 .ct-head,.ct-ligne{display:grid;grid-template-columns:minmax(0,1fr) 90px 150px auto;gap:8px;align-items:center}
 .ct-head{font-size:12px;color:var(--ink-3);font-weight:600;margin-top:6px}
 @media (max-width:620px){.ct-head{display:none}.ct-ligne{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.ct-ligne>input:first-child{grid-column:1/-1}}
+.ct-head.cp-av,.ct-ligne.cp-av{grid-template-columns:minmax(0,1fr) 150px 140px auto}
+.cp-svcs{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:6px}
+@media (max-width:620px){.ct-ligne.cp-av{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}}
 .tour-plan .mono{font-weight:600}
 .env-week{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:4px}
 .env-week label{font-weight:600;font-size:13px}
@@ -932,6 +935,31 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       </div>
       <div id="ct-list"><div class="empty">Chargement…</div></div>
     </div>
+    <div class="panel-head" style="margin-top:32px">
+      <div>
+        <h2>Conventions de partenariat</h2>
+        <p class="sub">Une entreprise s’engage à servir les services publics gratuitement ou à prix réduit pendant une durée : dépannages, réparations, repas… Chaque prestation offerte est notée. Une fois validée par la Direction, sa valeur ouvre droit à une réduction d’impôt pour l’entreprise.</p>
+      </div>
+      <div class="toolbar"><button class="btn" type="button" id="cp-new" hidden>Nouvelle convention</button></div>
+    </div>
+    <div class="ledger">
+      <div class="kpi" id="pk-vigueur"><span class="l">En vigueur</span><span class="v">—</span><span class="s">conventions</span></div>
+      <div class="kpi" id="pk-valider"><span class="l">À valider</span><span class="v">—</span><span class="s">prestations</span></div>
+      <div class="kpi" id="pk-offert"><span class="l">Offert</span><span class="v">—</span><span class="s">cette semaine</span></div>
+      <div class="kpi" id="pk-reduc"><span class="l">Réductions d’impôt</span><span class="v">—</span><span class="s">sur les avis</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="search-row">
+        <div class="seg" id="seg-cp" role="group" aria-label="Filtrer les conventions">
+          <button type="button" data-f="vigueur" aria-pressed="true">En vigueur<span class="count"></span></button>
+          <button type="button" data-f="projets" aria-pressed="false">Projets<span class="count"></span></button>
+          <button type="button" data-f="valider" aria-pressed="false">Prestations à valider<span class="count"></span></button>
+          <button type="button" data-f="finies" aria-pressed="false">Terminées<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Toutes<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="cp-list"><div class="empty">Chargement…</div></div>
+    </div>
   </section>
 
   <section class="panel" id="tab-prets" role="tabpanel" aria-labelledby="tab-btn-prets" hidden>
@@ -1078,6 +1106,8 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
           <option value="transmissions">Justice</option>
           <option value="convocations">Convocations</option>
           <option value="contrats">Contrats</option>
+          <option value="conventions">Conventions de partenariat</option>
+          <option value="prestations">Prestations offertes</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1208,6 +1238,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <dt id="c-is-l">Impôt sur le résultat</dt><dd id="c-is">0 €</dd>
             <dt id="c-cot-l">Cotisations sociales</dt><dd id="c-cot">0 €</dd>
             <dt id="c-exo-l" hidden>Exonération</dt><dd id="c-exo" class="exo" hidden></dd>
+            <dt id="c-mec-l" hidden>Réduction d’impôt des partenaires</dt><dd id="c-mec" class="exo" hidden></dd>
             <dt id="c-maj-l">Majoration de retard</dt><dd id="c-maj">0 €</dd>
             <dt class="tot-dt">Montant dû</dt><dd class="tot-dd" id="c-tot">0 €</dd>
           </dl>
@@ -1389,7 +1420,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <div class="seg set-tabs" id="set-tabs" role="tablist" aria-label="Rubriques des réglages">
       <button type="button" role="tab" id="set-tab-calendrier" data-sg="calendrier" aria-controls="set-page-calendrier" aria-selected="true">Calendrier et taux</button>
       <button type="button" role="tab" id="set-tab-baremes" data-sg="baremes" aria-controls="set-page-baremes" aria-selected="false">Barèmes</button>
-      <button type="button" role="tab" id="set-tab-exoneration" data-sg="exoneration" aria-controls="set-page-exoneration" aria-selected="false">Exonération</button>
+      <button type="button" role="tab" id="set-tab-exoneration" data-sg="exoneration" aria-controls="set-page-exoneration" aria-selected="false">Avantages fiscaux</button>
       <button type="button" role="tab" id="set-tab-recouvrement" data-sg="recouvrement" aria-controls="set-page-recouvrement" aria-selected="false">Recouvrement</button>
       <button type="button" role="tab" id="set-tab-entreprises" data-sg="entreprises" aria-controls="set-page-entreprises" aria-selected="false">Entreprises</button>
       <button type="button" role="tab" id="set-tab-services" data-sg="services" aria-controls="set-page-services" aria-selected="false">Services publics</button>
@@ -1517,6 +1548,23 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <div class="paste-row">
                 <button class="btn" type="button" id="x-save">Enregistrer l’exonération</button>
                 <span id="x-msg" class="hint" aria-live="polite"></span>
+              </div>
+            </div>
+          </div>
+          <div class="card" id="card-mec" style="margin-top:16px">
+            <h3>Réduction d’impôt des partenaires</h3>
+            <p class="sub">Sur le modèle du mécénat en nature : une entreprise liée par une convention de partenariat qui offre ses prestations aux services publics déduit de son impôt une part de leur valeur. La réduction s’applique aux déclarations suivantes, dans la limite d’un plafond par période ; le reste est reporté.</p>
+            <div class="set-form">
+              <label class="switch" for="m-on"><input type="checkbox" id="m-on"> Accorder la réduction d’impôt aux partenaires</label>
+              <div class="row2 mec-field" style="align-items:end">
+                <div class="field"><label for="m-taux">Part de la valeur offerte</label><div class="money" data-cur="%"><input id="m-taux" type="number" min="0" max="100" step="5"></div><span class="hint">Dans la réalité, 60 %.</span></div>
+                <div class="field"><label for="m-plaf" id="m-plaf-l">Plafond par semaine</label><div class="money" data-cur="€"><input id="m-plaf" type="number" min="0" step="1000"></div><span class="hint">Mettez 0 pour ne pas plafonner. La réduction ne dépasse jamais l’impôt de la période.</span></div>
+              </div>
+              <p class="hint" id="m-ex" style="margin:0"></p>
+              <p class="hint" style="margin:0">Le taux est figé dans chaque convention à sa signature. Seules les prestations validées par la Direction comptent ; la réduction ne porte que sur l’impôt, pas sur les cotisations.</p>
+              <div class="paste-row">
+                <button class="btn" type="button" id="m-save">Enregistrer la réduction</button>
+                <span id="m-msg" class="hint" aria-live="polite"></span>
               </div>
             </div>
           </div>
@@ -1753,6 +1801,7 @@ const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
   budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, enveloppesSemaines: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
   exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
+  mecActive: true, mecTaux: 60, mecPlafond: 20000,
   delaiMiseEnDemeureJours: 2, majorationImpaye: 10, majorationOffice: 40,
   convMajoration: 10, convAmende: 5000, convLieu: "Préfecture de police, Direction des impôts et cotisations", convIntervalle: 15, convTransporteur: "", tiersDefaut: "", justiceDestinataire: "Procureur de la République près le tribunal judiciaire",
   baremeMode: "progressif", baremeCotBase: "individuel", debutSuivi: "2026-S39",
@@ -1763,7 +1812,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -2542,6 +2591,8 @@ function subscribe() {
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("conventions", s => { S.conventions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("prestations", s => { S.prestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2569,6 +2620,7 @@ function render() {
   renderRecouvrement();
   renderDiscordSettings();
   renderExoSettings();
+  renderMecSettings();
   renderRecouvSettings();
   renderConvSettings();
   renderBlSettings();
@@ -2578,6 +2630,7 @@ function render() {
   renderVehicules();
   renderConvocations();
   renderContrats();
+  renderConventions();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
 }
@@ -3160,7 +3213,7 @@ function openDecl(id) {
     foot.push(delBtn);
   }
   if (w || inspOk) foot.push(h("span", { class: "spacer" }));
-  if (w && !locked && dec && !replaced && st !== "payee" && !(ecd && ecd.echeances.some(x => x.payee))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("decisions/" + id).delete())) { toast("Décision annulée : le dossier est de nouveau à valider."); await dropLinkedMajorations(d); if (st === "rejetee") await undoReplacementOf(d); openDecl(id); } }, text: "Remettre à valider" }));
+  if (w && !locked && dec && !replaced && st !== "payee" && !(ecd && ecd.echeances.some(x => x.payee))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("decisions/" + id).delete())) { toast("Décision annulée : le dossier est de nouveau à valider."); await dropLinkedMajorations(d); if (st === "rejetee") { await undoReplacementOf(d); await mecRecalc(d); } openDecl(id); } }, text: "Remettre à valider" }));
   if (ctl) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(ctl.id), text: `Contrôle ${dossierNo("CF", ctl.id)}` }));
   else if (w || inspOk) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(entOf(d), [d.id]), text: "Contrôle fiscal" }));
   if (w && st !== "rejetee" && !locked) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { const m = mIn ? Number(mIn.value) : dMontant(d); if (await decide(d, "rejetee", m, nIn ? nIn.value.trim() : "")) { await dropLinkedMajorations(d); await undoReplacement(d); closeDialog(); } }, text: "Rejeter" }));
@@ -3172,7 +3225,7 @@ function openDecl(id) {
     const credit = Math.round(dEncaisse(older));
     const b2 = Object.assign({}, d, { remplace: older.id, credit }); delete b2.id;
     if (!(await write(() => S.db.doc("declarations/" + d.id).set(b2)))) return;
-    if (await replaceDecl(older, d.id)) toast(`${dossierNo("DF", older.id)} remplacée${credit ? `, ${money(credit)} repris en avoir` : ""}.`);
+    if (await replaceDecl(older, d.id)) { toast(`${dossierNo("DF", older.id)} remplacée${credit ? `, ${money(credit)} repris en avoir` : ""}.`); await mecRecalc(Object.assign({ id: d.id }, b2), [older.id]); }
     openDecl(id);
   }, text: `Remplacer ${dossierNo("DF", older.id)}` }));
   if (w && !replaced) {
@@ -3394,12 +3447,21 @@ function renderDeclPreview() {
   const late = tax || depot.getTime() > dl.getTime();
   const nbV = numIn($("#d-nb")) || 0;
   const r0 = compute(ca, ch, ms, late, c, nbV, salMode() ? readSalaries() : null);
-  const r = applyExo(r0, findEnt($("#d-ent").value.trim()), key, c, late);
-  const xo = r.exoneration;
+  const entP = findEnt($("#d-ent").value.trim()), editingP = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
+  const exP = mecExclus(entP, key, editingP);
+  const officeP = tax || exP.some(id => (S.declarations.find(x => x.id === id) || {}).taxationOffice);
+  const r1 = applyExo(r0, entP, key, c, late);
+  const r = officeP ? r1 : applyMecenat(r1, entP, key, c, late, exP);
+  const xo = r.exoneration, mc = r.mecenat;
   $("#c-exo-l").hidden = $("#c-exo").hidden = !xo;
   if (xo) {
     $("#c-exo-l").textContent = `${exoLabel(xo)} : impôt −${pct(xo.tauxIS)}, cotisations −${pct(xo.tauxCot)}`;
     $("#c-exo").textContent = "− " + money(xo.montantIS + xo.montantCot);
+  }
+  $("#c-mec-l").hidden = $("#c-mec").hidden = !mc;
+  if (mc) {
+    $("#c-mec-l").textContent = mc.montant > 0 ? `Réduction d’impôt des partenaires (${money(mc.credit)} disponibles)` : "Reprise d’une réduction des partenaires (prestation annulée)";
+    $("#c-mec").textContent = mc.montant > 0 ? "− " + money(mc.montant) : "+ " + money(-mc.montant);
   }
   $("#c-res").textContent = money(r.resultat);
   $("#c-res").className = r.resultat < 0 ? "neg" : "";
@@ -3564,8 +3626,10 @@ $("#form-decl").addEventListener("submit", async e => {
   const depot = $("#d-date").value ? new Date($("#d-date").value) : new Date();
   const late = office ? true : depot.getTime() > deadline(key).getTime();
   const ent = findEnt(name);
-  const r = applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late);
   const editing = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
+  // Réduction d'impôt des partenaires : ni sur une imposition d'office, ni deux fois avec la déclaration remplacée.
+  const r1 = applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late);
+  const r = office ? r1 : applyMecenat(r1, ent, key, c, late, [editing && editing.id, repl && repl.id].filter(Boolean));
   const lockedK = isClosed(key) ? key : editing && isClosed(editing.periode) ? editing.periode : null;
   if (lockedK) { err.textContent = `${closedNote(lockedK)} : la Direction doit la rouvrir pour y ajouter ou modifier une déclaration.`; return; }
   const dup = S.declarations.some(d => (!editing || d.id !== editing.id) && d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
@@ -3574,7 +3638,7 @@ $("#form-decl").addEventListener("submit", async e => {
     ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
-    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration,
+    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, mecenat: r.mecenat || null,
     taxationOffice: tax ? { relanceId: tax.relanceId, base: tax.base, majoration: Number(c.majoration) || 0 }
       : repl && repl.taxationOffice ? Object.assign({}, repl.taxationOffice, { rectifiee: true })
       : editing0 && editing0.taxationOffice ? editing0.taxationOffice : null,
@@ -3622,7 +3686,7 @@ $("#form-decl").addEventListener("submit", async e => {
   rc.replaceChildren(stamp([editing ? "Modifiée" : "Enregistrée", "ok"]),
     h("div", { style: "min-width:0;flex:1 1 260px" },
       h("strong", { text: `${dossierNo("DF", ref.id)} · ${body.entrepriseNom}` }),
-      h("div", { class: "muted", text: `${periodLabel(key)} · montant calculé ${money(body.total)}${late ? " (majoré)" : ""}${body.exoneration ? ` · ${money(exoMontant(body))} d’exonération` : ""}${dup ? " · rectificative" : ""}${replNote}` })),
+      h("div", { class: "muted", text: `${periodLabel(key)} · montant calculé ${money(body.total)}${late ? " (majoré)" : ""}${body.exoneration ? ` · ${money(exoMontant(body))} d’exonération` : ""}${mecMontant(body) > 0 ? ` · ${money(mecMontant(body))} de réduction des partenaires` : mecMontant(body) < 0 ? ` · ${money(-mecMontant(body))} de réduction reprise` : ""}${dup ? " · rectificative" : ""}${replNote}` })),
     h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(ref.id), text: "Ouvrir le dossier" }));
   rc.hidden = false;
   $("#form-decl").reset();
@@ -3949,7 +4013,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -4505,6 +4569,7 @@ function openFiche(e, opts) {
     compteSection(e, reopen),
     convocationsSection(e),
     contratsSection(e),
+    conventionsSection(e),
     pretsSection(e),
     vehiculesSection(e),
     ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
@@ -4622,8 +4687,8 @@ function renderEconomie() {
   const empEnts = cur.filter(d => (Number(d.nbSalaries) || 0) > 0).length;
   setKpi("e-emp", NF.format(emp), emp ? `dans ${empEnts} entreprise${plural(empEnts)}` : "aucun salarié déclaré");
   setKpi("e-mas", money(mas), emp ? `${money(mas / emp)} par salarié en moyenne` : "aucun salarié déclaré");
-  const exoSum = allP.reduce((s, d) => s + exoMontant(d), 0);
-  setKpi("e-rec", money(rec), [penPaid ? `dont ${money(penPaid)} de pénalités` : "impôts et cotisations encaissés", exoSum ? `${money(exoSum)} exonérés` : ""].filter(Boolean).join(" · "), rec > 0 ? "ok" : "");
+  const exoSum = allP.reduce((s, d) => s + exoMontant(d), 0), mecSum = allP.reduce((s, d) => s + mecMontant(d), 0);
+  setKpi("e-rec", money(rec), [penPaid ? `dont ${money(penPaid)} de pénalités` : "impôts et cotisations encaissés", exoSum ? `${money(exoSum)} exonérés` : "", mecSum ? `${money(mecSum)} de réductions des partenaires` : ""].filter(Boolean).join(" · "), rec > 0 ? "ok" : "");
   setKpi("e-taux", dues ? `${Math.round(paidPart / dues * 100)} %` : "—", dues ? `${money(dues - paidPart)} restent à payer` : "aucun avis émis", dues && paidPart < dues ? "warn" : "");
   drawCols($("#ch-ca"), { short, full, series: [{ name: "Chiffre d’affaires", cls: "b1", values: per.map(ds => sumOf(ds, "ca")) }], label: "Chiffre d’affaires déclaré, " + spanLabel(keys, 12) });
   treasuryChart($("#ch-tr"), $("#lg-tr"), 12, keys);
@@ -4652,7 +4717,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -4773,6 +4838,20 @@ function describe(e) {
       if ((a.paiements || []).length > (b.paiements || []).length) { const p = a.paiements[a.paiements.length - 1] || {}; return `a payé ${money(p.montant)} à ${ct.fournisseurNom || ""} (${no})`; }
       if (a.statut !== b.statut) return { signe: `a signé le contrat ${no} avec ${qui}`, en_cours: `a signé le marché ${no} avec ${qui}`, livre: `a constaté la livraison du contrat ${no}`, resilie: a.resiliation && a.resiliation.livraisonRefusee ? `a refusé la livraison du contrat ${no}` : `a résilié le contrat ${no}`, termine: `a clos le marché ${no}`, annule: `a abandonné le projet ${no}` }[a.statut] || `a modifié le contrat ${no}`;
       return `a modifié le contrat ${no}`;
+    }
+    case "conventions": {
+      const no = dossierNo("CP", e.doc_id), qui = v.entrepriseNom || "";
+      if (x === "ajout") return v.statut === "signee" ? `a signé la convention de partenariat ${no} avec ${qui}` : `a préparé la convention de partenariat ${no} avec ${qui}`;
+      if (x === "suppression") return `a supprimé la convention ${no}`;
+      if (a.statut !== b.statut) return { signee: `a signé la convention de partenariat ${no} avec ${qui}`, resiliee: `a résilié la convention ${no} avec ${qui}`, annulee: `a abandonné le projet de convention ${no}` }[a.statut] || `a modifié la convention ${no}`;
+      return `a modifié la convention ${no}`;
+    }
+    case "prestations": {
+      const no = dossierNo("PS", e.doc_id), off = money(Math.max(0, (Number(v.valeur) || 0) - (Number(v.paye) || 0)));
+      if (x === "ajout") return `a noté une prestation offerte par ${v.entrepriseNom || ""} à ${v.service || "un service"} (${off}, ${no})`;
+      if (x === "suppression") return `a supprimé la prestation ${no}`;
+      if (a.statut !== b.statut) return { validee: `a validé la prestation ${no} de ${a.entrepriseNom || ""} (${off})`, refusee: `a refusé la prestation ${no} de ${a.entrepriseNom || ""}`, annulee: `a annulé la prestation ${no} de ${a.entrepriseNom || ""}` }[a.statut] || `a modifié la prestation ${no}`;
+      return `a modifié la prestation ${no}`;
     }
     case "meta": return "a téléchargé une sauvegarde du registre";
     case "agents": {
@@ -5291,6 +5370,8 @@ function editEntreprise(e, back) {
       for (const tj of S.transmissions) if (tj.entrepriseId === e.id && tj.entrepriseNom !== n) jobs.push(["transmissions", tj.id]);
       for (const cv of S.convocations || []) if (cv.entrepriseId === e.id && cv.entrepriseNom !== n) jobs.push(["convocations", cv.id]);
       for (const ct of S.contrats || []) if (ct.fournisseurId === e.id && ct.fournisseurNom !== n) jobs.push(["contrats", ct.id, { fournisseurNom: n }]);
+      for (const cp of S.conventions || []) if (cp.entrepriseId === e.id && cp.entrepriseNom !== n) jobs.push(["conventions", cp.id]);
+      for (const ps of S.prestations || []) if (ps.entrepriseId === e.id && ps.entrepriseNom !== n) jobs.push(["prestations", ps.id]);
       let done = 0;
       for (const [col, id, patch] of jobs) { await write(() => S.db.doc(col + "/" + id).update(patch || { entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -5380,6 +5461,7 @@ const DISCORD_AUTO = [
   ["saisies", "Saisies notifiées", "entreprises"],
   ["convocations", "Convocations, ordres de collecte et constats d’absence", "entreprises"],
   ["contrats", "Contrats signés et ordres de paiement", "entreprises"],
+  ["conventions", "Conventions de partenariat signées", "entreprises"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
@@ -7033,6 +7115,479 @@ function contratsSection(e) {
     canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openContratForm(e), text: "Nouveau contrat" }) : null);
 }
 
+/* ---------- Conventions de partenariat ---------- */
+// Une entreprise (dépanneur, garage, restaurant…) s'engage à servir les services publics gratuitement
+// ou à prix réduit pendant une durée. Chaque prestation offerte est notée : l'Inspection la note, la
+// Direction la valide. Sur le modèle du mécénat en nature (art. 238 bis du CGI), la valeur offerte
+// ouvre droit à une réduction d'impôt : une part de cette valeur (taux figé à la signature) s'impute
+// sur l'impôt des déclarations, dans la limite d'un plafond par période ; le reste est reporté.
+const CP_STAT = { projet: ["Projet", "info"], signee: ["En vigueur", "ok"], resiliee: ["Résiliée", "muted"], annulee: ["Abandonnée", "muted"] };
+const PS_STAT = { a_valider: ["À valider", "warn"], validee: ["Validée", "ok"], refusee: ["Refusée", "muted"], annulee: ["Annulée", "muted"] };
+const CP_MODES = { gratuit: "Gratuit", remise: "Remise en %", tarif: "Prix fixe" };
+const cpNo = c => dossierNo("CP", c.id);
+const psNo = p => dossierNo("PS", p.id);
+const cpNow = id => (S.conventions || []).find(c => c.id === id) || null;
+const psNow = id => (S.prestations || []).find(p => p.id === id) || null;
+const cpsOf = e => (S.conventions || []).filter(c => sameEnt(c, e)).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+const psOf = c => (S.prestations || []).filter(p => p.conventionId === c.id).sort((a, b) => String(b.date || b.at).localeCompare(String(a.date || a.at)));
+const psOffert = p => Math.max(0, (Number(p.valeur) || 0) - (Number(p.paye) || 0));
+const cpDebut = c => new Date(c.debut || c.signeLe || c.at).getTime();
+const cpFin = c => (c.fin ? new Date(c.fin).getTime() + 864e5 - 1 : Infinity);
+// Une prestation est couverte si elle a eu lieu pendant la convention (et avant sa résiliation).
+const cpCouvreDate = (c, t) => (c.statut === "signee" || (c.statut === "resiliee" && c.resiliation && t <= new Date(c.resiliation.at).getTime())) && t >= cpDebut(c) && t <= cpFin(c);
+const cpEnVigueur = c => c.statut === "signee" && Date.now() >= cpDebut(c) && Date.now() <= cpFin(c);
+const cpServices = c => (Array.isArray(c.services) && c.services.length ? c.services : null);
+const cpCouvre = (c, svc) => !cpServices(c) || cpServices(c).some(s => norm(s) === norm(svc));
+const cpServicesLabel = c => (cpServices(c) ? cpServices(c).join(", ") : "Tous les services publics");
+const avLabel = a => (a.mode === "gratuit" ? "gratuit" : a.mode === "remise" ? `remise de ${pct(Number(a.valeur) || 0)}` : `${money(a.valeur)} au lieu du prix normal`);
+const avPaye = (a, valeur) => (!a ? valeur : a.mode === "gratuit" ? 0 : a.mode === "remise" ? Math.round(valeur * (1 - Math.min(100, Math.max(0, Number(a.valeur) || 0)) / 100)) : Math.min(valeur, Math.max(0, Math.round(Number(a.valeur) || 0))));
+function cpState(c) {
+  if (c.statut === "signee") {
+    const t = Date.now();
+    if (t < cpDebut(c)) return ["Signée, pas encore en vigueur", "info"];
+    if (t > cpFin(c)) return ["Arrivée à terme", "muted"];
+  }
+  return CP_STAT[c.statut] || CP_STAT.projet;
+}
+const cpFinie = c => ["resiliee", "annulee"].includes(c.statut) || (c.statut === "signee" && Date.now() > cpFin(c));
+
+// Réduction d'impôt des partenaires.
+function mecCfg() {
+  const c = cfg();
+  return { on: c.mecActive !== false, taux: Math.min(100, Math.max(0, Number(c.mecTaux ?? 60) || 0)), plafond: Math.max(0, Math.round(Number(c.mecPlafond ?? 20000) || 0)) };
+}
+// Positive : réduction accordée ; négative : réduction reprise (prestation annulée après avoir été déduite).
+const mecMontant = d => (d && d.mecenat ? Number(d.mecenat.montant) || 0 : 0);
+// Crédit d'une entreprise pour une période : ce que ses prestations validées ont ouvert, moins ce que
+// ses autres déclarations (non rejetées) ont utilisé. Une période ne profite que des prestations faites
+// jusqu'à sa fin, et ne prend pas ce qu'une période suivante a déjà déduit : on retient le plus petit
+// solde entre la fin de la période et chacune des périodes suivantes qui ont utilisé du crédit.
+// « global » : le solde de tout l'historique ; négatif, la réduction de trop est à reprendre.
+function mecCredit(e, key, exclude) {
+  const out = { ouvert: 0, utilise: 0, dispo: 0, global: 0 };
+  if (!e || !e.id) return out;
+  const ps = [];
+  for (const p of S.prestations || []) {
+    if (p.statut !== "validee" || p.entrepriseId !== e.id) continue;
+    const c = cpNow(p.conventionId);
+    if (c && c.mecenat) ps.push({ t: new Date(p.date || p.at).getTime(), v: Math.round(psOffert(p) * (Number(c.taux) || 0) / 100) });
+  }
+  const ex = new Set((exclude || []).filter(Boolean));
+  const uses = S.declarations.filter(d => d.entrepriseId === e.id && !ex.has(d.id) && dStatus(d) !== "rejetee" && mecMontant(d))
+    .map(d => { const b = bounds(d.periode); return { t: b ? b.end.getTime() : Infinity, m: mecMontant(d) }; });
+  const opened = T => ps.reduce((s, x) => s + (x.t <= T ? x.v : 0), 0), used = T => uses.reduce((s, u) => s + (u.t <= T ? u.m : 0), 0);
+  out.ouvert = opened(Infinity); out.utilise = used(Infinity); out.global = out.ouvert - out.utilise;
+  const T0 = key && bounds(key) ? bounds(key).end.getTime() : Infinity;
+  const pts = [T0].concat(uses.filter(u => u.t > T0).map(u => u.t));
+  out.dispo = Math.max(0, Math.min(out.global, ...pts.map(T => opened(T) - used(T))));
+  return out;
+}
+// Appliquée après l'exonération, sur l'impôt seulement ; la majoration de retard porte sur le montant réduit.
+// Une réduction déduite en trop (prestation annulée ensuite) est reprise : le montant est alors négatif.
+function applyMecenat(r, e, key, c, late, exclude) {
+  const m = mecCfg(), impot0 = Number(r.impot) || 0, cot = Number(r.cotisations) || 0;
+  const cr = m.on && e && e.id ? mecCredit(e, key, exclude) : null;
+  const montant = !cr ? 0 : cr.global < 0 ? cr.global : Math.max(0, Math.min(cr.dispo, m.plafond > 0 ? m.plafond : Infinity, impot0));
+  const impot = impot0 - montant;
+  const majoration = late ? Math.round((impot + cot) * (Number(c.majoration) || 0) / 100) : 0;
+  return Object.assign({}, r, { impot, majoration, total: impot + cot + majoration, mecenat: montant ? { montant, credit: cr.dispo, plafond: m.plafond, impotAvant: impot0 } : null });
+}
+// Déclaration encore à valider dont le crédit a changé (remise à valider, rectificative qui remplace
+// enfin l'ancienne) : sa réduction est recalculée. Un avis émis ou payé ne bouge pas.
+async function mecRecalc(d, extra) {
+  const cur = S.declarations.find(x => x.id === d.id) || d, dec = S.decisions[cur.id];
+  if (!cur.entrepriseId || cur.taxationOffice || (dec && ["validee", "payee", "controle"].includes(dec.statut))) return false;
+  const e = entOf(cur);
+  if (!e.id) return false;
+  const avant = (Number(cur.impot) || 0) + mecMontant(cur);
+  const r = applyMecenat({ impot: avant, cotisations: Number(cur.cotisations) || 0 }, e, cur.periode, { majoration: Number(cur.majPct) || 0 }, !!cur.enRetard, [cur.id].concat(extra || []));
+  if (mecMontant(r) === mecMontant(cur)) return false;
+  const ok = await write(() => S.db.doc("declarations/" + cur.id).update({ impot: r.impot, majoration: r.majoration, total: r.total, mecenat: r.mecenat || null }));
+  if (ok) toast(`Réduction des partenaires recalculée : ${money(r.total)} à payer.`);
+  return ok;
+}
+// Saisie en cours : la déclaration modifiée et celle qu'une rectificative remplacera ne comptent pas.
+function mecExclus(e, key, editing) {
+  const out = [editing && editing.id];
+  if (!editing && e && e.id) {
+    const prev = S.declarations.filter(d => d.periode === key && d.entrepriseId === e.id && dStatus(d) !== "rejetee").sort(byCreatedDesc)[0];
+    if (prev && dStatus(prev) !== "controle" && (writer() || dEncaisse(prev) <= 0)) out.push(prev.id);
+  }
+  return out.filter(Boolean);
+}
+
+function partenariatDoc(c) {
+  const f = S.entreprises.find(e => e.id === c.entrepriseId) || { nom: c.entrepriseNom }, m = mecCfg();
+  const svcs = cpServices(c) || [];
+  return {
+    kind: "CONVENTION DE PARTENARIAT", no: cpNo(c), date: c.signeLe ? "Signée le " + longDate(new Date(c.signeLe)) : "Projet du " + longDate(new Date(c.at)),
+    meta: [["Entre", "La Préfecture de police"], ["Et", `${f.nom}${c.signataire ? ", représentée par " + c.signataire : ""}`], ["Objet", c.objet || "Prestations aux services publics"],
+      ["Au profit de", cpServicesLabel(c)], ["Durée", `du ${fmtDate(new Date(cpDebut(c)))}${c.fin ? " au " + fmtDate(new Date(c.fin)) : ", sans terme fixé"}`],
+      ["Contrepartie", c.mecenat ? `réduction d’impôt de ${pct(Number(c.taux ?? m.taux) || 0)} de la valeur offerte` : "aucune contrepartie fiscale"], ["Signée par", c.signeParNom || "—"]],
+    lines: (c.avantages || []).map(a => [a.prestation || "Prestation", avLabel(a)]).concat(c.conditions ? [["Conditions", c.conditions]] : []),
+    total: ["Avantages consentis", `${(c.avantages || []).length} prestation${plural((c.avantages || []).length)}`],
+    stamp: { projet: ["PROJET", "muted"], annulee: ["ABANDONNÉE", "muted"], resiliee: ["RÉSILIÉE", "muted"] }[c.statut] || ["SIGNÉE", "accent"],
+    footer: `L’entreprise fournit aux services publics désignés les prestations ci-dessus, aux conditions indiquées, pendant la durée de la convention. Chaque prestation est consignée par la Préfecture de police.${c.mecenat ? ` Sur le modèle du mécénat en nature, la valeur offerte ouvre droit à une réduction de l’impôt de l’entreprise${m.plafond ? `, dans la limite de ${money(m.plafond)} par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` : ""} ; l’excédent est reporté.` : ""} La convention peut être résiliée en cas de manquement.`,
+    discord: { channel: "entreprises", mentions: [entMention(f)].concat(svcs.map(svcMention)).filter(Boolean), text: `**Convention de partenariat ${cpNo(c)}** · ${f.nom} · ${cpServicesLabel(c)} · ${(c.avantages || []).map(a => `${a.prestation} (${avLabel(a)})`).join(", ")}` }
+  };
+}
+async function saveCp(c, patch, msg) {
+  const latest = cpNow(c.id) || c;
+  const body = Object.assign({}, latest, patch); delete body.id;
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+  const ok = await write(() => S.db.doc("conventions/" + c.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+async function savePs(p, patch, msg) {
+  const latest = psNow(p.id) || p;
+  const body = Object.assign({}, latest, patch); delete body.id;
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+  const ok = await write(() => S.db.doc("prestations/" + p.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+function cpChanged(id, want) {
+  const cur = cpNow(id);
+  if (!cur) { closeDialog(); toast("Cette convention vient d’être supprimée par un autre agent.", true); return true; }
+  if (want && !want(cur)) { toast("Un autre agent vient de modifier cette convention : voici son état.", true); openConvention(id); return true; }
+  return false;
+}
+const psBusy = new Set();
+async function psOnce(id, fn) { if (psBusy.has(id)) return false; psBusy.add(id); try { return await fn(); } finally { psBusy.delete(id); } }
+
+// Nouvelle convention, modification d'un projet (opts.edit) ou renouvellement (opts.from).
+function openConventionForm(e, opts) {
+  if (!canAgent()) return;
+  opts = opts || {};
+  const ed = opts.edit ? cpNow(opts.edit.id) || opts.edit : null, src = ed || opts.from || null, m = mecCfg();
+  const ents = S.entreprises.slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  const ent = h("select", {}, h("option", { value: "", text: "— Choisir l’entreprise —" }), ents.map(x => h("option", { value: x.id, text: x.nom })));
+  ent.value = src ? src.entrepriseId || "" : e ? e.id : "";
+  const objet = h("input", { autocomplete: "off", placeholder: "Ex. : dépannage et réparation des véhicules de service" }); objet.value = src ? src.objet || "" : "";
+  const signataire = h("input", { autocomplete: "off", placeholder: "Nom du patron ou de son représentant" });
+  const patronOf = () => { const x = S.entreprises.find(y => y.id === ent.value); return x ? x.patron || "" : ""; };
+  signataire.value = src ? src.signataire || "" : patronOf();
+  if (!src) signataire.dataset.auto = "1";
+  signataire.addEventListener("input", () => { delete signataire.dataset.auto; });
+  ent.addEventListener("change", () => { if (!signataire.value.trim() || signataire.dataset.auto) { signataire.value = patronOf(); signataire.dataset.auto = "1"; } });
+  // Services couverts
+  const svcList = cfg().services.slice(); for (const s of (src && cpServices(src)) || []) if (!svcList.some(x => norm(x) === norm(s))) svcList.push(s);
+  const tous = h("input", { type: "checkbox", id: "cp-tous" }); tous.checked = !src || !cpServices(src);
+  const svcBoxes = svcList.map((s, i) => { const cb = h("input", { type: "checkbox", id: "cp-svc-" + i, "data-s": s }); cb.checked = !!(src && cpServices(src) && cpServices(src).some(x => norm(x) === norm(s))); return h("label", { class: "switch", for: "cp-svc-" + i }, cb, s); });
+  const svcBox = h("div", { class: "checks-col cp-svcs" }, svcBoxes);
+  const syncSvc = () => { svcBox.hidden = tous.checked; };
+  tous.addEventListener("change", syncSvc); syncSvc();
+  // Avantages
+  const avBox = h("div", { class: "ct-lignes" });
+  const addAv = a => {
+    const pr = h("input", { autocomplete: "off", placeholder: "Prestation (ex. : remorquage)", "aria-label": "Prestation" });
+    const mode = h("select", { "aria-label": "Avantage" }, Object.entries(CP_MODES).map(([v, l]) => h("option", { value: v, text: l })));
+    const val = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "aria-label": "Remise ou prix" });
+    const valBox = h("div", { class: "money", "data-cur": "%" }, val);
+    pr.value = a ? a.prestation || "" : ""; mode.value = a ? a.mode || "gratuit" : "gratuit"; val.value = a && a.valeur != null ? String(a.valeur) : "";
+    const syncMode = () => { valBox.style.visibility = mode.value === "gratuit" ? "hidden" : ""; valBox.dataset.cur = mode.value === "remise" ? "%" : cur(); val.placeholder = mode.value === "remise" ? "Remise" : "Prix"; };
+    mode.addEventListener("change", syncMode); syncMode();
+    const rm = h("button", { class: "btn ghost small", type: "button", "aria-label": "Retirer l’avantage", text: "Retirer" });
+    const row = h("div", { class: "ct-ligne cp-av" }, pr, mode, valBox, rm);
+    rm.addEventListener("click", () => row.remove());
+    avBox.append(row);
+  };
+  ((src && src.avantages && src.avantages.length) ? src.avantages : [null]).forEach(addAv);
+  const avOf = () => $$(".cp-av", avBox).map(r => { const pr = $("input", r), mode = $("select", r), val = $$("input", r)[1]; return { prestation: pr.value.trim(), mode: mode.value, valeur: mode.value === "gratuit" ? null : Math.max(0, Math.round(Number(val.value) || 0)) }; }).filter(a => a.prestation);
+  // Durée
+  const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const debut = h("input", { type: "date" }), fin = h("input", { type: "date" });
+  if (opts.from && !ed) { const d0 = opts.from.fin ? new Date(new Date(opts.from.fin).getTime() + 864e5) : new Date(); debut.value = ymd(d0 < new Date() ? new Date() : d0); }
+  else debut.value = src && src.debut ? ymd(new Date(src.debut)) : ymd(new Date());
+  fin.value = ed ? (ed.fin ? ymd(new Date(ed.fin)) : "") : ymd(new Date(new Date(debut.value + "T00:00").getTime() + 27 * 864e5));
+  const mec = h("input", { type: "checkbox", id: "cp-mec" }); mec.checked = m.on && (src ? !!src.mecenat : true); mec.disabled = !m.on;
+  const mecL = h("label", { class: "switch", for: "cp-mec" }, mec, m.on ? `Les prestations offertes ouvrent droit à la réduction d’impôt (${pct(m.taux)} de leur valeur)` : "Réduction d’impôt désactivée dans les réglages");
+  const cond = h("textarea", { rows: "2", placeholder: "Ex. : intervention sous 30 minutes, 5 dépannages gratuits par semaine au plus (facultatif)" }); cond.value = src ? src.conditions || "" : "";
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const save = async signer => {
+    err.textContent = "";
+    const f = S.entreprises.find(x => x.id === ent.value);
+    if (!f) { err.textContent = "Choisissez l’entreprise partenaire."; ent.focus(); return; }
+    const avantages = avOf();
+    if (!avantages.length) { err.textContent = "Indiquez au moins un avantage : la prestation et ce qu’elle coûte aux services."; return; }
+    if (avantages.some(a => a.mode === "remise" && !(a.valeur > 0 && a.valeur <= 100))) { err.textContent = "Une remise se donne en pourcentage, entre 1 et 100."; return; }
+    if (avantages.some(a => a.mode === "tarif" && !(a.valeur >= 0) )) { err.textContent = "Indiquez le prix fixe de chaque prestation."; return; }
+    const services = tous.checked ? null : $$("input[data-s]", svcBox).filter(x => x.checked).map(x => x.dataset.s);
+    if (services && !services.length) { err.textContent = "Cochez au moins un service public, ou « Tous les services publics »."; return; }
+    if (!debut.value) { err.textContent = "Indiquez le début de la convention."; debut.focus(); return; }
+    if (fin.value && fin.value < debut.value) { err.textContent = "La fin de la convention précède son début."; fin.focus(); return; }
+    if (ed && cpChanged(ed.id, x => x.statut === "projet")) return;
+    const body = {
+      entrepriseId: f.id, entrepriseNom: f.nom, objet: objet.value.trim(), signataire: signataire.value.trim(), services, avantages,
+      debut: new Date(debut.value + "T00:00").toISOString(), fin: fin.value ? new Date(fin.value + "T00:00").toISOString() : null,
+      mecenat: m.on && mec.checked, taux: m.on && mec.checked ? m.taux : null, conditions: cond.value.trim(), renouvelle: ed ? ed.renouvelle || null : opts.from ? opts.from.id : null,
+      statut: signer ? "signee" : "projet", at: ed ? ed.at : nowISO(), by: ed ? ed.by : S.uid || null, byNom: ed ? ed.byNom : S.agentName || ""
+    };
+    if (signer) Object.assign(body, { signeLe: nowISO(), signeParNom: S.agentName || "" });
+    const ref = ed ? S.db.doc("conventions/" + ed.id) : S.db.collection("conventions").doc();
+    if (!(await write(() => ref.set(body)))) return;
+    const id = ed ? ed.id : ref.id, c = Object.assign({ id }, body);
+    toast(signer ? `Convention ${cpNo(c)} signée.` : `Projet ${cpNo(c)} enregistré.`);
+    if (signer) { autoPublish("conventions", partenariatDoc(c), "Convention publiée."); showDocImage(partenariatDoc(c), () => openConvention(id)); }
+    else openConvention(id);
+  };
+  openDialog({
+    eyebrow: ed ? `Projet ${cpNo(ed)}` : opts.from ? `Renouvellement de ${cpNo(opts.from)}` : "Conventions de partenariat", title: ed ? "Modifier le projet" : "Nouvelle convention", wide: true,
+    body: [
+      h("div", { class: "row2" }, field("cp-ent", "Entreprise partenaire", ent), field("cp-sig", "Signataire pour l’entreprise", signataire)),
+      field("cp-obj", "Objet", objet),
+      sec("Services publics bénéficiaires", h("label", { class: "switch", for: "cp-tous" }, tous, "Tous les services publics"), svcBox),
+      sec("Avantages consentis", h("div", { class: "ct-head cp-av", "aria-hidden": "true" }, h("span", { text: "Prestation" }), h("span", { text: "Avantage" }), h("span", { text: "Remise ou prix" }), h("span", {})), avBox,
+        h("div", { class: "paste-row" }, h("button", { class: "btn ghost small", type: "button", onclick: () => addAv(null), text: "Ajouter un avantage" }))),
+      h("div", { class: "row2" }, field("cp-deb", "Début", debut), field("cp-fin", "Fin (vide : sans terme)", fin)),
+      mecL, field("cp-cond", "Conditions", cond),
+      h("p", { class: "hint", style: "margin:0", text: writer() ? "Signée, la convention part sur Discord. Ensuite, chaque prestation offerte est notée dans la convention." : "L’Inspection prépare le projet ; la Direction le signe." }),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => ed ? openConvention(ed.id) : closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }),
+      h("button", { class: writer() ? "btn ghost small" : "btn ink small", type: "button", onclick: () => save(false), text: "Enregistrer le projet" }),
+      writer() ? h("button", { class: "btn ink small", type: "button", onclick: () => save(true), text: "Signer la convention" }) : null].filter(Boolean)
+  });
+}
+
+function openConvention(id) {
+  const c = cpNow(id);
+  if (!c) return;
+  const dir = writer(), ag = canAgent(), reopen = () => openConvention(id), m = mecCfg();
+  const f = S.entreprises.find(e => e.id === c.entrepriseId) || null;
+  const ps = psOf(c), valides = ps.filter(p => p.statut === "validee"), attente = ps.filter(p => p.statut === "a_valider");
+  const offert = valides.reduce((t, p) => t + psOffert(p), 0);
+  const cr = f && c.mecenat ? mecCredit(f, null) : null;
+  const body = [
+    kv([["Partenaire", f ? h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(f), text: f.nom }) : c.entrepriseNom], c.objet ? ["Objet", c.objet] : null,
+      ["Au profit de", cpServicesLabel(c)], ["Durée", `du ${fmtDate(new Date(cpDebut(c)))}${c.fin ? " au " + fmtDate(new Date(c.fin)) : ", sans terme"}`],
+      ["Contrepartie", c.mecenat ? `réduction d’impôt de ${pct(Number(c.taux) || 0)} de la valeur offerte` : "aucune contrepartie fiscale"],
+      ["Préparée par", `${c.byNom || "—"} le ${fmtDate(new Date(c.at))}`], c.signeLe ? ["Signée", `par ${c.signeParNom || "—"} le ${fmtDate(new Date(c.signeLe))}${c.signataire ? ", pour l’entreprise par " + c.signataire : ""}`] : null,
+      c.resiliation ? ["Résiliation", `${fmtDate(new Date(c.resiliation.at))} · ${c.resiliation.motif || ""}`] : null,
+      ["Offert aux services", `${money(offert)} sur ${valides.length} prestation${plural(valides.length)} validée${plural(valides.length)}`, "tot"],
+      cr ? ["Réduction d’impôt de l’entreprise", `${money(cr.dispo)} encore à déduire · ${money(cr.utilise)} déjà déduits`] : null]),
+    sec("Avantages consentis", h("ul", { class: "access" }, (c.avantages || []).map(a => h("li", { text: `${a.prestation} · ${avLabel(a)}` })))),
+    c.conditions ? sec("Conditions", h("p", { class: "prewrap", style: "margin:0", text: c.conditions })) : null,
+    ["projet", "annulee"].includes(c.statut) ? null : sec(`Prestations offertes · ${ps.length}`, ps.length ? h("ul", { class: "ent-list" }, ps.slice(0, 60).map(p => psItem(p, reopen)))
+      : h("p", { class: "muted", style: "margin:0", text: "Aucune prestation notée pour l’instant." }))
+  ];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(partenariatDoc(c), reopen), text: "Convention en image" }), h("span", { class: "spacer" })];
+  if (c.statut === "projet") {
+    if (ag) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => cpAbandon(c), text: "Abandonner" }));
+    if (ag) foot.push(h("button", { class: dir ? "btn ghost small" : "btn ink small", type: "button", onclick: () => openConventionForm(null, { edit: c }), text: dir ? "Modifier ou signer" : "Modifier" }));
+  }
+  if (dir && c.statut === "signee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => cpResilier(c), text: "Résilier" }));
+  if (ag && (c.statut === "resiliee" || (c.statut === "signee" && c.fin))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConventionForm(null, { from: c }), text: "Renouveler" }));
+  if (dir && attente.length) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => psValiderTout(c), text: `Tout valider (${attente.length})` }));
+  if (ag && ["signee", "resiliee"].includes(c.statut)) foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => openPrestationForm(c), text: "Noter une prestation" }));
+  openDialog({ eyebrow: `Convention ${cpNo(c)}`, title: `${c.entrepriseNom} · ${cpServicesLabel(c)}`, wide: true, stampEl: stamp(cpState(c)), body, foot });
+}
+function psItem(p, back) {
+  const dir = writer(), mine = !dir && canAgent() && p.by === S.uid;
+  const acts = [];
+  if (dir && p.statut === "a_valider") acts.push(h("button", { class: "btn ghost small", type: "button", onclick: () => psValider(p, back), text: "Valider" }), h("button", { class: "btn ghost small", type: "button", onclick: () => psRefuser(p, back), text: "Refuser" }));
+  if (dir && p.statut === "validee") acts.push(h("button", { class: "btn ghost small", type: "button", onclick: () => psAnnuler(p, back), text: "Annuler" }));
+  if (mine && p.statut === "a_valider") acts.push(h("button", { class: "btn ghost small", type: "button", onclick: () => psRetirer(p, back), text: "Retirer" }));
+  return h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${psNo(p)} · ${p.service} · ${p.objet || "Prestation"}` }),
+      h("span", { class: "meta", text: `${fmtDateTime(new Date(p.date || p.at))} · prix normal ${money(p.valeur)}, payé ${money(p.paye)} · ${money(psOffert(p))} offerts · noté par ${p.byNom || "—"}${p.valideParNom ? " · validé par " + p.valideParNom : ""}${p.motif ? " · " + p.motif : ""}${p.note ? " · " + p.note : ""}` })),
+    chip(PS_STAT[p.statut] || PS_STAT.a_valider),
+    h("span", { class: "row-actions" }, acts));
+}
+function cpAbandon(c) {
+  if (cpChanged(c.id, x => x.statut === "projet")) return;
+  openDialog({ eyebrow: `Projet ${cpNo(c)}`, title: "Abandonner le projet ?", body: [h("p", { style: "margin:0", text: "Le projet reste dans l’historique, marqué « abandonné »." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConvention(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => { const btn = ev.currentTarget; btn.disabled = true; if (await saveCp(c, { statut: "annulee" }, "Projet abandonné.")) openConvention(c.id); else btn.disabled = false; }, text: "Abandonner" })] });
+}
+function cpResilier(c) {
+  const motif = h("textarea", { rows: "2", placeholder: "Ex. : prestations refusées aux services, conditions non respectées" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: `Convention ${cpNo(c)}`, title: "Résilier la convention",
+    body: [h("p", { style: "margin:0", text: "Les prestations déjà faites restent acquises, et la réduction d’impôt qu’elles ouvrent aussi. Les suivantes ne seront plus couvertes." }), field("cp-res", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConvention(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+        if (cpChanged(c.id, x => x.statut === "signee")) return;
+        const btn = ev.currentTarget; btn.disabled = true;
+        if (await saveCp(c, { statut: "resiliee", resiliation: { at: nowISO(), motif: motif.value.trim(), byNom: S.agentName || "" } }, "Convention résiliée.")) openConvention(c.id); else btn.disabled = false;
+      }, text: "Résilier" })] });
+}
+
+// Prestation offerte : notée par un agent (à valider par la Direction), ou directement validée par la Direction.
+function openPrestationForm(c) {
+  c = cpNow(c.id) || c;
+  if (!canAgent() || !["signee", "resiliee"].includes(c.statut)) return;
+  const svcs = cpServices(c) || cfg().services;
+  const svc = h("select", {}, svcs.map(s => h("option", { value: s, text: s })));
+  const date = h("input", { type: "datetime-local" }); date.value = toLocalInput(new Date(Math.min(Date.now(), cpFin(c), c.resiliation ? new Date(c.resiliation.at).getTime() : Infinity)));
+  const avs = c.avantages || [];
+  const av = h("select", {}, avs.map((a, i) => h("option", { value: String(i), text: `${a.prestation} · ${avLabel(a)}` })), h("option", { value: "autre", text: "Autre prestation" }));
+  const objet = h("input", { autocomplete: "off", placeholder: "Ex. : remorquage du véhicule 12 du SAMU" });
+  const valeur = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" });
+  const paye = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" });
+  const offEl = h("strong", { class: "mono" });
+  const note = h("input", { autocomplete: "off", placeholder: "Facultatif : lien d’une capture, nom de l’agent servi…" });
+  let payeTouched = false;
+  const avOfSel = () => (av.value === "autre" ? null : avs[Number(av.value)] || null);
+  const upd = () => { const v = Math.max(0, Math.round(Number(valeur.value) || 0)); if (!payeTouched) paye.value = valeur.value === "" ? "" : String(avPaye(avOfSel(), v)); offEl.textContent = money(Math.max(0, v - Math.max(0, Math.round(Number(paye.value) || 0)))); };
+  valeur.addEventListener("input", upd); paye.addEventListener("input", () => { payeTouched = true; upd(); }); av.addEventListener("change", () => { payeTouched = false; upd(); }); upd();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: writer() ? "Enregistrer et valider" : "Noter la prestation" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const t = date.value ? new Date(date.value).getTime() : NaN, v = Math.max(0, Math.round(Number(valeur.value) || 0)), py = Math.max(0, Math.round(Number(paye.value) || 0));
+    if (!Number.isFinite(t)) { err.textContent = "Indiquez la date de la prestation."; date.focus(); return; }
+    if (t > Date.now() + 60e3) { err.textContent = "La prestation doit déjà avoir eu lieu."; date.focus(); return; }
+    const cur = cpNow(c.id) || c;
+    if (!cpCouvreDate(cur, t)) { err.textContent = `Cette date n’est pas couverte par la convention (${fmtDate(new Date(cpDebut(cur)))}${cur.fin ? " – " + fmtDate(new Date(cur.fin)) : ""}${cur.resiliation ? ", résiliée le " + fmtDate(new Date(cur.resiliation.at)) : ""}).`; return; }
+    if (!cpCouvre(cur, svc.value)) { err.textContent = "Ce service n’est pas couvert par la convention."; return; }
+    if (!(v > 0)) { err.textContent = "Indiquez le prix normal de la prestation."; valeur.focus(); return; }
+    if (py > v) { err.textContent = "Le prix payé dépasse le prix normal : rien n’a été offert."; paye.focus(); return; }
+    if (py === v) { err.textContent = "Rien n’a été offert : le service a payé le prix normal."; paye.focus(); return; }
+    const a = avOfSel();
+    const body = { conventionId: cur.id, entrepriseId: cur.entrepriseId, entrepriseNom: cur.entrepriseNom, service: svc.value, date: new Date(t).toISOString(),
+      prestation: a ? a.prestation : "Autre", objet: objet.value.trim() || (a ? a.prestation : ""), valeur: v, paye: py, note: note.value.trim(),
+      statut: writer() ? "validee" : "a_valider", at: nowISO(), by: S.uid || null, byNom: S.agentName || "" };
+    if (writer()) Object.assign(body, { valideLe: nowISO(), valideParNom: S.agentName || "" });
+    go.disabled = true;
+    const ref = S.db.collection("prestations").doc();
+    if (!(await write(() => ref.set(body)))) { go.disabled = false; return; }
+    toast(writer() ? `Prestation ${psNo({ id: ref.id })} validée : ${money(v - py)} offerts.` : `Prestation ${psNo({ id: ref.id })} notée, à valider par la Direction.`);
+    openConvention(cur.id);
+  });
+  openDialog({ eyebrow: `Convention ${cpNo(c)} · ${c.entrepriseNom}`, title: "Noter une prestation offerte",
+    body: [
+      h("div", { class: "row2" }, field("ps-svc", "Service servi", svc), field("ps-date", "Date", date)),
+      h("div", { class: "row2" }, field("ps-av", "Avantage de la convention", av), field("ps-obj", "Détail", objet)),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ps-val", text: "Prix normal" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(valeur, { id: "ps-val" }))),
+        h("div", { class: "field" }, h("label", { for: "ps-paye", text: "Payé par le service" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(paye, { id: "ps-paye" })))),
+      field("ps-note", "Observation", note),
+      kv([["Offert", offEl, "tot"], c.mecenat ? ["Réduction d’impôt ouverte", `${pct(Number(c.taux) || 0)} de la somme offerte, une fois validée`] : null]),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConvention(c.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+// Avant de valider, la Direction revérifie ce que la saisie a contrôlé (la prestation a pu être écrite autrement).
+function psProbleme(p) {
+  const c = cpNow(p.conventionId), t = new Date(p.date || p.at).getTime(), v = Number(p.valeur), py = Number(p.paye);
+  if (!c || !["signee", "resiliee"].includes(c.statut) || c.entrepriseId !== p.entrepriseId) return "sa convention n’est pas signée";
+  if (!Number.isFinite(t) || !cpCouvreDate(c, t)) return "sa date n’est pas couverte par la convention";
+  if (!cpCouvre(c, p.service)) return "ce service n’est pas couvert";
+  if (!(v > 0) || !(py >= 0) || !(py < v)) return "ses montants sont incohérents";
+  return null;
+}
+async function psValider(p, back) {
+  await psOnce(p.id, async () => {
+    const cur = psNow(p.id);
+    if (!cur || cur.statut !== "a_valider") { toast("Cette prestation vient d’être traitée par un autre agent.", true); return false; }
+    const pb = psProbleme(cur);
+    if (pb) { toast(`Prestation ${psNo(cur)} non validée : ${pb}. Refusez-la.`, true); return false; }
+    return savePs(cur, { statut: "validee", valideLe: nowISO(), valideParNom: S.agentName || "" }, `Prestation ${psNo(cur)} validée.`);
+  });
+  if (back) back();
+}
+async function psValiderTout(c) {
+  const list = psOf(c).filter(p => p.statut === "a_valider");
+  let n = 0, bad = 0;
+  for (const p of list) if (await psOnce(p.id, async () => { const cur = psNow(p.id); if (!cur || cur.statut !== "a_valider") return false; if (psProbleme(cur)) { bad++; return false; } return savePs(cur, { statut: "validee", valideLe: nowISO(), valideParNom: S.agentName || "" }); })) n++;
+  toast(`${n} prestation${plural(n)} validée${plural(n)}${bad ? ` · ${bad} à vérifier une à une` : ""}.`, !!bad);
+  openConvention(c.id);
+}
+function psMotifDialog(p, title, text, label, statut, msg, back) {
+  const motif = h("textarea", { rows: "2" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: `Prestation ${psNo(p)} · ${p.entrepriseNom}`, title, body: [h("p", { style: "margin:0", text }), field("ps-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+        const btn = ev.currentTarget; btn.disabled = true;
+        const ok = await psOnce(p.id, async () => {
+          const cur = psNow(p.id), from = statut === "annulee" && writer() ? ["validee", "a_valider"] : ["a_valider"];
+          if (!cur || !from.includes(cur.statut)) { toast("Cette prestation vient d’être traitée par un autre agent.", true); return false; }
+          return savePs(cur, { statut, motif: motif.value.trim(), traiteLe: nowISO(), traiteParNom: S.agentName || "" }, msg);
+        });
+        if (ok && back) back(); else if (!ok) btn.disabled = false;
+      }, text: label })] });
+}
+const psRefuser = (p, back) => psMotifDialog(p, "Refuser la prestation", "Elle reste dans l’historique, sans ouvrir de réduction d’impôt.", "Refuser", "refusee", "Prestation refusée.", back);
+const psAnnuler = (p, back) => psMotifDialog(p, "Annuler la prestation validée", "Sa part de réduction d’impôt est retirée du crédit de l’entreprise. Si elle a déjà été déduite d’un avis, elle est reprise sur la prochaine déclaration de l’entreprise.", "Annuler la prestation", "annulee", "Prestation annulée.", back);
+const psRetirer = (p, back) => psMotifDialog(p, "Retirer la prestation", "Elle n’a pas encore été validée : elle est retirée de la convention.", "Retirer", "annulee", "Prestation retirée.", back);
+
+// Onglet Contrats, partie « Conventions de partenariat ».
+function renderConventions() {
+  if (S.tab !== "contrats") return;
+  const box = $("#cp-list");
+  if (!S.connected || !S.loaded.has("conventions") || !S.loaded.has("prestations")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.conventions || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const vigueur = all.filter(c => c.statut === "signee" && !cpFinie(c)), projets = all.filter(c => c.statut === "projet"), finies = all.filter(cpFinie);
+  const valider = (S.prestations || []).filter(p => p.statut === "a_valider").sort((a, b) => String(b.date || b.at).localeCompare(String(a.date || a.at)));
+  const b = bounds(keyOf(new Date()));
+  const offWk = (S.prestations || []).filter(p => p.statut === "validee" && new Date(p.date || p.at) >= b.start && new Date(p.date || p.at) <= b.end).reduce((t, p) => t + psOffert(p), 0);
+  const reduc = S.declarations.filter(d => dStatus(d) !== "rejetee").reduce((t, d) => t + mecMontant(d), 0);
+  setKpi("pk-vigueur", String(vigueur.length), projets.length ? `${projets.length} projet${plural(projets.length)} à signer` : "conventions", projets.length ? "warn" : "");
+  setKpi("pk-valider", String(valider.length), valider.length ? `${money(valider.reduce((t, p) => t + psOffert(p), 0))} offerts à vérifier` : "prestations", valider.length ? "warn" : "");
+  setKpi("pk-offert", money(offWk), "offerts aux services cette semaine", offWk ? "ok" : "");
+  setKpi("pk-reduc", money(reduc), mecCfg().on ? "déduits de l’impôt des partenaires" : "réduction désactivée", "");
+  const F = { vigueur, projets, valider, finies, tout: all };
+  const f = F[S.cpFilter] ? S.cpFilter : "vigueur";
+  setSegCounts($("#seg-cp"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), f);
+  $("#cp-new").hidden = !canAgent();
+  const list = F[f];
+  if (f === "valider") {
+    const back = () => { if (dlg.open) closeDialog(); renderConventions(); };
+    fill(box, list.length ? h("ul", { class: "ent-list" }, list.slice(0, 300).map(p => psItem(p, back))) : h("div", { class: "empty", text: "Aucune prestation à valider." }));
+    return;
+  }
+  fill(box, list.length ? h("ul", { class: "ent-list" }, list.slice(0, 300).map(c => {
+    const ps = psOf(c), off = ps.filter(p => p.statut === "validee").reduce((t, p) => t + psOffert(p), 0), att = ps.filter(p => p.statut === "a_valider").length;
+    return h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConvention(c.id), text: `${cpNo(c)} · ${c.entrepriseNom}` }),
+        h("span", { class: "meta", text: `${cpServicesLabel(c)} · ${(c.avantages || []).map(a => `${a.prestation} (${avLabel(a)})`).join(", ")}${off ? ` · ${money(off)} offerts` : ""}${att ? ` · ${att} à valider` : ""}` })),
+      chip(cpState(c)),
+      h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openConvention(c.id), text: "Ouvrir" })));
+  })) : h("div", { class: "empty", text: { vigueur: "Aucune convention en vigueur.", projets: "Aucun projet à signer.", finies: "Aucune convention terminée.", tout: "Aucune convention pour l’instant." }[f] }));
+}
+// Fiche de l'entreprise : ses conventions et sa réduction d'impôt.
+function conventionsSection(e) {
+  const cs = e.id ? cpsOf(e) : [];
+  if (!cs.length && !canAgent()) return null;
+  const cr = e.id && cs.some(c => c.mecenat) ? mecCredit(e, null) : null;
+  return sec("Conventions de partenariat" + (cr && (cr.ouvert || cr.utilise) ? ` · ${money(cr.dispo)} de réduction d’impôt à déduire` : ""),
+    cs.length ? h("ul", { class: "ent-list" }, cs.slice(0, 8).map(c => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConvention(c.id), text: `${cpNo(c)} · ${c.objet || "Partenariat"}` }), h("span", { class: "meta", text: `${cpServicesLabel(c)} · ${(c.avantages || []).map(a => a.prestation).join(", ")}` })),
+      chip(cpState(c)), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune convention." }),
+    canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openConventionForm(e), text: "Nouvelle convention" }) : null);
+}
+
+/* Réglages : réduction d'impôt des partenaires */
+function renderMecSettings(force) {
+  const box = $("#card-mec");
+  if (!box) return;
+  if (!force && (S.mecDirty || box.contains(document.activeElement))) { mecExample(); return; }
+  const m = mecCfg();
+  $("#m-on").checked = m.on;
+  $("#m-taux").value = String(m.taux);
+  $("#m-plaf").value = String(m.plafond);
+  $("#m-plaf-l").textContent = `Plafond par ${cfg().periodicite === "mois" ? "mois" : "semaine"}`;
+  mecExample();
+}
+function mecExample() {
+  const on = $("#m-on").checked, taux = Math.min(100, Math.max(0, Number($("#m-taux").value) || 0)), plaf = Math.max(0, Math.round(Number($("#m-plaf").value) || 0));
+  $$("#card-mec .mec-field").forEach(f => { f.hidden = !on; });
+  if (!on) { $("#m-ex").textContent = "Aucune réduction : les prestations offertes restent notées, sans effet sur l’impôt."; return; }
+  const off = 10000, red = Math.round(off * taux / 100);
+  $("#m-ex").textContent = `Exemple : un dépanneur offre ${money(off)} de réparations ; il déduira ${money(red)} de son impôt${plaf ? `, au plus ${money(plaf)} par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` : ""}, sur ses prochaines déclarations.`;
+}
+$("#card-mec").addEventListener("input", () => { S.mecDirty = true; $("#m-msg").textContent = "Modifications non enregistrées."; mecExample(); });
+$("#m-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const v = { mecActive: $("#m-on").checked, mecTaux: Math.min(100, Math.max(0, Number($("#m-taux").value) || 0)), mecPlafond: Math.max(0, Math.round(Number($("#m-plaf").value) || 0)) };
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
+  if (ok) { S.mecDirty = false; $("#m-msg").textContent = v.mecActive ? "Réduction enregistrée. Elle s’applique aux déclarations saisies à partir de maintenant ; le taux des conventions déjà signées ne change pas." : "Réduction désactivée."; toast("Réduction d’impôt des partenaires enregistrée."); renderMecSettings(true); }
+});
+$("#seg-cp").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.cpFilter = b.dataset.f; renderConventions(); });
+$("#cp-new").addEventListener("click", () => openConventionForm(null));
+
 /* ---------- Clôture des semaines ---------- */
 // Une période clôturée est verrouillée par la base (supabase/v4_inspection_cloture.sql) :
 // plus de déclaration ajoutée, modifiée ou supprimée, plus de changement de montant d'avis.
@@ -7122,7 +7677,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -7345,7 +7900,7 @@ $("#btn-att-verify").addEventListener("click", openVerifyAttestation);
 // Sur le modèle de l'ACRE (cotisations réduites au début de l'activité) et du régime des entreprises
 // nouvelles (impôt réduit puis dégressif) : pendant ses premières périodes, une entreprise nouvelle
 // paie moins d'impôt et de cotisations. La réduction est calculée au dépôt et figure sur l'avis.
-const brutIS = d => (d.exoneration ? Number(d.exoneration.impotBrut) || 0 : Number(d.impot) || 0);
+const brutIS = d => (d.exoneration ? Number(d.exoneration.impotBrut) || 0 : (Number(d.impot) || 0) + mecMontant(d));
 const brutCot = d => (d.exoneration ? Number(d.exoneration.cotisationsBrutes) || 0 : Number(d.cotisations) || 0);
 const exoMontant = d => (d.exoneration ? (Number(d.exoneration.montantIS) || 0) + (Number(d.exoneration.montantCot) || 0) : 0);
 // Première période exonérée de l'entreprise, ou null si elle n'y a pas droit.
@@ -7390,11 +7945,12 @@ function applyExo(r, e, key, c, late) {
 const exoLabel = x => `Exonération de début d’activité (période ${x.rang} sur ${x.sur})`;
 // Lignes « brut, réduction, net » pour l'avis, le dossier et le texte Discord.
 function exoLines(d) {
-  const x = d.exoneration;
-  if (!x) return [];
-  const out = [];
-  if (x.montantIS) out.push([`${exoLabel(x)} · impôt −${pct(x.tauxIS)}`, "− " + money(x.montantIS)]);
-  if (x.montantCot) out.push([`${exoLabel(x)} · cotisations −${pct(x.tauxCot)}`, "− " + money(x.montantCot)]);
+  const x = d.exoneration, out = [];
+  if (x && x.montantIS) out.push([`${exoLabel(x)} · impôt −${pct(x.tauxIS)}`, "− " + money(x.montantIS)]);
+  if (x && x.montantCot) out.push([`${exoLabel(x)} · cotisations −${pct(x.tauxCot)}`, "− " + money(x.montantCot)]);
+  // Réduction d'impôt des partenaires (conventions de partenariat), après l'exonération.
+  if (mecMontant(d) > 0) out.push(["Réduction d’impôt des partenaires · prestations offertes aux services publics", "− " + money(mecMontant(d))]);
+  if (mecMontant(d) < 0) out.push(["Reprise d’une réduction d’impôt des partenaires (prestation annulée)", "+ " + money(-mecMontant(d))]);
   return out;
 }
 function exoSituation(e) {
@@ -7479,11 +8035,12 @@ function ctrlState(c) {
 }
 const ctrlDone = c => c.statut === "sans_suite" || (c.statut === "recouvre" && (ctrlPen(c) || {}).statut !== "due");
 const ctrlsOf = e => S.controles.filter(c => sameEnt(c, e)).sort((a, b) => String(b.ouvertLe).localeCompare(String(a.ouvertLe)));
-// Droits (impôt et cotisations, exonération comprise) recalculés au barème actuel.
+// Droits (impôt et cotisations, exonération et réduction des partenaires comprises) recalculés au barème actuel.
+// La réduction des partenaires reste celle accordée au dépôt (sans dépasser l'impôt recalculé).
 function droitsSur(d, ca, ch, ms, nb, sal) {
   const conf = cfg();
   const r = applyExo(compute(ca, ch, ms, false, conf, nb, sal), entOf(d), d.periode, conf, false);
-  return r.impot + r.cotisations;
+  return r.impot - Math.min(r.impot, mecMontant(d)) + r.cotisations;
 }
 // Salaires retenus quand le contrôle ne donne que la masse et l'effectif : la répartition des
 // salaires déclarés est gardée (proportionnellement), et les salariés en plus se partagent le surplus.
@@ -9843,8 +10400,8 @@ const NOTIF_TYPES = [
   ["controle", "Contrôle fiscal", "Réponse d’une entreprise, proposition notifiée, mise en recouvrement, classement."],
   ["vehicule", "Véhicules de société", "Contrôle de police défavorable, véhicule non déclaré ou requalifié."],
   ["convocation", "Convocations", "Absence à sanctionner, collecte à encaisser, rendez-vous de l’heure à venir."],
-  ["contrat", "Contrats d’achat", "Un projet de contrat attend la signature de la Direction."],
-  ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt (vérifié chaque heure)."]
+  ["contrat", "Contrats et partenariats", "Projet de contrat ou de convention à signer, prestation offerte à valider."],
+  ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, conventions arrivées à terme (vérifié chaque heure)."]
 ];
 const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "contrat", "delais"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais"], lecture: ["delais"] };
 const notifUrl = () => String((window.GUICHET_CONFIG || {}).supabaseUrl || "").replace(/\/$/, "") + "/functions/v1/notifier";
@@ -9952,7 +10509,7 @@ function ouvrirDossier(spec) {
   const [, col, id] = m, need = col === "penalites" ? "penalites" : col === "decisions" ? "declarations" : col;
   if (!S.connected || !S.loaded.has(need)) { S.pendingOpen = spec; return false; }
   S.pendingOpen = null;
-  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations", contrats: "contrats" }[col] || "dashboard";
+  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations", contrats: "contrats", conventions: "contrats", prestations: "contrats" }[col] || "dashboard";
   showTab(tab);
   try { history.replaceState(null, "", "#" + tab); } catch (e) { /* sans historique */ }
   if (col === "declarations" || col === "decisions") { if (S.declarations.some(d => d.id === id)) { openDecl(id); return true; } }
@@ -9962,6 +10519,8 @@ function ouvrirDossier(spec) {
   else if (col === "vehicules") { if ((S.vehicules || []).some(d => d.id === id)) { openVeh(id); return true; } }
   else if (col === "convocations") { if ((S.convocations || []).some(d => d.id === id)) { openConv(id); return true; } }
   else if (col === "contrats") { if ((S.contrats || []).some(d => d.id === id)) { openContrat(id); return true; } }
+  else if (col === "conventions") { if (cpNow(id)) { openConvention(id); return true; } }
+  else if (col === "prestations") { const ps = psNow(id); if (ps && cpNow(ps.conventionId)) { openConvention(ps.conventionId); return true; } }
   else if (col === "penalites") { const p = S.penalites.find(d => d.id === id); if (p) { openFiche(entOf(p)); return true; } }
   toast("Ce dossier n’existe plus.", true);
   return false;
@@ -10066,6 +10625,8 @@ openTransmission = liveView(openTransmission, id => { const t = S.transmissions.
   match: c => c.path === "transmissions/" + id || entMatch(t.entrepriseId)(c), reopen: () => S.transmissions.some(x => x.id === id) ? openTransmission(id) : gone() } : null; });
 openContrat = liveView(openContrat, id => { const c = ctNow(id); return c ? { key: "ct:" + id, label: `Contrat ${ctNo(c)} · ${c.fournisseurNom}`,
   match: x => x.path === "contrats/" + id || x.path.startsWith("convocations/") || entMatch(c.fournisseurId)(x), reopen: () => ctNow(id) ? openContrat(id) : gone() } : null; });
+openConvention = liveView(openConvention, id => { const c = cpNow(id); return c ? { key: "cp:" + id, label: `Convention ${cpNo(c)} · ${c.entrepriseNom}`,
+  match: x => x.path === "conventions/" + id || (x.path.startsWith("prestations/") && ((x.data || x.old || {}).conventionId === id)) || entMatch(c.entrepriseId)(x), reopen: () => cpNow(id) ? openConvention(id) : gone() } : null; });
 openConv = liveView(openConv, id => { const c = convNow(id); return c ? { key: "conv:" + id, label: `Convocation ${convNo(c)} · ${c.entrepriseNom}`,
   match: x => x.path === "convocations/" + id || entMatch(c.entrepriseId)(x), reopen: () => convNow(id) ? openConv(id) : gone() } : null; });
 openPret = liveView(openPret, id => { const p = (S.prets || []).find(x => x.id === id); return p ? { key: "pret:" + id, label: `Prêt ${pretNo(p)} · ${p.entrepriseNom}`,
@@ -10309,6 +10870,8 @@ function searchIndex() {
   for (const r of S.relances) push(isMed(r) ? "Mise en demeure" : "Relance", rlNo(r), `${rlNo(r)} · ${r.entrepriseNom}`, `${rlLabel(r)} · envoyée le ${fmtDate(new Date(r.at))}`, "", () => showDocImage(relanceDoc(r)), r.at);
   for (const s of S.saisies) push("Saisie", dossierNo("SA", s.id), `${dossierNo("SA", s.id)} · ${s.entrepriseNom}`, `${SAISIE_TYPES[s.type] || "Saisie"} · ${money(s.montant)} · ${(SSTAT[s.statut] || SSTAT.notifiee)[0]}`, s.tiers, () => openSaisieDetail(s.id), s.at);
   for (const c of S.contrats || []) push("Contrat", ctNo(c), `${ctNo(c)} · ${c.fournisseurNom}`, `${ctState(c)[0]} · ${ctAcheteur(c)} · ${c.type === "cadre" ? money(c.prixUnitaire) + " par " + (c.unite || "prestation") : money(c.montant)}`, `${c.objet || ""} ${CT_CATS[c.categorie] || ""}`, () => openContrat(c.id), c.at);
+  for (const c of S.conventions || []) push("Convention", cpNo(c), `${cpNo(c)} · ${c.entrepriseNom}`, `${cpState(c)[0]} · ${cpServicesLabel(c)}`, `${c.objet || ""} ${(c.avantages || []).map(a => a.prestation).join(" ")} partenariat`, () => openConvention(c.id), c.at);
+  for (const p of S.prestations || []) push("Prestation offerte", psNo(p), `${psNo(p)} · ${p.entrepriseNom}`, `${p.service} · ${p.objet || ""} · ${money(psOffert(p))} offerts · ${(PS_STAT[p.statut] || PS_STAT.a_valider)[0]}`, p.note || "", () => openConvention(p.conventionId), p.date || p.at);
   for (const c of S.convocations || []) push("Convocation", convNo(c), `${convNo(c)} · ${c.entrepriseNom}`, `${convMotif(c)} · ${convWhen(c)} · ${convState(c)[0]}`, c.lieu || "", () => openConv(c.id), c.at);
   for (const p of S.prets || []) push("Prêt", pretNo(p), `${pretNo(p)} · ${p.entrepriseNom}`, `${(pretState(p))[0]} · ${money(p.montant)}${pretVerse(p) ? " · reste " + money(pretReste(p)) : ""}`, [PRET_OBJETS[p.objet], p.precision].join(" "), () => openPret(p.id), p.at || p.demandeLe);
   for (const v of S.vehicules || []) push("Véhicule", normPlaque(v.plaque), `${v.plaque} · ${v.modele || "Véhicule"}`, `${v.entrepriseNom} · ${vehState(v)[0]} · ${vehNo(v)}`, [vehNo(v), vehCat(v)[0], (v.conducteurs || []).join(" "), v.concession].join(" "), () => openVeh(v.id), v.achatLe || v.createdAt);
