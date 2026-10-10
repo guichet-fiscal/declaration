@@ -84,6 +84,18 @@ Si l’écran « Accès pas encore accordé » s’affiche, l’identifiant qu�
 
 ## Ce que fait le guichet
 
+**Se repérer** : le bandeau a cinq rubriques, et chacune a ses pages juste en dessous.
+
+| Rubrique | Pages |
+|---|---|
+| Tableau de bord | la vue d’ensemble |
+| Dossiers | Entreprises, Recouvrement, Convocations, Prêts, Véhicules |
+| Trésor | Économie, Contrats et partenariats, Amendes |
+| Saisir | Déclaration d’une entreprise, Demande de moyens d’un service |
+| Outils | Journal, Modèles Discord, Réglages |
+
+Une rubrique rouvre la dernière page consultée. Le bouton **Nouveau** (à droite du bandeau, ou le bouton rond en bas à droite sur téléphone) réunit toutes les créations, rangées par thème : déclaration, convocation, tournée de collecte, contrôle fiscal, relevé de compte, prêt, véhicule, contrat, convention, versement des amendes, demande de moyens. Les liens des notifications ouvrent toujours la bonne rubrique.
+
 - **Tableau de bord** : montants déclarés, encaissés et restant dus, entreprises à surveiller, alertes de fraude possible, enveloppes des services publics et Trésor.
 - **Demandes des services publics et enveloppes** : chaque demande appartient à une semaine (choisie à la saisie, par défaut celle de sa réception, ou lue dans la ligne « Semaine » du modèle Discord). Ses crédits accordés sont imputés sur l’enveloppe de cette semaine ; la Direction peut changer la semaine au moment de l’arbitrage. Le tableau de bord montre les enveloppes de la période choisie, ce qui reste en attente, et **Suivi des enveloppes semaine par semaine** croise services et semaines (cliquez sur une case pour voir ses demandes). Le formulaire de saisie affiche l’enveloppe du service pour la semaine choisie. **Les plafonds se règlent semaine par semaine** (Réglages → Services publics : choisissez la semaine, puis le plafond de chaque service) : une semaine sans plafonds propres reprend ceux de la dernière semaine réglée, et « Revenir aux plafonds précédents » efface le réglage d’une semaine. Rien à exécuter dans Supabase pour cela. Les demandes saisies avant cette mise à jour restent imputées sur la semaine de leur accord. Google Sheets a un onglet « Enveloppes ».
 - **Entreprises** : recherche et filtres (en retard, doivent de l’argent, alertes, en contrôle). Chaque nom ouvre une fiche avec l’historique, le total payé, les retards, les alertes et les pénalités.
@@ -217,7 +229,7 @@ Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. L
 
 Quand les droits rappelés par un contrôle dépassent 100 000 € avec une majoration de 80 % ou 100 %, le site signale la **dénonciation obligatoire** au procureur (art. L228 du LPF), comme dans la réalité.
 
-Relances et mises en demeure partent de l’onglet Recouvrement ou, en haut de la fiche de l’entreprise, de la rubrique « Relances et mises en demeure ». La fenêtre « Transmettre à la justice » ne les envoie pas : elle vérifie seulement qu’elles ont été faites. L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; la majoration, la saisie et la transmission à la justice sont réservées à la Direction. Rien de nouveau à exécuter dans Supabase pour cette partie.
+Relances et mises en demeure partent de Dossiers → Recouvrement ou, en haut de la fiche de l’entreprise, de la rubrique « Relances et mises en demeure ». La fenêtre « Transmettre à la justice » ne les envoie pas : elle vérifie seulement qu’elles ont été faites. L’Inspection envoie relances et mises en demeure, et peut taxer d’office ; la majoration, la saisie et la transmission à la justice sont réservées à la Direction. Rien de nouveau à exécuter dans Supabase pour cette partie.
 
 ## Surveillance des comptes (blanchiment)
 
@@ -233,7 +245,7 @@ Un écart classé par la Direction, ou qu’un contrôle a jugé justifié, ne r
 
 ## Prêts aux entreprises
 
-La Préfecture peut prêter l’argent du Trésor à une entreprise pour un objet précis : un véhicule, un local, du stock, de la trésorerie. Onglet **Prêts**, ou la fiche de l’entreprise.
+La Préfecture peut prêter l’argent du Trésor à une entreprise pour un objet précis : un véhicule, un local, du stock, de la trésorerie. Dossiers → **Prêts**, ou la fiche de l’entreprise.
 
 1. **La demande** : un agent (Inspection ou Direction) indique l’entreprise, l’objet, le montant, le taux et le remboursement. La simulation affiche aussitôt les intérêts, le total et les dates.
 2. **L’accord** (Direction) : **Accorder et verser**. Le capital sort du Trésor, qui doit pouvoir le couvrir, et la **convention de prêt** part sur Discord avec l’échéancier. **Refuser** demande un motif.
@@ -249,7 +261,7 @@ L’Inspection peut enregistrer une demande et l’annuler tant qu’elle n’es
 
 ## Véhicules de société (abus de biens sociaux)
 
-Les entreprises achètent leurs véhicules en concession avec l’argent de leur compte. Un véhicule payé par l’entreprise mais réservé au dirigeant est un **abus de biens sociaux** (art. L241-3 et L242-6 du Code de commerce : 5 ans d’emprisonnement et 375 000 € d’amende). Fiscalement, la dépense n’est pas une charge de l’entreprise (art. 39-1 du CGI) et l’avantage est imposé comme un revenu distribué (art. 111 c du CGI). Onglet **Véhicules**, ou la fiche de l’entreprise.
+Les entreprises achètent leurs véhicules en concession avec l’argent de leur compte. Un véhicule payé par l’entreprise mais réservé au dirigeant est un **abus de biens sociaux** (art. L241-3 et L242-6 du Code de commerce : 5 ans d’emprisonnement et 375 000 € d’amende). Fiscalement, la dépense n’est pas une charge de l’entreprise (art. 39-1 du CGI) et l’avantage est imposé comme un revenu distribué (art. 111 c du CGI). Dossiers → **Véhicules**, ou la fiche de l’entreprise.
 
 1. **La déclaration d’achat** : le patron poste le modèle « Achat d’un véhicule de société » (onglet Modèles Discord) avec la facture de la concession. L’agent colle le message dans **Enregistrer un véhicule** : plaque, modèle, catégorie, prix, concession, date, usage, conducteurs autorisés, facture. Il indique si l’achat est compté dans les charges déclarées et s’il a été financé par un prêt de la Préfecture. Le **certificat d’affectation** part dans le salon de la police.
 2. **La vérification par la police** : la case **Vérifier une plaque** (ou la recherche, Ctrl+K) dit à quelle entreprise appartient le véhicule, qui peut le conduire et à quoi il sert. **Publier le registre pour la police** envoie la liste des plaques dans son salon, où la police peut chercher une plaque. Une plaque inconnue qui roule pour une entreprise est un achat non déclaré : le guichet propose de l’enregistrer.
@@ -263,7 +275,7 @@ Un prêt « achat de véhicule » est justifié par le véhicule enregistré ave
 
 ## Convocations et collecte des impôts
 
-Onglet **Convocations**, la fiche de l’entreprise, un contrôle fiscal ou **Recouvrement → Impayés → Collecte**. Une convocation fixe un rendez-vous à une entreprise et part sur Discord avec la mention du patron.
+Dossiers → **Convocations**, la fiche de l’entreprise, un contrôle fiscal ou **Recouvrement → Impayés → Collecte**. Une convocation fixe un rendez-vous à une entreprise et part sur Discord avec la mention du patron.
 
 1. **Collecte des impôts** : le transporteur de fonds (Trans’Fond) passe au siège de l’entreprise pour collecter les sommes dues, cochées une à une (avis exigibles ou encore dans leur délai, pénalités, échéances). **Planifier une collecte** convoque plusieurs entreprises à la suite, de 15 en 15 minutes (réglable), et publie un seul **ordre de collecte** sur Discord.
 2. **Autres motifs** : contrôle fiscal (relié au contrôle), audition, ou motif libre, au lieu des convocations (la Préfecture par défaut).
@@ -277,7 +289,7 @@ L’Inspection convoque, constate la présence ou l’absence, reporte et annule
 
 ## Contrats d’achat
 
-Onglet **Contrats**, ou la fiche de l’entreprise fournisseur. La Préfecture achète auprès des entreprises du serveur, pour elle-même ou pour un service public : véhicules à la concession, armes à l’armurerie, équipement, dépannages, transport de fonds.
+Trésor → **Contrats et partenariats**, ou la fiche de l’entreprise fournisseur. La Préfecture achète auprès des entreprises du serveur, pour elle-même ou pour un service public : véhicules à la concession, armes à l’armurerie, équipement, dépannages, transport de fonds.
 
 1. **Commande** : des lignes (désignation, quantité, prix). Pour un service, elle est imputée sur son enveloppe de la semaine choisie dès la signature, ou financée par une demande de moyens déjà accordée (sans compter deux fois). Puis **Constater la livraison** et **Payer** : le Trésor verse la somme et un **ordre de paiement** part sur Discord. Une livraison non conforme peut être refusée tant que rien n’est payé : le contrat est résilié et l’enveloppe libérée.
 2. **Marché à prix unitaire** : un prix par prestation (intervention, collecte…), une durée et, si besoin, un plafond. Chaque paiement est imputé sur l’enveloppe du service la semaine où il est fait ; un dépassement demande une confirmation.
@@ -289,7 +301,7 @@ L’Inspection prépare et modifie des projets, et peut les abandonner ; signer,
 
 ## Conventions de partenariat
 
-Onglet **Contrats**, partie **Conventions de partenariat**, ou la fiche de l’entreprise. Une entreprise (dépanneur, garage, restaurant…) s’engage à servir les services publics gratuitement ou à prix réduit pendant une durée.
+Trésor → **Contrats et partenariats**, partie **Conventions de partenariat**, ou la fiche de l’entreprise. Une entreprise (dépanneur, garage, restaurant…) s’engage à servir les services publics gratuitement ou à prix réduit pendant une durée.
 
 1. **La convention** : l’entreprise, la personne qui signe pour elle, les services publics bénéficiaires (tous ou certains), les avantages (gratuit, remise en %, prix fixe), le début, la fin et des conditions libres. L’Inspection prépare le projet, la Direction le signe : la convention part sur Discord. À son terme, **Renouveler** prépare la suivante.
 2. **Les prestations offertes** : **Noter une prestation** enregistre le service servi, la date, le prix normal et ce que le service a payé (calculé d’après l’avantage choisi). Notée par l’Inspection, elle attend la validation de la Direction (partie « Prestations à valider », bouton **Tout valider**) ; notée par la Direction, elle est validée d’office. Une prestation hors de la durée de la convention, ou après sa résiliation, est refusée.
@@ -299,7 +311,7 @@ Discord : cochez « Conventions de partenariat signées » dans la publication a
 
 ## Amendes versées au Trésor
 
-Onglet **Amendes**. Chaque semaine, la police, la gendarmerie et les autres services qui encaissent des amendes en remettent le produit au Trésor par un convoi du transporteur de fonds (Trans’Fond).
+Trésor → **Amendes**. Chaque semaine, la police, la gendarmerie et les autres services qui encaissent des amendes en remettent le produit au Trésor par un convoi du transporteur de fonds (Trans’Fond).
 
 1. **À l’arrivée du convoi**, **Nouveau versement** : le service, la semaine des amendes, la somme annoncée, le nombre d’amendes, le n° de bordereau, l’heure d’arrivée, le transporteur, le convoyeur, l’agent qui a remis les fonds et un lien de capture. Un deuxième versement du même service pour la même semaine demande une confirmation.
 2. **La Direction compte** : **Confirmer la réception** avec la somme comptée. Un écart avec la somme annoncée doit être expliqué ; il reste visible sur le reçu et dans le tableau (« Écarts »). La somme entre alors au Trésor et le reçu part sur Discord, dans le salon des services publics. Noté par la Direction, un versement est reçu aussitôt. **Refuser** si rien n’est arrivé.

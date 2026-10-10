@@ -571,6 +571,39 @@ nav.tabs .wrap.fade-r{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 
 nav.tabs .wrap.fade-l{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px);mask-image:linear-gradient(90deg,transparent,#000 56px)}
 nav.tabs .wrap.fade-l.fade-r{-webkit-mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent);mask-image:linear-gradient(90deg,transparent,#000 56px,#000 calc(100% - 56px),transparent)}
 @media (min-width:900px){.tab{padding:7px 12px}nav.tabs .wrap{gap:2px}}
+/* Menu en deux niveaux : les rubriques, puis les pages de la rubrique choisie. */
+nav.tabs .wrap.nav-top{display:flex;align-items:center;gap:10px;overflow:visible;padding-block:2px 6px}
+.grp-rail{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1 1 auto;min-width:0}
+.grp-rail::-webkit-scrollbar{display:none}
+.grp{appearance:none;border:0;background:none;font:inherit;font-weight:650;font-size:15px;color:var(--bar-ink-2);padding:8px 15px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.grp:hover{color:var(--bar-ink);background:rgba(255,255,255,.08)}
+.grp[aria-selected="true"]{color:var(--bar);background:var(--bar-ink)}
+.grp:focus-visible,.new-btn:focus-visible{outline:2px solid var(--bar-ink);outline-offset:2px}
+.grp .sm{display:none}
+.new-btn{flex:none;display:inline-flex;align-items:center;gap:6px;appearance:none;font:inherit;font-weight:650;font-size:14px;color:var(--bar-ink);background:rgba(255,255,255,.1);border:1px solid var(--bar-line);border-radius:999px;padding:7px 14px;cursor:pointer;white-space:nowrap}
+.new-btn:hover,.new-btn[aria-expanded="true"]{background:rgba(255,255,255,.18)}
+.new-btn>span:first-child{font-size:17px;line-height:1;font-weight:500}
+nav.tabs .wrap.sub-rail{padding-block:0 9px;gap:2px;border-top:1px solid rgba(255,255,255,.08);padding-top:7px}
+nav.tabs .wrap.sub-rail.solo{display:none}
+.sub-rail .tab{font-size:13.5px;padding:5px 12px;font-weight:600}
+nav.tabs .sub-rail .tab[aria-selected="true"]{color:var(--bar-ink);background:rgba(255,255,255,.17)}
+.tab.off{display:none}
+.new-pop{width:min(660px,calc(100vw - 32px));padding:8px 8px 10px;max-height:min(76vh,600px);overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:0 10px;align-items:start}
+.new-pop .pop-title{margin:8px 8px 4px}
+.new-col{display:grid}
+.new-item{display:grid;gap:1px;width:100%;text-align:left;appearance:none;border:0;background:none;font:inherit;color:var(--ink);padding:7px 8px;border-radius:9px;cursor:pointer}
+.new-item:hover,.new-item:focus-visible{background:var(--field);outline:none}
+.new-item b{font-weight:600;font-size:14px}
+.new-item small{color:var(--ink-3);font-size:12.5px}
+@media (max-width:560px){
+  .grp .lg,.new-btn .lg{display:none}.grp .sm{display:inline}
+  .grp-rail{justify-content:space-between;gap:2px}.grp{padding:7px 9px;font-size:13.5px}
+  /* Téléphone : « Nouveau » devient un bouton rond en bas à droite, la liste s'ouvre comme un volet. */
+  .new-btn{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:25;width:54px;height:54px;padding:0;justify-content:center;border:0;background:var(--accent);color:#fff;box-shadow:0 8px 22px rgba(10,20,45,.35)}
+  .new-btn:hover,.new-btn[aria-expanded="true"]{background:var(--accent)}
+  .new-btn>span:first-child{font-size:28px}
+  .new-pop{position:fixed;left:8px;right:8px;top:auto;bottom:calc(80px + env(safe-area-inset-bottom,0px));width:auto;grid-template-columns:1fr;max-height:68vh}
+}
 #notif-btn.on{background:rgba(255,255,255,.14)}
 .notif-list{display:grid;gap:8px;margin-top:6px}
 .notif-list label{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:start;font-weight:600;font-size:14px;color:var(--ink)}
@@ -644,22 +677,33 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
 </header>
 
 <nav class="tabs" aria-label="Guichets">
-  <div class="wrap" role="tablist">
-    <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" aria-selected="true">Tableau de bord</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" aria-selected="false">Entreprises</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-convocations" data-tab="convocations" aria-selected="false">Convocations</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-contrats" data-tab="contrats" aria-selected="false">Contrats</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-amendes" data-tab="amendes" aria-selected="false">Amendes</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-prets" data-tab="prets" aria-selected="false">Prêts</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-vehicules" data-tab="vehicules" aria-selected="false">Véhicules</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" aria-selected="false" data-agent>Saisir une déclaration</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" aria-selected="false" data-agent>Saisir une demande</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-journal" data-tab="journal" aria-selected="false">Journal</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-modeles" data-tab="modeles" aria-selected="false">Modèles Discord</button>
-    <button class="tab" role="tab" type="button" id="tab-btn-reglages" data-tab="reglages" aria-selected="false" data-writer>Réglages</button>
+  <div class="wrap nav-top">
+    <div class="grp-rail" role="tablist" aria-label="Rubriques">
+      <button class="grp" role="tab" type="button" id="grp-accueil" data-grp="accueil" aria-selected="true"><span class="lg">Tableau de bord</span><span class="sm">Accueil</span></button>
+      <button class="grp" role="tab" type="button" id="grp-dossiers" data-grp="dossiers" aria-selected="false">Dossiers</button>
+      <button class="grp" role="tab" type="button" id="grp-tresor" data-grp="tresor" aria-selected="false">Trésor</button>
+      <button class="grp" role="tab" type="button" id="grp-saisir" data-grp="saisir" aria-selected="false">Saisir</button>
+      <button class="grp" role="tab" type="button" id="grp-outils" data-grp="outils" aria-selected="false">Outils</button>
+    </div>
+    <button class="new-btn" type="button" id="new-btn" aria-haspopup="true" aria-expanded="false" aria-controls="new-pop" hidden><span aria-hidden="true">+</span><span class="lg">Nouveau</span></button>
   </div>
+  <div class="wrap sub-rail" id="sub-rail" role="tablist" aria-label="Pages de la rubrique">
+    <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" data-grp="accueil" aria-selected="true">Tableau de bord</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" data-grp="dossiers" aria-selected="false">Entreprises</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" data-grp="dossiers" aria-selected="false">Recouvrement</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-convocations" data-tab="convocations" data-grp="dossiers" aria-selected="false">Convocations</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-prets" data-tab="prets" data-grp="dossiers" aria-selected="false">Prêts</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-vehicules" data-tab="vehicules" data-grp="dossiers" aria-selected="false">Véhicules</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" data-grp="tresor" aria-selected="false">Économie</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-contrats" data-tab="contrats" data-grp="tresor" aria-selected="false">Contrats et partenariats</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-amendes" data-tab="amendes" data-grp="tresor" aria-selected="false">Amendes</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" data-grp="saisir" aria-selected="false" data-agent>Déclaration d’une entreprise</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" data-grp="saisir" aria-selected="false" data-agent>Demande de moyens d’un service</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-journal" data-tab="journal" data-grp="outils" aria-selected="false">Journal</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-modeles" data-tab="modeles" data-grp="outils" aria-selected="false">Modèles Discord</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-reglages" data-tab="reglages" data-grp="outils" aria-selected="false" data-writer>Réglages</button>
+  </div>
+  <div class="pop new-pop" id="new-pop" role="menu" aria-label="Nouveau" hidden></div>
 </nav>
 
 <main>
@@ -2285,6 +2329,7 @@ function applyRole() {
   $$(".tab[data-writer]").forEach(b => { b.hidden = !w && known; });
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
+  navSync();
   $("#logout").hidden = !S.sb || !S.uid;
   $("#btn-search").hidden = !S.connected;
   $("#notif-btn").hidden = !S.connected || !S.role;
@@ -8731,12 +8776,12 @@ function closeSansSuite(c0, patch, restoreAvis) {
         openControle(c0.id);
       }, text: "Classer sans suite" })] });
 }
-function pickEntreprise(title, then) {
+function pickEntreprise(title, then, eyebrow) {
   const inp = h("input", { id: "pk-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" });
   const err = h("span", { class: "err", "aria-live": "polite" });
   const go = () => { const e = findEnt(inp.value); if (!e) { err.textContent = "Entreprise introuvable au registre."; return; } then(e); };
   inp.addEventListener("keydown", ev => { if (ev.key === "Enter") { ev.preventDefault(); go(); } });
-  openDialog({ eyebrow: "Recouvrement", title, body: [h("div", { class: "field" }, h("label", { for: "pk-ent", text: "Entreprise" }), inp), err],
+  openDialog({ eyebrow: eyebrow || "Recouvrement", title, body: [h("div", { class: "field" }, h("label", { for: "pk-ent", text: "Entreprise" }), inp), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: go, text: "Continuer" })] });
   setTimeout(() => inp.focus(), 30);
 }
@@ -11293,17 +11338,32 @@ checkVersion(true);
 drawNetbar();
 
 /* ---------- Onglets ---------- */
+// Deux niveaux : la rubrique (Tableau de bord, Dossiers, Trésor, Saisir, Outils), puis ses pages.
+// Chaque page garde son onglet (#tab-btn-…) ; seules celles de la rubrique choisie sont affichées.
+const navLast = {};
+const tabBtn = name => $(`.tab[data-tab="${name}"]`);
+const grpOf = name => { const b = tabBtn(name); return b ? b.dataset.grp : "accueil"; };
+const grpTabs = g => $$(`.tab[data-grp="${g}"]`).filter(b => !b.hidden);
+function navSync() {
+  const g = grpOf(S.tab);
+  $$(".grp").forEach(b => { const on = b.dataset.grp === g; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; b.hidden = !grpTabs(b.dataset.grp).length; });
+  $$(".tab").forEach(b => b.classList.toggle("off", b.dataset.grp !== g));
+  $("#sub-rail").classList.toggle("solo", grpTabs(g).length < 2);
+  $("#new-btn").hidden = !canAgent() || !S.connected;
+}
 function showTab(name) {
   if (name === "reglages" && S.admin) { loadAgents(); loadKeys(); }
   if (name === "journal") loadJournal();
-  const btn = $(`.tab[data-tab="${name}"]`);
+  const btn = tabBtn(name);
   if (!btn || btn.hidden) name = "dashboard";
   S.tab = name;
+  navLast[grpOf(name)] = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
+  navSync();
   if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes"].includes(name)) schedule();
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
-  const rail = $("nav.tabs .wrap"), cur = $(`.tab[data-tab="${name}"]`);
+  const rail = $("#sub-rail"), cur = tabBtn(name);
   if (rail && cur && rail.scrollWidth > rail.clientWidth) {
     const a = cur.getBoundingClientRect(), w = rail.getBoundingClientRect();
     if (a.left < w.left + 48) rail.scrollBy({ left: a.left - w.left - 56, behavior: "smooth" });
@@ -11311,22 +11371,88 @@ function showTab(name) {
   }
   tabsFade();
 }
+// Rubrique choisie : on revient à la dernière page ouverte dans cette rubrique.
+function showGroup(g) {
+  const tabs = grpTabs(g);
+  if (!tabs.length) return;
+  const last = navLast[g] && tabs.find(b => b.dataset.tab === navLast[g]);
+  const name = (last || tabs[0]).dataset.tab;
+  showTab(name);
+  try { history.replaceState(null, "", "#" + name); } catch (err) { /* sans historique */ }
+}
 // Barre d'onglets plus large que l'écran : un fondu indique qu'il en reste à droite ou à gauche.
 function tabsFade() {
-  const w = $("nav.tabs .wrap");
+  const w = $("#sub-rail");
   if (!w) return;
   w.classList.toggle("fade-r", w.scrollWidth - w.clientWidth - w.scrollLeft > 4);
   w.classList.toggle("fade-l", w.scrollLeft > 4);
 }
-$("nav.tabs .wrap").addEventListener("scroll", tabsFade, { passive: true });
+$("#sub-rail").addEventListener("scroll", tabsFade, { passive: true });
 window.addEventListener("resize", tabsFade);
-$("nav.tabs").addEventListener("click", e => { const b = e.target.closest(".tab"); if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } } });
+$("nav.tabs").addEventListener("click", e => {
+  const g = e.target.closest(".grp");
+  if (g) { showGroup(g.dataset.grp); return; }
+  const b = e.target.closest(".tab");
+  if (b) { showTab(b.dataset.tab); try { history.replaceState(null, "", "#" + b.dataset.tab); } catch (err) { /* sans historique */ } }
+});
 $("nav.tabs").addEventListener("keydown", e => {
-  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-  const tabs = $$(".tab").filter(t => !t.hidden);
+  if ((e.key !== "ArrowRight" && e.key !== "ArrowLeft") || e.target.closest("#new-pop, #new-btn")) return;
+  const step = e.key === "ArrowRight" ? 1 : -1;
+  if (e.target.closest(".grp-rail")) {
+    const gs = $$(".grp").filter(b => !b.hidden), i = gs.findIndex(b => b.dataset.grp === grpOf(S.tab));
+    const next = gs[(i + step + gs.length) % gs.length];
+    showGroup(next.dataset.grp); next.focus(); return;
+  }
+  const tabs = $$(".tab").filter(t => !t.hidden && !t.classList.contains("off"));
+  if (!tabs.length) return;
   const i = tabs.findIndex(t => t.dataset.tab === S.tab);
-  const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+  const next = tabs[(i + step + tabs.length) % tabs.length];
   showTab(next.dataset.tab); next.focus();
+});
+
+// Bouton « Nouveau » : toutes les créations, rangées par thème.
+function newActions() {
+  const w = writer(), tf = () => openContratForm(transporteur(), { categorie: "transport_fonds" });
+  return [
+    ["Entreprises", [
+      ["Déclaration", "Saisir la déclaration d’une entreprise", () => showTab("declaration")],
+      ["Convocation", "Collecte des impôts, contrôle fiscal, audition", () => openConvForm(null)],
+      ["Tournée de collecte", "Convoquer à la suite les entreprises qui doivent de l’argent", () => openTournee()],
+      ["Contrôle fiscal", "Vérifier une ou plusieurs déclarations", () => pickEntreprise("Ouvrir un contrôle fiscal", e => newControle(e, []), "Contrôle fiscal")],
+      ["Relevé de compte", "Noter le solde du compte d’une entreprise", () => pickEntreprise("Relever le compte d’une entreprise", e => openReleve(e), "Surveillance des comptes")],
+      ["Demande de prêt", "Prêt de la Préfecture à une entreprise", () => openPretForm(null)],
+      ["Véhicule de société", "Inscrire un véhicule au registre", () => openVehForm(null)],
+      w ? ["Entreprise au registre", "Ajouter une entreprise du serveur", () => { showTab("reglages"); setSetTab("entreprises"); setTimeout(() => { const i = $("#e-nom"); if (i) i.focus(); }, 60); }] : null]],
+    ["Trésor", [
+      ["Contrat d’achat", "Commande ou marché à prix unitaire", () => openContratForm(null)],
+      w ? ["Marché de transport de fonds", "Trans’Fond payé par collecte", tf] : null,
+      ["Convention de partenariat", "Prestations gratuites ou à prix réduit pour les services", () => openConventionForm(null)],
+      ["Versement des amendes", "Fonds des services arrivés par convoi", () => openVersementForm()]]],
+    ["Services publics", [
+      ["Demande de moyens", "Saisir la demande d’un service", () => showTab("demande")]]]
+  ].map(([t, items]) => [t, items.filter(Boolean)]).filter(([, items]) => items.length);
+}
+function newPopClose() { const pop = $("#new-pop"); if (!pop.hidden) { pop.hidden = true; $("#new-btn").setAttribute("aria-expanded", "false"); } }
+function newPopOpen() {
+  const pop = $("#new-pop");
+  const sec = ([t, items]) => [h("div", { class: "pop-title", text: t }),
+    items.map(([label, hint, go]) => h("button", { class: "new-item", type: "button", role: "menuitem", onclick: () => { newPopClose(); go(); } }, h("b", { text: label }), h("small", { text: hint })))];
+  const secs = newActions();
+  // Deux colonnes : les entreprises à gauche, le Trésor et les services à droite.
+  fill(pop, h("div", { class: "new-col" }, sec(secs[0])), secs.length > 1 ? h("div", { class: "new-col" }, secs.slice(1).map(sec)) : null);
+  pop.hidden = false;
+  $("#new-btn").setAttribute("aria-expanded", "true");
+  const first = $(".new-item", pop); if (first) first.focus();
+}
+$("#new-btn").addEventListener("click", ev => { ev.stopPropagation(); if ($("#new-pop").hidden) newPopOpen(); else newPopClose(); });
+document.addEventListener("click", ev => { const pop = $("#new-pop"); if (!pop.hidden && !pop.contains(ev.target)) newPopClose(); });
+document.addEventListener("keydown", ev => { if (ev.key === "Escape") newPopClose(); });
+$("#new-pop").addEventListener("keydown", ev => {
+  if (ev.key === "Escape") { newPopClose(); $("#new-btn").focus(); return; }
+  if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp") return;
+  ev.preventDefault();
+  const items = $$(".new-item", $("#new-pop")), i = items.indexOf(document.activeElement);
+  items[(i + (ev.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
 });
 $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; render(); });
 
