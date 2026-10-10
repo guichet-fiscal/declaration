@@ -417,10 +417,11 @@ table.compact td{padding:8px 10px}
 .env-week label{font-weight:600;font-size:13px}
 .env-week select{width:auto;min-width:200px}
 .env-week .hint{flex-basis:100%}
-.env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 150px 170px;gap:10px;align-items:center}
-@media (max-width:620px){.env-head{display:none}.env-edit{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.env-edit label{grid-column:1/-1}}
+.env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 150px 230px;gap:10px;align-items:center}
+@media (max-width:620px){.env-head{display:none}.env-edit{grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}.env-edit label{grid-column:1/-1}}
 .env-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650;margin-top:6px}
 .env-edit label{font-weight:500}
+.env-edit label small{display:block;font-weight:400;font-size:12px;color:var(--ink-3)}
 /* Préfecture de police : logo et barèmes */
 .logo{flex:none;width:52px;height:52px;border-radius:50%;display:block}
 .gate-card .logo{width:64px;height:64px}
@@ -1747,8 +1748,10 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
                 <span id="s-env-from" class="hint" aria-live="polite"></span>
               </div>
               <div class="env-editor" id="env-editor"></div>
+              <p class="hint" id="s-roles-hint">Rôle Discord : le service est mentionné sur ses décisions budgétaires, ses amendes versées, ses contrats et ses conventions. Le rôle de la justice est mentionné sur les dossiers transmis et les déclarations de soupçon ; ceux de la police et de la gendarmerie dans le salon de la police. Pour avoir l’identifiant : dans Discord, mode développeur activé, clic droit sur le rôle → Copier l’identifiant du rôle. Ou écrivez <code>\@EM PN</code> dans un salon et envoyez : Discord affiche <code>&lt;@&amp;…&gt;</code>, à coller ici.</p>
               <div class="paste-row">
                 <button class="btn" type="button" id="s-svc-save">Enregistrer les services et les plafonds</button>
+                <button class="btn ghost" type="button" id="s-roles-test">Essayer les rôles sur Discord</button>
                 <span id="s-svc-msg" class="hint" aria-live="polite"></span>
               </div>
             </div>
@@ -4064,8 +4067,8 @@ $("#s-svc-save").addEventListener("click", async () => {
   for (const i of $$("#env-editor input[data-svc-m]")) {
     const v = i.value.trim();
     if (!v || !list.includes(i.dataset.svcM)) continue;
-    if (!parseMention(v)) { $("#s-svc-msg").textContent = `${i.dataset.svcM} : mention Discord invalide. Écrivez <@&ID> pour un rôle, ou l’ID d’un membre.`; i.focus(); return; }
-    ments[i.dataset.svcM] = normMention(v);
+    if (!parseMention(v, "role")) { $("#s-svc-msg").textContent = `${i.dataset.svcM} : rôle Discord invalide. Collez l’identifiant du rôle (18 à 19 chiffres) ou <@&ID>.`; i.focus(); return; }
+    ments[i.dataset.svcM] = normMention(v, "role");
   }
   const key = S.envKey || keyOf(new Date());
   const patch = { services: list, servicesMentions: ments, updatedAt: nowISO() };
@@ -4073,6 +4076,20 @@ $("#s-svc-save").addEventListener("click", async () => {
   if (S.capDirty || cfg().enveloppesSemaines[key]) patch.enveloppesSemaines = Object.assign({}, cfg().enveloppesSemaines, { [key]: env });
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, patch)));
   if (ok) { S.svcDirty = false; S.envDirty = false; S.capDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés${patch.enveloppesSemaines ? `, plafonds de ${perNom(key)} : ${Object.keys(env).length} service${plural(Object.keys(env).length)} plafonné${plural(Object.keys(env).length)}` : ""}.`; renderEnvEditor(true); }
+});
+// Un message dans le salon des services mentionne une fois chaque rôle enregistré : on voit tout de suite lequel ne sonne pas.
+$("#s-roles-test").addEventListener("click", async () => {
+  if (!writer()) return;
+  const msg = $("#s-svc-msg");
+  if (S.svcDirty || S.envDirty) { msg.textContent = "Enregistrez d’abord les services et leurs rôles."; return; }
+  if (!hookFor("services")) { msg.textContent = "Aucun salon des services publics : collez son adresse dans Réglages → Discord."; return; }
+  const rows = cfg().services.map(n => [n, svcMention(n)]);
+  const set = rows.filter(r => r[1]);
+  if (!set.length) { msg.textContent = "Aucun service n’a de rôle Discord."; return; }
+  const btn = $("#s-roles-test"); btn.disabled = true;
+  const r = await postDiscord("services", { content: ["Message d’essai du guichet fiscal : chaque service est mentionné une fois.", ...rows.map(([n, m]) => `${n} : ${m || "pas de rôle"}`)].join("\n"), mentions: set.map(x => x[1]) });
+  btn.disabled = false;
+  msg.textContent = r.ok ? `Essai envoyé : ${set.length} rôle${plural(set.length)} mentionné${plural(set.length)}${rows.length > set.length ? `, ${rows.length - set.length} service${plural(rows.length - set.length)} sans rôle` : ""}.` : "Discord a refusé l’envoi : " + r.error + ".";
 });
 $("#form-ent").addEventListener("submit", async e => {
   e.preventDefault();
@@ -5109,9 +5126,9 @@ function renderEnvEditor(force) {
       const inp = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", id: "env-" + i, "data-svc": n, placeholder: "Sans plafond", "aria-label": "Plafond de " + n });
       const k = Object.keys(env).find(x => norm(x) === norm(n));
       inp.value = prev[n] !== undefined ? prev[n] : (k && env[k] ? String(env[k]) : "");
-      const men = h("input", { class: "mono", autocomplete: "off", "data-svc-m": n, placeholder: "<@&ID du rôle>", "aria-label": "Rôle Discord de " + n });
+      const men = h("input", { class: "mono", autocomplete: "off", "data-svc-m": n, placeholder: "ID du rôle", "aria-label": "Rôle Discord de " + n + (svcRoleHint(n) ? " (" + svcRoleHint(n) + ")" : "") });
       men.value = prevM[n] !== undefined ? prevM[n] : svcMention(n);
-      return h("div", { class: "env-edit" }, h("label", { for: "env-" + i, text: n }), h("div", { class: "money", "data-cur": cur() }, inp), men);
+      return h("div", { class: "env-edit" }, h("label", { for: "env-" + i }, n, svcRoleHint(n) ? h("small", { text: "Rôle " + svcRoleHint(n) }) : null), h("div", { class: "money", "data-cur": cur() }, inp), men);
     }));
 }
 $("#env-editor").addEventListener("input", e => { S.envDirty = true; if (e.target.matches("input[data-svc]")) S.capDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
@@ -5518,21 +5535,31 @@ function renameAgent(a) {
 
 /* ---------- Discord : mentions, salons, publication ---------- */
 // Une mention s'écrit <@ID> pour un membre et <@&ID> pour un rôle.
-function parseMention(s) {
+// Un identifiant seul est un membre, sauf dans une case « rôle » (bare = "role").
+function parseMention(s, bare) {
   s = String(s || "").trim();
-  let m = /^<@&(\d{15,21})>$/.exec(s) || /^&(\d{15,21})$/.exec(s);
+  let m = /^<@&(\d{15,21})>$/.exec(s) || /^@?&(\d{15,21})$/.exec(s);
   if (m) return { type: "role", id: m[1] };
-  m = /^<@!?(\d{15,21})>$/.exec(s) || /^(\d{15,21})$/.exec(s);
+  m = /^<@!?(\d{15,21})>$/.exec(s);
   if (m) return { type: "user", id: m[1] };
+  m = /^(\d{15,21})$/.exec(s);
+  if (m) return { type: bare === "role" ? "role" : "user", id: m[1] };
   return null;
 }
-const normMention = s => { const p = parseMention(s); return p ? (p.type === "role" ? `<@&${p.id}>` : `<@${p.id}>`) : ""; };
+const normMention = (s, bare) => { const p = parseMention(s, bare); return p ? (p.type === "role" ? `<@&${p.id}>` : `<@${p.id}>`) : ""; };
 const entMention = e => (e && e.discord ? normMention(e.discord) : "");
 function svcMention(name) {
   const m = cfg().servicesMentions || {};
   const k = Object.keys(m).find(x => norm(x) === norm(name));
   return k ? normMention(m[k]) : "";
 }
+// Rôles des services repérés par leur nom ; à défaut, le rôle général réglé dans Réglages → Discord.
+function svcRoles(re) { return [...new Set((cfg().services || []).filter(n => re.test(norm(n))).map(svcMention).filter(Boolean))]; }
+function justiceMentions() { const r = svcRoles(/justice|tribunal/); return r.length ? r : [(S.discord && S.discord.mentionJustice) || ""].filter(Boolean); }
+function policeMentions() { const r = svcRoles(/^police|gendarm/); return r.length ? r : [(S.discord && S.discord.mentionPolice) || ""].filter(Boolean); }
+// Nom du rôle attendu pour chaque service du serveur, affiché dans la case vide.
+const SVC_ROLE_HINT = [[/^police/, "EM PN"], [/gendarm/, "EM GN"], [/samu|aphp|hopital/, "Direction APHP"], [/pompier|bspp/, "Direction BSPP"], [/prefecture/, "PREFECTURE"], [/justice|tribunal/, "TRIBUNAL"]];
+function svcRoleHint(n) { const x = SVC_ROLE_HINT.find(([re]) => re.test(norm(n))); return x ? x[1] : ""; }
 const pingTag = e => (entMention(e)
   ? h("span", { class: "tag ok", title: "Le patron est mentionné sur Discord", text: "ping" })
   : h("span", { class: "tag", title: "Ajoutez l’ID Discord du patron (Modifier l’entreprise) pour le mentionner", text: "sans ping" }));
@@ -5666,8 +5693,8 @@ function buildDiscordForm() {
       h("input", { id: "dw-" + k, type: "url", class: "mono secret", autocomplete: "off", spellcheck: "false", placeholder: "https://discord.com/api/webhooks/…" }),
       h("span", { class: "hint", text: hint }))),
     h("div", { class: "row2" },
-      h("div", { class: "field" }, h("label", { for: "dw-mjustice", text: "Rôle de la justice à mentionner" }), h("input", { id: "dw-mjustice", class: "mono", autocomplete: "off", placeholder: "<@&ID du rôle>" }), h("span", { class: "hint", text: "Prévenu à chaque dossier transmis." })),
-      h("div", { class: "field" }, h("label", { for: "dw-mpolice", text: "Rôle de la police à mentionner" }), h("input", { id: "dw-mpolice", class: "mono", autocomplete: "off", placeholder: "<@&ID du rôle>" }), h("span", { class: "hint", text: "Prévenu quand un véhicule est requalifié." }))),
+      h("div", { class: "field" }, h("label", { for: "dw-mjustice", text: "Rôle de la justice, par défaut" }), h("input", { id: "dw-mjustice", class: "mono", autocomplete: "off", placeholder: "ID du rôle" }), h("span", { class: "hint", text: "Mentionné sur les dossiers transmis si le service Justice n’a pas de rôle (Réglages → Services publics)." })),
+      h("div", { class: "field" }, h("label", { for: "dw-mpolice", text: "Rôle de la police, par défaut" }), h("input", { id: "dw-mpolice", class: "mono", autocomplete: "off", placeholder: "ID du rôle" }), h("span", { class: "hint", text: "Mentionné quand un véhicule est requalifié si ni la police nationale ni la gendarmerie n’ont de rôle (Réglages → Services publics)." }))),
     h("div", { class: "row2" },
       h("div", { class: "field" }, h("label", { for: "dw-nom", text: "Nom affiché dans Discord" }), h("input", { id: "dw-nom", autocomplete: "off", placeholder: "Préfecture de police" }))),
     h("fieldset", { class: "checks" }, h("legend", { text: "Publier automatiquement" }),
@@ -5689,12 +5716,12 @@ function buildDiscordForm() {
       if (v) webhooks[k] = v;
     }
     const mj = $("#dw-mjustice").value.trim();
-    if (mj && !parseMention(mj)) { $("#dw-msg").textContent = "Rôle de la justice : écrivez <@&ID> pour un rôle, ou l’ID d’un membre."; $("#dw-mjustice").focus(); return; }
+    if (mj && !parseMention(mj, "role")) { $("#dw-msg").textContent = "Rôle de la justice : collez l’identifiant du rôle ou <@&ID>."; $("#dw-mjustice").focus(); return; }
     const mp = $("#dw-mpolice").value.trim();
-    if (mp && !parseMention(mp)) { $("#dw-msg").textContent = "Rôle de la police : écrivez <@&ID> pour un rôle, ou l’ID d’un membre."; $("#dw-mpolice").focus(); return; }
+    if (mp && !parseMention(mp, "role")) { $("#dw-msg").textContent = "Rôle de la police : collez l’identifiant du rôle ou <@&ID>."; $("#dw-mpolice").focus(); return; }
     const auto = {};
     DISCORD_AUTO.forEach(([k]) => { auto[k] = $("#da-" + k).checked; });
-    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim(), mentionJustice: normMention(mj), mentionPolice: normMention(mp) };
+    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim(), mentionJustice: normMention(mj, "role"), mentionPolice: normMention(mp, "role") };
     const { error } = await S.sb.from("parametres_prives").upsert({ cle: "discord", valeur, modifie_le: nowISO() }, { onConflict: "cle" });
     if (error) { $("#dw-msg").textContent = "Enregistrement refusé : " + error.message; return; }
     S.discord = valeur; S.discordDirty = false;
@@ -9230,10 +9257,10 @@ function openJustice(e) {
     let pdf = null;
     try { pdf = await buildJusticePdf(full, e); } catch (x) { pdf = null; }
     const name = pdfName(full, e);
-    const mj = (S.discord && S.discord.mentionJustice) || "";
-    const text = `${mj ? mj + " " : ""}**Dossier transmis à la justice ${dossierNo("TJ", ref.id)}** · ${e.nom}${entMention(e) ? " (" + entMention(e) + ")" : ""}\nSomme à recouvrer : **${money(t.montant)}**\nQualification : ${t.qualifs.map(q => QUALIFS_J[q].split(" :")[0].split(" (")[0].toLowerCase()).join(", ")}\nMesures sollicitées : ${t.mesures.map(m => MESURES_J[m].split(",")[0].toLowerCase()).join(" ; ")}\nLe dossier complet est joint en PDF.\n— Préfecture de police · Direction des impôts et cotisations`;
+    const mjs = justiceMentions();
+    const text = `${mjs.length ? mjs.join(" ") + " " : ""}**Dossier transmis à la justice ${dossierNo("TJ", ref.id)}** · ${e.nom}${entMention(e) ? " (" + entMention(e) + ")" : ""}\nSomme à recouvrer : **${money(t.montant)}**\nQualification : ${t.qualifs.map(q => QUALIFS_J[q].split(" :")[0].split(" (")[0].toLowerCase()).join(", ")}\nMesures sollicitées : ${t.mesures.map(m => MESURES_J[m].split(",")[0].toLowerCase()).join(" ; ")}\nLe dossier complet est joint en PDF.\n— Préfecture de police · Direction des impôts et cotisations`;
     if (hookFor("justice") && pdf) {
-      const r = await postDiscord("justice", { content: text, mentions: [mj, entMention(e)].filter(Boolean), files: [{ blob: pdf, name }] });
+      const r = await postDiscord("justice", { content: text, mentions: [...mjs, entMention(e)].filter(Boolean), files: [{ blob: pdf, name }] });
       toast(r.ok ? "Dossier transmis à la justice sur Discord." : "Dossier enregistré, mais Discord a refusé l’envoi : " + r.error, !r.ok);
     } else toast("Dossier enregistré : le PDF est téléchargé, transmettez-le à la justice.");
     if (pdf) { try { await S.downloads.save({ filename: name, data: pdf }); } catch (x) { /* téléchargement refusé */ } }
@@ -9984,7 +10011,6 @@ function demanderJustif(e) {
 const SOUPCON_STAT = { transmise: ["Transmise", "warn"], classee: ["Classée", "muted"], justice: ["Jointe à la justice", "bad"] };
 function soupconDoc(s) {
   const e = entOf(s);
-  const mj = (S.discord && S.discord.mentionJustice) || "";
   return {
     kind: "DÉCLARATION DE SOUPÇON", no: dossierNo("DS", s.id), date: "Transmise le " + longDate(new Date(s.at)),
     meta: [["Entreprise", e.nom || s.entrepriseNom], ["Dirigeant", e.patron || "—"], ["Secteur", e.secteur || "—"], ["Transmise par", s.byNom || "Direction des impôts et cotisations"]],
@@ -9993,7 +10019,7 @@ function soupconDoc(s) {
     note: s.faits || "", noteTitle: "Faits",
     stamp: ["SOUPÇON", "bad"],
     footer: "Sur le modèle de la déclaration de soupçon adressée à TRACFIN (art. L561-15 du Code monétaire et financier). Le blanchiment est puni de 5 ans et 375 000 € d’amende (art. 324-1 du Code pénal), 10 ans et 750 000 € s’il est habituel ou commis en bande organisée (art. 324-2).",
-    discord: { channel: "justice", mentions: [mj].filter(Boolean), text: `**Déclaration de soupçon ${dossierNo("DS", s.id)}** · ${e.nom || s.entrepriseNom} · ${money(s.montant)} d’origine inexpliquée.` }
+    discord: { channel: "justice", mentions: justiceMentions(), text: `**Déclaration de soupçon ${dossierNo("DS", s.id)}** · ${e.nom || s.entrepriseNom} · ${money(s.montant)} d’origine inexpliquée.` }
   };
 }
 function openSoupcon(e) {
@@ -10217,8 +10243,8 @@ function requalifDoc(v) {
 async function notifyPolice(text) {
   const w = (S.discord && S.discord.webhooks) || {};
   if (!w.police || !canAgent()) return false;
-  const mp = (S.discord && S.discord.mentionPolice) || "";
-  const r = await postDiscord("police", { content: [mp, text].filter(Boolean).join(" "), mentions: [mp].filter(Boolean) });
+  const mps = policeMentions();
+  const r = await postDiscord("police", { content: [...mps, text].join(" "), mentions: mps });
   return r.ok;
 }
 
