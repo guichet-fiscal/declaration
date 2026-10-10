@@ -650,6 +650,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" aria-selected="false">Recouvrement</button>
     <button class="tab" role="tab" type="button" id="tab-btn-convocations" data-tab="convocations" aria-selected="false">Convocations</button>
     <button class="tab" role="tab" type="button" id="tab-btn-contrats" data-tab="contrats" aria-selected="false">Contrats</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-amendes" data-tab="amendes" aria-selected="false">Amendes</button>
     <button class="tab" role="tab" type="button" id="tab-btn-prets" data-tab="prets" aria-selected="false">Prêts</button>
     <button class="tab" role="tab" type="button" id="tab-btn-vehicules" data-tab="vehicules" aria-selected="false">Véhicules</button>
     <button class="tab" role="tab" type="button" id="tab-btn-economie" data-tab="economie" aria-selected="false">Économie</button>
@@ -962,6 +963,37 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     </div>
   </section>
 
+  <section class="panel" id="tab-amendes" role="tabpanel" aria-labelledby="tab-btn-amendes" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Amendes versées au Trésor</h2>
+        <p class="sub">Chaque semaine, la police, la gendarmerie et les autres services qui encaissent des amendes en remettent le produit au Trésor par un convoi du transporteur de fonds. L’Inspection note le versement à l’arrivée du convoi ; la Direction compte la somme et confirme la réception. Chaque convoi est payé au transporteur comme une collecte.</p>
+      </div>
+      <div class="toolbar"><button class="btn" type="button" id="vt-new" hidden>Nouveau versement</button></div>
+    </div>
+    <div class="ledger">
+      <div class="kpi" id="ak-attente"><span class="l">À confirmer</span><span class="v">—</span><span class="s">versements</span></div>
+      <div class="kpi" id="ak-semaine"><span class="l">Cette semaine</span><span class="v">—</span><span class="s">reçus au Trésor</span></div>
+      <div class="kpi" id="ak-prec"><span class="l">Semaine dernière</span><span class="v">—</span><span class="s">reçus au Trésor</span></div>
+      <div class="kpi" id="ak-ecart"><span class="l">Écarts</span><span class="v">—</span><span class="s">manquants au comptage</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Semaine par semaine</h3>
+      <p class="sub">Ce que chaque service a versé pour les amendes de la semaine. Un tiret : rien n’est arrivé.</p>
+      <div id="vt-grid" style="margin-top:10px"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="search-row">
+        <div class="seg" id="seg-vt" role="group" aria-label="Filtrer les versements">
+          <button type="button" data-f="attente" aria-pressed="true">À confirmer<span class="count"></span></button>
+          <button type="button" data-f="recus" aria-pressed="false">Reçus<span class="count"></span></button>
+          <button type="button" data-f="tout" aria-pressed="false">Tous<span class="count"></span></button>
+        </div>
+      </div>
+      <div id="vt-list"><div class="empty">Chargement…</div></div>
+    </div>
+  </section>
+
   <section class="panel" id="tab-prets" role="tabpanel" aria-labelledby="tab-btn-prets" hidden>
     <div class="panel-head">
       <div>
@@ -1108,6 +1140,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
           <option value="contrats">Contrats</option>
           <option value="conventions">Conventions de partenariat</option>
           <option value="prestations">Prestations offertes</option>
+          <option value="versements">Amendes versées</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -1812,7 +1845,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -2010,7 +2043,10 @@ function treasury() {
   }
   let achats = 0;
   for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) achats += Number(p.montant) || 0;
-  return { rec, dep, budget, achats, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, solde: budget + rec - dep - achats - pv + pr };
+  // Produit des amendes remis par les services (versements dont la réception est confirmée).
+  let amendes = 0;
+  for (const v of S.versements || []) amendes += vtRecu(v);
+  return { rec, dep, budget, achats, amendes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, solde: budget + rec + amendes - dep - achats - pv + pr };
 }
 const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
 const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -2593,6 +2629,7 @@ function subscribe() {
   col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("conventions", s => { S.conventions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("prestations", s => { S.prestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("versements", s => { S.versements = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2631,6 +2668,7 @@ function render() {
   renderConvocations();
   renderContrats();
   renderConventions();
+  renderVersements();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
 }
@@ -2707,7 +2745,7 @@ function renderDashboard() {
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
-  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}`, t.solde < 0 ? "bad" : "");
+  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}`, t.solde < 0 ? "bad" : "");
 
   // Entreprises à surveiller
   const reg = $("#registry");
@@ -2857,6 +2895,7 @@ function treasurySeries(keys) {
   for (const p of S.penalites) if (p.statut === "payee" && p.paidAt) { const k = keyOf(new Date(p.paidAt)); if (k in rec) rec[k] += Number(p.montant) || 0; }
   for (const dm of S.demandes) { const v = demAccorde(dm); if (v) { const k = demImputation(dm); if (k in dep) dep[k] += v; } }
   for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) { const k = p.periode || keyOf(new Date(p.at)); if (k in dep) dep[k] += Number(p.montant) || 0; }
+  for (const v of S.versements || []) if (vtRecu(v)) { const k = keyOf(new Date(v.confirmeLe || v.date || v.at)); if (k in rec) rec[k] += vtRecu(v); }
   return { rec: keys.map(k => rec[k]), dep: keys.map(k => dep[k]) };
 }
 function treasuryChart(box, legend, n, givenKeys) {
@@ -4013,7 +4052,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -4717,7 +4756,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -4852,6 +4891,13 @@ function describe(e) {
       if (x === "suppression") return `a supprimé la prestation ${no}`;
       if (a.statut !== b.statut) return { validee: `a validé la prestation ${no} de ${a.entrepriseNom || ""} (${off})`, refusee: `a refusé la prestation ${no} de ${a.entrepriseNom || ""}`, annulee: `a annulé la prestation ${no} de ${a.entrepriseNom || ""}` }[a.statut] || `a modifié la prestation ${no}`;
       return `a modifié la prestation ${no}`;
+    }
+    case "versements": {
+      const no = dossierNo("VA", e.doc_id), qui = `${v.service || "un service"} · ${periodPlain(v.periode)}`;
+      if (x === "ajout") return v.statut === "confirme" ? `a reçu au Trésor ${money(v.montantRecu ?? v.montant)} d’amendes de ${qui} (${no})` : `a noté un versement de ${money(v.montant)} d’amendes de ${qui} (${no})`;
+      if (x === "suppression") return `a supprimé le versement ${no}`;
+      if (a.statut !== b.statut) return { confirme: `a confirmé la réception de ${money(a.montantRecu ?? a.montant)} d’amendes de ${qui} (${no})`, refuse: `a refusé le versement ${no} de ${qui}`, annule: `a annulé le versement ${no} de ${qui}` }[a.statut] || `a modifié le versement ${no}`;
+      return `a modifié le versement ${no}`;
     }
     case "meta": return "a téléchargé une sauvegarde du registre";
     case "agents": {
@@ -5372,6 +5418,7 @@ function editEntreprise(e, back) {
       for (const ct of S.contrats || []) if (ct.fournisseurId === e.id && ct.fournisseurNom !== n) jobs.push(["contrats", ct.id, { fournisseurNom: n }]);
       for (const cp of S.conventions || []) if (cp.entrepriseId === e.id && cp.entrepriseNom !== n) jobs.push(["conventions", cp.id]);
       for (const ps of S.prestations || []) if (ps.entrepriseId === e.id && ps.entrepriseNom !== n) jobs.push(["prestations", ps.id]);
+      for (const vt of S.versements || []) if (vt.transporteurId === e.id && vt.transporteurNom !== n) jobs.push(["versements", vt.id, { transporteurNom: n }]);
       let done = 0;
       for (const [col, id, patch] of jobs) { await write(() => S.db.doc(col + "/" + id).update(patch || { entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -5447,7 +5494,7 @@ const pingTag = e => (entMention(e)
 const WEBHOOK_RE = /^https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d{15,21}\/[\w-]{20,}$/;
 const DISCORD_CHANNELS = [
   ["entreprises", "Salon des entreprises", "Avis d’imposition et pénalités. Le patron est mentionné quand son ID Discord est connu."],
-  ["services", "Salon des services publics", "Décisions sur les demandes de moyens. Le service est mentionné si vous lui avez donné un rôle."],
+  ["services", "Salon des services publics", "Décisions sur les demandes de moyens et reçus des amendes versées au Trésor. Le service est mentionné si vous lui avez donné un rôle."],
   ["relances", "Salon des relances", "Rappels, relances et mises en demeure. Laissez vide pour utiliser le salon des entreprises."],
   ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."],
   ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."]
@@ -5462,6 +5509,7 @@ const DISCORD_AUTO = [
   ["convocations", "Convocations, ordres de collecte et constats d’absence", "entreprises"],
   ["contrats", "Contrats signés et ordres de paiement", "entreprises"],
   ["conventions", "Conventions de partenariat signées", "entreprises"],
+  ["versements", "Amendes reçues au Trésor (reçu du versement)", "services"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"]
@@ -6754,10 +6802,12 @@ function ctCollectes(c) {
   if (c.categorie !== "transport_fonds") return { faites: [], aPayer: [], payables: [], horsPlafond: 0 };
   const deb = new Date(c.debut || c.signeLe || c.at).getTime(), fin = c.fin ? new Date(c.fin).getTime() + 864e5 - 1 : Infinity;
   // Une collecte payée par un marché, quel qu'il soit, ne l'est plus par un autre.
-  const payes = new Set((S.contrats || []).flatMap(x => (x.paiements || []).flatMap(p => p.convocations || [])));
+  const payes = new Set((S.contrats || []).flatMap(x => (x.paiements || []).flatMap(p => (p.convocations || []).concat(p.versements || []))));
   const faites = (S.convocations || []).filter(v => v.transporteurId === c.fournisseurId && v.motif === "collecte" && (
     (v.collecte && !v.collecte.enCours && (Number(v.collecte.montant) > 0 || c.passagesAbsents) && (t => t >= deb && t <= fin)(new Date(v.collecte.at).getTime())) ||
     (c.passagesAbsents && v.statut === "absente" && v.absence && (t => t >= deb && t <= fin)(new Date(v.absence.at).getTime()))))
+    // Convois des amendes des services, reçus au Trésor : payés comme une collecte.
+    .concat((S.versements || []).filter(v => v.statut === "confirme" && v.transporteurId === c.fournisseurId && vtDate(v) >= deb && vtDate(v) <= fin).map(v => Object.assign({ _vt: true }, v)))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const aPayer = faites.filter(v => !payes.has(v.id));
   // Plafond du marché : on ne paie que les collectes qu'il couvre encore.
@@ -6765,6 +6815,11 @@ function ctCollectes(c) {
   const payables = pu > 0 ? aPayer.slice(0, room === Infinity ? aPayer.length : Math.floor(room / pu)) : [];
   return { faites, aPayer, payables, horsPlafond: aPayer.length - payables.length };
 }
+// Une collecte ou un convoi des amendes, dans les listes des marchés de transport de fonds.
+const colLabel = v => (v._vt ? `Amendes · ${v.service} · ${fmtDateTime(new Date(vtDate(v)))}` : `${convShort(v)} · ${v.entrepriseNom}`);
+const colNo = v => (v._vt ? vtNo(v) : dossierNo("CV", v.id));
+const colOpen = v => (v._vt ? openVersement(v.id) : openConv(v.id));
+const colInfo = v => (v._vt ? `${money(vtRecu(v))} convoyés` : v.statut === "absente" ? "passage sans collecte" : money(v.collecte ? v.collecte.montant : 0) + " collectés");
 const ctAPayer = c => {
   if (c.statut === "livre") return Math.max(0, (Number(c.montant) || 0) - ctPaye(c));
   if (c.statut === "en_cours" && c.categorie === "transport_fonds") return ctCollectes(c).payables.length * (Number(c.prixUnitaire) || 0);
@@ -6796,8 +6851,9 @@ function contratDoc(c) {
 }
 function paiementDoc(c, p) {
   const f = S.entreprises.find(e => e.id === c.fournisseurId) || { nom: c.fournisseurNom }, i = (c.paiements || []).indexOf(p) + 1, svc = ctService(c);
-  const lines = p.convocations && p.convocations.length
-    ? p.convocations.map(id => { const v = (S.convocations || []).find(x => x.id === id); return [`${v ? `${convShort(v)} · ${v.entrepriseNom}` : "Collecte"} (${dossierNo("CV", id)})`, money(c.prixUnitaire)]; })
+  const lines = (p.convocations && p.convocations.length) || (p.versements && p.versements.length)
+    ? (p.convocations || []).map(id => { const v = (S.convocations || []).find(x => x.id === id); return [`${v ? `${convShort(v)} · ${v.entrepriseNom}` : "Collecte"} (${dossierNo("CV", id)})`, money(c.prixUnitaire)]; })
+      .concat((p.versements || []).map(id => { const v = vtNow(id); return [`Convoi des amendes${v ? ` · ${v.service}` : ""} (${dossierNo("VA", id)})`, money(c.prixUnitaire)]; }))
     : c.type === "cadre" ? [[`${p.quantite || 1} ${c.unite || "prestation"}${Number(p.quantite) > 1 ? "s" : ""} × ${money(c.prixUnitaire)}`, money(p.montant)]] : [[c.objet || "Commande", money(p.montant)]];
   return {
     kind: "ORDRE DE PAIEMENT", no: `${ctNo(c)}-${i}`, date: "Payé le " + longDate(new Date(p.at)),
@@ -6972,7 +7028,7 @@ function openContrat(id) {
       ["Payé", money(paye), "tot"], aPayer ? ["Reste à payer", money(aPayer), "tot"] : null]),
     !cadre && (c.lignes || []).length ? sec("Lignes", h("ul", { class: "access" }, c.lignes.map(l => h("li", { text: `${l.designation} · ${l.quantite} × ${money(l.prixUnitaire)} = ${money(l.quantite * l.prixUnitaire)}` })))) : null,
     c.conditions ? sec("Conditions", h("p", { class: "prewrap", style: "margin:0", text: c.conditions })) : null,
-    c.categorie === "transport_fonds" ? sec(`Collectes faites · ${col.faites.length}`, col.faites.length ? h("ul", { class: "access" }, col.faites.slice(-30).map(v => h("li", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(v.id), text: `${convShort(v)} · ${v.entrepriseNom}` }), ` · ${v.statut === "absente" ? "passage sans collecte" : money(v.collecte ? v.collecte.montant : 0) + " collectés"} · ${col.aPayer.includes(v) ? "à payer" : "payée"}`)))
+    c.categorie === "transport_fonds" ? sec(`Collectes faites · ${col.faites.length}`, col.faites.length ? h("ul", { class: "access" }, col.faites.slice(-30).map(v => h("li", {}, h("button", { class: "linkbtn", type: "button", onclick: () => colOpen(v), text: colLabel(v) }), ` · ${colInfo(v)} · ${col.aPayer.includes(v) ? "à payer" : "payée"}`)))
       : h("p", { class: "muted", style: "margin:0", text: "Aucune collecte encaissée depuis le début du marché." })) : null,
     (c.paiements || []).length ? sec("Paiements", h("ul", { class: "ent-list" }, c.paiements.map((p, i) => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${ctNo(c)}-${i + 1} · ${money(p.montant)}` }), h("span", { class: "meta", text: `${fmtDateTime(new Date(p.at))} · ${p.byNom || ""}${p.note ? " · " + p.note : ""}` })), h("span", {}),
       h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(paiementDoc(c, p), reopen), text: "Ordre de paiement" })))))) : null
@@ -7052,8 +7108,10 @@ function ctPayer(c) {
     go.disabled = true;
     const ok = await ctOnce(c.id, async () => {
       const cur = ctNow(c.id) || c, at = nowISO();
+      // Une collecte ou un convoi a pu changer depuis l'ouverture (réception annulée, payé ailleurs) : on repart de la liste à jour.
+      if (tf && cadre && ctCollectes(cur).payables.map(v => v.id).join() !== col.payables.map(v => v.id).join()) { toast("Les collectes à payer viennent de changer : voici la liste à jour.", true); ctPayer(cur); return null; }
       const p = { at, montant: m, periode: keyOf(new Date(at)), byNom: S.agentName || "", note: note.value.trim() };
-      if (tf && cadre) p.convocations = col.payables.map(v => v.id);
+      if (tf && cadre) { p.convocations = col.payables.filter(v => !v._vt).map(v => v.id); const vts = col.payables.filter(v => v._vt).map(v => v.id); if (vts.length) p.versements = vts; }
       else if (cadre) p.quantite = Math.max(1, Math.round(Number(qte.value) || 1));
       const patch = { paiements: (cur.paiements || []).concat([p]) };
       if (!cadre) patch.statut = "paye";
@@ -7061,12 +7119,13 @@ function ctPayer(c) {
       const c2 = ctNow(c.id); if (c2) autoPublish("contrats", paiementDoc(c2, c2.paiements[c2.paiements.length - 1]), "Ordre de paiement publié.");
       return true;
     });
+    if (ok === null) return;
     if (!ok) { go.disabled = false; return; }
     const c3 = ctNow(c.id); if (c3) showDocImage(paiementDoc(c3, c3.paiements[c3.paiements.length - 1]), () => openContrat(c.id)); else openContrat(c.id);
   });
   openDialog({ eyebrow: `${CT_TYPES[c.type]} ${ctNo(c)} · ${c.fournisseurNom}`, title: "Payer",
     body: [
-      tf && cadre ? (col.payables.length ? sec(`${col.payables.length} collecte${plural(col.payables.length)} à payer`, h("ul", { class: "access" }, col.payables.map(v => h("li", { text: `${convShort(v)} · ${v.entrepriseNom} · ${dossierNo("CV", v.id)}` }))))
+      tf && cadre ? (col.payables.length ? sec(`${col.payables.length} collecte${plural(col.payables.length)} à payer`, h("ul", { class: "access" }, col.payables.map(v => h("li", { text: `${colLabel(v)} · ${colNo(v)}` }))))
         : h("p", { class: "hint", style: "margin:0", text: "Aucune collecte encaissée à payer pour l’instant." })) : null,
       tf && col.horsPlafond ? h("p", { class: "hint", style: "margin:0", text: `${col.horsPlafond} collecte${plural(col.horsPlafond)} dépasse${col.horsPlafond > 1 ? "nt" : ""} le plafond du marché : elle${col.horsPlafond > 1 ? "s" : ""} ne peu${col.horsPlafond > 1 ? "vent" : "t"} pas être payée${plural(col.horsPlafond)} sur ce marché.` }) : null,
       cadre && !tf ? field("ct-qte", `Nombre ${/^[aeiouyhéèê]/i.test(c.unite || "prestation") ? "d’" : "de "}${c.unite || "prestation"}s à payer`, qte) : null,
@@ -7588,6 +7647,231 @@ $("#m-save").addEventListener("click", async () => {
 $("#seg-cp").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.cpFilter = b.dataset.f; renderConventions(); });
 $("#cp-new").addEventListener("click", () => openConventionForm(null));
 
+/* ---------- Amendes versées au Trésor ---------- */
+// Chaque semaine, les services qui encaissent des amendes (police, gendarmerie…) en remettent le produit
+// au Trésor par un convoi du transporteur de fonds. L'Inspection note le versement à l'arrivée du convoi ;
+// la Direction compte la somme et confirme la réception : elle entre alors au Trésor. Un écart entre la
+// somme annoncée et la somme comptée est consigné. Chaque convoi est payé au transporteur comme une
+// collecte de son marché de transport de fonds.
+const VT_STAT = { a_confirmer: ["À confirmer", "warn"], confirme: ["Reçu au Trésor", "ok"], refuse: ["Refusé", "muted"], annule: ["Annulé", "muted"] };
+const vtNo = v => dossierNo("VA", v.id);
+const vtNow = id => (S.versements || []).find(v => v.id === id) || null;
+const vtRecu = v => (v.statut === "confirme" ? Math.max(0, Number(v.montantRecu ?? v.montant) || 0) : 0);
+const vtDate = v => new Date(v.date || v.at).getTime();
+const vtEcart = v => (v.statut === "confirme" ? vtRecu(v) - (Number(v.montant) || 0) : 0);
+// Un convoi payé au transporteur (sur un marché de transport de fonds) ne s'annule plus.
+const vtPaye = id => (S.contrats || []).some(c => (c.paiements || []).some(p => (p.versements || []).includes(id)));
+// Services qui versent des amendes : ceux qui l'ont déjà fait, et la police et la gendarmerie.
+function vtServices() {
+  const out = [];
+  const add = s => { if (s && !out.some(x => norm(x) === norm(s))) out.push(s); };
+  cfg().services.filter(s => /police|gendarm/i.test(s)).forEach(add);
+  (S.versements || []).filter(v => v.statut !== "annule").forEach(v => add(v.service));
+  return out;
+}
+function versementDoc(v) {
+  const recu = v.statut === "confirme", ec = vtEcart(v);
+  return {
+    kind: "VERSEMENT DES AMENDES AU TRÉSOR", no: vtNo(v), date: recu ? "Reçu le " + longDate(new Date(v.confirmeLe)) : "Annoncé le " + longDate(new Date(v.at)),
+    meta: [["Service", v.service || "—"], ["Amendes de", periodLabel(v.periode)], ["Bordereau", v.bordereau || "—"], ["Convoi", `${v.transporteurNom || "—"}${v.convoyeur ? " · " + v.convoyeur : ""}`],
+      ["Remis par", v.remisPar || "—"], ["Arrivé le", fmtDateTime(new Date(vtDate(v)))], ["Reçu par", v.confirmeParNom || "—"]],
+    lines: [["Somme annoncée", money(v.montant)], v.nbAmendes ? ["Nombre d’amendes", String(v.nbAmendes)] : null,
+      recu && ec ? ["Somme comptée à l’arrivée", money(vtRecu(v))] : null, recu && ec ? ["Écart", (ec > 0 ? "+ " : "− ") + money(Math.abs(ec))] : null,
+      v.motifEcart ? ["Explication de l’écart", v.motifEcart] : null, v.note ? ["Observation", v.note] : null].filter(Boolean),
+    total: ["Versé au Trésor", money(recu ? vtRecu(v) : v.montant)],
+    stamp: { confirme: ["REÇU", "ok"], refuse: ["REFUSÉ", "muted"], annule: ["ANNULÉ", "muted"] }[v.statut] || ["À CONFIRMER", "warn"],
+    footer: "Produit des amendes encaissées par le service, remis au Trésor de la Préfecture de police par le convoi du transporteur de fonds. La somme comptée à l’arrivée fait foi.",
+    discord: { channel: "services", mentions: [svcMention(v.service)].filter(Boolean), text: `**Versement des amendes ${vtNo(v)}** · ${v.service} · ${periodLabel(v.periode)} · ${money(recu ? vtRecu(v) : v.montant)} ${recu ? "reçus au Trésor" : "annoncés"}${recu && ec ? ` (écart de ${money(ec)})` : ""}` }
+  };
+}
+async function saveVt(v, patch, msg) {
+  const latest = vtNow(v.id) || v;
+  const body = Object.assign({}, latest, patch); delete body.id;
+  for (const k of Object.keys(body)) if (body[k] === undefined) delete body[k];
+  const ok = await write(() => S.db.doc("versements/" + v.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+function vtChanged(id, want) {
+  const cur = vtNow(id);
+  if (!cur) { closeDialog(); toast("Ce versement vient d’être supprimé par un autre agent.", true); return true; }
+  if (want && !want(cur)) { toast("Un autre agent vient de traiter ce versement : voici son état.", true); openVersement(id); return true; }
+  return false;
+}
+const vtBusy = new Set();
+async function vtOnce(id, fn) { if (vtBusy.has(id)) return false; vtBusy.add(id); try { return await fn(); } finally { vtBusy.delete(id); } }
+
+// Nouveau versement, noté à l'arrivée du convoi. Noté par la Direction, il est reçu aussitôt.
+function openVersementForm(opts) {
+  if (!canAgent()) return;
+  opts = opts || {};
+  const svcs = vtServices().concat(cfg().services).filter((s, i, a) => a.findIndex(x => norm(x) === norm(s)) === i);
+  const svc = h("select", {}, svcs.map(s => h("option", { value: s, text: s })));
+  svc.value = opts.service && svcs.some(s => norm(s) === norm(opts.service)) ? svcs.find(s => norm(s) === norm(opts.service)) : svcs[0] || "";
+  const per = h("select", {}); demPerOptions(per, opts.periode || keyOf(new Date()));
+  const mt = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric" });
+  const nb = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "Facultatif" });
+  const bord = h("input", { autocomplete: "off", placeholder: "Ex. : BV-2026-41-PN" });
+  const date = h("input", { type: "datetime-local" }); date.value = toLocalInput(new Date());
+  const ents = S.entreprises.slice().sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  const tr = h("select", {}, h("option", { value: "", text: "— Pas de convoi (remis au guichet) —" }), ents.map(x => h("option", { value: x.id, text: x.nom })));
+  tr.value = transporteur() ? transporteur().id : "";
+  const conv = h("input", { autocomplete: "off", placeholder: "Nom du convoyeur (facultatif)" });
+  const remis = h("input", { autocomplete: "off", placeholder: "Agent du service qui a remis les fonds" });
+  const lien = h("input", { type: "url", autocomplete: "off", placeholder: "Lien d’une capture du bordereau (facultatif)" });
+  const note = h("input", { autocomplete: "off", placeholder: "Facultatif" });
+  const dupL = h("div", { class: "err", hidden: true }), dupCb = h("input", { type: "checkbox", id: "vt-dup" });
+  [svc, per].forEach(i => i.addEventListener("change", () => { dupCb.checked = false; dupL.hidden = true; }));
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: writer() ? "Enregistrer la réception" : "Noter le versement" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const m = Math.round(Number(mt.value) || 0), t = date.value ? new Date(date.value).getTime() : NaN;
+    if (!svc.value) { err.textContent = "Choisissez le service qui verse ses amendes."; return; }
+    if (!(m > 0)) { err.textContent = "Indiquez la somme versée."; mt.focus(); return; }
+    if (!Number.isFinite(t) || t > Date.now() + 60e3) { err.textContent = "Indiquez quand le convoi est arrivé (pas dans le futur)."; date.focus(); return; }
+    const dup = (S.versements || []).find(v => norm(v.service) === norm(svc.value) && v.periode === per.value && ["a_confirmer", "confirme"].includes(v.statut));
+    if (dup && !dupCb.checked) { fill(dupL, `${vtNo(dup)} : ${dup.service} a déjà versé ${money(dup.montant)} pour ${periodPlain(per.value).toLowerCase()}. `, h("label", { class: "switch", for: "vt-dup" }, dupCb, "C’est un autre convoi : enregistrer quand même")); dupL.hidden = false; return; }
+    const f = S.entreprises.find(x => x.id === tr.value) || null, at = nowISO();
+    const body = { service: svc.value, periode: per.value, montant: m, nbAmendes: Math.max(0, Math.round(Number(nb.value) || 0)) || null, bordereau: bord.value.trim(),
+      date: new Date(t).toISOString(), transporteurId: f ? f.id : null, transporteurNom: f ? f.nom : "", convoyeur: conv.value.trim(), remisPar: remis.value.trim(),
+      preuve: linkProof(lien.value), note: note.value.trim(), statut: writer() ? "confirme" : "a_confirmer", at, by: S.uid || null, byNom: S.agentName || "" };
+    if (writer()) Object.assign(body, { montantRecu: m, confirmeLe: at, confirmeParNom: S.agentName || "" });
+    go.disabled = true;
+    const ref = S.db.collection("versements").doc();
+    if (!(await write(() => ref.set(body)))) { go.disabled = false; return; }
+    const v = Object.assign({ id: ref.id }, body);
+    if (writer()) { toast(`${vtNo(v)} : ${money(m)} reçus au Trésor.`); autoPublish("versements", versementDoc(v), "Versement publié."); showDocImage(versementDoc(v), () => openVersement(ref.id)); }
+    else { toast(`${vtNo(v)} noté : la Direction confirme la réception.`); openVersement(ref.id); }
+  });
+  openDialog({ eyebrow: "Amendes versées au Trésor", title: "Nouveau versement", wide: true,
+    body: [
+      h("div", { class: "row2" }, field("vt-svc", "Service", svc), field("vt-per", "Amendes de la semaine", per)),
+      h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "vt-mt", text: "Somme versée" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(mt, { id: "vt-mt" }))), field("vt-nb", "Nombre d’amendes", nb), field("vt-bord", "N° de bordereau", bord)),
+      h("div", { class: "row3" }, field("vt-arr", "Arrivée du convoi", date), field("vt-tr", "Transporteur de fonds", tr), field("vt-conv", "Convoyeur", conv)),
+      h("div", { class: "row2" }, field("vt-remis", "Remis par", remis), field("vt-lien", "Capture du bordereau", lien)),
+      field("vt-note", "Observation", note), dupL,
+      h("p", { class: "hint", style: "margin:0", text: writer() ? "La somme entre au Trésor dès l’enregistrement ; le reçu part sur Discord. Un convoi du transporteur est payé comme une collecte de son marché." : "La Direction compte la somme et confirme la réception : elle entre alors au Trésor." }),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+
+function openVersement(id) {
+  const v = vtNow(id);
+  if (!v) return;
+  const dir = writer(), mine = !dir && canAgent() && v.by === S.uid, reopen = () => openVersement(id), ec = vtEcart(v);
+  const body = [
+    kv([["Service", v.service], ["Amendes de", periodLabel(v.periode)], ["Somme annoncée", money(v.montant), "num"],
+      v.statut === "confirme" ? ["Reçu au Trésor", money(vtRecu(v)), "tot"] : null,
+      ec ? ["Écart", `${ec > 0 ? "+ " : "− "}${money(Math.abs(ec))}${v.motifEcart ? " · " + v.motifEcart : ""}`] : null,
+      v.nbAmendes ? ["Nombre d’amendes", String(v.nbAmendes)] : null, v.bordereau ? ["Bordereau", v.bordereau] : null,
+      ["Convoi", `${v.transporteurNom || "remis au guichet"}${v.convoyeur ? " · " + v.convoyeur : ""} · arrivé le ${fmtDateTime(new Date(vtDate(v)))}`],
+      v.remisPar ? ["Remis par", v.remisPar] : null, ["Noté par", `${v.byNom || "—"} le ${fmtDateTime(new Date(v.at))}`],
+      v.confirmeLe ? ["Réception confirmée", `par ${v.confirmeParNom || "—"} le ${fmtDateTime(new Date(v.confirmeLe))}`] : null,
+      v.motif ? [v.statut === "refuse" ? "Refusé" : "Annulé", `${v.motif}${v.traiteParNom ? " · " + v.traiteParNom : ""}`] : null,
+      v.transporteurId && v.statut === "confirme" ? ["Transporteur", vtPaye(v.id) ? "convoi payé sur son marché"
+        : (S.contrats || []).some(c => c.categorie === "transport_fonds" && c.statut === "en_cours" && ctCollectes(c).faites.some(x => x.id === v.id)) ? "convoi à payer sur son marché de transport de fonds"
+        : "aucun marché de transport de fonds en cours ne couvre ce convoi"] : null,
+      v.preuve ? ["Capture", proofEl(v.preuve)] : null, v.note ? ["Observation", v.note] : null])];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(versementDoc(v), reopen), text: "Reçu en image" }), h("span", { class: "spacer" })];
+  if (mine && v.statut === "a_confirmer") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => vtMotif(v, "retirer"), text: "Retirer" }));
+  if (dir && v.statut === "a_confirmer") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => vtMotif(v, "refuser"), text: "Refuser" }), h("button", { class: "btn ink small", type: "button", onclick: () => vtConfirmer(v), text: "Confirmer la réception" }));
+  if (dir && v.statut === "confirme" && !vtPaye(v.id)) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => vtMotif(v, "annuler"), text: "Annuler la réception" }));
+  openDialog({ eyebrow: `Versement ${vtNo(v)}`, title: `Amendes · ${v.service}`, stampEl: stamp(VT_STAT[v.statut] || VT_STAT.a_confirmer), body, foot });
+}
+// La Direction compte la somme : un écart avec la somme annoncée doit être expliqué.
+function vtConfirmer(v) {
+  const mt = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric" }); mt.value = String(v.montant);
+  const motif = h("input", { autocomplete: "off", placeholder: "Ex. : 2 000 € manquants dans la mallette, signalé au service" });
+  const motifF = field("vt-mot", "Explication de l’écart", motif); motifF.hidden = true;
+  const ecEl = h("strong", { class: "mono" });
+  const upd = () => { const e = Math.round(Number(mt.value) || 0) - (Number(v.montant) || 0); ecEl.textContent = e ? `${e > 0 ? "+ " : "− "}${money(Math.abs(e))}` : "aucun"; motifF.hidden = !e; };
+  mt.addEventListener("input", upd); upd();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Confirmer la réception" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const m = Math.round(Number(mt.value) || 0);
+    if (!(m > 0)) { err.textContent = "Indiquez la somme comptée. Si rien n’est arrivé, refusez le versement."; mt.focus(); return; }
+    if (m !== Number(v.montant) && !motif.value.trim()) { err.textContent = "Expliquez l’écart entre la somme annoncée et la somme comptée."; motif.focus(); return; }
+    go.disabled = true;
+    const ok = await vtOnce(v.id, async () => {
+      if (vtChanged(v.id, x => x.statut === "a_confirmer" && Number(x.montant) === Number(v.montant))) return false;
+      return saveVt(v, { statut: "confirme", montantRecu: m, motifEcart: m !== Number(v.montant) ? motif.value.trim() : "", confirmeLe: nowISO(), confirmeParNom: S.agentName || "" }, `${money(m)} reçus au Trésor.`);
+    });
+    if (!ok) { go.disabled = false; return; }
+    const v2 = vtNow(v.id) || Object.assign({}, v, { statut: "confirme", montantRecu: m, confirmeLe: nowISO() });
+    autoPublish("versements", versementDoc(v2), "Versement publié.");
+    showDocImage(versementDoc(v2), () => openVersement(v.id));
+  });
+  openDialog({ eyebrow: `Versement ${vtNo(v)} · ${v.service}`, title: "Confirmer la réception",
+    body: [h("p", { style: "margin:0", text: `Comptez la somme arrivée avec le convoi. Annoncé : ${money(v.montant)}.` }),
+      h("div", { class: "field" }, h("label", { for: "vt-cpt", text: "Somme comptée" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(mt, { id: "vt-cpt" }))),
+      kv([["Écart", ecEl]]), motifF, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVersement(v.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+function vtMotif(v, action) {
+  const A = {
+    refuser: { title: "Refuser le versement", text: "Rien n’entre au Trésor. Le service et le transporteur doivent s’expliquer.", statut: "refuse", from: ["a_confirmer"], label: "Refuser", msg: "Versement refusé." },
+    annuler: { title: "Annuler la réception", text: "La somme ressort du Trésor. Ce n’est possible que tant que le convoi n’est pas payé au transporteur.", statut: "annule", from: ["confirme"], label: "Annuler la réception", msg: "Réception annulée." },
+    retirer: { title: "Retirer le versement", text: "Il n’a pas encore été confirmé : il est retiré.", statut: "annule", from: ["a_confirmer"], label: "Retirer", msg: "Versement retiré." }
+  }[action];
+  const motif = h("textarea", { rows: "2" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: `Versement ${vtNo(v)} · ${v.service}`, title: A.title, body: [h("p", { style: "margin:0", text: A.text }), field("vt-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openVersement(v.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+        const btn = ev.currentTarget; btn.disabled = true;
+        const ok = await vtOnce(v.id, async () => {
+          if (vtChanged(v.id, x => A.from.includes(x.statut))) return false;
+          if (action === "annuler" && vtPaye(v.id)) { err.textContent = "Ce convoi a déjà été payé au transporteur : la réception ne s’annule plus."; return false; }
+          return saveVt(v, { statut: A.statut, motif: motif.value.trim(), traiteLe: nowISO(), traiteParNom: S.agentName || "" }, A.msg);
+        });
+        if (ok) openVersement(v.id); else btn.disabled = false;
+      }, text: A.label })] });
+}
+
+// Onglet Amendes.
+function renderVersements() {
+  if (S.tab !== "amendes") return;
+  const box = $("#vt-list");
+  if (!S.connected || !S.loaded.has("versements")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.versements || []).slice().sort((a, b) => vtDate(b) - vtDate(a));
+  const kNow = keyOf(new Date()), kPrev = prevKey(kNow);
+  const recuDe = k => all.filter(v => v.periode === k).reduce((t, v) => t + vtRecu(v), 0);
+  const attente = all.filter(v => v.statut === "a_confirmer"), recus = all.filter(v => v.statut === "confirme");
+  const ecarts = recus.filter(v => vtEcart(v) < 0);
+  setKpi("ak-attente", String(attente.length), attente.length ? `${money(attente.reduce((t, v) => t + (Number(v.montant) || 0), 0))} annoncés` : "rien à confirmer", attente.length ? "warn" : "");
+  setKpi("ak-semaine", money(recuDe(kNow)), `amendes de ${periodPlain(kNow).toLowerCase()}`, recuDe(kNow) ? "ok" : "");
+  setKpi("ak-prec", money(recuDe(kPrev)), `amendes de ${periodPlain(kPrev).toLowerCase()}`, "");
+  setKpi("ak-ecart", money(Math.abs(ecarts.reduce((t, v) => t + vtEcart(v), 0))), ecarts.length ? `manquants sur ${ecarts.length} convoi${ecarts.length > 1 ? "s" : ""}` : "aucun écart", ecarts.length ? "bad" : "");
+  // Semaine par semaine : qui a versé, qui manque.
+  const keys = [kNow]; for (let i = 0; i < 5; i++) keys.push(prevKey(keys[keys.length - 1]));
+  const svcs = vtServices();
+  fill($("#vt-grid"), svcs.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
+    h("thead", {}, h("tr", {}, h("th", { text: "Service" }), keys.map(k => h("th", { class: "num", text: periodShort(k) })))),
+    h("tbody", {}, svcs.map(s => h("tr", {}, h("td", { text: s }), keys.map(k => {
+      const vs = all.filter(v => v.periode === k && norm(v.service) === norm(s)), r = vs.reduce((t, v) => t + vtRecu(v), 0), att = vs.filter(v => v.statut === "a_confirmer");
+      return h("td", { class: "num" }, r ? h("span", { text: money(r) }) : att.length ? null : h("span", { class: "muted", text: "—" }),
+        att.length ? h("span", { class: "meta", text: `${money(att.reduce((t, v) => t + (Number(v.montant) || 0), 0))} à confirmer` }) : null);
+    }))))))
+    : h("p", { class: "muted", style: "margin:0", text: "Aucun service ne verse encore d’amendes." }));
+  const F = { attente, recus, tout: all };
+  const f = F[S.vtFilter] ? S.vtFilter : "attente";
+  setSegCounts($("#seg-vt"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), f);
+  $("#vt-new").hidden = !canAgent();
+  const list = F[f];
+  fill(box, list.length ? h("ul", { class: "ent-list" }, list.slice(0, 300).map(v => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openVersement(v.id), text: `${vtNo(v)} · ${v.service}` }),
+      h("span", { class: "meta", text: `${periodLabel(v.periode)} · ${money(v.statut === "confirme" ? vtRecu(v) : v.montant)}${vtEcart(v) ? ` · écart ${money(vtEcart(v))}` : ""} · ${v.transporteurNom || "remis au guichet"} · ${fmtDateTime(new Date(vtDate(v)))}` })),
+    chip(VT_STAT[v.statut] || VT_STAT.a_confirmer),
+    h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openVersement(v.id), text: "Ouvrir" })))))
+    : h("div", { class: "empty", text: { attente: "Aucun versement à confirmer.", recus: "Aucun versement reçu pour l’instant.", tout: "Aucun versement pour l’instant." }[f] }));
+}
+$("#seg-vt").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.vtFilter = b.dataset.f; renderVersements(); });
+$("#vt-new").addEventListener("click", () => openVersementForm());
+
 /* ---------- Clôture des semaines ---------- */
 // Une période clôturée est verrouillée par la base (supabase/v4_inspection_cloture.sql) :
 // plus de déclaration ajoutée, modifiée ou supprimée, plus de changement de montant d'avis.
@@ -7677,7 +7961,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -10401,9 +10685,10 @@ const NOTIF_TYPES = [
   ["vehicule", "Véhicules de société", "Contrôle de police défavorable, véhicule non déclaré ou requalifié."],
   ["convocation", "Convocations", "Absence à sanctionner, collecte à encaisser, rendez-vous de l’heure à venir."],
   ["contrat", "Contrats et partenariats", "Projet de contrat ou de convention à signer, prestation offerte à valider."],
+  ["versement", "Amendes versées", "Un versement d’amendes arrivé par convoi attend la confirmation de la Direction."],
   ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, conventions arrivées à terme (vérifié chaque heure)."]
 ];
-const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "contrat", "delais"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais"], lecture: ["delais"] };
+const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "contrat", "versement", "delais"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais"], lecture: ["delais"] };
 const notifUrl = () => String((window.GUICHET_CONFIG || {}).supabaseUrl || "").replace(/\/$/, "") + "/functions/v1/notifier";
 const notifSupport = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 function appareilNom() {
@@ -10509,7 +10794,7 @@ function ouvrirDossier(spec) {
   const [, col, id] = m, need = col === "penalites" ? "penalites" : col === "decisions" ? "declarations" : col;
   if (!S.connected || !S.loaded.has(need)) { S.pendingOpen = spec; return false; }
   S.pendingOpen = null;
-  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations", contrats: "contrats", conventions: "contrats", prestations: "contrats" }[col] || "dashboard";
+  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "dashboard", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations", contrats: "contrats", conventions: "contrats", prestations: "contrats", versements: "amendes" }[col] || "dashboard";
   showTab(tab);
   try { history.replaceState(null, "", "#" + tab); } catch (e) { /* sans historique */ }
   if (col === "declarations" || col === "decisions") { if (S.declarations.some(d => d.id === id)) { openDecl(id); return true; } }
@@ -10520,6 +10805,7 @@ function ouvrirDossier(spec) {
   else if (col === "convocations") { if ((S.convocations || []).some(d => d.id === id)) { openConv(id); return true; } }
   else if (col === "contrats") { if ((S.contrats || []).some(d => d.id === id)) { openContrat(id); return true; } }
   else if (col === "conventions") { if (cpNow(id)) { openConvention(id); return true; } }
+  else if (col === "versements") { if (vtNow(id)) { openVersement(id); return true; } }
   else if (col === "prestations") { const ps = psNow(id); if (ps && cpNow(ps.conventionId)) { openConvention(ps.conventionId); return true; } }
   else if (col === "penalites") { const p = S.penalites.find(d => d.id === id); if (p) { openFiche(entOf(p)); return true; } }
   toast("Ce dossier n’existe plus.", true);
@@ -10624,9 +10910,11 @@ openSaisieDetail = liveView(openSaisieDetail, id => { const s = S.saisies.find(x
 openTransmission = liveView(openTransmission, id => { const t = S.transmissions.find(x => x.id === id); return t ? { key: "tj:" + id, label: `Justice ${dossierNo("TJ", id)} · ${t.entrepriseNom}`,
   match: c => c.path === "transmissions/" + id || entMatch(t.entrepriseId)(c), reopen: () => S.transmissions.some(x => x.id === id) ? openTransmission(id) : gone() } : null; });
 openContrat = liveView(openContrat, id => { const c = ctNow(id); return c ? { key: "ct:" + id, label: `Contrat ${ctNo(c)} · ${c.fournisseurNom}`,
-  match: x => x.path === "contrats/" + id || x.path.startsWith("convocations/") || entMatch(c.fournisseurId)(x), reopen: () => ctNow(id) ? openContrat(id) : gone() } : null; });
+  match: x => x.path === "contrats/" + id || x.path.startsWith("convocations/") || x.path.startsWith("versements/") || entMatch(c.fournisseurId)(x), reopen: () => ctNow(id) ? openContrat(id) : gone() } : null; });
 openConvention = liveView(openConvention, id => { const c = cpNow(id); return c ? { key: "cp:" + id, label: `Convention ${cpNo(c)} · ${c.entrepriseNom}`,
   match: x => x.path === "conventions/" + id || (x.path.startsWith("prestations/") && ((x.data || x.old || {}).conventionId === id)) || entMatch(c.entrepriseId)(x), reopen: () => cpNow(id) ? openConvention(id) : gone() } : null; });
+openVersement = liveView(openVersement, id => { const v = vtNow(id); return v ? { key: "vt:" + id, label: `Versement ${vtNo(v)} · ${v.service}`,
+  match: x => x.path === "versements/" + id || x.path.startsWith("contrats/"), reopen: () => vtNow(id) ? openVersement(id) : gone() } : null; });
 openConv = liveView(openConv, id => { const c = convNow(id); return c ? { key: "conv:" + id, label: `Convocation ${convNo(c)} · ${c.entrepriseNom}`,
   match: x => x.path === "convocations/" + id || entMatch(c.entrepriseId)(x), reopen: () => convNow(id) ? openConv(id) : gone() } : null; });
 openPret = liveView(openPret, id => { const p = (S.prets || []).find(x => x.id === id); return p ? { key: "pret:" + id, label: `Prêt ${pretNo(p)} · ${p.entrepriseNom}`,
@@ -10872,6 +11160,7 @@ function searchIndex() {
   for (const c of S.contrats || []) push("Contrat", ctNo(c), `${ctNo(c)} · ${c.fournisseurNom}`, `${ctState(c)[0]} · ${ctAcheteur(c)} · ${c.type === "cadre" ? money(c.prixUnitaire) + " par " + (c.unite || "prestation") : money(c.montant)}`, `${c.objet || ""} ${CT_CATS[c.categorie] || ""}`, () => openContrat(c.id), c.at);
   for (const c of S.conventions || []) push("Convention", cpNo(c), `${cpNo(c)} · ${c.entrepriseNom}`, `${cpState(c)[0]} · ${cpServicesLabel(c)}`, `${c.objet || ""} ${(c.avantages || []).map(a => a.prestation).join(" ")} partenariat`, () => openConvention(c.id), c.at);
   for (const p of S.prestations || []) push("Prestation offerte", psNo(p), `${psNo(p)} · ${p.entrepriseNom}`, `${p.service} · ${p.objet || ""} · ${money(psOffert(p))} offerts · ${(PS_STAT[p.statut] || PS_STAT.a_valider)[0]}`, p.note || "", () => openConvention(p.conventionId), p.date || p.at);
+  for (const v of S.versements || []) push("Versement d’amendes", vtNo(v), `${vtNo(v)} · ${v.service}`, `${periodLabel(v.periode)} · ${money(v.statut === "confirme" ? vtRecu(v) : v.montant)} · ${(VT_STAT[v.statut] || VT_STAT.a_confirmer)[0]}`, `${v.bordereau || ""} ${v.transporteurNom || ""} amendes`, () => openVersement(v.id), v.date || v.at);
   for (const c of S.convocations || []) push("Convocation", convNo(c), `${convNo(c)} · ${c.entrepriseNom}`, `${convMotif(c)} · ${convWhen(c)} · ${convState(c)[0]}`, c.lieu || "", () => openConv(c.id), c.at);
   for (const p of S.prets || []) push("Prêt", pretNo(p), `${pretNo(p)} · ${p.entrepriseNom}`, `${(pretState(p))[0]} · ${money(p.montant)}${pretVerse(p) ? " · reste " + money(pretReste(p)) : ""}`, [PRET_OBJETS[p.objet], p.precision].join(" "), () => openPret(p.id), p.at || p.demandeLe);
   for (const v of S.vehicules || []) push("Véhicule", normPlaque(v.plaque), `${v.plaque} · ${v.modele || "Véhicule"}`, `${v.entrepriseNom} · ${vehState(v)[0]} · ${vehNo(v)}`, [vehNo(v), vehCat(v)[0], (v.conducteurs || []).join(" "), v.concession].join(" "), () => openVeh(v.id), v.achatLe || v.createdAt);
@@ -11012,7 +11301,7 @@ function showTab(name) {
   S.tab = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes"].includes(name)) schedule();
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
   const rail = $("nav.tabs .wrap"), cur = $(`.tab[data-tab="${name}"]`);
   if (rail && cur && rail.scrollWidth > rail.clientWidth) {
@@ -11045,7 +11334,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "prets", "vehicules", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();

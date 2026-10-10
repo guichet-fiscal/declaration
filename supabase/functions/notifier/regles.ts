@@ -2,7 +2,7 @@
 // Guichet fiscal : quelles notifications envoyer, et avec quel texte.
 // Fonctions pures (aucun accès au réseau ni à la base) : testables à part.
 
-export const TYPES = ["declaration", "paiement", "demande", "pret", "controle", "vehicule", "convocation", "contrat", "delais"];
+export const TYPES = ["declaration", "paiement", "demande", "pret", "controle", "vehicule", "convocation", "contrat", "versement", "delais"];
 
 const NF = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 const money = (n) => NF.format(Math.round(Number(n) || 0)).replace(/ | /g, " ") + " €";
@@ -72,6 +72,10 @@ export function evenement(e, ctx) {
     case "prestations":
       // Notée par l'Inspection, la prestation attend la validation de la Direction.
       if (ins && n.statut === "a_valider" && recent(n.at, 2)) return { type: "contrat", title: "Prestation offerte à valider", body: `${n.entrepriseNom || "Entreprise"} · ${n.service || "service public"}${n.objet ? " · " + n.objet : ""} · ${money(Math.max(0, (Number(n.valeur) || 0) - (Number(n.paye) || 0)))} offerts`, url: `#ouvrir=prestations/${id}`, tag: "ps-" + id };
+      return null;
+    case "versements":
+      // Noté par l'Inspection à l'arrivée du convoi, le versement attend la confirmation de la Direction.
+      if (ins && n.statut === "a_confirmer" && recent(n.at, 2)) return { type: "versement", title: "Versement d’amendes à confirmer", body: `${n.service || "Service"} · ${periode(n.periode)} · ${money(n.montant)}${n.transporteurNom ? " · convoi " + n.transporteurNom : ""}`, url: `#ouvrir=versements/${id}`, tag: "va-" + id };
       return null;
     case "vehicules": {
       const nc = n.constats || [], oc = b.constats || [];

@@ -31,6 +31,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v11_convocations.sql` : les convocations (droits de l’Inspection, verrou contre les décisions prises deux fois)
 - `supabase/v12_contrats.sql` : les contrats d’achat (projets de l’Inspection, contrat signé figé, paiements jamais effacés)
 - `supabase/v13_conventions.sql` : les conventions de partenariat et les prestations offertes (l’Inspection note, la Direction valide)
+- `supabase/v14_amendes.sql` : les amendes versées au Trésor (l’Inspection note, la Direction confirme la réception)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
@@ -51,7 +52,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat) et `supabase/v13_conventions.sql` (conventions de partenariat). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat), `supabase/v13_conventions.sql` (conventions de partenariat) et `supabase/v14_amendes.sql` (amendes versées au Trésor). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -156,7 +157,7 @@ Une entreprise est attendue à partir du début du suivi, ou de son **début d�
 
 ## Suivi dans Google Sheets
 
-La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société, les contrôles de police, les convocations, les contrats d’achat et leurs paiements, les conventions de partenariat et les prestations offertes. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
+La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société, les contrôles de police, les convocations, les contrats d’achat et leurs paiements, les conventions de partenariat et les prestations offertes, les amendes versées au Trésor. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
@@ -280,7 +281,7 @@ Onglet **Contrats**, ou la fiche de l’entreprise fournisseur. La Préfecture a
 
 1. **Commande** : des lignes (désignation, quantité, prix). Pour un service, elle est imputée sur son enveloppe de la semaine choisie dès la signature, ou financée par une demande de moyens déjà accordée (sans compter deux fois). Puis **Constater la livraison** et **Payer** : le Trésor verse la somme et un **ordre de paiement** part sur Discord. Une livraison non conforme peut être refusée tant que rien n’est payé : le contrat est résilié et l’enveloppe libérée.
 2. **Marché à prix unitaire** : un prix par prestation (intervention, collecte…), une durée et, si besoin, un plafond. Chaque paiement est imputé sur l’enveloppe du service la semaine où il est fait ; un dépassement demande une confirmation.
-3. **Transport de fonds** : **Marché de transport de fonds** prépare le marché avec Trans’Fond, payé par collecte. Les collectes encaissées depuis le début du marché apparaissent d’elles-mêmes, **Payer les collectes** les règle en une fois. Une collecte payée ne l’est jamais une deuxième fois, même sur un autre marché ; celles qui dépasseraient le plafond restent signalées. Une case permet de payer aussi les passages où l’entreprise était absente.
+3. **Transport de fonds** : **Marché de transport de fonds** prépare le marché avec Trans’Fond, payé par collecte. Les collectes encaissées depuis le début du marché, et les convois des amendes reçus au Trésor, apparaissent d’eux-mêmes ; **Payer les collectes** les règle en une fois. Une collecte payée ne l’est jamais une deuxième fois, même sur un autre marché ; celles qui dépasseraient le plafond restent signalées. Une case permet de payer aussi les passages où l’entreprise était absente.
 
 Les sommes versées sont déduites du solde du Trésor et comptées dans le suivi des enveloppes. Si une entreprise déclare un chiffre d’affaires inférieur à ce que la Préfecture lui a payé sur la période, une alerte le signale. Discord : cochez « Contrats » dans la publication automatique.
 
@@ -295,6 +296,17 @@ Onglet **Contrats**, partie **Conventions de partenariat**, ou la fiche de l’e
 3. **La réduction d’impôt** : sur le modèle du mécénat en nature, l’entreprise déduit de son impôt 60 % de la valeur offerte (taux figé dans la convention à la signature). La réduction s’applique d’elle-même à ses déclarations, sur l’impôt seulement, sans dépasser l’impôt de la période ni le plafond par période (20 000 € par défaut) ; le reste est reporté. Elle figure sur l’aperçu du calcul, l’avis et Discord. Une prestation ne réduit pas l’impôt d’une période qui la précède. Si une prestation déjà déduite est annulée, la réduction correspondante est reprise (ajoutée à l’impôt) sur la prochaine déclaration de l’entreprise ; une déclaration remise à valider ou une rectificative qui remplace l’ancienne voit sa réduction recalculée. Pas de réduction sur une imposition d’office. Réglages → Avantages fiscaux : taux, plafond, ou désactiver la réduction.
 
 Discord : cochez « Conventions de partenariat signées » dans la publication automatique. La base protège les conventions (`supabase/v13_conventions.sql`) : une convention signée ne se modifie plus et ne se supprime plus, une prestation validée garde ses montants et ne se supprime pas (on l’annule, avec un motif), et les états n’avancent que dans un sens.
+
+## Amendes versées au Trésor
+
+Onglet **Amendes**. Chaque semaine, la police, la gendarmerie et les autres services qui encaissent des amendes en remettent le produit au Trésor par un convoi du transporteur de fonds (Trans’Fond).
+
+1. **À l’arrivée du convoi**, **Nouveau versement** : le service, la semaine des amendes, la somme annoncée, le nombre d’amendes, le n° de bordereau, l’heure d’arrivée, le transporteur, le convoyeur, l’agent qui a remis les fonds et un lien de capture. Un deuxième versement du même service pour la même semaine demande une confirmation.
+2. **La Direction compte** : **Confirmer la réception** avec la somme comptée. Un écart avec la somme annoncée doit être expliqué ; il reste visible sur le reçu et dans le tableau (« Écarts »). La somme entre alors au Trésor et le reçu part sur Discord, dans le salon des services publics. Noté par la Direction, un versement est reçu aussitôt. **Refuser** si rien n’est arrivé.
+3. **Semaine par semaine** : le tableau montre ce que chaque service a versé pour les six dernières semaines ; un tiret signale qu’un service n’a rien remis.
+4. **Le convoi est payé** au transporteur comme une collecte : il apparaît dans **Payer les collectes** de son marché de transport de fonds, au même prix, une seule fois. Une fois payé, la réception ne s’annule plus.
+
+L’Inspection note et peut retirer un versement tant qu’il n’est pas confirmé ; confirmer, refuser et annuler sont réservés à la Direction. La base l’impose (`supabase/v14_amendes.sql`) : un versement traité garde ses montants, un versement reçu ne se supprime pas. Discord : cochez « Amendes reçues au Trésor » dans la publication automatique.
 
 ## Cohérence des dossiers
 
@@ -336,13 +348,13 @@ La présence, le journal en direct et le remplacement d’une déclaration par u
 
 ## Notifications sur téléphone et ordinateur
 
-Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), convocations (absence à sanctionner, collecte à encaisser), contrats et partenariats (projet de contrat ou de convention à signer, prestation offerte à valider), délais (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, rendez-vous de l’heure à venir, conventions arrivées à terme, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
+Chaque agent choisit ce qu’il reçoit, appareil par appareil, avec la **cloche** du bandeau : déclaration déposée, paiement encaissé par un autre agent, demande de moyens, demande de prêt, contrôle fiscal (réponse, proposition, mise en recouvrement), véhicules de société (contrôle de police défavorable, véhicule non déclaré ou requalifié), convocations (absence à sanctionner, collecte à encaisser), contrats et partenariats (projet de contrat ou de convention à signer, prestation offerte à valider), amendes versées (versement à confirmer), délais (mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, rendez-vous de l’heure à venir, conventions arrivées à terme, vérifiés chaque heure). On ne reçoit jamais la notification de sa propre action. Un clic sur la notification ouvre le dossier. **Envoyer un essai** vérifie que tout fonctionne.
 
 Sur iPhone et iPad (iOS 16.4 ou plus récent), installez d’abord le guichet sur l’écran d’accueil (Safari → Partager → « Sur l’écran d’accueil ») et ouvrez-le depuis son icône : Apple ne permet les notifications qu’aux applications installées. Sur Android et sur ordinateur, Chrome, Edge, Firefox et Safari les reçoivent directement.
 
 Mise en place, une seule fois :
 
-1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais. `supabase/v11_convocations.sql` y ajoute les convocations, `supabase/v12_contrats.sql` les contrats, `supabase/v13_conventions.sql` les conventions.
+1. Dans Supabase, **SQL Editor** : exécutez `supabase/v10_notifications.sql`. Il crée la table des abonnements, prévient le service d’envoi quand le registre change et programme le passage horaire des délais. `supabase/v11_convocations.sql` y ajoute les convocations, `supabase/v12_contrats.sql` les contrats, `supabase/v13_conventions.sql` les conventions, `supabase/v14_amendes.sql` les amendes.
 2. Dans Supabase, **Edge Functions → Deploy a new function → Via Editor** : nommez-la `notifier`, collez `supabase/functions/notifier/index.ts` puis ajoutez le fichier `regles.ts` du même dossier, et déployez. Dans les réglages de la fonction, désactivez **Verify JWT** (la base s’authentifie avec sa propre clé). Après une mise à jour de ces deux fichiers (comme celles des convocations et des contrats), ouvrez la fonction `notifier` → **Code**, remplacez leur contenu et redéployez.
 3. Dans le guichet, cloche du bandeau → **Activer sur cet appareil** → **Envoyer un essai**.
 

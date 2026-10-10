@@ -256,7 +256,7 @@ function actualiser() {
     col("contrats").map(r => {
       const c = r.data, cadre = c.type === "cadre", sv = c.acheteur && c.acheteur.type === "service" ? c.acheteur.service : "";
       (c.paiements || []).forEach((p, i) => lignesPaiementCt.push([no("CT", r.id) + "-" + (i + 1), no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), p.montant, p.periode || semaineDe(p.at), date(p.at), p.byNom || "",
-        p.convocations ? p.convocations.length + " collecte" + (p.convocations.length > 1 ? "s" : "") : cadre ? (p.quantite || 1) + " " + (c.unite || "prestation") + ((p.quantite || 1) > 1 ? "s" : "") : c.objet || "Commande", p.note || ""]));
+        p.convocations || p.versements ? (function (n) { return n + " collecte" + (n > 1 ? "s" : ""); })((p.convocations || []).length + (p.versements || []).length) : cadre ? (p.quantite || 1) + " " + (c.unite || "prestation") + ((p.quantite || 1) > 1 ? "s" : "") : c.objet || "Commande", p.note || ""]));
       return [no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), TYPES_CT[c.type] || c.type || "", CATS_CT[c.categorie] || c.categorie || "", c.objet || "",
         cadre ? "" : c.montant, cadre ? c.prixUnitaire : "", cadre ? c.unite || "" : "", cadre && c.plafond ? c.plafond : "",
         sv ? (c.demandeId ? "Demande " + no("DM", c.demandeId) : cadre ? "Enveloppe " + sv + " (semaine du paiement)" : "Enveloppe " + sv + " · " + (c.periode || "")) : "Trésor",
@@ -282,6 +282,17 @@ function actualiser() {
     prestations.map(r => { const x = r.data;
       return [no("PS", r.id), no("CP", x.conventionId), x.entrepriseNom || "", x.service || "", date(x.date), x.prestation || "", x.objet || "", x.valeur, x.paye, offertPs(x),
         ETATS_PS[x.statut] || x.statut || "", x.byNom || "", x.valideParNom || "", x.motif || ""]; }));
+
+  const ETATS_VA = { a_confirmer: "À confirmer", confirme: "Reçu au Trésor", refuse: "Refusé", annule: "Annulé" };
+  const recuVa = x => (x.statut === "confirme" ? Number(x.montantRecu != null ? x.montantRecu : x.montant) || 0 : 0);
+  const versements = col("versements");
+  const convoisPayes = {};
+  col("contrats").forEach(r => (r.data.paiements || []).forEach(p => (p.versements || []).forEach(id => { convoisPayes[id] = true; })));
+  ecrire("Amendes versées", ["N°", "Service", "Semaine", "Somme annoncée", "Somme reçue", "Écart", "Explication", "Nombre d’amendes", "Bordereau", "Transporteur", "Convoyeur", "Remis par", "Arrivé le", "État", "Noté par", "Reçu par", "Reçu le", "Convoi payé", "Motif"],
+    versements.map(r => { const x = r.data, recu = recuVa(x);
+      return [no("VA", r.id), x.service || "", x.periode || "", x.montant, x.statut === "confirme" ? recu : "", x.statut === "confirme" ? recu - (Number(x.montant) || 0) : "", x.motifEcart || "",
+        x.nbAmendes || "", x.bordereau || "", x.transporteurNom || "", x.convoyeur || "", x.remisPar || "", date(x.date), ETATS_VA[x.statut] || x.statut || "",
+        x.byNom || "", x.confirmeParNom || "", date(x.confirmeLe), x.transporteurId && x.statut === "confirme" ? (convoisPayes[r.id] ? "Oui" : "Non") : "", x.motif || ""]; }));
 
   ecrire("Remboursements de prêts", ["Prêt", "Entreprise", "Échéance", "Date limite", "Montant", "Dont capital", "Dont intérêts", "État", "Payée le", "Note"], lignesPret);
 
@@ -314,6 +325,8 @@ function actualiser() {
     ["Conventions de partenariat signées", col("conventions").filter(r => ["signee", "resiliee"].indexOf(r.data.statut) >= 0).length],
     ["Offert aux services publics (prestations validées)", prestations.filter(r => r.data.statut === "validee").reduce((t, r) => t + offertPs(r.data), 0)],
     ["Prestations à valider", prestations.filter(r => r.data.statut === "a_valider").length],
+    ["Amendes reçues au Trésor", versements.reduce((t, r) => t + recuVa(r.data), 0)],
+    ["Versements d’amendes à confirmer", versements.filter(r => r.data.statut === "a_confirmer").length],
     ["Réductions d’impôt des partenaires (avis)", col("declarations").filter(r => !(decisions[r.id] && decisions[r.id].statut === "rejetee")).reduce((t, r) => t + (r.data.mecenat ? Number(r.data.mecenat.montant) || 0 : 0), 0)]
   ]);
 }
