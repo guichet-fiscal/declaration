@@ -269,13 +269,13 @@ function actualiser() {
   const ETATS_PS = { a_valider: "À valider", validee: "Validée", refusee: "Refusée", annulee: "Annulée" };
   const offertPs = x => Math.max(0, (Number(x.valeur) || 0) - (Number(x.paye) || 0));
   const prestations = col("prestations");
-  ecrire("Conventions", ["N°", "Entreprise", "Objet", "Services", "Avantages", "Début", "Fin", "Réduction d’impôt", "État", "Prestations validées", "Offert", "Préparée par", "Signée le", "Signée par", "Signataire de l’entreprise", "Résiliation"],
+  ecrire("Conventions", ["N°", "Entreprise", "Objet", "Services", "Avantages", "Début", "Fin", "Réduction d’impôt", "Réduction par période", "État", "Prestations validées", "Offert", "Préparée par", "Signée le", "Signée par", "Signataire de l’entreprise", "Résiliation"],
     col("conventions").map(r => {
       const c = r.data, ps = prestations.filter(x => x.data.conventionId === r.id && x.data.statut === "validee"), fin = c.fin ? new Date(new Date(c.fin).getTime() + 864e5) : null;
       const etat = c.statut === "signee" && fin && fin < new Date() ? "Arrivée à terme" : ETATS_CP[c.statut] || c.statut || "";
       return [no("CP", r.id), c.entrepriseNom || "", c.objet || "", c.services && c.services.length ? c.services.join(", ") : "Tous les services publics",
         (c.avantages || []).map(a => a.prestation + " (" + (a.mode === "remise" ? "remise de " + a.valeur + " %" : a.mode === "tarif" ? "prix fixe de " + a.valeur : "gratuit") + ")").join(", "),
-        date(c.debut), date(c.fin), c.mecenat ? (Number(c.taux) || 0) / 100 : "Non", etat, ps.length, ps.reduce((t, x) => t + offertPs(x.data), 0),
+        date(c.debut), date(c.fin), !c.mecenat ? "Non" : Number(c.forfait) > 0 ? "Montant fixe" : (Number(c.taux) || 0) / 100, c.mecenat && Number(c.forfait) > 0 ? Number(c.forfait) : "", etat, ps.length, ps.reduce((t, x) => t + offertPs(x.data), 0),
         c.byNom || "", date(c.signeLe), c.signeParNom || "", c.signataire || "", c.resiliation ? c.resiliation.motif || "" : ""];
     }));
   ecrire("Prestations offertes", ["N°", "Convention", "Entreprise", "Service", "Date", "Prestation", "Détail", "Prix normal", "Payé", "Offert", "État", "Notée par", "Validée par", "Motif"],
