@@ -92,9 +92,9 @@ function actualiser() {
     return [no("DF", r.id), d.entrepriseNom, d.periode, d.ca, d.charges, d.masse, d.nbSalaries, d.resultat, d.impot, d.cotisations, d.majoration, exo, d.total, montant, encaisse,
       STATUTS_DECL[st] || st, d.enRetard ? "Oui" : "Non", e && e.echeances ? e.echeances.length + " fois" : "", date(d.depotAt), d.declarant || "", dec && dec.note ? dec.note : "",
       d.solde != null && d.solde !== "" ? d.solde : "", d.soldePreuve ? (d.soldePreuve.type === "lien" ? d.soldePreuve.url : "Capture dans le guichet") : "",
-      d.mecenat ? Number(d.mecenat.montant) || 0 : ""];
+      d.mecenat ? Number(d.mecenat.montant) || 0 : "", d.compensation ? Number(d.compensation.montant) || 0 : ""];
   });
-  ecrire("Déclarations", ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Charges", "Masse salariale", "Salariés", "Résultat", "Impôt", "Cotisations", "Majoration", "Exonération", "Total calculé", "Montant retenu", "Encaissé", "Statut", "Retard", "Échéancier", "Déposée le", "Déclarant", "Observation", "Solde du compte déclaré", "Capture du solde", "Réduction des partenaires"], declarations);
+  ecrire("Déclarations", ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Charges", "Masse salariale", "Salariés", "Résultat", "Impôt", "Cotisations", "Majoration", "Exonération", "Total calculé", "Montant retenu", "Encaissé", "Statut", "Retard", "Échéancier", "Déposée le", "Déclarant", "Observation", "Solde du compte déclaré", "Capture du solde", "Réduction des partenaires", "Compensation (contrats)"], declarations);
 
   ecrire("Entreprises", ["Nom", "Secteur", "Patron", "Active", "Ajoutée le"],
     col("entreprises").map(r => [r.data.nom, r.data.secteur || "", r.data.patron || "", r.data.actif === false ? "Non" : "Oui", date(r.data.createdAt)]));
@@ -255,7 +255,7 @@ function actualiser() {
   ecrire("Contrats", ["N°", "Fournisseur", "Acheteur", "Type", "Catégorie", "Objet", "Montant", "Prix unitaire", "Unité", "Plafond", "Payé sur", "État", "Payé", "Préparé par", "Signé le", "Signé par", "Début", "Fin", "Livraison constatée le", "Résiliation"],
     col("contrats").map(r => {
       const c = r.data, cadre = c.type === "cadre", sv = c.acheteur && c.acheteur.type === "service" ? c.acheteur.service : "";
-      (c.paiements || []).forEach((p, i) => lignesPaiementCt.push([no("CT", r.id) + "-" + (i + 1), no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), p.montant, p.periode || semaineDe(p.at), date(p.at), p.byNom || "",
+      (c.paiements || []).forEach((p, i) => lignesPaiementCt.push([no("CT", r.id) + "-" + (i + 1), no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), p.montant, p.periode || semaineDe(p.at), date(p.at), p.mode === "impot" ? "Déduction sur ses impôts" : "Versement du Trésor", p.byNom || "",
         p.convocations || p.versements ? (function (n) { return n + " collecte" + (n > 1 ? "s" : ""); })((p.convocations || []).length + (p.versements || []).length) : cadre ? (p.quantite || 1) + " " + (c.unite || "prestation") + ((p.quantite || 1) > 1 ? "s" : "") : c.objet || "Commande", p.note || ""]));
       return [no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), TYPES_CT[c.type] || c.type || "", CATS_CT[c.categorie] || c.categorie || "", c.objet || "",
         cadre ? "" : c.montant, cadre ? c.prixUnitaire : "", cadre ? c.unite || "" : "", cadre && c.plafond ? c.plafond : "",
@@ -263,7 +263,7 @@ function actualiser() {
         ETATS_CT[c.statut] || c.statut || "", payeCt(c), c.byNom || "", date(c.signeLe), c.signeParNom || "", date(c.debut), date(c.fin),
         c.livraison ? date(c.livraison.at) : "", c.resiliation ? (c.resiliation.livraisonRefusee ? "Livraison refusée : " : "") + (c.resiliation.motif || "") : ""];
     }));
-  ecrire("Paiements des contrats", ["Ordre", "Contrat", "Bénéficiaire", "Acheteur", "Montant", "Semaine", "Payé le", "Par", "Objet", "Observation"], lignesPaiementCt);
+  ecrire("Paiements des contrats", ["Ordre", "Contrat", "Bénéficiaire", "Acheteur", "Montant", "Semaine", "Payé le", "Mode", "Par", "Objet", "Observation"], lignesPaiementCt);
 
   const ETATS_CP = { projet: "Projet", signee: "Signée", resiliee: "Résiliée", annulee: "Abandonnée" };
   const ETATS_PS = { a_valider: "À valider", validee: "Validée", refusee: "Refusée", annulee: "Annulée" };
@@ -322,6 +322,8 @@ function actualiser() {
     ["Contrats signés", col("contrats").filter(r => ["signe", "livre", "paye", "en_cours", "termine", "resilie"].indexOf(r.data.statut) >= 0 && r.data.signeLe).length],
     ["Projets de contrat à signer", col("contrats").filter(r => r.data.statut === "projet").length],
     ["Payé au titre des contrats", col("contrats").reduce((t, r) => t + payeCt(r.data), 0)],
+    ["Dû aux entreprises, à déduire de leurs impôts", Math.max(0, col("contrats").reduce((t, r) => t + (r.data.paiements || []).filter(p => p.mode === "impot").reduce((u, p) => u + (Number(p.montant) || 0), 0), 0)
+      - col("declarations").filter(r => !(decisions[r.id] && decisions[r.id].statut === "rejetee")).reduce((t, r) => t + (r.data.compensation ? Number(r.data.compensation.montant) || 0 : 0), 0))],
     ["Conventions de partenariat signées", col("conventions").filter(r => ["signee", "resiliee"].indexOf(r.data.statut) >= 0).length],
     ["Offert aux services publics (prestations validées)", prestations.filter(r => r.data.statut === "validee").reduce((t, r) => t + offertPs(r.data), 0)],
     ["Prestations à valider", prestations.filter(r => r.data.statut === "a_valider").length],

@@ -1318,6 +1318,8 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <dt id="c-mec-l" hidden>Réduction d’impôt des partenaires</dt><dd id="c-mec" class="exo" hidden></dd>
             <dt id="c-maj-l">Majoration de retard</dt><dd id="c-maj">0 €</dd>
             <dt class="tot-dt">Montant dû</dt><dd class="tot-dd" id="c-tot">0 €</dd>
+            <dt id="c-comp-l" hidden>Réglé par compensation (contrats)</dt><dd id="c-comp" class="exo" hidden></dd>
+            <dt id="c-reste-l" class="tot-dt" hidden>Reste à payer</dt><dd id="c-reste" class="tot-dd" hidden></dd>
           </dl>
           <div class="due" id="c-due"></div>
           <div class="calc-detail" id="c-detail" hidden></div>
@@ -2087,18 +2089,28 @@ function treasury() {
     pv += Number(p.montant) || 0;
     for (const x of p.echeances || []) { if (x.payee) pr += Number(x.montant) || 0; else if (p.statut === "en_cours") pd += Number(x.capital) || 0; }
   }
-  let achats = 0;
-  for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) achats += Number(p.montant) || 0;
+  let achats = 0, deduits = 0, compense = 0;
+  for (const c of S.contrats || []) for (const p of c.paiements || []) {
+    if (p.mode === "impot") deduits += Number(p.montant) || 0;
+    else if (!c.demandeId) achats += Number(p.montant) || 0;
+  }
+  // Ce qui a été compensé sur les avis compte à la fois en recette (dEncaisse) et en achat.
+  for (const d of S.declarations) if (dStatus(d) !== "rejetee") compense += dComp(d);
+  achats += compense;
   // Produit des amendes remis par les services (versements dont la réception est confirmée).
   let amendes = 0;
   for (const v of S.versements || []) amendes += vtRecu(v);
-  return { rec, dep, budget, achats, amendes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, solde: budget + rec + amendes - dep - achats - pv + pr };
+  return { rec, dep, budget, achats, amendes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, aDeduire: Math.max(0, deduits - compense), solde: budget + rec + amendes - dep - achats - pv + pr };
 }
 const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
 const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 const echOf = d => { const e = S.echeanciers[d.id]; return e && Array.isArray(e.echeances) && e.echeances.length ? e : null; };
 // Une déclaration rectificative reprend, en avoir, ce qui avait été payé sur celle qu'elle remplace.
-const dCredit = d => Math.max(0, Number(d && d.credit) || 0);
+const dAvoir = d => Math.max(0, Number(d && d.credit) || 0);
+// Compensation : une partie de ce que doit l'entreprise est réglée par ce que la Préfecture lui doit
+// sur ses contrats payés « par déduction sur ses impôts ».
+const dComp = d => (d && d.compensation ? Math.max(0, Math.round(Number(d.compensation.montant) || 0)) : 0);
+const dCredit = d => dAvoir(d) + dComp(d);
 function dEncaisse(d) {
   const st = dStatus(d);
   if (st === "rejetee") return 0;
@@ -2792,7 +2804,7 @@ function renderDashboard() {
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
-  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}`, t.solde < 0 ? "bad" : "");
+  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}${t.aDeduire > 0 ? ` · ${money(t.aDeduire)} dus aux entreprises, à déduire de leurs impôts` : ""}`, t.solde < 0 ? "bad" : "");
 
   // Entreprises à surveiller
   const reg = $("#registry");
@@ -2941,7 +2953,9 @@ function treasurySeries(keys) {
   for (const d of S.declarations) if (d.periode in rec) rec[d.periode] += dEncaisse(d);
   for (const p of S.penalites) if (p.statut === "payee" && p.paidAt) { const k = keyOf(new Date(p.paidAt)); if (k in rec) rec[k] += Number(p.montant) || 0; }
   for (const dm of S.demandes) { const v = demAccorde(dm); if (v) { const k = demImputation(dm); if (k in dep) dep[k] += v; } }
-  for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) { const k = p.periode || keyOf(new Date(p.at)); if (k in dep) dep[k] += Number(p.montant) || 0; }
+  for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) { if (p.mode === "impot") continue; const k = p.periode || keyOf(new Date(p.at)); if (k in dep) dep[k] += Number(p.montant) || 0; }
+  // Compensation : la somme déduite d'un avis est à la fois une recette et le paiement d'un contrat.
+  for (const d of S.declarations) if (d.periode in dep && dStatus(d) !== "rejetee") dep[d.periode] += dComp(d);
   for (const v of S.versements || []) if (vtRecu(v)) { const k = keyOf(new Date(v.confirmeLe || v.date || v.at)); if (k in rec) rec[k] += vtRecu(v); }
   return { rec: keys.map(k => rec[k]), dep: keys.map(k => dep[k]) };
 }
@@ -3148,7 +3162,7 @@ async function decide(d, statut, montant, note, opts) {
   // Rectificative : si ce qui avait été payé sur la déclaration remplacée couvre le nouvel avis, il est réglé d'emblée.
   if (statut === "validee" && writer() && dCredit(d) > 0 && dCredit(d) >= Math.round(Number(montant) || 0)) {
     statut = "payee";
-    note = [note, `Réglé par le paiement de la déclaration remplacée ${dossierNo("DF", d.remplace)}.`].filter(Boolean).join(" ");
+    note = [note, dAvoir(d) ? `Réglé par le paiement de la déclaration remplacée ${dossierNo("DF", d.remplace)}.` : "", dComp(d) ? "Réglé par compensation avec ce que la Préfecture doit à l’entreprise sur ses contrats." : ""].filter(Boolean).join(" ");
   }
   // Encaissement du solde : les échéances restantes sont marquées payées avec lui.
   const ecx = echOf(d);
@@ -3218,10 +3232,12 @@ function openDecl(id) {
     h("div", { class: "reasons" + (ast.how ? " done" : "") }, ast.list.map(r => h("span", { class: "reason", text: r }))),
     !ast.how && w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(d, () => openDecl(id)), text: "Classer l’alerte" }) : null,
     ast.how === "classee" && w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: async () => { if (await write(() => S.db.doc("alertes/" + d.id).delete())) { toast("Alerte rouverte."); openDecl(id); } }, text: "Rouvrir l’alerte" }) : null));
-  if (dCredit(d)) body.splice(1, 0, h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {},
+  if (dAvoir(d)) body.splice(1, 0, h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {},
     h("strong", { text: `Déclaration rectificative de ${dossierNo("DF", d.remplace)}. ` }),
-    `${money(dCredit(d))} déjà payés sur la déclaration remplacée sont repris en déduction${dCredit(d) > dMontant(d) ? ` : trop-perçu de ${money(dCredit(d) - dMontant(d))} à rembourser à l’entreprise` : ""}.`)));
+    `${money(dAvoir(d))} déjà payés sur la déclaration remplacée sont repris en déduction${dCredit(d) > dMontant(d) ? ` : trop-perçu de ${money(dCredit(d) - dMontant(d))} à rembourser à l’entreprise` : ""}.`)));
   else if (d.remplace) body.splice(1, 0, h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {}, h("strong", { text: `Déclaration rectificative. ` }), `Elle remplace ${dossierNo("DF", d.remplace)}.`)));
+  if (dComp(d)) body.splice(1, 0, h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {},
+    h("strong", { text: "Compensation. " }), `${money(dComp(d))} sont réglés par ce que la Préfecture doit à l’entreprise sur ses contrats : il reste ${money(Math.max(0, dMontant(d) - dCredit(d)))} à payer.`)));
   if (dec && dec.remplaceePar) body.unshift(h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Remplacée. " }), "Cette déclaration a été remplacée par la rectificative ",
     h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(dec.remplaceePar), text: dossierNo("DF", dec.remplaceePar) }), ".")));
   if (d.detail && d.detail.is) {
@@ -3308,7 +3324,7 @@ function openDecl(id) {
   if ((w || inspOk) && !replaced && !(older && st === "soumise") && st !== "validee" && st !== "payee" && !(st === "controle" && ctl)) foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
   // Rectificative saisie par l'Inspection sur une déclaration déjà payée : la Direction valide le remplacement.
   if (w && older && st === "soumise" && dStatus(older) !== "controle") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => {
-    const credit = Math.round(dEncaisse(older));
+    const credit = Math.max(0, Math.round(dEncaisse(older) - dComp(older)));
     const b2 = Object.assign({}, d, { remplace: older.id, credit }); delete b2.id;
     if (!(await write(() => S.db.doc("declarations/" + d.id).set(b2)))) return;
     if (await replaceDecl(older, d.id)) { toast(`${dossierNo("DF", older.id)} remplacée${credit ? `, ${money(credit)} repris en avoir` : ""}.`); await mecRecalc(Object.assign({ id: d.id }, b2), [older.id]); }
@@ -3549,6 +3565,13 @@ function renderDeclPreview() {
     $("#c-mec-l").textContent = mc.montant > 0 ? `Réduction d’impôt des partenaires (${money(mc.credit)} disponibles)` : "Reprise d’une réduction des partenaires (prestation annulée)";
     $("#c-mec").textContent = mc.montant > 0 ? "− " + money(mc.montant) : "+ " + money(-mc.montant);
   }
+  const cp = entP && entP.id ? applyCompensation(r, entP, exP).compensation : null;
+  $("#c-comp-l").hidden = $("#c-comp").hidden = $("#c-reste-l").hidden = $("#c-reste").hidden = !cp;
+  if (cp) {
+    $("#c-comp-l").textContent = `Réglé par compensation (${money(cp.credit)} dus par la Préfecture)`;
+    $("#c-comp").textContent = "− " + money(cp.montant);
+    $("#c-reste").textContent = money(Math.max(0, r.total - cp.montant));
+  }
   $("#c-res").textContent = money(r.resultat);
   $("#c-res").className = r.resultat < 0 ? "neg" : "";
   $("#c-is-l").textContent = r.detail ? `Impôt sur le bénéfice (${pct(r.tauxIS)} effectif)` : `Impôt sur le résultat (${pct(c.tauxIS)})`;
@@ -3716,6 +3739,7 @@ $("#form-decl").addEventListener("submit", async e => {
   // Réduction d'impôt des partenaires : ni sur une imposition d'office, ni deux fois avec la déclaration remplacée.
   const r1 = applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late);
   const r = office ? r1 : applyMecenat(r1, ent, key, c, late, [editing && editing.id, repl && repl.id].filter(Boolean));
+  const rcomp = applyCompensation(r, ent, [editing && editing.id, repl && repl.id].filter(Boolean));
   const lockedK = isClosed(key) ? key : editing && isClosed(editing.periode) ? editing.periode : null;
   if (lockedK) { err.textContent = `${closedNote(lockedK)} : la Direction doit la rouvrir pour y ajouter ou modifier une déclaration.`; return; }
   const dup = S.declarations.some(d => (!editing || d.id !== editing.id) && d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
@@ -3724,7 +3748,7 @@ $("#form-decl").addEventListener("submit", async e => {
     ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
-    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, mecenat: r.mecenat || null,
+    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, mecenat: r.mecenat || null, compensation: rcomp.compensation || null,
     taxationOffice: tax ? { relanceId: tax.relanceId, base: tax.base, majoration: Number(c.majoration) || 0 }
       : repl && repl.taxationOffice ? Object.assign({}, repl.taxationOffice, { rectifiee: true })
       : editing0 && editing0.taxationOffice ? editing0.taxationOffice : null,
@@ -3732,12 +3756,12 @@ $("#form-decl").addEventListener("submit", async e => {
     solde: $("#d-solde").value === "" || !Number.isFinite(Number($("#d-solde").value)) ? null : Math.round(Number($("#d-solde").value)),
     soldePreuve: linkProof($("#d-solde-lien").value) || (editing0 && editing0.soldePreuve && editing0.soldePreuve.type === "image" ? editing0.soldePreuve : null),
     enRetard: late, rectificative: dup,
-    remplace: repl ? repl.id : null, credit: repl && dEncaisse(repl) > 0 ? Math.round(dEncaisse(repl)) : 0,
+    remplace: repl ? repl.id : null, credit: repl ? Math.max(0, Math.round(dEncaisse(repl) - dComp(repl))) : 0,
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
     depotAt: depot.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
   };
   if (editing) Object.assign(body, { createdAt: editing.createdAt || nowISO(), saisiPar: editing.saisiPar || S.uid || null, rectificative: !!editing.rectificative || dup, modifieLe: nowISO(),
-    remplace: editing.remplace || null, credit: dCredit(editing) });
+    remplace: editing.remplace || null, credit: dAvoir(editing) });
   const btn = $("#d-submit");
   btn.disabled = true;
   const ref = editing ? S.db.doc("declarations/" + editing.id) : S.db.collection("declarations").doc();
@@ -4425,7 +4449,9 @@ function avisDoc(d) {
   exoLines(d).forEach(l => lines.push(l));
   if (d.enRetard) lines.push([`Majoration de retard (${pct(d.majPct)})`, money(d.majoration)]);
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) lines.push(["Montant rectifié après vérification", money(dec.montant), true]);
-  if (dCredit(d)) lines.push([`Déjà payé sur la déclaration remplacée ${dossierNo("DF", d.remplace)}`, "− " + money(dCredit(d))], [st === "payee" ? "Complément réglé" : "Reste à régler", money(Math.max(0, dMontant(d) - dCredit(d))), true]);
+  if (dAvoir(d)) lines.push([`Déjà payé sur la déclaration remplacée ${dossierNo("DF", d.remplace)}`, "− " + money(dAvoir(d))]);
+  if (dComp(d)) lines.push(["Réglé par compensation · contrats payés par la Préfecture", "− " + money(dComp(d))]);
+  if (dCredit(d)) lines.push([st === "payee" ? "Complément réglé" : "Reste à régler", money(Math.max(0, dMontant(d) - dCredit(d))), true]);
   const due = st === "validee" && !e ? payDue(d) : null;
   const doc = {
     kind: "AVIS D’IMPOSITION", no: dossierNo("DF", d.id), date: "Émis le " + longDate(dec && dec.at ? new Date(dec.at) : new Date()),
@@ -6861,6 +6887,23 @@ function ctImputations(service, key) {
   return out;
 }
 // Ce qu'une entreprise a reçu de la Préfecture sur une période (pour vérifier son chiffre d'affaires).
+// Ce que la Préfecture doit encore à une entreprise sur ses contrats payés par déduction : retiré de ce
+// qu'elle doit sur ses déclarations (impôt et cotisations, pas la majoration), sans plafond, jusqu'à
+// épuisement. Les déclarations rejetées rendent leur part ; « exclude » écarte celle en cours de saisie.
+function ctCreance(e, exclude) {
+  const out = { ouvert: 0, utilise: 0, dispo: 0 };
+  if (!e || !e.id) return out;
+  for (const c of ctsOf(e)) for (const p of c.paiements || []) if (p.mode === "impot") out.ouvert += Number(p.montant) || 0;
+  const ex = new Set((exclude || []).filter(Boolean));
+  for (const d of S.declarations) if (d.entrepriseId === e.id && !ex.has(d.id) && dStatus(d) !== "rejetee") out.utilise += dComp(d);
+  out.dispo = Math.max(0, out.ouvert - out.utilise);
+  return out;
+}
+function applyCompensation(r, e, exclude) {
+  const cr = ctCreance(e, exclude), base = Math.max(0, (Number(r.impot) || 0) + (Number(r.cotisations) || 0));
+  const montant = Math.min(cr.dispo, base);
+  return Object.assign({}, r, { compensation: montant > 0 ? { montant, credit: cr.dispo } : null });
+}
 function paiementsPrefecture(e, key) {
   if (!e) return 0;
   let t = 0;
@@ -6930,10 +6973,12 @@ function paiementDoc(c, p) {
     kind: "ORDRE DE PAIEMENT", no: `${ctNo(c)}-${i}`, date: "Payé le " + longDate(new Date(p.at)),
     meta: [["Bénéficiaire", f.nom], ["Contrat", `${ctNo(c)} · ${c.objet || CT_CATS[c.categorie] || ""}`], ["Imputation", svc ? (c.demandeId ? `Demande ${dossierNo("DM", c.demandeId)}` : `Enveloppe ${svc} · ${periodPlain(p.periode || keyOf(new Date(p.at))).toLowerCase()}`) : "Trésor de la Préfecture"], ["Ordonné par", p.byNom || "Direction"]],
     lines: lines.concat(p.note ? [["Observation", p.note]] : []),
-    total: ["Somme versée", money(p.montant)],
-    stamp: ["PAYÉ", "ok"],
-    footer: "Somme versée par la Préfecture de police au titre du contrat ci-dessus. Elle entre dans le chiffre d’affaires du bénéficiaire et doit figurer dans sa déclaration de la période.",
-    discord: { channel: "entreprises", mentions: [entMention(f)].filter(Boolean), text: `**Ordre de paiement ${ctNo(c)}-${i}** · ${f.nom} · ${money(p.montant)} au titre du ${c.type === "cadre" ? "marché" : "contrat"} ${ctNo(c)}` }
+    total: [p.mode === "impot" ? "Somme due, à déduire" : "Somme versée", money(p.montant)],
+    stamp: p.mode === "impot" ? ["À DÉDUIRE", "accent"] : ["PAYÉ", "ok"],
+    footer: p.mode === "impot"
+      ? "Somme due par la Préfecture de police au titre du contrat ci-dessus. Elle n’est pas versée : elle est retirée de ce que le bénéficiaire doit sur ses prochaines déclarations (impôt et cotisations), jusqu’à épuisement. Elle entre dans son chiffre d’affaires et doit figurer dans sa déclaration de la période."
+      : "Somme versée par la Préfecture de police au titre du contrat ci-dessus. Elle entre dans le chiffre d’affaires du bénéficiaire et doit figurer dans sa déclaration de la période.",
+    discord: { channel: "entreprises", mentions: [entMention(f)].filter(Boolean), text: `**Ordre de paiement ${ctNo(c)}-${i}** · ${f.nom} · ${money(p.montant)} au titre du ${c.type === "cadre" ? "marché" : "contrat"} ${ctNo(c)}${p.mode === "impot" ? " · à déduire de ses impôts et cotisations" : ""}` }
   };
 }
 async function saveCt(c, patch, msg) {
@@ -7101,7 +7146,7 @@ function openContrat(id) {
     c.conditions ? sec("Conditions", h("p", { class: "prewrap", style: "margin:0", text: c.conditions })) : null,
     c.categorie === "transport_fonds" ? sec(`Collectes faites · ${col.faites.length}`, col.faites.length ? h("ul", { class: "access" }, col.faites.slice(-30).map(v => h("li", {}, h("button", { class: "linkbtn", type: "button", onclick: () => colOpen(v), text: colLabel(v) }), ` · ${colInfo(v)} · ${col.aPayer.includes(v) ? "à payer" : "payée"}`)))
       : h("p", { class: "muted", style: "margin:0", text: "Aucune collecte encaissée depuis le début du marché." })) : null,
-    (c.paiements || []).length ? sec("Paiements", h("ul", { class: "ent-list" }, c.paiements.map((p, i) => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${ctNo(c)}-${i + 1} · ${money(p.montant)}` }), h("span", { class: "meta", text: `${fmtDateTime(new Date(p.at))} · ${p.byNom || ""}${p.note ? " · " + p.note : ""}` })), h("span", {}),
+    (c.paiements || []).length ? sec("Paiements", h("ul", { class: "ent-list" }, c.paiements.map((p, i) => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${ctNo(c)}-${i + 1} · ${money(p.montant)}` }), h("span", { class: "meta", text: `${fmtDateTime(new Date(p.at))} · ${p.mode === "impot" ? "par déduction sur ses impôts" : "versé par le Trésor"} · ${p.byNom || ""}${p.note ? " · " + p.note : ""}` })), h("span", {}),
       h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(paiementDoc(c, p), reopen), text: "Ordre de paiement" })))))) : null
   ];
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(contratDoc(c), reopen), text: cadre ? "Marché en image" : "Contrat en image" }), h("span", { class: "spacer" })];
@@ -7166,6 +7211,18 @@ function ctPayer(c) {
   const err = h("span", { class: "err", "aria-live": "polite" });
   const forceP = h("input", { type: "checkbox", id: "ct-forcep" }), forceL = h("div", { class: "err", hidden: true });
   qte.addEventListener("input", () => { forceP.checked = false; forceL.hidden = true; });
+  // Sans demande de moyens derrière, la Direction choisit : le Trésor verse la somme, ou elle est retirée
+  // de ce que l'entreprise doit sur ses prochaines déclarations.
+  const modeSel = c.demandeId ? null : h("select", { id: "ct-mode" }, h("option", { value: "tresor", text: "Versement du Trésor" }), h("option", { value: "impot", text: "Déduction sur ses impôts et cotisations" }));
+  if (modeSel && montantOf() > treasury().solde) modeSel.value = "impot";
+  const modeHint = h("span", { class: "hint" }), payeSur = h("span", {});
+  const syncMode = () => {
+    const ded = modeSel && modeSel.value === "impot";
+    modeHint.textContent = !modeSel ? "" : ded ? "Rien ne sort du Trésor : la somme sera retirée de ce que l’entreprise doit sur ses prochaines déclarations (impôt et cotisations), jusqu’à épuisement." : `Le Trésor verse la somme tout de suite (solde : ${money(treasury().solde)}).`;
+    payeSur.textContent = c.demandeId ? `crédits de la demande ${dossierNo("DM", c.demandeId)}` : ded ? `déduction sur les impôts et cotisations de ${c.fournisseurNom}${ctService(c) ? `, imputé sur l’enveloppe ${ctService(c)}` : ""}` : ctService(c) ? `Trésor, imputé sur l’enveloppe ${ctService(c)}` : "Trésor de la Préfecture";
+  };
+  if (modeSel) modeSel.addEventListener("change", syncMode);
+  syncMode();
   const go = h("button", { class: "btn ink small", type: "button", text: "Payer" });
   go.addEventListener("click", async () => {
     err.textContent = "";
@@ -7175,13 +7232,15 @@ function ctPayer(c) {
     if (cadre && c.plafond && ctPaye(c) + m > c.plafond) { err.textContent = `Le plafond du marché (${money(c.plafond)}) serait dépassé : il reste ${money(Math.max(0, c.plafond - ctPaye(c)))}.`; return; }
     const svcP = ctService(c), wkP = keyOf(new Date());
     if (cadre && svcP && !c.demandeId) { const x = envStats(svcP, wkP), over = x.accorde + m - (x.cap || 0); if (x.cap && over > 0 && !forceP.checked) { fill(forceL, `L’enveloppe ${svcP} de ${perNom(wkP)} serait dépassée de ${money(over)}. `, h("label", { class: "switch", for: "ct-forcep" }, forceP, "Payer quand même")); forceL.hidden = false; return; } }
-    if (!c.demandeId && m > treasury().solde) { err.textContent = `Le Trésor ne dispose que de ${money(treasury().solde)}.`; return; }
+    const ded = !!modeSel && modeSel.value === "impot";
+    if (!c.demandeId && !ded && m > treasury().solde) { err.textContent = `Le Trésor ne dispose que de ${money(treasury().solde)} : choisissez « Déduction sur ses impôts et cotisations ».`; return; }
     go.disabled = true;
     const ok = await ctOnce(c.id, async () => {
       const cur = ctNow(c.id) || c, at = nowISO();
       // Une collecte ou un convoi a pu changer depuis l'ouverture (réception annulée, payé ailleurs) : on repart de la liste à jour.
       if (tf && cadre && ctCollectes(cur).payables.map(v => v.id).join() !== col.payables.map(v => v.id).join()) { toast("Les collectes à payer viennent de changer : voici la liste à jour.", true); ctPayer(cur); return null; }
       const p = { at, montant: m, periode: keyOf(new Date(at)), byNom: S.agentName || "", note: note.value.trim() };
+      if (ded) p.mode = "impot";
       if (tf && cadre) { p.convocations = col.payables.filter(v => !v._vt).map(v => v.id); const vts = col.payables.filter(v => v._vt).map(v => v.id); if (vts.length) p.versements = vts; }
       else if (cadre) p.quantite = Math.max(1, Math.round(Number(qte.value) || 1));
       const patch = { paiements: (cur.paiements || []).concat([p]) };
@@ -7202,7 +7261,8 @@ function ctPayer(c) {
       cadre && !tf ? field("ct-qte", `Nombre ${/^[aeiouyhéèê]/i.test(c.unite || "prestation") ? "d’" : "de "}${c.unite || "prestation"}s à payer`, qte) : null,
       field("ct-note", "Observation", note),
       forceL,
-      kv([["Somme versée", totalEl, "tot"], ["Payé sur", c.demandeId ? `crédits de la demande ${dossierNo("DM", c.demandeId)}` : ctService(c) ? `Trésor, imputé sur l’enveloppe ${ctService(c)}` : "Trésor de la Préfecture"], c.demandeId ? null : ["Trésor disponible", money(treasury().solde)]]),
+      modeSel ? h("div", { class: "field" }, h("label", { for: "ct-mode", text: "Mode de paiement" }), modeSel, modeHint) : null,
+      kv([["Montant", totalEl, "tot"], ["Payé sur", payeSur], c.demandeId ? null : ["Trésor disponible", money(treasury().solde)]]),
       err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
 }
@@ -7237,8 +7297,8 @@ function renderContrats() {
 function contratsSection(e) {
   const cs = e.id ? ctsOf(e) : [];
   if (!cs.length && !canAgent()) return null;
-  const recu = cs.reduce((t, c) => t + ctPaye(c), 0);
-  return sec("Contrats avec la Préfecture" + (recu ? ` · ${money(recu)} reçus` : ""),
+  const recu = cs.reduce((t, c) => t + ctPaye(c), 0), cr = ctCreance(e);
+  return sec("Contrats avec la Préfecture" + (recu ? ` · ${money(recu)} reçus` : "") + (cr.dispo ? ` · ${money(cr.dispo)} à déduire de ses prochaines déclarations` : ""),
     cs.length ? h("ul", { class: "ent-list" }, cs.slice(0, 8).map(c => h("li", {},
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openContrat(c.id), text: `${ctNo(c)} · ${c.objet || CT_CATS[c.categorie] || ""}` }), h("span", { class: "meta", text: `${ctAcheteur(c)} · ${c.type === "cadre" ? money(c.prixUnitaire) + " par " + (c.unite || "prestation") : money(c.montant)}` })),
       chip(ctState(c)), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucun contrat." }),
@@ -7358,14 +7418,20 @@ function applyMecenat(r, e, key, c, late, exclude) {
 // enfin l'ancienne) : sa réduction est recalculée. Un avis émis ou payé ne bouge pas.
 async function mecRecalc(d, extra) {
   const cur = S.declarations.find(x => x.id === d.id) || d, dec = S.decisions[cur.id];
-  if (!cur.entrepriseId || cur.taxationOffice || (dec && ["validee", "payee", "controle"].includes(dec.statut))) return false;
+  if (!cur.entrepriseId || (dec && ["validee", "payee", "controle"].includes(dec.statut))) return false;
   const e = entOf(cur);
   if (!e.id) return false;
-  const avant = (Number(cur.impot) || 0) + mecMontant(cur);
-  const r = applyMecenat({ impot: avant, cotisations: Number(cur.cotisations) || 0 }, e, cur.periode, { majoration: Number(cur.majPct) || 0 }, !!cur.enRetard, [cur.id].concat(extra || []));
-  if (mecMontant(r) === mecMontant(cur)) return false;
-  const ok = await write(() => S.db.doc("declarations/" + cur.id).update({ impot: r.impot, majoration: r.majoration, total: r.total, mecenat: r.mecenat || null }));
-  if (ok) toast(`Réduction des partenaires recalculée : ${money(r.total)} à payer.`);
+  const ex = [cur.id].concat(extra || []);
+  // Réduction des partenaires (jamais sur une imposition d'office), puis compensation avec les contrats.
+  let r = { impot: Number(cur.impot) || 0, cotisations: Number(cur.cotisations) || 0, majoration: Number(cur.majoration) || 0, total: Number(cur.total) || 0, mecenat: cur.mecenat || null };
+  if (!cur.taxationOffice) {
+    const avant = (Number(cur.impot) || 0) + mecMontant(cur);
+    r = applyMecenat({ impot: avant, cotisations: Number(cur.cotisations) || 0 }, e, cur.periode, { majoration: Number(cur.majPct) || 0 }, !!cur.enRetard, ex);
+  }
+  const comp = applyCompensation(r, e, ex).compensation || null;
+  if (mecMontant(r) === mecMontant(cur) && (comp ? comp.montant : 0) === dComp(cur)) return false;
+  const ok = await write(() => S.db.doc("declarations/" + cur.id).update({ impot: r.impot, majoration: r.majoration, total: r.total, mecenat: r.mecenat || null, compensation: comp }));
+  if (ok) toast(`Réduction et compensation recalculées : ${money(Math.max(0, r.total - (comp ? comp.montant : 0)))} à payer.`);
   return ok;
 }
 // Saisie en cours : la déclaration modifiée et celle qu'une rectificative remplacera ne comptent pas.
@@ -8126,7 +8192,8 @@ function quittanceDeclDoc(d) {
   return quittanceDoc({
     no: dossierNo("QT", d.id), ent: entOf(d), objet: `Impôt et cotisations · ${periodPlain(d.periode)}`, ref: dossierNo("DF", d.id),
     montant: Math.max(0, dMontant(d) - dCredit(d)), paidAt: dec.paidAt, paidByNom: dec.paidByNom,
-    detail: dCredit(d) ? [[`Déjà payé sur la déclaration remplacée ${dossierNo("DF", d.remplace)}`, money(Math.min(dCredit(d), dMontant(d))), false]] : null,
+    detail: dCredit(d) ? [dAvoir(d) ? [`Déjà payé sur la déclaration remplacée ${dossierNo("DF", d.remplace)}`, money(Math.min(dAvoir(d), dMontant(d))), false] : null,
+      dComp(d) ? ["Réglé par compensation (contrats payés par la Préfecture)", money(Math.min(dComp(d), Math.max(0, dMontant(d) - dAvoir(d)))), false] : null].filter(Boolean) : null,
     table: ec ? { title: "Réglé en plusieurs fois", head: ["Échéance", "Payée le", "Montant", ""], rows: ec.echeances.map(x => [`${x.n} / ${ec.echeances.length}`, x.paidAt ? longDate(new Date(x.paidAt)) : "—", money(x.montant), ""]) } : null
   });
 }
