@@ -7150,6 +7150,7 @@ function openContrat(id) {
       h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(paiementDoc(c, p), reopen), text: "Ordre de paiement" })))))) : null
   ];
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(contratDoc(c), reopen), text: cadre ? "Marché en image" : "Contrat en image" }), h("span", { class: "spacer" })];
+  if (dir && !(c.paiements || []).length) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => ctSupprimer(c), text: "Supprimer" }));
   if (c.statut === "projet") {
     if (ag) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => ctAbandon(c), text: "Abandonner" }));
     if (ag) foot.push(h("button", { class: dir ? "btn ghost small" : "btn ink small", type: "button", onclick: () => openContratForm(null, { edit: c }), text: dir ? "Modifier ou signer" : "Modifier" }));
@@ -7166,6 +7167,24 @@ function ctAbandon(c) {
   openDialog({ eyebrow: `Projet ${ctNo(c)}`, title: "Abandonner le projet ?", body: [h("p", { style: "margin:0", text: "Le projet reste dans l’historique, marqué « abandonné ». Rien n’a été engagé." })],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Retour" }), h("span", { class: "spacer" }),
       h("button", { class: "btn danger small", type: "button", onclick: async ev => { const btn = ev.currentTarget; btn.disabled = true; if (await saveCt(c, { statut: "annule" }, "Projet abandonné.")) openContrat(c.id); else btn.disabled = false; }, text: "Abandonner" })] });
+}
+// Suppression : la Direction efface un contrat fait par erreur ou clos trop tôt, tant qu'aucun paiement n'y est inscrit.
+function ctSupprimer(c) {
+  if (ctChanged(c.id, x => !(x.paiements || []).length)) return;
+  const cadre = c.type === "cadre", svc = ctService(c), nom = cadre ? "le marché" : "le contrat";
+  const libere = c.demandeId ? `Les crédits de la demande ${dossierNo("DM", c.demandeId)} redeviennent disponibles.`
+    : svc && !cadre && ctVivant(c) && c.statut !== "resilie" ? `L’enveloppe ${svc}${c.periode ? " de " + perNom(c.periode) : ""} est libérée.` : "";
+  openDialog({ eyebrow: `${CT_TYPES[c.type] || "Contrat"} ${ctNo(c)}`, title: `Supprimer ${nom} ?`,
+    body: [h("p", { style: "margin:0", text: `${cadre ? "Le marché" : "Le contrat"} avec ${c.fournisseurNom} disparaît du registre et de sa fiche. Rien n’a été payé dessus. ${libere}`.trim() }),
+      h("p", { class: "hint", style: "margin:0", text: "La suppression reste inscrite au journal. Si le contrat a été publié sur Discord, effacez le message à la main." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openContrat(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        if (ctChanged(c.id, x => !(x.paiements || []).length)) return;
+        const btn = ev.currentTarget; btn.disabled = true;
+        const ok = await ctOnce(c.id, () => write(() => S.db.doc("contrats/" + c.id).delete()));
+        if (!ok) { btn.disabled = false; return; }
+        closeDialog(); toast(`${cadre ? "Marché" : "Contrat"} ${ctNo(c)} supprimé.`);
+      }, text: `Supprimer ${nom}` })] });
 }
 function ctResilier(c) {
   const motif = h("textarea", { rows: "2", placeholder: "Ex. : livraison jamais faite, prix non respecté" });

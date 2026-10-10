@@ -33,6 +33,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v13_conventions.sql` : les conventions de partenariat et les prestations offertes (l’Inspection note, la Direction valide)
 - `supabase/v14_amendes.sql` : les amendes versées au Trésor (l’Inspection note, la Direction confirme la réception)
 - `supabase/v15_conventions_forfait.sql` : la réduction d’impôt fixe des conventions de partenariat, figée à la signature
+- `supabase/v16_contrats_suppression.sql` : la suppression d’un contrat sans paiement par la Direction
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
@@ -53,7 +54,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat), `supabase/v13_conventions.sql` (conventions de partenariat) et `supabase/v14_amendes.sql` (amendes versées au Trésor), `supabase/v15_conventions_forfait.sql` (réduction fixe des conventions). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat), `supabase/v13_conventions.sql` (conventions de partenariat), `supabase/v14_amendes.sql` (amendes versées au Trésor), `supabase/v15_conventions_forfait.sql` (réduction fixe des conventions) et `supabase/v16_contrats_suppression.sql` (suppression des contrats sans paiement). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -303,7 +304,9 @@ Trésor → **Contrats et partenariats**, ou la fiche de l’entreprise fourniss
 
 Les sommes versées sont déduites du solde du Trésor et comptées dans le suivi des enveloppes ; une somme payée par déduction compte dans l’enveloppe du service, pas dans le solde. Si une entreprise déclare un chiffre d’affaires inférieur à ce que la Préfecture lui a payé sur la période, une alerte le signale. Discord : cochez « Contrats » dans la publication automatique.
 
-L’Inspection prépare et modifie des projets, et peut les abandonner ; signer, constater une livraison, payer, résilier et clore un marché sont réservés à la Direction. La base l’impose elle-même (`supabase/v12_contrats.sql`) : un contrat signé ne se modifie plus et ne se supprime plus, un paiement enregistré n’est jamais réécrit ni effacé, deux paiements simultanés ne s’écrasent pas, et l’état d’un contrat n’avance que dans un sens. Pour changer un contrat signé, résiliez-le et faites-en un nouveau.
+L’Inspection prépare et modifie des projets, et peut les abandonner ; signer, constater une livraison, payer, résilier, clore un marché et supprimer sont réservés à la Direction. La base l’impose elle-même (`supabase/v12_contrats.sql`, complété par `supabase/v16_contrats_suppression.sql`) : un contrat signé ne se modifie plus, un paiement enregistré n’est jamais réécrit ni effacé, deux paiements simultanés ne s’écrasent pas, et l’état d’un contrat n’avance que dans un sens. Pour changer un contrat signé, résiliez-le et faites-en un nouveau.
+
+**Supprimer** : un contrat ou un marché fait par erreur, ou clos trop tôt, se supprime depuis sa fenêtre (Direction), quel que soit son état, tant qu’aucun paiement n’y est inscrit. L’enveloppe du service ou les crédits de la demande sont libérés ; la suppression reste au journal ; le message Discord déjà publié s’efface à la main. Un contrat qui a reçu un paiement ne se supprime pas : son paiement est entré dans les comptes.
 
 ## Conventions de partenariat
 
