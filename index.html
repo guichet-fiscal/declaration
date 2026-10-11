@@ -4460,7 +4460,7 @@ function parseArticle(raw) {
   let pu = null, q = null, m;
   const pm = /(\s*[:=]\s*|\s+[–—-]\s+|\s+(?:à|@|pour)\s+)(\d[\d\s.,]*(?:\s?[kKmM]\b)?)\s*(?:€|euros?|eur|\$)?\s*(?:ttc|ht)?\s*(l['’]unit[eé]|l['’]une?|\/\s*u(?:nit[eé])?|pi[eè]ce|chacune?|par unit[eé]|unitaire|pu)?\.?\s*$/i.exec(t);
   if (pm) t = t.slice(0, pm.index).trim();
-  if ((m = /^(\d{1,3}(?:[\s  ]\d{3})+|\d+)\s*(?:x|×|\*)?\s+(.+)$/i.exec(t)) && !/^(?:mm|cm|m|km|kg|g|l|ml|cl|%|h|min)\b/i.test(m[2])) { q = parseInt(m[1].replace(/\D/g, ""), 10); t = m[2]; }
+  if ((m = /^(\d{1,3}(?:[\s  ]\d{3})+|\d+)\s*(?:x|×|\*)?\s+(.+)$/i.exec(t)) && !/^(?:mm|cm|m|km|kg|g|l|ml|cl|%|h|min)(?![\p{L}\d])/iu.test(m[2])) { q = parseInt(m[1].replace(/\D/g, ""), 10); t = m[2]; }
   else if ((m = /^(.+?)\s*[(\[]\s*[x×]?\s*(\d{1,6})\s*[)\]]$/i.exec(t))) { q = +m[2]; t = m[1]; }
   else if ((m = /^(.+?)\s+(?:x|×)\s*(\d{1,6})$/i.exec(t))) { q = +m[2]; t = m[1]; }
   t = t.replace(/[\s:–—-]+$/, "").trim();
