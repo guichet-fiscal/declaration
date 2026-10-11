@@ -99,7 +99,9 @@ function actualiser() {
   ecrire("Entreprises", ["Nom", "Secteur", "Patron", "Active", "Ajoutée le"],
     col("entreprises").map(r => [r.data.nom, r.data.secteur || "", r.data.patron || "", r.data.actif === false ? "Non" : "Oui", date(r.data.createdAt)]));
 
-  // Semaine d'une demande, comme dans le guichet : celle choisie à la saisie, sinon celle de l'accord (anciennes demandes) ou de la réception.
+  // Budget des services publics au mois, comme dans le guichet : le mois choisi à la saisie ; une demande
+  // rattachée à une semaine (avant le passage au mois) va au mois du jeudi de cette semaine ; les plus
+  // anciennes, au mois de leur accord ou de leur réception.
   const conf = (col("config").find(r => r.id === "main") || { data: {} }).data;
   const pad2 = n => String(n).padStart(2, "0");
   const semaineDe = iso => {
@@ -110,29 +112,57 @@ function actualiser() {
     const y = t.getUTCFullYear();
     return y + "-S" + pad2(Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7));
   };
+  const moisDate = iso => { const d = new Date(iso || Date.now()); return d.getFullYear() + "-" + pad2(d.getMonth() + 1); };
+  const moisDe = k => {
+    if (!k) return "";
+    if (/^\d{4}-\d{2}$/.test(k)) return k;
+    const m = /^(\d{4})-S(\d{2})$/.exec(k);
+    if (!m) return k;
+    const j4 = new Date(Date.UTC(+m[1], 0, 4)), lundi = new Date(j4.getTime() - ((j4.getUTCDay() + 6) % 7) * 864e5 + (+m[2] - 1) * 7 * 864e5);
+    const jeudi = new Date(lundi.getTime() + 3 * 864e5);
+    return jeudi.getUTCFullYear() + "-" + pad2(jeudi.getUTCMonth() + 1);
+  };
   const accorde = a => (a && (a.statut === "accordee" || a.statut === "partielle") ? Number(a.montantAccorde) || 0 : 0);
-  const semaineDem = (d, a) => d.periode || (accorde(a) && a.at ? semaineDe(a.at) : semaineDe(d.recueAt || d.createdAt));
+  const moisDem = (d, a) => d.periode ? moisDe(d.periode) : moisDate(accorde(a) && a.at ? a.at : d.recueAt || d.createdAt);
+  const lignesDem = d => (Array.isArray(d.lignes) && d.lignes.length ? d.lignes : null);
   const env = {};
-  ecrire("Demandes", ["N°", "Service", "Nature", "Objet", "Semaine", "Quantité", "Demandé", "Urgence", "Statut", "Accordé", "Motif", "Reçue le", "Décidée le"],
+  const lignesArt = [];
+  ecrire("Demandes", ["N°", "Service", "Unité", "Nature", "Objet", "Mois", "Articles", "Demandé", "Urgence", "Statut", "Accordé", "Motif", "Reçue le", "Décidée le", "Bon de commande", "Demandeur"],
     col("demandes").map(r => {
-      const d = r.data, a = arbitrages[r.id], st = a ? a.statut : "attente", k = semaineDem(d, a), sv = d.service || "Autre";
+      const d = r.data, a = arbitrages[r.id], st = a ? a.statut : "attente", k = moisDem(d, a), sv = d.service || "Autre", ls = lignesDem(d);
       const x = env[sv + "|" + k] = env[sv + "|" + k] || { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 };
       x.n++; x.demande += Number(d.montant) || 0; x.accorde += accorde(a); if (st === "attente" || st === "etude") x.attente += Number(d.montant) || 0;
-      return [no("DM", r.id), d.service, NATURES[d.nature] || d.nature, d.objet, k, d.quantite || "", d.montant, d.urgence, STATUTS_DEM[st] || st,
-        accorde(a), a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : ""];
+      // Articles : une ligne par article, avec la décision article par article quand elle existe.
+      const al = a && Array.isArray(a.lignes) ? a.lignes : [];
+      (ls || [{ designation: d.objet || "Demande", quantite: 1, prixUnitaire: Number(d.montant) || 0 }]).forEach((l, i) => {
+        const z = al[i] && String(al[i].designation) === String(l.designation) ? al[i] : null, pu = l.prixUnitaire == null || l.prixUnitaire === "" ? "" : Number(l.prixUnitaire);
+        const zq = z ? Number(z.quantite) || 0 : "", zp = z && z.prixUnitaire != null ? Number(z.prixUnitaire) : "", etat = !z ? "" : !(zq > 0 && zp > 0) ? "Refusé" : (zq < (Number(z.quantiteDemandee) || 0) || (z.prixDemande != null && zp < Number(z.prixDemande))) ? "Réduit" : "Accordé";
+        lignesArt.push([no("DM", r.id), sv, k, l.designation, Number(l.quantite) || 0, pu, pu === "" ? "" : (Number(l.quantite) || 0) * pu, zq, zp, z ? (zq || 0) * (zp || 0) : "", etat || STATUTS_DEM[st] || st, z && z.motif ? z.motif : ""]);
+      });
+      return [no("DM", r.id), d.service, d.unite || "", NATURES[d.nature] || d.nature, d.objet, k, ls ? ls.length : "", d.montant, d.urgence, STATUTS_DEM[st] || st,
+        accorde(a), a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : "", d.reference || "", d.demandeur || ""];
     }));
-  // Plafonds réglés période par période ; une période sans plafonds propres reprend ceux de la dernière période réglée.
-  const parSemaine = conf.enveloppesSemaines && typeof conf.enveloppesSemaines === "object" ? conf.enveloppesSemaines : {};
-  const sorte = k => (/-S\d{2}$/.test(k) ? "S" : "M");
+  ecrire("Articles des demandes", ["Demande", "Service", "Mois", "Article", "Quantité demandée", "Prix demandé", "Total demandé", "Quantité accordée", "Prix retenu", "Accordé", "Décision", "Motif"], lignesArt);
+  ecrire("Catalogue des prix", ["Article", "Catégorie", "Prix de référence", "Note", "Ajouté par", "Ajouté le"],
+    col("catalogue").map(r => [r.data.designation, r.data.categorie || "", Number(r.data.prix) || 0, r.data.note || "", r.data.byNom || "", date(r.data.at)])
+      .sort((x, y) => String(x[1]).localeCompare(String(y[1])) || String(x[0]).localeCompare(String(y[0]))));
+  // Plafonds réglés mois par mois ; un mois sans plafonds propres reprend ceux du dernier mois réglé.
+  // Tant qu'aucun mois n'est réglé, les anciens plafonds par semaine valent pour leur mois, × 4,33.
+  const parMois = (() => {
+    if (conf.enveloppesMois && typeof conf.enveloppesMois === "object") return conf.enveloppesMois;
+    const out = {}, w = conf.enveloppesSemaines && typeof conf.enveloppesSemaines === "object" ? conf.enveloppesSemaines : {};
+    Object.keys(w).sort().forEach(k => { if (!/-S\d{2}$/.test(k) || !w[k] || typeof w[k] !== "object") return; const caps = {}; Object.keys(w[k]).forEach(sv => { if (Number(w[k][sv]) > 0) caps[sv] = Math.round(Number(w[k][sv]) * 4.33); }); out[moisDe(k)] = caps; });
+    return out;
+  })();
   const plafondsDe = k => {
-    if (parSemaine[k]) return parSemaine[k];
-    const avant = Object.keys(parSemaine).filter(x => sorte(x) === sorte(k) && x < k).sort().pop();
-    return avant ? parSemaine[avant] : conf.enveloppes || {};
+    if (parMois[k]) return parMois[k];
+    const avant = Object.keys(parMois).filter(x => /^\d{4}-\d{2}$/.test(x) && x < k).sort().pop();
+    return avant ? parMois[avant] : conf.enveloppes || {};
   };
   const plafond = (sv, k) => { const e = plafondsDe(k) || {}; const c = Object.keys(e).find(x => x.toLowerCase() === String(sv).toLowerCase()); return c ? Number(e[c]) || 0 : ""; };
-  Object.keys(parSemaine).forEach(k => Object.keys(parSemaine[k] || {}).forEach(sv => { if (!env[sv + "|" + k]) env[sv + "|" + k] = { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 }; }));
+  Object.keys(parMois).forEach(k => Object.keys(parMois[k] || {}).forEach(sv => { if (!env[sv + "|" + k]) env[sv + "|" + k] = { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 }; }));
   // Achats sous contrat d'un service (hors achats financés par une demande) : une commande compte dès sa
-  // signature sur la semaine choisie, un marché à chaque paiement sur la semaine du paiement.
+  // signature sur le mois choisi, un marché à chaque paiement sur le mois du paiement.
   const envDe = (sv, k) => {
     const cle = Object.keys(env).find(x => x.toLowerCase() === (sv + "|" + k).toLowerCase());
     return cle ? env[cle] : (env[sv + "|" + k] = { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 });
@@ -140,10 +170,10 @@ function actualiser() {
   col("contrats").forEach(r => {
     const c = r.data, sv = c.acheteur && c.acheteur.type === "service" ? c.acheteur.service : "";
     if (!sv || c.demandeId || c.statut === "projet" || c.statut === "annule") return;
-    if (c.type === "commande") { if (c.periode && c.statut !== "resilie") { const x = envDe(sv, c.periode); x.achete = (x.achete || 0) + (Number(c.montant) || 0); } }
-    else (c.paiements || []).forEach(p => { const x = envDe(sv, p.periode || semaineDe(p.at)); x.achete = (x.achete || 0) + (Number(p.montant) || 0); });
+    if (c.type === "commande") { if (c.periode && c.statut !== "resilie") { const x = envDe(sv, moisDe(c.periode)); x.achete = (x.achete || 0) + (Number(c.montant) || 0); } }
+    else (c.paiements || []).forEach(p => { const x = envDe(sv, moisDate(p.at)); x.achete = (x.achete || 0) + (Number(p.montant) || 0); });
   });
-  ecrire("Enveloppes", ["Semaine", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Acheté sous contrat", "Plafond", "Reste"],
+  ecrire("Enveloppes", ["Mois", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Acheté sous contrat", "Plafond", "Reste"],
     Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
       .map(x => { const p = plafond(x.service, x.k), achete = x.achete || 0; return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, achete, p, p === "" ? "" : p - x.accorde - achete]; }));
 
@@ -259,7 +289,7 @@ function actualiser() {
         p.convocations || p.versements ? (function (n) { return n + " collecte" + (n > 1 ? "s" : ""); })((p.convocations || []).length + (p.versements || []).length) : cadre ? (p.quantite || 1) + " " + (c.unite || "prestation") + ((p.quantite || 1) > 1 ? "s" : "") : c.objet || "Commande", p.note || ""]));
       return [no("CT", r.id), c.fournisseurNom || "", acheteurCt(c), TYPES_CT[c.type] || c.type || "", CATS_CT[c.categorie] || c.categorie || "", c.objet || "",
         cadre ? "" : c.montant, cadre ? c.prixUnitaire : "", cadre ? c.unite || "" : "", cadre && c.plafond ? c.plafond : "",
-        sv ? (c.demandeId ? "Demande " + no("DM", c.demandeId) : cadre ? "Enveloppe " + sv + " (semaine du paiement)" : "Enveloppe " + sv + " · " + (c.periode || "")) : "Trésor",
+        sv ? (c.demandeId ? "Demande " + no("DM", c.demandeId) : cadre ? "Enveloppe " + sv + " (mois du paiement)" : "Enveloppe " + sv + " · " + moisDe(c.periode || "")) : "Trésor",
         ETATS_CT[c.statut] || c.statut || "", payeCt(c), c.byNom || "", date(c.signeLe), c.signeParNom || "", date(c.debut), date(c.fin),
         c.livraison ? date(c.livraison.at) : "", c.resiliation ? (c.resiliation.livraisonRefusee ? "Livraison refusée : " : "") + (c.resiliation.motif || "") : ""];
     }));
