@@ -6336,7 +6336,19 @@ async function renderDocImage(doc) {
   const noteLines = doc.note ? wrapLines(m, doc.note, inner) : [];
   m.font = `400 14px ${F.body}`;
   const footLines = wrapLines(m, doc.footer || "", inner);
-  let H = 200 + metaH.reduce((s, x) => s + x, 0) + 10 + doc.lines.length * 42 + 14 + 112;
+  // Lignes : libellé à gauche, valeur à droite. Trop longues pour une ligne, le libellé passe sur
+  // plusieurs lignes à côté d'une valeur courte, ou la valeur (un texte libre) passe en dessous.
+  const LN = doc.lines.map(([label, value, strong]) => {
+    m.font = `${strong ? 700 : 400} 17px ${F.body}`; const lw = m.measureText(String(label)).width;
+    m.font = `${strong ? 600 : 400} 17px ${F.mono}`; const vw = m.measureText(String(value)).width;
+    if (lw + 24 + vw <= inner) return { label, value, strong, lab: [String(label)], val: null, h: 42 };
+    m.font = `${strong ? 700 : 400} 17px ${F.body}`;
+    if (vw <= inner * 0.45) { const lab = wrapLines(m, label, inner - vw - 24); return { label, value, strong, lab, val: null, h: 42 + (lab.length - 1) * 24 }; }
+    const lab = wrapLines(m, label, inner);
+    m.font = `400 17px ${F.body}`; const val = wrapLines(m, value, inner);
+    return { label, value, strong, lab, val, h: 42 + (lab.length - 1) * 24 + val.length * 24 + 4 };
+  });
+  let H = 200 + metaH.reduce((s, x) => s + x, 0) + 10 + LN.reduce((s, x) => s + x.h, 0) + 14 + 112;
   // Tableau : colonnes réglables (cols = début de chaque colonne, en part de la largeur ; align ; mono),
   // première colonne sur plusieurs lignes si besoin, sous-ligne (motif) et lignes grisées (articles refusés).
   const T = doc.table ? (() => {
@@ -6416,11 +6428,14 @@ async function renderDocImage(doc) {
     y += 24;
   };
   if (T && doc.tableFirst) drawTable();
-  doc.lines.forEach(([label, value, strong]) => {
+  LN.forEach(({ value, strong, lab, val, h: lh }) => {
     ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(P, y + 0.5); ctx.lineTo(W - P, y + 0.5); ctx.stroke();
-    ctx.fillStyle = strong ? ink : ink2; ctx.font = `${strong ? 700 : 400} 17px ${F.body}`; ctx.fillText(label, P, y + 28);
-    ctx.textAlign = "right"; ctx.fillStyle = ink; ctx.font = `${strong ? 600 : 400} 17px ${F.mono}`; ctx.fillText(value, W - P, y + 28); ctx.textAlign = "left";
-    y += 42;
+    ctx.fillStyle = strong ? ink : ink2; ctx.font = `${strong ? 700 : 400} 17px ${F.body}`;
+    lab.forEach((ln, i) => ctx.fillText(ln, P, y + 28 + i * 24));
+    ctx.fillStyle = ink;
+    if (val) { ctx.font = `400 17px ${F.body}`; val.forEach((ln, i) => ctx.fillText(ln, P, y + 28 + (lab.length + i) * 24 + 4)); }
+    else { ctx.textAlign = "right"; ctx.font = `${strong ? 600 : 400} 17px ${F.mono}`; ctx.fillText(value, W - P, y + 28); ctx.textAlign = "left"; }
+    y += lh;
   });
   y += 14;
   const totalY = y;
