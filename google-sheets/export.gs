@@ -183,6 +183,8 @@ function actualiser() {
   // Trop-perçus remboursés directement : rendus au budget du mois de la semaine concernée.
   const tropPercus = col("rappels").filter(r => r.data.origine === "retenue");
   tropPercus.forEach(r => { const rb = (r.data.remboursements || []).reduce((t, x) => t + (Number(x.montant) || 0), 0); if (rb) { const x = envDe(svcPaye, moisDe(r.data.semaine)); x.payes = (x.payes || 0) - rb; } });
+  // Rappels versés à part (hors d'une paye) : comptés au mois de leur versement.
+  col("rappels").forEach(r => { if (r.data.origine === "retenue") return; (r.data.aPart || []).forEach(a => { if (!a.le) return; const x = envDe(svcPaye, moisDate(a.le)); x.payes = (x.payes || 0) + (Number(a.montant) || 0); }); });
   ecrire("Enveloppes", ["Mois", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Acheté sous contrat", "Payes versées", "Plafond", "Reste"],
     Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
       .map(x => { const p = plafond(x.service, x.k), achete = x.achete || 0, py = x.payes || 0; return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, achete, py, p, p === "" ? "" : p - x.accorde - achete - py]; }));
@@ -198,6 +200,7 @@ function actualiser() {
   ecrire("Payes", ["Semaine", "Mois", "Agent", "Grade", "Heures pointées", "Heures retenues", "Heures payées", "Taux horaire", "Paye due", "Versé", "Reste en rappel", "Prorata", "Nature", "Versée le", "Par"], lignesPaye);
   const docsRap = {}; col("rappels").forEach(r => { docsRap[r.id] = r.data; });
   const verseRap = {}; payesV.forEach(r => (r.data.rappels || []).forEach(x => { verseRap[x.rid] = (verseRap[x.rid] || 0) + (Number(x.verse) || 0); }));
+  col("rappels").forEach(r => { if (r.data.origine === "retenue") return; (r.data.aPart || []).forEach(a => { verseRap[r.id] = (verseRap[r.id] || 0) + (Number(a.montant) || 0); }); });
   const lignesRap = [];
   payesV.forEach(r => (r.data.lignes || []).forEach(l => { const reste = Math.round((Number(l.brut) || 0) - (Number(l.verse) || 0)); if (reste <= 0) return; const id = "auto-" + r.id + "-" + l.fid, o = docsRap[id], v = verseRap[id] || 0;
     lignesRap.push([l.nom || "", r.id, "Prorata de la paye", reste, v, o && o.annule ? 0 : Math.max(0, reste - v), o && o.annule ? "Annulé" : reste - v <= 0 ? "Versé" : "Dû", date(r.data.verseeLe)]); }));

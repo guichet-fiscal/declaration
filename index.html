@@ -282,6 +282,8 @@ pre.tpl{margin:12px 0 0;background:var(--field);border:1px solid var(--rule);bor
 .ent-list{list-style:none;margin:14px 0 0;padding:0}
 .ent-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--rule-2)}
 .ent-list .meta{display:block;font-size:12.5px;color:var(--ink-3)}
+/* Fenêtre étroite : les boutons d'une ligne passent dessous au lieu de pousser la fenêtre. */
+@media (max-width:560px){.ent-list li{grid-template-columns:minmax(0,1fr) auto}.ent-list li>.row-actions{grid-column:1/-1;justify-content:flex-start}}
 .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink-2)}
 .switch input{width:auto}
 .access{margin:10px 0 0;padding:0 0 0 18px;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
@@ -295,14 +297,15 @@ dialog::backdrop{background:rgba(8,18,22,.55)}
 .dlg-titles{min-width:0}
 .dlg-title{font-size:20px;margin-top:3px;overflow-wrap:anywhere}
 .dlg-side{display:flex;align-items:center;gap:14px}
-.dlg-body{padding:16px 20px 18px;display:grid;gap:16px;overflow:auto;min-height:0;grid-auto-rows:max-content;align-content:start}
+.dlg-body{padding:16px 20px 18px;display:grid;grid-template-columns:minmax(0,1fr);gap:16px;overflow:auto;min-height:0;grid-auto-rows:max-content;align-content:start}
 .dlg-foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;padding:14px 20px;border-top:1px solid var(--rule);background:var(--paper)}
 .dlg-foot .spacer{flex:1 1 auto}
 .dlg-sec{display:grid;gap:4px;align-content:start}
 .dlg-sec h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650}
 .dlg-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px}
 @media (max-width:560px){.dlg-cols{grid-template-columns:minmax(0,1fr)}}
-.kv{margin-top:6px;align-content:start}
+/* Le libellé garde au moins 8 em : une valeur longue passe à la ligne au lieu de recouvrir son libellé. */
+.kv{margin-top:6px;align-content:start;grid-template-columns:minmax(min(8em,40%),1fr) auto}
 .kv dd{font-family:var(--f-body);font-variant-numeric:normal;text-align:right;overflow-wrap:anywhere}
 .kv dd.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .kv .tot-dt,.kv .tot-dd{border-top:1px solid var(--ink);padding-top:7px;font-weight:700;color:var(--ink)}
@@ -379,6 +382,8 @@ td.tone-text{color:var(--tone)}
 .minis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--sheet)}
 .minis .kpi{border-left:1px solid var(--rule-2);border-top:1px solid var(--rule-2);margin:-1px 0 0 -1px}
 .minis .kpi .v{font-size:18px}
+/* Une valeur en mots (un grade, un nom) passe à la ligne au lieu de déborder sur la case voisine. */
+.kpi.kpi-txt .v{font-family:var(--f-body);font-size:16px;white-space:normal;overflow-wrap:anywhere;line-height:1.3}
 table.compact{min-width:560px;font-size:13.5px}
 table.compact td{padding:8px 10px}
 @media (max-width:560px){
@@ -852,6 +857,16 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <div class="kpi" id="k-conf"><span class="l">Entreprises à jour</span><span class="v">—</span><span class="s">déclaration déposée</span></div>
       <div class="kpi" id="k-dem"><span class="l">Demandes en attente</span><span class="v">—</span><span class="s">services publics</span></div>
       <div class="kpi" id="k-solde"><span class="l">Solde du Trésor</span><span class="v">—</span><span class="s">encaissé − accordé</span></div>
+    </div>
+
+    <div class="card" id="todo-card" style="margin-top:16px" hidden>
+      <div class="card-head">
+        <div>
+          <h3>À traiter</h3>
+          <p class="sub" id="todo-sub">Ce qui attend une action, rubrique par rubrique.</p>
+        </div>
+      </div>
+      <ul class="ent-list todo-list" id="todo"></ul>
     </div>
 
     <div class="dash-grid">
@@ -1445,6 +1460,15 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
           <option value="conventions">Conventions de partenariat</option>
           <option value="prestations">Prestations offertes</option>
           <option value="versements">Amendes versées</option>
+          <option value="prets">Prêts</option>
+          <option value="vehicules">Véhicules de société</option>
+          <option value="releves">Relevés de compte</option>
+          <option value="soupcons">Déclarations de soupçon</option>
+          <option value="catalogue">Catalogue des prix</option>
+          <option value="fonctionnaires">Fonctionnaires</option>
+          <option value="payes">Payes</option>
+          <option value="rappels">Rappels et trop-perçus</option>
+          <option value="pointages">Pointages</option>
           <option value="config">Barème et services</option>
           <option value="agents">Accès au guichet</option>
           <option value="meta">Sauvegardes</option>
@@ -2354,7 +2378,7 @@ function treasury() {
     if (a && !rep.has(dm.id) && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
   }
   // Payes des fonctionnaires de la Préfecture (une demande « budget salaires » reprise en paye n'est comptée qu'une fois).
-  const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0) - retenuesTous().reduce((t, r) => t + r.rembourse, 0);
+  const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0) - retenuesTous().reduce((t, r) => t + r.rembourse, 0) + aPartTous().reduce((t, x) => t + x.montant, 0);
   const budget = Number(cfg().budgetInitial) || 0;
   // Prêts : le capital versé sort du Trésor, les remboursements (intérêts compris) y reviennent.
   let pv = 0, pr = 0, pd = 0;
@@ -3166,6 +3190,7 @@ function renderDashboard() {
   }
   $("#reg-sub").textContent = ents.length ? `${ok} à jour, ${late} en retard sur ${ents.length} entreprise${plural(ents.length)} active${plural(ents.length)}.` : "Qui n’a pas déclaré, doit payer ou est en contrôle.";
 
+  renderTodo();
   renderAlerts();
   renderEnvelopes(key);
   renderChart();
@@ -3292,6 +3317,8 @@ function treasurySeries(keys) {
   for (const p of payesVersees()) { const k = keyOf(new Date(p.verseeLe || p.at || Date.now())); if (k in dep) dep[k] += payeTotal(p); }
   // Trop-perçus remboursés directement par les agents : la somme revient au Trésor.
   for (const r of retenuesTous()) for (const x of r.remboursements || []) { const k = keyOf(new Date(x.le)); if (k in rec) rec[k] += Number(x.montant) || 0; }
+  // Rappels versés à part : une sortie du Trésor, à la date du versement.
+  for (const x of aPartTous()) { const k = keyOf(new Date(x.le)); if (k in dep) dep[k] += x.montant; }
   for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) { if (p.mode === "impot") continue; const k = p.periode || keyOf(new Date(p.at)); if (k in dep) dep[k] += Number(p.montant) || 0; }
   // Compensation : la somme déduite d'un avis est à la fois une recette et le paiement d'un contrat.
   for (const d of S.declarations) if (d.periode in dep && dStatus(d) !== "rejetee") dep[d.periode] += dComp(d);
@@ -3374,6 +3401,50 @@ const demTri = (a, b) => {
   const pa = ["attente", "etude"].includes(aStatus(a)) ? 0 : 1, pb = ["attente", "etude"].includes(aStatus(b)) ? 0 : 1;
   return (pa - pb) || (pa === 0 ? ((URG_RANG[a.urgence] ?? 2) - (URG_RANG[b.urgence] ?? 2)) : 0) || String(b.recueAt || b.createdAt || "").localeCompare(String(a.recueAt || a.createdAt || ""));
 };
+// À traiter : ce qui attend une action de la Direction ou de l'Inspection, avec un lien vers la page.
+function allerA(tab) { showTab(tab); try { history.replaceState(null, "", "#" + tab); } catch (e) { /* sans historique */ } window.scrollTo({ top: 0, behavior: "smooth" }); }
+function todoItems() {
+  if (!canAgent()) return [];
+  const w = writer(), out = [], sum = (l, f) => l.reduce((t, x) => t + (Number(f(x)) || 0), 0);
+  const add = (n, label, sub, go, tone) => { if (n > 0) out.push({ n, label, sub, go, tone: tone || "warn" }); };
+  const av = S.declarations.filter(d => dStatus(d) === "soumise");
+  add(av.length, `Déclaration${plural(av.length)} à valider`, `${money(sum(av, d => d.total))} calculés`, () => { S.declFilter = "atraiter"; render(); $("#decl-table").scrollIntoView({ behavior: "smooth", block: "start" }); }, "info");
+  if (w) {
+    const dm = S.demandes.filter(x => ["attente", "etude"].includes(aStatus(x)));
+    add(dm.length, `Demande${plural(dm.length)} des services à arbitrer`, `${money(sum(dm, x => x.montant))} demandés`, () => { S.demFilter = dm.some(x => aStatus(x) === "attente") ? "attente" : "etude"; allerA("svc"); });
+    const ct = (S.contrats || []).filter(c => c.statut === "projet");
+    add(ct.length, `Projet${plural(ct.length)} de contrat à signer`, ct.slice(0, 3).map(c => c.fournisseurNom).join(", "), () => { S.ctFilter = "projets"; allerA("contrats"); });
+    const cp = (S.conventions || []).filter(c => c.statut === "projet");
+    add(cp.length, `Projet${plural(cp.length)} de convention à signer`, cp.slice(0, 3).map(c => c.entrepriseNom).join(", "), () => { S.cpFilter = "projets"; S.cpFilterChoisi = true; allerA("contrats"); setTimeout(() => { const el = $("#cp-list"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 120); });
+    const vt = (S.versements || []).filter(v => v.statut === "a_confirmer");
+    add(vt.length, `Versement${plural(vt.length)} d’amendes à confirmer`, `${money(sum(vt, v => v.montant))} annoncés`, () => { S.vtFilter = "attente"; allerA("amendes"); });
+    const pr = (S.prets || []).filter(x => x.statut === "demande");
+    add(pr.length, `Demande${plural(pr.length)} de prêt`, `${money(sum(pr, x => x.montant))} demandés`, () => { S.pretFilter = "dem"; allerA("prets"); });
+    // Paye de la semaine passée pas encore versée, alors que des agents ont des heures.
+    const kp = semPrec(semKey(new Date()));
+    if (!payeVersee(payeOf(kp)) && (S.fonctionnaires || []).length) {
+      const x = payeCalc(kp), n = x.lignes.filter(l => l.heures > 0).length;
+      add(n ? 1 : 0, `Paye de la semaine ${(bounds(kp) || {}).week} à verser`, `${n} agent${plural(n)} · ${money(x.total)}`, () => { S.payeSem = kp; allerA("payes"); });
+    }
+    const lg = ptActifs().filter(p => !p.fin && ptLong(p));
+    add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA("pointeuse"));
+  }
+  const vh = (S.vehicules || []).filter(v => vehActive(v).length);
+  add(vh.length, `Véhicule${plural(vh.length)} à examiner`, vh.slice(0, 3).map(v => v.entrepriseNom).join(", "), () => { S.vehFilter = "exam"; allerA("vehicules"); });
+  const cv = (S.convocations || []).filter(c => convPassee(c) || convASanctionner(c) || convAEncaisser(c));
+  add(cv.length, `Convocation${plural(cv.length)} à constater ou à traiter`, cv.slice(0, 3).map(c => c.entrepriseNom).join(", "), () => { S.convFilter = (S.convocations || []).some(convPassee) ? "constat" : "traiter"; allerA("convocations"); });
+  return out;
+}
+function renderTodo() {
+  const card = $("#todo-card"), list = S.connected ? todoItems() : [];
+  card.hidden = !list.length;
+  if (!list.length) return;
+  $("#todo-sub").textContent = `${list.reduce((t, x) => t + x.n, 0)} dossier${plural(list.reduce((t, x) => t + x.n, 0))} attendent une action.`;
+  fill($("#todo"), list.map(x => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: x.go, text: x.label }), x.sub ? h("span", { class: "meta", text: x.sub }) : null),
+    chip([String(x.n), x.tone]),
+    h("button", { class: "btn ghost small", type: "button", onclick: x.go, text: "Voir" }))));
+}
 function renderDemDash() {
   const box = $("#dash-dem");
   if (!S.connected || !S.loaded.has("demandes")) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
@@ -3795,7 +3866,7 @@ const payeRepris = () => new Set(payesVersees().filter(p => p.reprise && p.repri
 function payesImpute(service, m) {
   if (norm(service) !== norm(payeSvc())) return { total: 0, list: [] };
   const list = payesDuMois(m);
-  return { total: list.reduce((t, p) => t + payeTotal(p), 0) - rembMois(m), list };
+  return { total: list.reduce((t, p) => t + payeTotal(p), 0) - rembMois(m) + aPartMois(m), list };
 }
 
 /* Rappels : ceux nés d'un prorata se lisent sur les payes versées, les autres sont saisis à la main.
@@ -3808,15 +3879,27 @@ function rappelsTous() {
     const id = `auto-${p.id}-${l.fid}`, o = docs.get(id);
     out.push({ id, auto: true, fid: l.fid, nom: l.nom, grade: l.grade, semaine: p.id, montant: reste, heures: null,
       motif: `Prorata de la paye de la semaine ${(bounds(p.id) || {}).week || p.id} (${Math.round((Number(p.coef) || 0) * 100)} % versés)`,
-      at: p.verseeLe, annule: !!(o && o.annule), annuleMotif: (o && o.motif) || "", annuleParNom: (o && o.parNom) || "" });
+      at: p.verseeLe, annule: !!(o && o.annule), annuleMotif: (o && o.motif) || "", annuleParNom: (o && o.parNom) || "", aPart: o && Array.isArray(o.aPart) ? o.aPart : [] });
   }
-  for (const r of S.rappels || []) if (!String(r.id).startsWith("auto-") && r.origine !== "retenue") out.push(Object.assign({}, r, { auto: false, montant: Math.round(Number(r.montant) || 0), annule: r.statut === "annule" }));
+  for (const r of S.rappels || []) if (!String(r.id).startsWith("auto-") && r.origine !== "retenue") out.push(Object.assign({}, r, { auto: false, montant: Math.round(Number(r.montant) || 0), annule: r.statut === "annule", aPart: Array.isArray(r.aPart) ? r.aPart : [] }));
   const paid = new Map(), where = new Map();
   for (const p of payesVersees()) for (const x of p.rappels || []) { paid.set(x.rid, (paid.get(x.rid) || 0) + (Number(x.verse) || 0)); if (!where.has(x.rid)) where.set(x.rid, []); where.get(x.rid).push(p.id); }
-  for (const r of out) { r.verse = paid.get(r.id) || 0; r.versePar = where.get(r.id) || []; r.reste = r.annule ? 0 : Math.max(0, r.montant - r.verse); }
+  for (const r of out) {
+    r.versePaye = paid.get(r.id) || 0; r.versePar = where.get(r.id) || [];
+    r.verseAPart = r.aPart.reduce((t, x) => t + (Math.round(Number(x.montant) || 0)), 0);
+    r.verse = r.versePaye + r.verseAPart; r.reste = r.annule ? 0 : Math.max(0, r.montant - r.verse);
+  }
   return out.sort((a, b) => String(b.semaine).localeCompare(String(a.semaine)) || String(a.nom || "").localeCompare(String(b.nom || ""), "fr"));
 }
 const rappelsDus = () => rappelsTous().filter(r => r.reste > 0);
+// Rappels versés à part (hors d'une paye, par exemple un virement direct) : ils comptent au mois de leur
+// versement dans le budget des payes et sortent du Trésor, comme une paye.
+function aPartTous() {
+  const out = [];
+  for (const r of S.rappels || []) if (r.origine !== "retenue" && Array.isArray(r.aPart)) for (const x of r.aPart) out.push({ rid: r.id, fid: r.fid, nom: r.nom, semaine: r.semaine, montant: Math.round(Number(x.montant) || 0), le: x.le });
+  return out;
+}
+const aPartMois = m => aPartTous().filter(x => x.le && moisKey(new Date(x.le)) === m).reduce((t, x) => t + x.montant, 0);
 /* Trop-perçus : la somme versée en trop à un agent pour une semaine. Elle est retenue sur ses payes
    suivantes (ce qui est retenu se lit sur les payes versées), ou il la rembourse directement : le
    remboursement rend la somme au budget du mois de la semaine concernée et au Trésor. */
@@ -3864,7 +3947,7 @@ function payeLignesPrep(k, p) {
 }
 function payeBudget(k, p) {
   const c = payeCfg(), m = moisDe(k), bm = Math.max(0, Math.round(Number(c.budgetMois) || 0));
-  const deja = payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0) - rembMois(m), reste = bm - deja;
+  const deja = payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0) - rembMois(m) + aPartMois(m), reste = bm - deja;
   const semaines = semainesDuMois(m).filter(w => w === k || (w > k && !payeVersee(payeOf(w))));
   const n = Math.max(1, semaines.length), lisse = Math.max(0, Math.floor(reste / n));
   const cap = envCap(c.service, m), used = (envUse(m)[norm(c.service)] || 0) - (payeVersee(p) ? payeTotal(p) : 0);
@@ -3974,9 +4057,14 @@ function payeAnnulerDlg(k) {
   const nes = (p.lignes || []).filter(l => (Number(l.brut) || 0) > (Number(l.verse) || 0)).map(l => `auto-${k}-${l.fid}`);
   const paidLater = payesVersees().filter(q => q.id !== k && (q.rappels || []).some(r => nes.includes(r.rid))).map(q => q.id);
   if (paidLater.length) { toast(`Des rappels nés de cette paye sont déjà versés (semaine ${paidLater.map(z => (bounds(z) || {}).week).join(", ")}) : annulez d’abord ces payes-là.`, true); return; }
+  const aPartNes = (S.rappels || []).filter(r => nes.includes(r.id) && Array.isArray(r.aPart) && r.aPart.length);
+  if (aPartNes.length) { toast(`Des rappels nés de cette paye ont été versés à part (${aPartNes.map(r => r.nom).join(", ")}) : retirez d’abord ces versements.`, true); return; }
   const tpPris = retenuesTous().filter(r => r.semaine === k && (r.retenu > 0 || r.rembourse > 0));
   if (tpPris.length) { toast(`Des trop-perçus de cette semaine sont déjà retenus ou remboursés (${tpPris.map(r => r.nom).join(", ")}) : annulez d’abord ces payes ou ces remboursements.`, true); return; }
   const motif = h("input", { autocomplete: "off", placeholder: "Erreur d’heures, mauvais grade…" }), err = h("span", { class: "err", "aria-live": "polite" });
+  // Rappels et trop-perçus saisis pour cette semaine (une régularisation, par exemple) : ils partaient de la paye versée.
+  const lies = (S.rappels || []).filter(r => r.semaine === k && !String(r.id).startsWith("auto-") && r.statut !== "annule");
+  const liesTp = lies.filter(r => r.origine === "retenue").length, liesRp = lies.length - liesTp;
   const go = h("button", { class: "btn danger small", type: "button", text: p.reprise ? "Annuler la reprise" : "Annuler le versement" });
   go.addEventListener("click", async () => {
     if (!motif.value.trim()) { err.textContent = "Indiquez pourquoi."; motif.focus(); return; }
@@ -3988,7 +4076,9 @@ function payeAnnulerDlg(k) {
     closeDialog(); toast(p.reprise ? "Reprise annulée : la demande compte de nouveau seule." : "Versement annulé : la paye est de nouveau en préparation.");
   });
   openDialog({ eyebrow: `Payes de la Préfecture · ${periodLabel(k)}`, title: p.reprise ? "Annuler la reprise de cette paye ?" : "Annuler le versement de la paye ?",
-    body: [h("p", { style: "margin:0", text: p.reprise ? `La paye reprise de la demande ${p.reprise.no || ""} est retirée des payes ; la demande accordée compte de nouveau sur l’enveloppe.` : `${money(payeTotal(p))} reviennent dans le budget ${deMois(p.mois || moisDe(k))}. Les heures saisies sont gardées : la paye repasse en préparation.` }), field("py-ann-motif", "Motif", motif), err],
+    body: [h("p", { style: "margin:0", text: p.reprise ? `La paye reprise de la demande ${p.reprise.no || ""} est retirée des payes ; la demande accordée compte de nouveau sur l’enveloppe.` : `${money(payeTotal(p))} reviennent dans le budget ${deMois(p.mois || moisDe(k))}. Les heures saisies sont gardées : la paye repasse en préparation.` }),
+      !p.reprise && lies.length ? h("p", { class: "py-note", text: `${[liesTp ? `${liesTp} trop-perçu${plural(liesTp)}` : "", liesRp ? `${liesRp} rappel${plural(liesRp)}` : ""].filter(Boolean).join(" et ")} saisi${plural(lies.length)} pour cette semaine reste${lies.length > 1 ? "nt" : ""} enregistré${plural(lies.length)} : ${lies.length > 1 ? "ils partaient" : "il partait"} de la paye versée. Vérifiez-les après le nouveau versement.` }) : null,
+      field("py-ann-motif", "Motif", motif), err].filter(Boolean),
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Retour" }), h("span", { class: "spacer" }), go] });
   setTimeout(() => motif.focus(), 30);
 }
@@ -4361,7 +4451,7 @@ function openFonc(fid, k0) {
   });
   const body = [
     h("div", { class: "minis" },
-      mk("Grade", f.grade || "—", taux ? `${money(taux)} de l’heure` : "pas de taux au barème", taux ? "" : "bad"),
+      mk("Grade", f.grade || "—", taux ? `${money(taux)} de l’heure` : "pas de taux au barème", taux ? "kpi-txt" : "kpi-txt bad"),
       mk("Heures de la semaine", fmtH(l ? l.heures : pt.h), l && l.manuel ? "saisies à la main" : f.discordId ? "pointées" : "à saisir dans la paye"),
       mk(x.versee ? "Versé" : "Paye prévue", money(l ? l.verse : 0), l ? `${fmtH(l.heuresPayees)} payées${l.reste > 0 ? " · " + money(l.reste) + " en rappel" : ""}` : "pas d’heures", x.versee ? "ok" : ""),
       mk("Rappels dus", money(dus.reduce((t, r) => t + r.reste, 0)), dus.length ? `${dus.length} rappel${plural(dus.length)}` : "aucun", dus.length ? "warn" : ""),
@@ -4495,30 +4585,75 @@ function openRappelForm(preset) {
       h("div", { class: "row2" }, field("py-rp-a", "Agent", agent), field("py-rp-s", "Semaine concernée", sem)), field("py-rp-mode", "Ce qui reste dû", mode), hrsF, mtF, calc, field("py-rp-motif", "Motif", motif), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: preset.back || closeDialog, text: preset.back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
 }
+// Document d'un rappel tel qu'il est enregistré (sans son id) : celui d'un rappel né d'un prorata n'existe
+// qu'une fois annulé ou versé à part.
+function rappelDoc(r) {
+  const d = (S.rappels || []).find(z => z.id === r.id);
+  const body = d ? Object.assign({}, d) : { fid: r.fid, nom: r.nom || "", semaine: r.semaine, origine: "prorata" };
+  delete body.id;
+  return body;
+}
 function openRappel(rid, back) {
   const r = rappelsTous().find(z => z.id === rid); if (!r) return;
   const w = writer(), reopen = () => openRappel(rid, back);
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Fermer" }), h("span", { class: "spacer" })];
-  if (w && !r.annule && r.reste > 0) foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => rappelAnnulerDlg(r, reopen), text: r.verse ? "Annuler le reste" : "Annuler le rappel" }));
-  if (w && r.annule) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const ok = r.auto ? await write(() => S.db.doc("rappels/" + r.id).delete()) : await write(() => S.db.doc("rappels/" + r.id).set(Object.assign({}, (S.rappels || []).find(z => z.id === r.id) || {}, { statut: "du", annuleLe: null, annuleMotif: null }))); if (ok) { toast("Rappel rétabli."); reopen(); } }, text: "Rétablir le rappel" }));
+  if (w && !r.annule && r.aPart.length) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+    ev.currentTarget.disabled = true;
+    const body = Object.assign(rappelDoc(r), { aPart: r.aPart.slice(0, -1) });
+    if (await write(() => S.db.doc("rappels/" + r.id).set(body))) { toast("Dernier versement à part retiré : la somme est de nouveau due."); reopen(); }
+  }, text: "Retirer le dernier versement à part" }));
+  if (w && !r.annule && r.reste > 0) foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => rappelAnnulerDlg(r, reopen), text: r.verse ? "Annuler le reste" : "Annuler le rappel" }),
+    h("button", { class: "btn ink small", type: "button", onclick: () => rappelAPartDlg(r, reopen), text: "Versé à part" }));
+  if (w && r.annule) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+    ev.currentTarget.disabled = true;
+    // Un rappel né d'un prorata redevient dû en effaçant son annulation ; ses versements à part restent.
+    const body = r.auto ? Object.assign(rappelDoc(r), { annule: false, motif: null, le: null, parNom: null }) : Object.assign(rappelDoc(r), { statut: "du", annuleLe: null, annuleMotif: null, annuleParNom: null });
+    const ok = r.auto && !r.aPart.length ? await write(() => S.db.doc("rappels/" + r.id).delete()) : await write(() => S.db.doc("rappels/" + r.id).set(body));
+    if (ok) { toast("Rappel rétabli."); reopen(); }
+  }, text: "Rétablir le rappel" }));
+  const verses = [r.versePaye ? `${money(r.versePaye)} sur la paye${plural(r.versePar.length)} ${r.versePar.map(z => "S" + ((bounds(z) || {}).week || "?")).join(", ")}` : ""]
+    .concat(r.aPart.map(x => `${money(x.montant)} à part le ${fmtDate(new Date(x.le))}${x.note ? " (" + x.note + ")" : ""}`)).filter(Boolean);
   openDialog({ eyebrow: "Rappel de salaire", title: `${r.nom || "Agent"} · semaine ${(bounds(r.semaine) || {}).week || "?"}`, stampEl: stamp(r.annule ? ["ANNULÉ", "muted"] : r.reste <= 0 ? ["VERSÉ", "ok"] : ["DÛ", "warn"]),
     body: [kv([["Motif", r.motif || "—"], ["Semaine concernée", periodLabel(r.semaine)], r.heures ? ["Heures", `${fmtH(r.heures)} à ${money(r.taux)}/h`] : null, ["Montant", money(r.montant)],
-      ["Déjà versé", r.verse ? `${money(r.verse)} · paye${plural(r.versePar.length)} ${r.versePar.map(z => "S" + ((bounds(z) || {}).week || "?")).join(", ")}` : "rien"], ["Reste dû", money(r.reste), "tot"],
+      ["Déjà versé", verses.length ? verses.join(" · ") : "rien"], ["Reste dû", money(r.reste), "tot"],
       r.annule ? ["Annulé", `${r.annuleMotif || ""}${r.annuleParNom ? " · " + r.annuleParNom : ""}`] : null, r.byNom ? ["Saisi par", r.byNom] : null])], foot });
 }
+// Rappel payé hors d'une paye : il n'est plus proposé sur les payes, et la somme compte dans le budget
+// des payes du mois du versement et sort du Trésor.
+function rappelAPartDlg(r, back) {
+  const mt = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric", id: "py-ap-m" }); mt.value = String(r.reste);
+  const note = h("input", { autocomplete: "off", placeholder: "Virement direct, espèces… (facultatif)" });
+  const err = h("span", { class: "err", "aria-live": "polite" }), go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le versement" });
+  const m = moisKey(new Date());
+  go.addEventListener("click", async () => {
+    const v = Math.round(Number(mt.value) || 0);
+    if (!(v > 0) || v > r.reste) { err.textContent = `Entre 1 et ${money(r.reste)}.`; mt.focus(); return; }
+    go.disabled = true;
+    const doc = rappelDoc(r), body = Object.assign(doc, { aPart: (Array.isArray(doc.aPart) ? doc.aPart : []).concat([{ le: nowISO(), montant: v, note: note.value.trim(), parNom: S.agentName || "" }]) });
+    if (!(await write(() => S.db.doc("rappels/" + r.id).set(body)))) { go.disabled = false; return; }
+    toast(`${money(v)} versés à part à ${r.nom} : comptés dans le budget des payes ${deMois(m)} et sortis du Trésor.`); back();
+  });
+  openDialog({ eyebrow: "Rappel de salaire", title: `Versé à part à ${r.nom} ?`,
+    body: [h("p", { style: "margin:0 0 8px", text: `Le rappel a été payé hors d’une paye. La somme compte dans le budget des payes ${deMois(m)} et sort du Trésor ; elle ne sera plus proposée sur une paye.` }),
+      h("div", { class: "field" }, h("label", { for: "py-ap-m", text: "Somme versée" }), h("div", { class: "money", "data-cur": cur() }, mt)), field("py-ap-note", "Précision", note), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => mt.focus(), 30);
+}
 function rappelAnnulerDlg(r, back) {
-  const motif = h("input", { autocomplete: "off", placeholder: "Déjà payé autrement, erreur…" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const motif = h("input", { autocomplete: "off", placeholder: "Erreur, décision de la Direction…" }), err = h("span", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn danger small", type: "button", text: "Annuler" });
   go.addEventListener("click", async () => {
     if (!motif.value.trim()) { err.textContent = "Indiquez pourquoi."; motif.focus(); return; }
     go.disabled = true;
-    const ok = r.auto ? await write(() => S.db.doc("rappels/" + r.id).set({ fid: r.fid, nom: r.nom, semaine: r.semaine, origine: "prorata", annule: true, motif: motif.value.trim(), le: nowISO(), parNom: S.agentName || "" }))
-      : await write(() => S.db.doc("rappels/" + r.id).set(Object.assign({}, (S.rappels || []).find(z => z.id === r.id) || {}, { statut: "annule", annuleLe: nowISO(), annuleMotif: motif.value.trim(), annuleParNom: S.agentName || "" })));
-    if (!ok) { go.disabled = false; return; }
+    const body = r.auto ? Object.assign(rappelDoc(r), { origine: "prorata", annule: true, motif: motif.value.trim(), le: nowISO(), parNom: S.agentName || "" })
+      : Object.assign(rappelDoc(r), { statut: "annule", annuleLe: nowISO(), annuleMotif: motif.value.trim(), annuleParNom: S.agentName || "" });
+    if (!(await write(() => S.db.doc("rappels/" + r.id).set(body)))) { go.disabled = false; return; }
     toast(`Rappel annulé : ${money(r.reste)} ne sont plus dus.`); back();
   });
-  openDialog({ eyebrow: "Rappel de salaire", title: `Annuler ${money(r.reste)} dus à ${r.nom} ?`, body: [h("p", { style: "margin:0", text: r.verse ? `${money(r.verse)} déjà versés restent acquis.` : "Rien n’a encore été versé sur ce rappel." }), field("py-ra-motif", "Motif", motif), err],
+  openDialog({ eyebrow: "Rappel de salaire", title: `Annuler ${money(r.reste)} dus à ${r.nom} ?`,
+    body: [h("p", { style: "margin:0", text: `${r.verse ? `${money(r.verse)} déjà versés restent acquis.` : "Rien n’a encore été versé sur ce rappel."} Si le rappel a été payé hors d’une paye, utilisez plutôt « Versé à part » : la somme comptera dans le budget des payes.` }), field("py-ra-motif", "Motif", motif), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => motif.focus(), 30);
 }
 
 /* Trop-perçus : saisie, remboursement, annulation */
@@ -5207,6 +5342,10 @@ function openDem(id) {
   if (legacy) body.push(h("div", { class: "notice", style: "margin:0" }, h("span", {}, "Demande saisie avant le détail par article : elle compte pour un seul montant. ",
     ag ? h("button", { class: "linkbtn", type: "button", onclick: () => startEditDem(dm), text: "Détailler les articles" }) : null)));
   if (stale) body.push(h("div", { class: "notice", style: "margin:0;border-left-color:var(--warn)" }, h("span", { text: "La demande a été modifiée après la décision : vérifiez les articles, puis enregistrez de nouveau la décision." })));
+  // Salaires repris dans les payes de la Préfecture : la paye compte à la place de la demande.
+  const repP = payesVersees().find(p => p.reprise && p.reprise.demandeId === id);
+  if (repP) body.push(h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("span", {}, `Reprise dans la paye de ${perNom(repP.id)} (${pyNo(repP.id)}) : ces salaires comptent dans les payes de la Préfecture, une seule fois, et plus sur cette demande. `,
+    h("button", { class: "linkbtn", type: "button", onclick: () => { closeDialog(); S.payeSem = repP.id; showTab("payes"); try { history.replaceState(null, "", "#payes"); } catch (e) { /* sans historique */ } renderPayes(true); }, text: "Voir la paye" }))));
 
   // Articles : la Direction fixe, ligne par ligne, la quantité accordée et le prix retenu.
   const totEl = h("dd", { class: "num tot-dd" }), afterEl = h("dd", { class: "num" }), envDt = h("dt", {}), envDd = h("dd", { class: "num" });
@@ -6169,7 +6308,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -6292,7 +6431,8 @@ $("#b-file").addEventListener("change", e => {
           ["Demandes de moyens", String(count("demandes")), "num"],
           ["Arbitrages", String(count("arbitrages")), "num"],
           ["Pénalités", String(count("penalites")), "num"],
-          ["Échéanciers", String(count("echeanciers")), "num"]]),
+          ["Échéanciers", String(count("echeanciers")), "num"],
+          ["Payes, rappels et pointages", String(count("payes") + count("rappels") + count("pointages")), "num"]]),
         h("p", { class: "sub", style: "margin:0", text: "Les dossiers portant le même numéro sont remplacés par la version du fichier. Rien n’est supprimé." }),
         progress],
       foot: [cancel, go]
@@ -7096,6 +7236,51 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le versement ${no}`;
       if (a.statut !== b.statut) return { confirme: `a confirmé la réception de ${money(a.montantRecu ?? a.montant)} d’amendes de ${qui} (${no})`, refuse: `a refusé le versement ${no} de ${qui}`, annule: `a annulé le versement ${no} de ${qui}` }[a.statut] || `a modifié le versement ${no}`;
       return `a modifié le versement ${no}`;
+    }
+    case "fonctionnaires": {
+      const nom = v.nom || "un agent";
+      if (x === "ajout") return `a ajouté ${nom} aux fonctionnaires (${v.grade || "sans grade"})`;
+      if (x === "suppression") return `a supprimé la fiche de ${nom}`;
+      if ((a.actif !== false) !== (b.actif !== false)) return a.actif === false ? `a retiré ${nom} des effectifs` : `a remis ${nom} dans les effectifs`;
+      if (norm(a.grade) !== norm(b.grade)) return `a passé ${nom} au grade ${a.grade || "—"}`;
+      return `a modifié la fiche de ${nom}`;
+    }
+    case "payes": {
+      const wk = `la paye de la semaine ${(bounds(e.doc_id) || {}).week || e.doc_id}`;
+      if (x === "suppression") return b.reprise ? `a annulé la reprise de ${b.reprise.no || "la demande"} dans ${wk}` : `a supprimé ${wk}`;
+      if (a.statut === "versee" && b.statut !== "versee") return a.reprise ? `a repris la demande ${a.reprise.no || ""} dans ${wk} (${money(payeTotal(a))})` : `a versé ${wk} (${money(payeTotal(a))})`;
+      if (b.statut === "versee" && a.statut !== "versee") return `a annulé le versement de ${wk}`;
+      if (a.statut === "versee") return `a modifié ${wk}`;
+      return `a préparé ${wk}`;
+    }
+    case "rappels": {
+      const nom = v.nom || "un agent", wk = `semaine ${(bounds(v.semaine) || {}).week || v.semaine || "?"}`;
+      if (v.origine === "retenue") {
+        if (x === "ajout") return `a noté un trop-perçu de ${money(v.montant)} pour ${nom} (${wk})`;
+        if (x === "suppression") return `a supprimé un trop-perçu de ${nom}`;
+        const ra = a.remboursements || [], rb = b.remboursements || [];
+        if (ra.length > rb.length) return `a noté le remboursement de ${money(ra[ra.length - 1].montant)} par ${nom} (${wk})`;
+        if (ra.length < rb.length) return `a retiré un remboursement de ${nom} (${wk})`;
+        if (a.statut !== b.statut) return a.statut === "annule" ? `a annulé le trop-perçu de ${nom} (${wk})` : `a rétabli le trop-perçu de ${nom} (${wk})`;
+        return `a modifié le trop-perçu de ${nom}`;
+      }
+      if (x === "ajout" && v.origine === "manuel") return `a ajouté un rappel de salaire de ${money(v.montant)} pour ${nom} (${wk})`;
+      if (x === "suppression") return v.origine === "prorata" ? `a rétabli le rappel de prorata de ${nom} (${wk})` : `a supprimé un rappel de ${nom}`;
+      const pa = a.aPart || [], pb = b.aPart || [];
+      if (pa.length > pb.length) return `a noté ${money(pa[pa.length - 1].montant)} versés à part à ${nom} (rappel de la ${wk})`;
+      if (pa.length < pb.length) return `a retiré un versement à part de ${nom} (rappel de la ${wk})`;
+      const annA = a.statut === "annule" || a.annule === true, annB = b.statut === "annule" || b.annule === true;
+      if (annA !== annB) return annA ? `a annulé le rappel de ${nom} (${wk})` : `a rétabli le rappel de ${nom} (${wk})`;
+      return `a modifié le rappel de ${nom} (${wk})`;
+    }
+    case "pointages": {
+      const nom = v.nom || "un agent";
+      if (x === "ajout") return v.source === "direction" ? `a ajouté un pointage pour ${nom} (${fmtDateTime(new Date(v.debut))})` : "a pris son service";
+      if (x === "suppression") return `a supprimé un pointage de ${nom}`;
+      if (a.annule && !b.annule) return `a annulé un pointage de ${nom}${a.annuleMotif ? " : " + a.annuleMotif : ""}`;
+      if ((a.corrections || []).length > (b.corrections || []).length) return `a corrigé le pointage de ${nom}`;
+      if (a.fin && !b.fin) return `a fini son service (${fmtH(ptDuree(a))})`;
+      return `a modifié un pointage de ${nom}`;
     }
     case "meta": return "a téléchargé une sauvegarde du registre";
     case "agents": {
@@ -9862,7 +10047,9 @@ function renderConventions() {
   setKpi("pk-forfait", money(parSem), mecCfg().on ? "de réduction d’impôt accordée" : "réduction désactivée", parSem ? "ok" : "");
   setKpi("pk-reduc", money(reduc), mecCfg().on ? "déduits de l’impôt des partenaires" : "réduction désactivée", "");
   const F = { vigueur, projets, finies, tout: all };
-  const f = F[S.cpFilter] ? S.cpFilter : "vigueur";
+  // Rien en vigueur mais des projets à signer : on les montre d'emblée, tant que le filtre n'a pas été choisi.
+  let f = F[S.cpFilter] ? S.cpFilter : "vigueur";
+  if (!S.cpFilterChoisi && f === "vigueur" && !vigueur.length && projets.length) f = "projets";
   setSegCounts($("#seg-cp"), Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.length])), f);
   $("#cp-new").hidden = !canAgent();
   const list = F[f];
@@ -9912,7 +10099,7 @@ $("#m-save").addEventListener("click", async () => {
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
   if (ok) { S.mecDirty = false; $("#m-msg").textContent = v.mecActive ? "Réduction enregistrée. Elle s’applique aux déclarations saisies à partir de maintenant ; le montant des conventions déjà signées ne change pas." : "Réduction désactivée."; toast("Réduction d’impôt des partenaires enregistrée."); renderMecSettings(true); }
 });
-$("#seg-cp").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.cpFilter = b.dataset.f; renderConventions(); });
+$("#seg-cp").addEventListener("click", ev => { const b = ev.target.closest("button[data-f]"); if (!b) return; S.cpFilter = b.dataset.f; S.cpFilterChoisi = true; renderConventions(); });
 $("#cp-new").addEventListener("click", () => openConventionForm(null));
 
 /* ---------- Amendes versées au Trésor ---------- */
@@ -10229,7 +10416,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -13437,6 +13624,9 @@ function searchIndex() {
   for (const v of S.vehicules || []) push("Véhicule", normPlaque(v.plaque), `${v.plaque} · ${v.modele || "Véhicule"}`, `${v.entrepriseNom} · ${vehState(v)[0]} · ${vehNo(v)}`, [vehNo(v), vehCat(v)[0], (v.conducteurs || []).join(" "), v.concession].join(" "), () => openVeh(v.id), v.achatLe || v.createdAt);
   for (const r of S.releves) push("Relevé", dossierNo("RC", r.id), `${dossierNo("RC", r.id)} · ${r.entrepriseNom}`, `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}`, r.note, () => openFiche(entOf(r)), r.at);
   for (const x of S.soupcons) push("Soupçon", dossierNo("DS", x.id), `${dossierNo("DS", x.id)} · ${x.entrepriseNom}`, `Déclaration de soupçon · ${money(x.montant)}`, "", () => showDocImage(soupconDoc(x)), x.at);
+  // Payes de la Préfecture : les agents et les payes versées.
+  for (const f of S.fonctionnaires || []) push("Fonctionnaire", "", f.nom || "Agent", `${f.grade || "sans grade"}${f.actif === false ? " · retiré des effectifs" : ""}`, [f.discordId, f.note].join(" "), () => openFonc(f.id), f.at);
+  for (const p of payesVersees()) push("Paye", pyNo(p.id), `${pyNo(p.id)} · ${periodLabel(p.id)}`, `${(p.lignes || []).length} agent${plural((p.lignes || []).length)} · ${money(payeTotal(p))} versés${p.reprise ? " · reprise de " + (p.reprise.no || "la demande") : ""}`, "paye salaires", () => { S.payeSem = p.id; showTab("payes"); try { history.replaceState(null, "", "#payes"); } catch (e) { /* sans historique */ } renderPayes(true); }, p.verseeLe);
   for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
   return out;
 }
