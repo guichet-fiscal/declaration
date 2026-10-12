@@ -283,7 +283,7 @@ pre.tpl{margin:12px 0 0;background:var(--field);border:1px solid var(--rule);bor
 .ent-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--rule-2)}
 .ent-list .meta{display:block;font-size:12.5px;color:var(--ink-3)}
 /* Fenêtre étroite : les boutons d'une ligne passent dessous au lieu de pousser la fenêtre. */
-@media (max-width:560px){.ent-list li{grid-template-columns:minmax(0,1fr) auto}.ent-list li>.row-actions{grid-column:1/-1;justify-content:flex-start}}
+@media (max-width:560px){.ent-list li{grid-template-columns:minmax(0,1fr) auto}.ent-list li>.row-actions{grid-column:1/-1;justify-content:flex-start}.todo-list li>.btn{display:none}}
 .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink-2)}
 .switch input{width:auto}
 .access{margin:10px 0 0;padding:0 0 0 18px;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
@@ -488,6 +488,36 @@ table.py-tbl{min-width:820px}
 .py-tbl .py-reste{color:var(--warn)}
 .py-tbl tfoot td{font-weight:650;border-top:2px solid var(--rule)}
 .py-flags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+/* Tableaux en cartes sur téléphone : l'essentiel de chaque ligne (c-main, c-chip, c-meta, c-amt, c-act),
+   le reste (c-hide) dans la fiche du dossier. */
+.m-only{display:none!important}
+@media (max-width:620px){
+  .m-only{display:block!important}
+  table.cards,table.cards tbody{display:block;min-width:0;width:100%}
+  .cards thead{display:none}
+  .cards tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--rule-2)}
+  .cards td{padding:0;border:0!important;text-align:left}
+  .cards td.c-hide,.cards td:empty{display:none}
+  .cards td.c-main{grid-column:1;grid-row:1}
+  .cards td.c-chip{grid-column:2;grid-row:1;justify-self:end}
+  .cards td.c-meta{grid-column:1;grid-row:2}
+  .cards td.c-amt{grid-column:2;grid-row:2;text-align:right}
+  .cards td.c-amt[data-l]::before{content:attr(data-l) " ";font-family:var(--f-body);font-size:12px;font-weight:600;color:var(--ink-3)}
+  .cards td.c-act{grid-column:1/-1;grid-row:3}
+  .cards tbody tr:hover>td,.ent-tbl tbody tr:hover>td{background:transparent}
+}
+/* Entreprises sur téléphone : une carte par entreprise (le détail est sur sa fiche). */
+@media (max-width:620px){
+  table.ent-tbl,table.ent-tbl tbody{display:block;min-width:0;width:100%}
+  .ent-tbl thead{display:none}
+  .ent-tbl tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:start;padding:11px 0;border-bottom:1px solid var(--rule-2)}
+  .ent-tbl td{padding:0;border:0!important}
+  .ent-tbl td.e-sit{justify-self:end}
+  .ent-tbl td.e-ca,.ent-tbl td.e-paid,.ent-tbl td.e-ret,.ent-tbl td.e-zero{display:none}
+  .ent-tbl td.e-al{grid-column:1;grid-row:2}
+  .ent-tbl td.e-due{grid-column:2;grid-row:2;text-align:right}
+  .ent-tbl td.e-due::before{content:attr(data-l) " ";font-family:var(--f-body);font-size:12px;font-weight:600;color:var(--ink-3)}
+}
 @media (max-width:620px){
   table.py-tbl,table.py-tbl tbody,table.py-tbl tfoot{display:block;min-width:0;width:100%}
   .py-tbl thead{display:none}
@@ -3498,19 +3528,21 @@ function renderSvc() {
   } else {
     const rows = list.map(dm => {
       const st = aStatus(dm), a = S.arbitrages[dm.id], n = demDetaillee(dm) ? dm.lignes.length : 0, miss = n ? sansPrix(dm.lignes) : 0;
+      const acc = a && a.montantAccorde != null && ["accordee", "partielle"].includes(st);
       return h("tr", {},
-        h("td", { class: "no", text: dmNo(dm) }),
-        h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openService(dm.service, demImputation(dm)), text: dm.service || "—" }), h("span", { class: "small-meta", text: dm.unite || dm.demandeur || "" })),
-        h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openDem(dm.id), text: dm.objet || NATURES[dm.nature] || "Demande" }),
+        h("td", { class: "no c-hide", text: dmNo(dm) }),
+        h("td", { class: "c-hide" }, h("button", { class: "linkbtn", type: "button", onclick: () => openService(dm.service, demImputation(dm)), text: dm.service || "—" }), h("span", { class: "small-meta", text: dm.unite || dm.demandeur || "" })),
+        h("td", { class: "c-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openDem(dm.id), text: dm.objet || NATURES[dm.nature] || "Demande" }),
+          h("span", { class: "small-meta m-only", text: `${dmNo(dm)} · ${dm.service || "—"} · ${moisNom(demImputation(dm))}` }),
           h("span", { class: "small-meta", text: [n ? artLabel(n) : "montant global", miss ? `${miss} à chiffrer` : "", decisionPerimee(dm) ? "modifiée depuis la décision" : ""].filter(Boolean).join(" · ") })),
-        h("td", { text: moisNom(demImputation(dm)) }),
-        h("td", {}, chip(URG[dm.urgence] || URG.normale)),
-        h("td", { class: "num", text: money(dm.montant) }),
-        h("td", { class: "num", text: a && a.montantAccorde != null && ["accordee", "partielle"].includes(st) ? money(a.montantAccorde) : "—" }),
-        h("td", {}, chip(ASTAT[st] || ASTAT.attente)),
-        h("td", { class: "act" }, writer() && ["attente", "etude"].includes(st) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openDem(dm.id), text: "Décider" }) : null));
+        h("td", { class: "c-hide", text: moisNom(demImputation(dm)) }),
+        h("td", { class: "c-meta" }, chip(URG[dm.urgence] || URG.normale)),
+        h("td", { class: "num c-amt", "data-l": "Demandé", text: money(dm.montant) }),
+        h("td", { class: "num c-hide", text: acc ? money(a.montantAccorde) : "—" }),
+        h("td", { class: "c-chip" }, chip(ASTAT[st] || ASTAT.attente)),
+        h("td", { class: "act c-act" }, writer() && ["attente", "etude"].includes(st) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openDem(dm.id), text: "Décider" }) : null));
     });
-    fill(box, h("div", { class: "tbl-wrap" }, h("table", {},
+    fill(box, h("div", { class: "tbl-wrap" }, h("table", { class: "cards" },
       h("thead", {}, h("tr", {}, ["N°", "Service", "Objet", "Mois", "Urgence", "Demandé", "Accordé", "État", ""].map((t, i) => h("th", { class: [5, 6].includes(i) ? "num" : null, text: t })))),
       h("tbody", {}, rows))));
   }
@@ -4988,21 +5020,22 @@ function renderDeclTable(key) {
     else if (canAgent() && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
     else if (w && st === "validee") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || ""); }, text: "Encaisser" });
     return h("tr", {},
-      h("td", { class: "no", text: dossierNo("DF", d.id) }),
-      h("td", {},
+      h("td", { class: "no c-hide", text: dossierNo("DF", d.id) }),
+      h("td", { class: "c-main" },
         h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: d.entrepriseNom || "Sans nom" }),
+        h("span", { class: "small-meta m-only", text: `${dossierNo("DF", d.id)} · ${periodPlain(d.periode)}` }),
         !registered ? h("span", { class: "tag warn", text: "non enregistrée" }) : null,
         d.rectificative ? h("span", { class: "tag", text: "rectificative" }) : null,
         activeAlerts(d).length && !["controle", "rejetee"].includes(st) ? h("span", { class: "tag bad", text: "alerte" }) : null,
         h("span", { class: "small-meta", text: d.declarant || "" })),
-      h("td", { text: periodShort(d.periode), title: periodLabel(d.periode) }),
-      h("td", { class: "num", text: money(d.ca) }),
-      h("td", { class: "num", text: money(d.resultat) }),
-      h("td", { class: "num" }, money(dMontant(d)), d.enRetard ? h("span", { class: "tag warn", text: "retard" }) : null),
-      h("td", {}, dChip(d)),
-      h("td", { class: "act" }, act));
+      h("td", { class: "c-hide", text: periodShort(d.periode), title: periodLabel(d.periode) }),
+      h("td", { class: "num c-hide", text: money(d.ca) }),
+      h("td", { class: "num c-hide", text: money(d.resultat) }),
+      h("td", { class: "num c-amt", "data-l": "Montant dû" }, money(dMontant(d)), d.enRetard ? h("span", { class: "tag warn", text: "retard" }) : null),
+      h("td", { class: "c-chip" }, dChip(d)),
+      h("td", { class: "act c-act" }, act));
   });
-  box.replaceChildren(h("div", { class: "tbl-wrap" }, h("table", {},
+  box.replaceChildren(h("div", { class: "tbl-wrap" }, h("table", { class: "cards" },
     h("thead", {}, h("tr", {}, ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Résultat", "Montant dû", "Statut", ""].map((t, i) => h("th", { class: [3, 4, 5].includes(i) ? "num" : null, text: t })))),
     h("tbody", {}, rows))));
 }
@@ -7019,16 +7052,17 @@ function renderEntreprises() {
   list.sort((a, b) => (by[S.entSort] || by.nom)(a, b) || by.nom(a, b));
   if (!list.length) { fill(box, h("div", { class: "empty", text: q ? `Aucune entreprise ne correspond à « ${S.entQ} ».` : "Aucune entreprise dans ce filtre." })); return; }
   const shown = list.slice(0, S.entLimit);
+  // Sur téléphone, chaque entreprise devient une carte : nom et situation, puis ce qu'elle doit et ses alertes.
   const rows = shown.map(x => h("tr", {},
-    h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), h("span", { class: "small-meta", text: [x.e.secteur, x.e.patron].filter(Boolean).join(" · ") || "—" })),
-    h("td", {}, chip(situation(x))),
-    h("td", { class: "num", text: x.last ? money(x.last.ca) : "—" }),
-    h("td", { class: "num", text: money(x.paid) }),
-    h("td", { class: "num" + (x.due > 0 ? " t-warn tone-text" : ""), text: money(x.due) }),
-    h("td", { class: "num", text: String(x.retards) }),
-    h("td", {}, x.alerts.length ? h("span", { class: "tag bad", style: "margin-left:0", text: `${x.alerts.length} alerte${plural(x.alerts.length)}`, title: x.alerts.join(" ; ") }) : h("span", { class: "muted", text: "—" }))));
+    h("td", { class: "e-nom" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), h("span", { class: "small-meta", text: [x.e.secteur, x.e.patron].filter(Boolean).join(" · ") || "—" })),
+    h("td", { class: "e-sit" }, chip(situation(x))),
+    h("td", { class: "num e-ca", text: x.last ? money(x.last.ca) : "—" }),
+    h("td", { class: "num e-paid", text: money(x.paid) }),
+    h("td", { class: "num e-due" + (x.due > 0 ? " t-warn tone-text" : " e-zero"), "data-l": "Reste dû", text: money(x.due) }),
+    h("td", { class: "num e-ret", text: String(x.retards) }),
+    h("td", { class: "e-al" + (x.alerts.length ? "" : " e-zero") }, x.alerts.length ? h("span", { class: "tag bad", style: "margin-left:0", text: `${x.alerts.length} alerte${plural(x.alerts.length)}`, title: x.alerts.join(" ; ") }) : h("span", { class: "muted", text: "—" }))));
   fill(box,
-    h("div", { class: "tbl-wrap" }, h("table", {},
+    h("div", { class: "tbl-wrap" }, h("table", { class: "ent-tbl" },
       h("thead", {}, h("tr", {}, ["Entreprise", "Situation", "Dernier chiffre d’affaires", "Total payé", "Reste dû", "Retards", "Alertes"].map((t, i) => h("th", { class: [2, 3, 4, 5].includes(i) ? "num" : null, text: t })))),
       h("tbody", {}, rows))),
     list.length > shown.length ? h("div", { class: "reg-foot" }, `${shown.length} sur ${list.length} affichées. `, h("button", { class: "linkbtn", type: "button", onclick: () => { S.entLimit += 50; renderEntreprises(); }, text: "Afficher 50 de plus" })) : null);
@@ -13159,9 +13193,10 @@ async function swReg() {
   return navigator.serviceWorker.ready.then(x => x || r);
 }
 async function notifEtat() {
-  const st = { support: notifSupport(), perm: "Notification" in window ? Notification.permission : "default", sub: null, row: null, table: true };
+  const st = { support: notifSupport(), perm: "Notification" in window ? Notification.permission : "default", sub: null, row: null, table: true, lent: false };
   if (!st.support) return st;
-  try { const r = await swReg(); st.sub = await r.pushManager.getSubscription(); } catch (e) { st.sub = null; }
+  // Un service de l'appli qui ne démarre pas ne doit pas bloquer la fenêtre : on attend 5 secondes au plus.
+  try { const r = await Promise.race([swReg(), sleep(5000).then(() => null)]); if (r) st.sub = await r.pushManager.getSubscription(); else st.lent = true; } catch (e) { st.sub = null; }
   if (st.sub) {
     const { data, error } = await S.sb.from("notif_abonnements").select("*").eq("endpoint", st.sub.endpoint);
     if (error) st.table = !tableMissing(error); else st.row = (data || [])[0] || null;
@@ -13211,6 +13246,7 @@ async function openNotifs() {
   if (!st.support) msg = isIOS() && !isStandalone()
     ? ["Sur iPhone et iPad, installez d’abord le guichet sur l’écran d’accueil : dans Safari, bouton Partager → « Sur l’écran d’accueil ». Ouvrez-le ensuite depuis son icône et revenez ici (iOS 16.4 ou plus récent).", "warn"]
     : ["Ce navigateur ne reçoit pas les notifications. Essayez avec Chrome, Edge, Firefox ou Safari à jour.", "warn"];
+  else if (st.lent) msg = ["Le service de notifications de cet appareil ne répond pas encore. Rechargez la page, puis rouvrez cette fenêtre.", "warn"];
   else if (!st.table) msg = ["Les notifications ne sont pas encore installées : exécutez supabase/v10_notifications.sql dans Supabase, puis déployez le service « notifier ».", "warn"];
   else if (st.perm === "denied") msg = ["Les notifications sont bloquées pour ce site. Autorisez-les dans les réglages du navigateur (icône à gauche de l’adresse) ou du téléphone, puis revenez ici.", "bad"];
   else if (on) msg = [`Activées sur cet appareil (${st.row.appareil || appareilNom()}). Les notifications de vos propres actions ne vous sont pas envoyées.`, "ok"];
@@ -13226,7 +13262,7 @@ async function openNotifs() {
     }), text: "Désactiver sur cet appareil" }));
   }
   foot.push(h("span", { class: "spacer" }));
-  if (st.support && st.table && st.perm !== "denied") foot.push(h("button", { class: "btn ink small", type: "button", onclick: ev => busy(ev.currentTarget, async () => {
+  if (st.support && !st.lent && st.table && st.perm !== "denied") foot.push(h("button", { class: "btn ink small", type: "button", onclick: ev => busy(ev.currentTarget, async () => {
     const p = chosen();
     if (!p.length) throw new Error("Cochez au moins une notification, ou désactivez-les sur cet appareil.");
     if (on) { await notifEnregistrer(st.sub, p); toast("Choix enregistrés."); }

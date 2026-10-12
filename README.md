@@ -170,7 +170,7 @@ Une alerte n’est pas une preuve : c’est une raison de faire un contrôle en 
    - Le rôle du service Justice (TRIBUNAL) est mentionné sur les dossiers transmis à la justice et les déclarations de soupçon ; ceux de la police nationale et de la gendarmerie (EM PN, EM GN) dans le salon de la police.
    - Les rôles de la justice et de la police réglés dans **Réglages → Discord** ne servent plus que si ces services n’ont pas de rôle.
 
-Le guichet ne mentionne jamais `@everyone` ni `@here` : seuls le patron ou le rôle du service concerné sont notifiés. Les adresses des webhooks ne sont lisibles que par la Direction : elles n’apparaissent ni dans le journal, ni dans les sauvegardes, ni dans Google Sheets. Si une adresse fuite, supprimez le webhook dans Discord et collez-en un nouveau.
+Le guichet ne mentionne jamais `@everyone` ni `@here` : seuls le patron ou le rôle du service concerné sont notifiés. Les adresses des webhooks ne sont lisibles que par la Direction et l’Inspection (qui publie aussi), et seule la Direction les modifie : elles n’apparaissent ni dans le journal, ni dans les sauvegardes, ni dans Google Sheets. Si une adresse fuite, supprimez le webhook dans Discord et collez-en un nouveau.
 
 Une entreprise est attendue à partir du début du suivi, ou de son **début d’activité** s’il est plus récent (Modifier l’entreprise). Une entreprise ajoutée au registre est attendue à partir de la période en cours : elle n’est jamais relancée pour une semaine où elle n’existait pas.
 
