@@ -4785,13 +4785,16 @@ function openRegulariser(k) {
     rows = (p.lignes || []).map(l => {
       const taux = Number(l.taux) || gradeTaux(l.grade), du = ok ? Math.min(Math.round(Math.min(H, c.plafondHeures) * taux), payeMaxOf(c)) : 0;
       const d = percuSemaine(l.fid, k), ecart = d.total - du;
-      return { l, taux, du, percu: d.total, ecart, cb: Object.assign(h("input", { type: "checkbox", "aria-label": `Régulariser ${l.nom}` }), { checked: true }) };
+      // Un rappel ou un trop-perçu de cette semaine déjà annulé : la Direction a tranché, l'agent n'est pas coché d'office.
+      const ann = (S.rappels || []).filter(r => r.fid === l.fid && r.semaine === k && r.statut === "annule" && !String(r.id).startsWith("auto-") && (ecart > 0 ? r.origine === "retenue" : r.origine !== "retenue"));
+      return { l, taux, du, percu: d.total, ecart, ann, cb: Object.assign(h("input", { type: "checkbox", "aria-label": `Régulariser ${l.nom}` }), { checked: !ann.length }) };
     });
     const plus = rows.filter(r => r.ecart > 0), moins = rows.filter(r => r.ecart < 0);
     box.replaceChildren(
       h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
         h("thead", {}, h("tr", {}, ["", "Agent", "Taux", `Dû pour ${ok ? fmtH(Math.min(H, c.plafondHeures)) : "—"}`, "Touché", "Régularisation"].map((t, i) => h("th", { class: [2, 3, 4].includes(i) ? "num" : null, text: t })))),
-        h("tbody", {}, rows.map(r => h("tr", { class: r.ecart ? null : "py-off" }, h("td", {}, r.ecart ? r.cb : null), h("td", {}, h("span", { style: "font-weight:600", text: r.l.nom }), h("span", { class: "small-meta", text: r.l.grade || "" })),
+        h("tbody", {}, rows.map(r => h("tr", { class: r.ecart ? null : "py-off" }, h("td", {}, r.ecart ? r.cb : null), h("td", {}, h("span", { style: "font-weight:600", text: r.l.nom }), h("span", { class: "small-meta", text: r.l.grade || "" }),
+            r.ecart && r.ann.length ? h("span", { class: "small-meta t-warn tone-text", text: `${r.ecart > 0 ? "Trop-perçu" : "Complément"} déjà annulé${r.ann[0].annuleMotif ? " (" + r.ann[0].annuleMotif + ")" : ""} : décoché` }) : null),
           h("td", { class: "num", text: money(r.taux) }), h("td", { class: "num", text: money(r.du) }), h("td", { class: "num", text: money(r.percu) }),
           h("td", { class: r.ecart > 0 ? "py-reste" : null, style: "font-weight:600", text: r.ecart > 0 ? `Trop-perçu : ${money(r.ecart)}` : r.ecart < 0 ? `Complément : ${money(-r.ecart)}` : "à jour" })))))),
       h("p", { class: "hint", style: "margin:8px 0 0", text: ok ? `${plus.length} trop-perçu${plural(plus.length)} (${money(plus.reduce((t, r) => t + r.ecart, 0))}) retenu${plural(plus.length)} sur les prochaines payes, ${moins.length} complément${plural(moins.length)} (${money(-moins.reduce((t, r) => t + r.ecart, 0))}) versé${plural(moins.length)} en rappel avec la prochaine paye. « Touché » compte la paye, les rappels et les trop-perçus déjà notés : relancer la régularisation ne compte rien deux fois.` : "Indiquez une base d’heures valable." }));
