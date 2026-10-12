@@ -127,11 +127,14 @@ function actualiser() {
   const lignesDem = d => (Array.isArray(d.lignes) && d.lignes.length ? d.lignes : null);
   const env = {};
   const lignesArt = [];
+  // Payes de la Préfecture : une demande « budget salaires » reprise dans une paye ne compte qu'une fois (par la paye).
+  const payesV = col("payes").filter(r => r.data.statut === "versee");
+  const repris = {}; payesV.forEach(r => { if (r.data.reprise && r.data.reprise.demandeId) repris[r.data.reprise.demandeId] = r.id; });
   ecrire("Demandes", ["N°", "Service", "Unité", "Nature", "Objet", "Mois", "Articles", "Demandé", "Urgence", "Statut", "Accordé", "Motif", "Reçue le", "Décidée le", "Bon de commande", "Demandeur"],
     col("demandes").map(r => {
       const d = r.data, a = arbitrages[r.id], st = a ? a.statut : "attente", k = moisDem(d, a), sv = d.service || "Autre", ls = lignesDem(d);
       const x = env[sv + "|" + k] = env[sv + "|" + k] || { service: sv, k: k, n: 0, demande: 0, accorde: 0, attente: 0 };
-      x.n++; x.demande += Number(d.montant) || 0; x.accorde += accorde(a); if (st === "attente" || st === "etude") x.attente += Number(d.montant) || 0;
+      x.n++; x.demande += Number(d.montant) || 0; if (!repris[r.id]) x.accorde += accorde(a); if (st === "attente" || st === "etude") x.attente += Number(d.montant) || 0;
       // Articles : une ligne par article, avec la décision article par article quand elle existe.
       const al = a && Array.isArray(a.lignes) ? a.lignes : [];
       (ls || [{ designation: d.objet || "Demande", quantite: 1, prixUnitaire: Number(d.montant) || 0 }]).forEach((l, i) => {
@@ -140,7 +143,7 @@ function actualiser() {
         lignesArt.push([no("DM", r.id), sv, k, l.designation, Number(l.quantite) || 0, pu, pu === "" ? "" : (Number(l.quantite) || 0) * pu, zq, zp, z ? (zq || 0) * (zp || 0) : "", etat || STATUTS_DEM[st] || st, z && z.motif ? z.motif : ""]);
       });
       return [no("DM", r.id), d.service, d.unite || "", NATURES[d.nature] || d.nature, d.objet, k, ls ? ls.length : "", d.montant, d.urgence, STATUTS_DEM[st] || st,
-        accorde(a), a && a.commentaire ? a.commentaire : "", date(d.recueAt), a ? date(a.at) : "", d.reference || "", d.demandeur || ""];
+        accorde(a), (a && a.commentaire ? a.commentaire : "") + (repris[r.id] ? (a && a.commentaire ? " · " : "") + "Reprise dans la paye " + repris[r.id] : ""), date(d.recueAt), a ? date(a.at) : "", d.reference || "", d.demandeur || ""];
     }));
   ecrire("Articles des demandes", ["Demande", "Service", "Mois", "Article", "Quantité demandée", "Prix demandé", "Total demandé", "Quantité accordée", "Prix retenu", "Accordé", "Décision", "Motif"], lignesArt);
   ecrire("Catalogue des prix", ["Article", "Catégorie", "Prix de référence", "Note", "Ajouté par", "Ajouté le"],
@@ -173,9 +176,34 @@ function actualiser() {
     if (c.type === "commande") { if (c.periode && c.statut !== "resilie") { const x = envDe(sv, moisDe(c.periode)); x.achete = (x.achete || 0) + (Number(c.montant) || 0); } }
     else (c.paiements || []).forEach(p => { const x = envDe(sv, moisDate(p.at)); x.achete = (x.achete || 0) + (Number(p.montant) || 0); });
   });
-  ecrire("Enveloppes", ["Mois", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Acheté sous contrat", "Plafond", "Reste"],
+  // Payes versées : imputées sur l'enveloppe du service des payes, au mois de leur semaine.
+  const payeConf = conf.payes && typeof conf.payes === "object" ? conf.payes : {}, svcPaye = payeConf.service || "Préfecture";
+  const payeTot = d => (d.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0) + (d.rappels || []).reduce((t, x) => t + (Number(x.verse) || 0), 0);
+  payesV.forEach(r => { const x = envDe(svcPaye, r.data.mois || moisDe(r.id)); x.payes = (x.payes || 0) + payeTot(r.data); });
+  ecrire("Enveloppes", ["Mois", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Acheté sous contrat", "Payes versées", "Plafond", "Reste"],
     Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
-      .map(x => { const p = plafond(x.service, x.k), achete = x.achete || 0; return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, achete, p, p === "" ? "" : p - x.accorde - achete]; }));
+      .map(x => { const p = plafond(x.service, x.k), achete = x.achete || 0, py = x.payes || 0; return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, achete, py, p, p === "" ? "" : p - x.accorde - achete - py]; }));
+
+  // Payes des fonctionnaires, agent par agent, et rappels de salaire (dus ou versés).
+  const lignesPaye = [], heures = h => Math.round((Number(h) || 0) * 100) / 100;
+  payesV.slice().sort((a, b) => (a.id < b.id ? 1 : -1)).forEach(r => {
+    const d = r.data, coef = d.coef == null ? 1 : Number(d.coef);
+    (d.lignes || []).forEach(l => lignesPaye.push([r.id, d.mois || moisDe(r.id), l.nom || "", l.grade || "", l.heuresPointees == null ? "" : heures(l.heuresPointees), heures(l.heures), heures(l.heuresPayees), Number(l.taux) || 0, Number(l.brut) || 0, Number(l.verse) || 0, Math.max(0, (Number(l.brut) || 0) - (Number(l.verse) || 0)), coef, "Paye", date(d.verseeLe), d.verseeParNom || ""]));
+    (d.rappels || []).forEach(x => lignesPaye.push([r.id, d.mois || moisDe(r.id), x.nom || "", "", "", "", "", "", Number(x.du) || 0, Number(x.verse) || 0, "", "", "Rappel de la semaine " + x.semaine, date(d.verseeLe), d.verseeParNom || ""]));
+  });
+  ecrire("Payes", ["Semaine", "Mois", "Agent", "Grade", "Heures pointées", "Heures retenues", "Heures payées", "Taux horaire", "Paye due", "Versé", "Reste en rappel", "Prorata", "Nature", "Versée le", "Par"], lignesPaye);
+  const docsRap = {}; col("rappels").forEach(r => { docsRap[r.id] = r.data; });
+  const verseRap = {}; payesV.forEach(r => (r.data.rappels || []).forEach(x => { verseRap[x.rid] = (verseRap[x.rid] || 0) + (Number(x.verse) || 0); }));
+  const lignesRap = [];
+  payesV.forEach(r => (r.data.lignes || []).forEach(l => { const reste = Math.round((Number(l.brut) || 0) - (Number(l.verse) || 0)); if (reste <= 0) return; const id = "auto-" + r.id + "-" + l.fid, o = docsRap[id], v = verseRap[id] || 0;
+    lignesRap.push([l.nom || "", r.id, "Prorata de la paye", reste, v, o && o.annule ? 0 : Math.max(0, reste - v), o && o.annule ? "Annulé" : reste - v <= 0 ? "Versé" : "Dû", date(r.data.verseeLe)]); }));
+  col("rappels").forEach(r => { if (String(r.id).indexOf("auto-") === 0) return; const d = r.data, m = Number(d.montant) || 0, v = verseRap[r.id] || 0;
+    lignesRap.push([d.nom || "", d.semaine || "", d.motif || "", m, v, d.statut === "annule" ? 0 : Math.max(0, m - v), d.statut === "annule" ? "Annulé" : m - v <= 0 ? "Versé" : "Dû", date(d.at)]); });
+  ecrire("Rappels de salaire", ["Agent", "Semaine concernée", "Motif", "Montant", "Versé", "Reste dû", "État", "Né le"], lignesRap);
+  ecrire("Pointages", ["Agent", "Compte Discord", "Début", "Fin", "Durée (h)", "Source", "Corrections", "Annulé"],
+    col("pointages").map(r => { const d = r.data, a = d.debut ? new Date(d.debut) : null, b = d.fin ? new Date(d.fin) : null;
+      return [d.nom || "", d.discordId || "", a || "", b || "en cours", a && b ? heures((b - a) / 3600e3) : "", d.source === "direction" ? "Saisi par la Direction" : "Pointeuse", (d.corrections || []).map(c => c.motif).join(" · "), d.annule ? "Oui" : ""]; })
+      .sort((x, y) => (x[2] < y[2] ? 1 : -1)));
 
   const NATURES_PEN = { redressement: "Redressement fiscal", majoration: "Majoration pour paiement tardif", defaut: "Défaut de déclaration (semaine clôturée)", convocation: "Absence à une convocation" };
   ecrire("Pénalités", ["N°", "Entreprise", "Motif", "Montant", "Statut", "Infligée le", "Payée le", "Nature"],

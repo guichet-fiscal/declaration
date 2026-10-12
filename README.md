@@ -35,6 +35,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v15_conventions_forfait.sql` : la réduction d’impôt fixe des conventions de partenariat, figée à la signature
 - `supabase/v16_contrats_suppression.sql` : la suppression d’un contrat sans paiement par la Direction
 - `supabase/v17_budget_mensuel.sql` : le passage du budget des services publics au mois (dossiers déjà enregistrés rangés au mois, plafonds par semaine × 4,33)
+- `supabase/v18_payes_pointeuse.sql` : la pointeuse (prise et fin de service à l’heure du serveur) et le rôle d’accès « Pointeuse », qui ne voit que ses propres pointages
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
@@ -55,7 +56,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat), `supabase/v13_conventions.sql` (conventions de partenariat), `supabase/v14_amendes.sql` (amendes versées au Trésor), `supabase/v15_conventions_forfait.sql` (réduction fixe des conventions) `supabase/v16_contrats_suppression.sql` (suppression des contrats sans paiement) et `supabase/v17_budget_mensuel.sql` (budget des services au mois). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat), `supabase/v13_conventions.sql` (conventions de partenariat), `supabase/v14_amendes.sql` (amendes versées au Trésor), `supabase/v15_conventions_forfait.sql` (réduction fixe des conventions) `supabase/v16_contrats_suppression.sql` (suppression des contrats sans paiement), `supabase/v17_budget_mensuel.sql` (budget des services au mois) et `supabase/v18_payes_pointeuse.sql` (pointeuse et rôle Pointeuse). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -175,7 +176,7 @@ Une entreprise est attendue à partir du début du suivi, ou de son **début d�
 
 ## Suivi dans Google Sheets
 
-La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société, les contrôles de police, les convocations, les contrats d’achat et leurs paiements, les conventions de partenariat et les prestations offertes, les amendes versées au Trésor, les articles des demandes des services (avec la décision article par article), le catalogue des prix et les enveloppes des services mois par mois. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
+La feuille contient aussi les relances et mises en demeure, les attestations, les semaines clôturées, les contrôles, les saisies, les dossiers transmis à la justice, les relevés de compte, les déclarations de soupçon, les prêts et leurs remboursements, les véhicules de société, les contrôles de police, les convocations, les contrats d’achat et leurs paiements, les conventions de partenariat et les prestations offertes, les amendes versées au Trésor, les articles des demandes des services (avec la décision article par article), le catalogue des prix, les enveloppes des services mois par mois, les payes de la Préfecture agent par agent, les rappels de salaire et les pointages. Après une mise à jour de `google-sheets/export.gs`, recollez-le dans Apps Script.
 
 Une feuille Google Sheets peut recopier tout le registre chaque heure ou chaque lundi. Les admins la consultent sans passer par le site.
 
@@ -196,8 +197,9 @@ Dans **Réglages → Accès**, ajoutez son identifiant Discord, son nom et son r
 - **Direction** : tout, y compris encaisser, annuler, infliger les pénalités, arbitrer les demandes, clôturer les semaines, restaurer depuis le journal, les réglages et les accès.
 - **Inspection** : saisit les déclarations et les demandes, émet les avis, place un dossier en contrôle, relance les entreprises et publie sur Discord. Elle ne peut ni encaisser, ni annuler, ni supprimer, ni arbitrer, ni toucher aux réglages. Ces limites sont appliquées par la base elle-même, pas seulement par le site.
 - **Lecture seule** : consulte le registre et télécharge les sauvegardes. C’est le bon rôle pour les administrateurs du serveur.
+- **Pointeuse seulement** : la pointeuse et rien d’autre. Pour les fonctionnaires de la Préfecture qui n’ont pas besoin du registre : ils prennent et finissent leur service, voient leurs heures de la semaine, et la base ne leur montre aucun autre dossier (ni le journal, ni les accès, ni les pièces, ni qui est connecté).
 
-Le rôle Inspection demande d’avoir exécuté `supabase/v4_inspection_cloture.sql`.
+Le rôle Inspection demande d’avoir exécuté `supabase/v4_inspection_cloture.sql`, le rôle Pointeuse `supabase/v18_payes_pointeuse.sql`. Tous les rôles ont aussi la pointeuse (Tableau de bord → Pointeuse).
 
 Les joueurs n’ont pas besoin d’accès : ils déclarent sur Discord.
 
@@ -306,7 +308,24 @@ Rubrique **Services publics** du bandeau. Les chefs de service postent leur dema
 7. **Enveloppes** : le budget de chaque service se compte au mois. Choisissez le mois (flèches ou liste) : plafond, crédits accordés, achats sous contrat, demandes en attente et reste. La Direction règle les plafonds du mois directement dans le tableau ; un mois sans plafonds propres reprend ceux du dernier mois réglé (**Revenir aux plafonds précédents** efface le réglage d’un mois). Le suivi sur six mois croise services et mois.
 8. **Catalogue des prix** (Direction) : les prix de référence des articles. À la saisie, le prix d’un article du catalogue se remplit seul ; au moment de décider, un prix demandé plus élevé est signalé (« +20 % »). **Reprendre les articles des demandes** propose d’un coup les articles chiffrés des demandes déjà reçues ; **Inscrire au catalogue** le fait depuis une demande.
 
+9. **Payes** : la paye des fonctionnaires de la Préfecture, ci-dessous.
+
 Une demande saisie avant le détail par article compte pour un seul montant : **Détailler les articles** la rouvre avec les articles repérés dans sa justification, à vérifier et chiffrer. Les demandes et les plafonds rattachés à des semaines passent au mois de leur semaine : `supabase/v17_budget_mensuel.sql` les range dans la base (semaines 41 et 42 → octobre 2026 ; plafonds par semaine × 4,33) ; le site fait déjà la même conversion avant ce script.
+
+## Payes de la Préfecture et pointeuse
+
+**Services publics → Payes**. La Préfecture paie elle-même ses fonctionnaires, à l’heure de service.
+
+- **Fonctionnaires** : chaque agent a une fiche avec son grade et, s’il pointe, son compte Discord. **Ajouter un fonctionnaire** peut lui donner en même temps l’accès « Pointeuse ». Un agent qui part est **retiré des effectifs** : ses payes passées restent.
+- **Pointeuse** (Tableau de bord → Pointeuse, pour tous les rôles) : **Prendre mon service** en arrivant, **Finir mon service** en partant. L’heure est celle du serveur. Un service de plus de 12 h est signalé « à vérifier ». La Direction corrige, clôt, ajoute ou annule un pointage depuis la fiche de l’agent, avec un motif gardé au dossier.
+- **Paye de la semaine** : heures pointées × taux horaire du grade, au plus 20 h payées et 100 000 € par semaine (barème de 3 000 €/h pour un agent de sécurité à 5 000 €/h pour le préfet). Pour un agent sans pointeuse, ou pour corriger, la Direction tape les heures retenues dans le tableau (12 h 30, 12:30 ou 12,5).
+- **Budget lissé** : 3,5 M par mois pour les payes, comptés dans l’enveloppe de la Préfecture. Chaque semaine a droit à ce qui reste du mois, divisé par les semaines qui restent (en cas d’urgence, la Direction peut lui donner plus). Si les payes dues dépassent ce budget, **toutes baissent du même pourcentage** (prorata) et ce qui manque à chacun devient un **rappel**.
+- **Rappels de salaire** : ceux nés d’un prorata, et ceux saisis à la main (**Ajouter un rappel**) pour des heures non payées d’une semaine passée, calculés à l’heure dans la limite de 20 h et 100 000 € pour cette semaine-là. Ils sont proposés sur la paye suivante et versés avec ce qui reste du budget après les payes de la semaine.
+- **Verser la paye** : fige la semaine, l’impute sur l’enveloppe de la Préfecture du mois de la semaine et la sort du Trésor. L’**état de paye** et le **bulletin** de chaque agent se publient en image. **Annuler le versement** remet la semaine en préparation (impossible si ses rappels ont déjà été versés plus tard).
+- **Barème et budget** : grades et taux horaires, budget des payes par mois, heures et paye maximum par semaine, enveloppe imputée.
+- **Salaires déjà versés par une demande** « budget salaires » de la Préfecture : le bandeau **Reprendre dans les payes** rattache chaque salaire à son agent et à sa semaine. La demande reste au dossier mais ne compte plus sur l’enveloppe ni dans le Trésor : la paye compte à sa place, une seule fois.
+
+La pointeuse demande `supabase/v18_payes_pointeuse.sql` ; sans ce script, les payes fonctionnent avec des heures saisies à la main.
 
 ## Contrats d’achat
 

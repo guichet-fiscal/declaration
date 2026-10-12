@@ -464,6 +464,53 @@ tr.arb-off .arb-art{text-decoration:line-through;text-decoration-color:var(--ink
   .arb-acts{display:flex;flex-wrap:wrap}
 }
 .arb-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 18px;align-items:start}
+/* Payes de la Préfecture et pointeuse */
+.ledger.l5{grid-template-columns:repeat(5,minmax(0,1fr))}
+@media (max-width:1000px){.ledger.l5{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:560px){.ledger.l5{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.py-budget{display:flex;flex-wrap:wrap;gap:4px 18px;margin:0 0 4px;font-size:13.5px;color:var(--ink-2)}
+.py-budget b{color:var(--ink);font-family:var(--f-mono);font-weight:600}
+.py-budget .warn{color:var(--warn);font-weight:600}
+.py-note{margin:10px 0 0;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--warn);border-radius:6px;font-size:13.5px;color:var(--ink-2);background:var(--sheet)}
+.py-note.info{border-left-color:var(--accent)}
+.py-note b{color:var(--ink)}
+table.py-tbl{min-width:820px}
+.py-tbl td{vertical-align:top}
+.py-tbl .py-nom{font-weight:600}
+.py-h{width:96px;padding:6px 8px;font-size:14px;font-family:var(--f-mono)}
+.py-h-row{display:flex;align-items:center;gap:4px}
+.py-tbl tr.py-off td{color:var(--ink-3)}
+.py-tbl .py-reste{color:var(--warn)}
+.py-tbl tfoot td{font-weight:650;border-top:2px solid var(--rule)}
+.py-flags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+@media (max-width:620px){
+  table.py-tbl,table.py-tbl tbody,table.py-tbl tfoot{display:block;min-width:0;width:100%}
+  .py-tbl thead{display:none}
+  .py-tbl tr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--rule-2)}
+  .py-tbl td{padding:0;border:0!important;text-align:left!important}
+  .py-tbl td:first-child{grid-column:1/-1}
+  .py-tbl td[data-l]::before{content:attr(data-l);display:block;font-family:var(--f-body);font-size:12px;font-weight:600;color:var(--ink-3);margin-bottom:2px}
+  .py-tbl td:empty{display:none}
+  .py-h{width:100%}
+}
+.pt-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.pt-grid > .card{margin-top:0}
+@media (max-width:560px){#py-sem{min-width:0;flex:1 1 150px}}
+@media (max-width:900px){.pt-grid{grid-template-columns:minmax(0,1fr)}}
+.pt-state{display:flex;align-items:center;gap:10px;font-weight:650;font-size:15px;color:var(--ink-2)}
+.pt-dot{width:12px;height:12px;border-radius:50%;background:var(--ink-3);flex:none}
+.pt-on .pt-state{color:var(--ok)}
+.pt-on .pt-dot{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft)}
+.pt-clock{font-family:var(--f-mono);font-size:clamp(36px,7vw,56px);font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1;margin:12px 0 4px;letter-spacing:-.01em;color:var(--ink)}
+.pt-since{color:var(--ink-2);font-size:14px;margin:0}
+.pt-go{margin-top:18px;width:100%;padding:15px 18px;font-size:16px}
+.pt-warn{margin-top:12px}
+.pt-week-h{font-family:var(--f-mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.pt-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:0}
+.pt-list li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:9px 0;border-top:1px solid var(--rule-2);font-size:13.5px;align-items:center}
+.pt-list li:first-child{border-top:0}
+.pt-list .mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.pt-list .meta{grid-column:1/-1;font-size:12.5px;color:var(--ink-3)}
 .svc-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:12px}
 .svc-card{display:grid;gap:7px;text-align:left;border:1px solid var(--rule);border-radius:var(--r);background:var(--sheet);padding:12px 14px;cursor:pointer;font:inherit;color:inherit}
 .svc-card:hover{border-color:var(--ink-3)}
@@ -746,6 +793,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
   </div>
   <div class="wrap sub-rail" id="sub-rail" role="tablist" aria-label="Pages de la rubrique">
     <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" data-grp="accueil" aria-selected="true">Tableau de bord</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-pointeuse" data-tab="pointeuse" data-grp="accueil" aria-selected="false">Pointeuse</button>
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" data-grp="dossiers" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" data-grp="dossiers" aria-selected="false" data-agent>Saisir une déclaration</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" data-grp="dossiers" aria-selected="false">Recouvrement</button>
@@ -758,6 +806,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <button class="tab" role="tab" type="button" id="tab-btn-svc" data-tab="svc" data-grp="services" aria-selected="false">Demandes</button>
     <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" data-grp="services" aria-selected="false" data-agent>Saisir une demande</button>
     <button class="tab" role="tab" type="button" id="tab-btn-enveloppes" data-tab="enveloppes" data-grp="services" aria-selected="false">Enveloppes</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-payes" data-tab="payes" data-grp="services" aria-selected="false">Payes</button>
     <button class="tab" role="tab" type="button" id="tab-btn-catalogue" data-tab="catalogue" data-grp="services" aria-selected="false">Catalogue des prix</button>
     <button class="tab" role="tab" type="button" id="tab-btn-journal" data-tab="journal" data-grp="outils" aria-selected="false">Journal</button>
     <button class="tab" role="tab" type="button" id="tab-btn-modeles" data-tab="modeles" data-grp="outils" aria-selected="false">Modèles Discord</button>
@@ -939,6 +988,74 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <h3>Sur six mois</h3>
       <p class="sub">Accordé et acheté par service, sur le plafond de chaque mois. Cliquez sur un mois pour l’afficher plus haut.</p>
       <div id="env-suivi"></div>
+    </div>
+  </section>
+
+  <!-- SERVICES PUBLICS : PAYES DE LA PRÉFECTURE -->
+  <section class="panel" id="tab-payes" role="tabpanel" aria-labelledby="tab-btn-payes" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Payes de la Préfecture</h2>
+        <p class="sub" id="py-intro">La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service × taux horaire du grade. Elle est déduite de l’enveloppe de la Préfecture ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.</p>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost" type="button" id="py-reglages" hidden>Barème et budget</button>
+        <button class="btn ghost" type="button" id="py-rappel" hidden>Ajouter un rappel</button>
+        <button class="btn" type="button" id="py-fonc-new" hidden>Ajouter un fonctionnaire</button>
+      </div>
+    </div>
+    <div id="py-reprise"></div>
+    <div class="ledger l5">
+      <div class="kpi" id="py-k-budget"><span class="l">Budget de la semaine</span><span class="v">—</span><span class="s">lissé sur le mois</span></div>
+      <div class="kpi" id="py-k-du"><span class="l">Payes dues</span><span class="v">—</span><span class="s">heures × taux</span></div>
+      <div class="kpi" id="py-k-verse"><span class="l">À verser</span><span class="v">—</span><span class="s">après prorata</span></div>
+      <div class="kpi" id="py-k-mois"><span class="l">Reste du mois</span><span class="v">—</span><span class="s">budget des payes</span></div>
+      <div class="kpi" id="py-k-rappels"><span class="l">Rappels dus</span><span class="v">—</span><span class="s">à verser</span></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="env-nav">
+        <button class="btn ghost small" type="button" id="py-prev" aria-label="Semaine précédente">‹</button>
+        <select id="py-sem" aria-label="Semaine de paye"></select>
+        <button class="btn ghost small" type="button" id="py-next" aria-label="Semaine suivante">›</button>
+        <span id="py-etat" aria-live="polite"></span>
+      </div>
+      <div id="py-budget"></div>
+      <div id="py-table"><div class="empty">Chargement…</div></div>
+      <div id="py-rappels"></div>
+      <div class="paste-row" id="py-actions"></div>
+    </div>
+    <div class="dash-grid">
+      <div class="card">
+        <div class="card-head"><div><h3>Fonctionnaires</h3><p class="sub" id="py-fonc-sub">Les agents payés par la Préfecture, leur grade et leur compte de pointeuse.</p></div></div>
+        <div id="py-fonc"><div class="empty">Chargement…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><div><h3>Rappels de salaire</h3><p class="sub" id="py-rap-sub">Ce qui reste dû aux agents : prorata, heures non payées, corrections.</p></div></div>
+        <div id="py-rap"><div class="empty">Chargement…</div></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>Payes versées</h3>
+      <p class="sub">Chaque semaine versée, imputée sur l’enveloppe de la Préfecture du mois de la semaine.</p>
+      <div id="py-hist"></div>
+    </div>
+  </section>
+
+  <!-- POINTEUSE -->
+  <section class="panel" id="tab-pointeuse" role="tabpanel" aria-labelledby="tab-btn-pointeuse" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Pointeuse</h2>
+        <p class="sub">Prenez votre service en arrivant et finissez-le en partant : l’heure retenue est celle du registre, pas celle de votre appareil. Vos heures de service servent au calcul de votre paye.</p>
+      </div>
+    </div>
+    <div class="pt-grid">
+      <div class="card pt-main" id="pt-me"><div class="empty">Chargement…</div></div>
+      <div class="card" id="pt-week"></div>
+    </div>
+    <div class="card" id="pt-now-card" style="margin-top:16px" hidden>
+      <div class="card-head"><div><h3>En service maintenant</h3><p class="sub" id="pt-now-sub"></p></div></div>
+      <div id="pt-now"></div>
     </div>
   </section>
 
@@ -1926,7 +2043,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <form class="ent-add agent-add" id="form-agent" novalidate>
               <div class="field"><label for="a-id">Identifiant Discord</label><input id="a-id" class="mono" inputmode="numeric" autocomplete="off" placeholder="123456789012345678"></div>
               <div class="field"><label for="a-nom">Nom</label><input id="a-nom" autocomplete="off" placeholder="Ex. : Inspecteur Martin"></div>
-              <div class="field"><label for="a-role">Rôle</label><select id="a-role"><option value="direction">Direction</option><option value="inspecteur">Inspection</option><option value="lecture" selected>Lecture seule</option></select></div>
+              <div class="field"><label for="a-role">Rôle</label><select id="a-role"><option value="direction">Direction</option><option value="inspecteur">Inspection</option><option value="lecture" selected>Lecture seule</option><option value="pointeuse">Pointeuse seulement</option></select></div>
               <button class="btn" type="submit" id="a-add">Ajouter</button>
             </form>
             <span id="a-msg" class="err" aria-live="polite"></span>
@@ -2046,7 +2163,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -2064,7 +2181,7 @@ const cfg = () => {
 // writer() : la Direction. canAgent() : la Direction ou l’Inspection.
 const writer = () => S.connected && !S.readOnly && (S.admin || S.canWrite !== false);
 const canAgent = () => S.connected && !S.readOnly && (S.role === "direction" || S.role === "inspecteur");
-const ROLE_LABEL = { direction: "Direction", inspecteur: "Inspection", lecture: "Lecture seule" };
+const ROLE_LABEL = { direction: "Direction", inspecteur: "Inspection", lecture: "Lecture seule", pointeuse: "Pointeuse" };
 
 const NATURES = { vehicule: "Véhicule", equipement: "Équipement & moyens", salaires: "Budget salaires", fonctionnement: "Fonctionnement", autre: "Autre" };
 const URG = { normale: ["Normale", "muted"], prioritaire: ["Prioritaire", "warn"], urgente: ["Urgente", "bad"] };
@@ -2231,10 +2348,13 @@ function treasury() {
   let rec = 0, dep = 0;
   for (const d of S.declarations) rec += dEncaisse(d);
   for (const p of S.penalites) if (p.statut === "payee") rec += Number(p.montant) || 0;
+  const rep = payeRepris();
   for (const dm of S.demandes) {
     const a = S.arbitrages[dm.id];
-    if (a && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
+    if (a && !rep.has(dm.id) && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
   }
+  // Payes des fonctionnaires de la Préfecture (une demande « budget salaires » reprise en paye n'est comptée qu'une fois).
+  const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0);
   const budget = Number(cfg().budgetInitial) || 0;
   // Prêts : le capital versé sort du Trésor, les remboursements (intérêts compris) y reviennent.
   let pv = 0, pr = 0, pd = 0;
@@ -2253,7 +2373,7 @@ function treasury() {
   // Produit des amendes remis par les services (versements dont la réception est confirmée).
   let amendes = 0;
   for (const v of S.versements || []) amendes += vtRecu(v);
-  return { rec, dep, budget, achats, amendes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, aDeduire: Math.max(0, deduits - compense), solde: budget + rec + amendes - dep - achats - pv + pr };
+  return { rec, dep, budget, achats, amendes, payes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, aDeduire: Math.max(0, deduits - compense), solde: budget + rec + amendes - dep - achats - payes - pv + pr };
 }
 const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
 const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -2411,24 +2531,28 @@ function demImputation(dm) {
 }
 const demAccorde = dm => { const a = S.arbitrages[dm.id]; return a && (a.statut === "accordee" || a.statut === "partielle") ? Number(a.montantAccorde) || 0 : 0; };
 function envUse(key) {
-  const out = {};
+  const out = {}, rep = payeRepris();
   for (const dm of S.demandes) {
     const v = demAccorde(dm);
-    if (!v || demImputation(dm) !== key) continue;
+    if (!v || rep.has(dm.id) || demImputation(dm) !== key) continue;
     const k = norm(dm.service || "Autre");
     out[k] = (out[k] || 0) + v;
   }
   // Achats sous contrat imputés sur l'enveloppe du service.
   const svcs = new Map(); for (const c of S.contrats || []) { const s = ctService(c); if (s && !svcs.has(norm(s))) svcs.set(norm(s), s); }
   for (const [k, s] of svcs) for (const x of ctImputations(s, key)) out[k] = (out[k] || 0) + x.montant;
+  // Payes de la Préfecture versées pour les semaines du mois.
+  const py = payesImpute(payeSvc(), key);
+  if (py.total) out[norm(payeSvc())] = (out[norm(payeSvc())] || 0) + py.total;
   return out;
 }
 // Bilan d'un service pour un mois : demandé, accordé, en attente, refusé, plafond.
 function envStats(service, key) {
   const n = norm(service), list = S.demandes.filter(dm => norm(dm.service || "Autre") === n && demImputation(dm) === key);
   const st = dm => aStatus(dm), sum = (l, f) => l.reduce((t, x) => t + f(x), 0);
-  const achats = ctImputations(service, key), cap = envCap(service, key), credits = sum(list, demAccorde), achete = achats.reduce((t, x) => t + x.montant, 0), accorde = credits + achete;
-  return { list, achats, cap, credits, achete, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
+  const rep = payeRepris(), py = payesImpute(service, key);
+  const achats = ctImputations(service, key), cap = envCap(service, key), credits = sum(list.filter(dm => !rep.has(dm.id)), demAccorde), achete = achats.reduce((t, x) => t + x.montant, 0), payes = py.total, accorde = credits + achete + payes;
+  return { list, achats, cap, credits, achete, payes, payesList: py.list, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
     refuse: list.filter(dm => st(dm) === "refusee").length, reste: cap ? cap - accorde : null };
 }
 const envServices = keys => { const names = cfg().services.slice(); for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && keys.includes(demImputation(dm))) names.push(dm.service); for (const c of S.contrats || []) { const s = ctService(c); if (s && !names.some(n => norm(n) === norm(s)) && keys.some(k => ctImputations(s, k).length)) names.push(s); } return names; };
@@ -2525,16 +2649,19 @@ function applyRole() {
   role.className = "role";
   if (S.offline) role.textContent = "Hors ligne";
   else if (!S.connected) role.textContent = "Connexion au registre…";
+  else if (S.role === "pointeuse") role.textContent = "Pointeuse" + (S.agentName ? " · " + S.agentName : "");
   else if (S.readOnly || !canAgent()) role.textContent = "Lecture seule" + (S.agentName ? " · " + S.agentName : "");
   else { role.textContent = (ROLE_LABEL[S.role] || "Agent") + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
   const w = writer(), ag = canAgent(), known = S.connected || S.offline;
   $$(".tab[data-writer]").forEach(b => { b.hidden = !w && known; });
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
+  // Rôle « pointeuse » : la pointeuse et rien d'autre.
+  if (S.role === "pointeuse") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "pointeuse"; }); if (S.tab !== "pointeuse") showTab("pointeuse"); }
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
-  $("#btn-search").hidden = !S.connected;
-  $("#notif-btn").hidden = !S.connected || !S.role;
+  $("#btn-search").hidden = !S.connected || S.role === "pointeuse";
+  $("#notif-btn").hidden = !S.connected || !S.role || S.role === "pointeuse";
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
@@ -2704,7 +2831,9 @@ function makeStore(sb) {
       async add(data) { const r = docRef(col + "/" + newId()); await r.set(data); return r; }
     };
   }
-  return { doc: docRef, collection: colRef, loadAll, startLive, peek: path => cache.get(path) };
+  // Un dossier écrit par la base elle-même (pointage) : rangé tout de suite, sans attendre le direct.
+  const local = (path, data) => { if (!same(cache.get(path), data)) { cache.set(path, JSON.parse(JSON.stringify(data))); notify([path]); } };
+  return { doc: docRef, collection: colRef, loadAll, startLive, local, peek: path => cache.get(path) };
 }
 
 /* ---------- Téléchargements (navigateur classique) ---------- */
@@ -2787,15 +2916,21 @@ async function init() {
   S.connected = true;
   subscribe();
   store.startLive();
-  startCollab();
-  if (S.role !== "direction" && S.role !== "inspecteur") setReadOnly();
+  if (S.role === "pointeuse") {
+    // Rôle « pointeuse » : ni présence, ni journal, ni réglages ; la base ne lui montre que ses pointages.
+    S.readOnly = true;
+    $$("#grp-accueil span").forEach(x => { x.textContent = "Pointeuse"; });
+    applyRole();
+  } else startCollab();
+  if (S.role === "pointeuse") { /* rien de plus à charger */ }
+  else if (S.role !== "direction" && S.role !== "inspecteur") setReadOnly();
   else {
     applyRole();
     if (S.admin) loadAgents();
     else setNotice([h("div", {}, h("strong", { text: "Inspection. " }), "Vous saisissez les déclarations et les demandes, émettez les avis, placez un dossier en contrôle et relancez les entreprises. Les encaissements, annulations, pénalités, arbitrages et réglages restent à la Direction.")]);
     loadPrivate();
   }
-  if (S.tab === "journal") loadJournal();
+  if (S.tab === "journal" && S.role !== "pointeuse") loadJournal();
   if (S.tab === "reglages" && S.admin) loadKeys();
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
 }
@@ -2814,12 +2949,12 @@ function renderAgents() {
   list.replaceChildren(...S.agents.map(a => {
     const me = a.discord_id === S.discordId;
     const sel = h("select", { id: "role-" + a.discord_id, "aria-label": "Rôle de " + (a.nom || a.discord_id), style: "width:auto" },
-      h("option", { value: "direction", text: "Direction" }), h("option", { value: "inspecteur", text: "Inspection" }), h("option", { value: "lecture", text: "Lecture seule" }));
+      h("option", { value: "direction", text: "Direction" }), h("option", { value: "inspecteur", text: "Inspection" }), h("option", { value: "lecture", text: "Lecture seule" }), h("option", { value: "pointeuse", text: "Pointeuse seulement" }));
     sel.value = a.role;
     sel.disabled = me;
     sel.addEventListener("change", async () => {
       const { error } = await S.sb.from("agents").update({ role: sel.value }).eq("discord_id", a.discord_id);
-      if (error) { toast(/check constraint/i.test(error.message || "") ? "Exécutez d’abord supabase/v4_inspection_cloture.sql pour créer le rôle Inspection." : "Modification refusée.", true); sel.value = a.role; } else { a.role = sel.value; toast("Rôle mis à jour."); }
+      if (error) { toast(/check constraint/i.test(error.message || "") ? (sel.value === "pointeuse" ? "Exécutez d’abord supabase/v18_payes_pointeuse.sql pour créer le rôle Pointeuse." : "Exécutez d’abord supabase/v4_inspection_cloture.sql pour créer le rôle Inspection.") : "Modification refusée.", true); sel.value = a.role; } else { a.role = sel.value; toast("Rôle mis à jour."); }
     });
     const rm = h("button", { class: "btn danger small", type: "button", text: me ? "Vous" : "Retirer", disabled: me });
     rm.addEventListener("click", async () => {
@@ -2840,7 +2975,7 @@ $("#form-agent").addEventListener("submit", async e => {
   if (!/^\d{15,21}$/.test(id)) { $("#a-id").setAttribute("aria-invalid", "true"); $("#a-id").focus(); msg.textContent = "Un identifiant Discord compte 17 à 20 chiffres."; return; }
   $("#a-id").removeAttribute("aria-invalid");
   const { error } = await S.sb.from("agents").insert({ discord_id: id, nom, role });
-  if (error) { msg.textContent = error.code === "23505" ? "Cet identifiant a déjà accès." : error.code === "23514" ? "Rôle inconnu de la base : exécutez d’abord supabase/v4_inspection_cloture.sql." : "Ajout refusé : " + error.message; return; }
+  if (error) { msg.textContent = error.code === "23505" ? "Cet identifiant a déjà accès." : error.code === "23514" ? `Rôle inconnu de la base : exécutez d’abord ${role === "pointeuse" ? "supabase/v18_payes_pointeuse.sql" : "supabase/v4_inspection_cloture.sql"}.` : "Ajout refusé : " + error.message; return; }
   $("#form-agent").reset();
   toast(`${nom || "Agent"} ajouté.`);
   loadAgents();
@@ -2878,6 +3013,10 @@ function subscribe() {
   col("prestations", s => { S.prestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("versements", s => { S.versements = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("catalogue", s => { S.catalogue = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("fonctionnaires", s => { S.fonctionnaires = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("rappels", s => { S.rappels = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -2920,6 +3059,8 @@ function render() {
   renderSvc();
   renderEnvPage();
   renderCatalogue();
+  renderPayes();
+  renderPointeuse();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
 }
@@ -2998,7 +3139,7 @@ function renderDashboard() {
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
-  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}${t.aDeduire > 0 ? ` · ${money(t.aDeduire)} dus aux entreprises, à déduire de leurs impôts` : ""}`, t.solde < 0 ? "bad" : "");
+  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.payes ? ` − ${money(t.payes)} de payes` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}${t.aDeduire > 0 ? ` · ${money(t.aDeduire)} dus aux entreprises, à déduire de leurs impôts` : ""}`, t.solde < 0 ? "bad" : "");
 
   // Entreprises à surveiller
   const reg = $("#registry");
@@ -3146,7 +3287,9 @@ function treasurySeries(keys) {
   keys.forEach(k => { rec[k] = 0; dep[k] = 0; });
   for (const d of S.declarations) if (d.periode in rec) rec[d.periode] += dEncaisse(d);
   for (const p of S.penalites) if (p.statut === "payee" && p.paidAt) { const k = keyOf(new Date(p.paidAt)); if (k in rec) rec[k] += Number(p.montant) || 0; }
-  for (const dm of S.demandes) { const v = demAccorde(dm), a = S.arbitrages[dm.id]; if (v) { const k = keyOf(new Date((a && a.at) || dm.recueAt || dm.createdAt || Date.now())); if (k in dep) dep[k] += v; } }
+  const rep = payeRepris();
+  for (const dm of S.demandes) { const v = demAccorde(dm), a = S.arbitrages[dm.id]; if (v && !rep.has(dm.id)) { const k = keyOf(new Date((a && a.at) || dm.recueAt || dm.createdAt || Date.now())); if (k in dep) dep[k] += v; } }
+  for (const p of payesVersees()) { const k = keyOf(new Date(p.verseeLe || p.at || Date.now())); if (k in dep) dep[k] += payeTotal(p); }
   for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) { if (p.mode === "impot") continue; const k = p.periode || keyOf(new Date(p.at)); if (k in dep) dep[k] += Number(p.montant) || 0; }
   // Compensation : la somme déduite d'un avis est à la fois une recette et le paiement d'un contrat.
   for (const d of S.declarations) if (d.periode in dep && dStatus(d) !== "rejetee") dep[d.periode] += dComp(d);
@@ -3340,6 +3483,7 @@ function openService(name, k) {
       mk("Plafond", x.cap ? money(x.cap) : "—", x.cap ? moisNom(k) : "sans plafond"),
       mk("Accordé", money(x.credits), `${x.list.length} demande${plural(x.list.length)} ce mois-là`),
       mk("Achats sous contrat", money(x.achete), x.achats.length ? `${x.achats.length} imputation${plural(x.achats.length)}` : "aucun"),
+      x.payes || norm(name) === norm(payeSvc()) ? mk("Payes versées", money(x.payes), x.payesList.length ? `${x.payesList.length} semaine${plural(x.payesList.length)}` : "aucune ce mois-là") : null,
       mk("En attente", money(x.attente), "demandés"),
       mk("Reste", x.cap ? money(x.reste) : "—", x.cap ? `${Math.round(ratio * 100)} % utilisés` : "sans plafond", x.cap && x.reste < 0 ? "bad" : "")),
     x.cap ? h("div", { class: "meter " + tone, role: "img", "aria-label": `${Math.round(ratio * 100)} % de l’enveloppe utilisée` }, h("i", { style: `width:${Math.min(100, ratio * 100)}%` })) : null,
@@ -3351,6 +3495,10 @@ function openService(name, k) {
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openContrat(c.id), text: `${ctNo(c)} · ${c.fournisseurNom}` }),
         h("span", { class: "meta", text: `${c.objet || CT_CATS[c.categorie] || ""} · ${c.type === "cadre" ? money(c.prixUnitaire) + " par " + (c.unite || "prestation") : money(c.montant)}${c.demandeId ? " · demande " + dossierNo("DM", c.demandeId) : ""}` })),
       chip(ctState(c)), h("span", {}))))) : null,
+    x.payesList.length ? sec(`Payes des fonctionnaires · ${x.payesList.length}`, h("ul", { class: "ent-list" }, x.payesList.slice().sort((a, b) => String(b.id).localeCompare(String(a.id))).map(p => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => { closeDialog(); S.payeSem = p.id; showTab("payes"); try { history.replaceState(null, "", "#payes"); } catch (e) { /* sans historique */ } renderPayes(true); }, text: `${pyNo(p.id)} · ${periodLabel(p.id)}` }),
+        h("span", { class: "meta", text: `${(p.lignes || []).length} agent${plural((p.lignes || []).length)}${Number(p.coef) < 1 ? " · prorata " + Math.round(Number(p.coef) * 100) + " %" : ""}${p.reprise ? " · reprise de " + (p.reprise.no || "la demande") : ""}` })),
+      h("span", { class: "mono", text: money(payeTotal(p)) }), h("span", {}))))) : null,
     vts.length ? sec("Amendes versées au Trésor", kv([[`Reçu ${deMois(k)}`, money(vtM)], ["Depuis le début", money(vts.reduce((t, v) => t + vtRecu(v), 0))]])) : null,
     kv([["Rôle Discord", role ? h("span", { class: "mono", text: role }) : "pas de rôle enregistré (Réglages → Services publics)"]])
   ];
@@ -3372,10 +3520,10 @@ function renderEnvPage(force) {
   moisOptions($("#env-mois"), k);
   const caps = envCapsFor(k), names = envServices([k]);
   fill($("#env-from"), caps.own ? `Plafonds réglés pour ${moisNom(k)}.` : caps.from ? `Pas de plafonds propres à ${moisNom(k)} : ceux ${deMois(caps.from)} s’appliquent.` : "Pas encore de plafonds réglés par mois : les plafonds d’origine s’appliquent.");
-  const tot = { cap: 0, credits: 0, achete: 0, attente: 0, reste: 0 };
+  const tot = { cap: 0, credits: 0, achete: 0, payes: 0, attente: 0, reste: 0 };
   const rows = names.map((n, i) => {
     const x = envStats(n, k), ratio = x.cap ? x.accorde / x.cap : 0, tone = !x.cap ? "" : ratio > 1 ? "bad" : ratio >= 0.8 ? "warn" : "";
-    tot.cap += x.cap || 0; tot.credits += x.credits; tot.achete += x.achete; tot.attente += x.attente; if (x.cap) tot.reste += x.reste;
+    tot.cap += x.cap || 0; tot.credits += x.credits; tot.achete += x.achete; tot.payes += x.payes; tot.attente += x.attente; if (x.cap) tot.reste += x.reste;
     let capCell;
     if (w) {
       const inp = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "data-svc": n, id: "envp-" + i, placeholder: "Sans plafond", "aria-label": `Plafond de ${n} · ${moisNom(k)}` });
@@ -3388,13 +3536,14 @@ function renderEnvPage(force) {
       capCell,
       h("td", { class: "num", text: money(x.credits) }),
       h("td", { class: "num", text: x.achete ? money(x.achete) : "—" }),
+      h("td", { class: "num", text: x.payes ? money(x.payes) : "—" }),
       h("td", { class: "num", text: x.attente ? money(x.attente) : "—" }),
       h("td", { class: "num" + (tone ? " t-" + tone + " tone-text" : "") }, x.cap ? money(x.reste) : "—",
         x.cap ? h("div", { class: "meter " + tone, role: "img", "aria-label": `${Math.round(ratio * 100)} % utilisés` }, h("i", { style: `width:${Math.min(100, ratio * 100)}%` })) : null));
   });
   fill(box, names.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "compact env-tbl" },
-    h("thead", {}, h("tr", {}, ["Service", `Plafond · ${moisNom(k)}`, "Crédits accordés", "Achats sous contrat", "En attente", "Reste"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
-    h("tbody", {}, rows, h("tr", { class: "tot" }, h("td", { text: "Total" }), h("td", { class: "num", text: tot.cap ? money(tot.cap) : "—" }), h("td", { class: "num", text: money(tot.credits) }), h("td", { class: "num", text: money(tot.achete) }), h("td", { class: "num", text: money(tot.attente) }), h("td", { class: "num", text: tot.cap ? money(tot.reste) : "—" })))))
+    h("thead", {}, h("tr", {}, ["Service", `Plafond · ${moisNom(k)}`, "Crédits accordés", "Achats sous contrat", "Payes", "En attente", "Reste"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+    h("tbody", {}, rows, h("tr", { class: "tot" }, h("td", { text: "Total" }), h("td", { class: "num", text: tot.cap ? money(tot.cap) : "—" }), h("td", { class: "num", text: money(tot.credits) }), h("td", { class: "num", text: money(tot.achete) }), h("td", { class: "num", text: money(tot.payes) }), h("td", { class: "num", text: money(tot.attente) }), h("td", { class: "num", text: tot.cap ? money(tot.reste) : "—" })))))
     : h("div", { class: "empty", text: "Aucun service public enregistré : ajoutez-les dans Réglages → Services publics." }));
   $("#env-actions").hidden = !w || !names.length;
   $("#env-save").textContent = `Enregistrer les plafonds ${deMois(k)}`;
@@ -3407,7 +3556,7 @@ function renderEnvPage(force) {
     h("tbody", {}, all.map(n => h("tr", {}, h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openService(n, k), text: n })), keys.map(z => {
       const x = envStats(n, z), ratio = x.cap ? x.accorde / x.cap : 0, tone = !x.cap ? "" : ratio > 1 ? "bad" : ratio >= 0.8 ? "warn" : "";
       return h("td", { class: "num" + (z === k ? " env-sel" : "") },
-        h("button", { class: "linkbtn env-cell" + (tone ? " t-" + tone + " tone-text" : ""), type: "button", title: `${n} · ${moisNom(z)}`, onclick: () => envGo(z), text: x.list.length || x.cap || x.achats.length ? money(x.accorde) : "—" }),
+        h("button", { class: "linkbtn env-cell" + (tone ? " t-" + tone + " tone-text" : ""), type: "button", title: `${n} · ${moisNom(z)}`, onclick: () => envGo(z), text: x.list.length || x.cap || x.achats.length || x.payes ? money(x.accorde) : "—" }),
         x.cap ? h("span", { class: "meta", text: `/ ${money(x.cap)}` }) : null, x.attente ? h("span", { class: "meta", text: `${money(x.attente)} en attente` }) : null);
     })))))) : null);
 }
@@ -3544,6 +3693,921 @@ function openCatImport() {
       h("div", { class: "tbl-wrap" }, h("table", { class: "compact" }, h("thead", {}, h("tr", {}, h("th", { text: "Article" }), h("th", { text: "Catégorie" }), h("th", { class: "num", text: "Prix de référence" }))), h("tbody", {}, rows.map(r => r.el))))],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
+
+/* ---------- Payes de la Préfecture ---------- */
+// La paye des fonctionnaires de la Préfecture se calcule à l'heure de service : heures (pointées, ou
+// saisies par la Direction) × taux horaire du grade, au plus 20 h payées et 100 000 € par semaine.
+// Le budget des payes (3,5 M par mois) est lissé : chaque semaine a droit à ce qui reste du mois, divisé
+// par le nombre de semaines qui restent. Si la semaine coûte plus, toutes les payes baissent du même
+// pourcentage et ce qui manque à chacun devient un rappel, versé sur une paye suivante. Une paye versée
+// est imputée sur l'enveloppe de la Préfecture du mois de sa semaine et sort du Trésor.
+// Collections : « fonctionnaires » (les agents), « pointages » (prises et fins de service, écrites par
+// la fonction pointer de la base), « payes » (une par semaine, « 2026-S42 »), « rappels » (rappels saisis
+// à la main ; ceux nés d'un prorata se déduisent des payes versées).
+const PAYE_GRADES = [["Agent de sécurité", 3000], ["Directeur adjoint de la sécurité", 3150], ["Directeur de la sécurité", 3300], ["Agent administratif", 3500], ["Délégué territorial", 3650], ["Inspecteur des finances publiques", 3800], ["Directeur des finances publiques", 4000], ["Secrétaire général de la zone de défense et de sécurité de Paris", 4150], ["Directeur adjoint de cabinet", 4300], ["Directeur de cabinet", 4500], ["Sous-préfet", 4650], ["Préfet délégué", 4800], ["Préfet", 5000]];
+const PAYE_DEF = { service: "Préfecture", budgetMois: 3500000, plafondHeures: 20, payeMax: 100000, grades: PAYE_GRADES.map(([nom, taux]) => ({ nom, taux })) };
+function payeCfg() {
+  const raw = S.config && S.config.payes && typeof S.config.payes === "object" ? S.config.payes : {};
+  const c = Object.assign({}, PAYE_DEF, raw);
+  if (!Array.isArray(c.grades) || !c.grades.length) c.grades = PAYE_DEF.grades.slice();
+  c.grades = c.grades.filter(g => g && String(g.nom || "").trim()).map(g => ({ nom: String(g.nom).trim(), taux: Math.max(0, Math.round(Number(g.taux) || 0)) }));
+  ["budgetMois", "plafondHeures", "payeMax"].forEach(x => { const v = Number(c[x]); c[x] = Number.isFinite(v) && v >= 0 ? v : PAYE_DEF[x]; });
+  if (!String(c.service || "").trim()) c.service = PAYE_DEF.service;
+  return c;
+}
+const payeSvc = () => payeCfg().service;
+const gradeTaux = g => { const x = payeCfg().grades.find(z => norm(z.nom) === norm(g)); return x ? x.taux : 0; };
+const gradeRang = g => payeCfg().grades.findIndex(z => norm(z.nom) === norm(g));
+const payeMaxOf = c => (Number(c.payeMax) > 0 ? Number(c.payeMax) : Infinity);
+// Heures : « 12 h 30 », lues aussi en « 12h30 », « 12:30 », « 12,5 » ou « 45 min ».
+const fmtH = h => { const m = Math.round((Number(h) || 0) * 60); return `${Math.floor(m / 60)} h ${pad(m % 60)}`; };
+const fmtHr = d => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+function parseH(v) {
+  const s = String(v == null ? "" : v).trim().toLowerCase().replace(/\s+/g, "");
+  if (!s) return null;
+  let m = /^(\d+)(?:h|:)(\d{1,2})?(?:min|mn|m)?$/.exec(s);
+  if (m) return +m[1] + (m[2] ? Math.min(59, +m[2]) / 60 : 0);
+  m = /^(\d+(?:[.,]\d+)?)(?:h|heures?)?$/.exec(s);
+  if (m) return Number(m[1].replace(",", "."));
+  m = /^(\d+)(?:min|mn|m)$/.exec(s);
+  if (m) return +m[1] / 60;
+  return NaN;
+}
+const roundH = h => Math.round((Number(h) || 0) * 60) / 60;
+const semKey = d => keyOf(d, "semaine");
+const pyNo = k => "PY-" + String(k || "").replace(/-/g, "");
+const pctC = c => (Math.round((Number(c) || 0) * 1000) / 10).toLocaleString("fr-FR") + " %";
+// Semaines d'un mois : celles dont le jeudi tombe dans le mois (comme les semaines ISO).
+function semainesDuMois(m) {
+  const b = bounds(m); if (!b) return [];
+  const out = [], end = b.end.getTime() + 7 * 864e5;
+  for (let d = new Date(b.start.getFullYear(), b.start.getMonth(), b.start.getDate() - 6); d.getTime() <= end; d.setDate(d.getDate() + 7)) { const k = semKey(d); if (moisDe(k) === m && !out.includes(k)) out.push(k); }
+  return out.sort();
+}
+const semPrec = k => { const b = bounds(k); return b ? semKey(new Date(b.start.getFullYear(), b.start.getMonth(), b.start.getDate() - 3)) : k; };
+const semSuiv = k => { const b = bounds(k); return b ? semKey(new Date(b.start.getFullYear(), b.start.getMonth(), b.start.getDate() + 10)) : k; };
+
+/* Pointages */
+const ptActifs = () => (S.pointages || []).filter(p => p && !p.annule && p.debut);
+const ptFinT = p => (p.fin ? new Date(p.fin).getTime() : Date.now());
+const ptDuree = p => Math.max(0, (ptFinT(p) - new Date(p.debut).getTime()) / 3600e3);
+const ptLong = p => ptDuree(p) > 12 && !p.verifie;
+function ptDans(p, k) {
+  const b = bounds(k); if (!b) return 0;
+  const s = Math.max(new Date(p.debut).getTime(), b.start.getTime()), e = Math.min(ptFinT(p), b.end.getTime() + 1);
+  return e > s ? (e - s) / 3600e3 : 0;
+}
+// Heures pointées par un compte Discord pendant une semaine (un service à cheval sur deux semaines est partagé).
+function ptSemaine(discordId, k) {
+  const out = { h: 0, open: null, verif: 0, list: [] };
+  if (!discordId) return out;
+  for (const p of ptActifs()) {
+    if (p.discordId !== discordId) continue;
+    const x = ptDans(p, k); if (x <= 0) continue;
+    out.h += x; out.list.push(p);
+    if (!p.fin) out.open = p;
+    if (ptLong(p)) out.verif++;
+  }
+  out.h = roundH(out.h);
+  out.list.sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
+  return out;
+}
+const ptOuvert = discordId => (discordId ? ptActifs().find(p => p.discordId === discordId && !p.fin) || null : null);
+
+/* Fonctionnaires */
+const foncOf = id => (S.fonctionnaires || []).find(f => f.id === id) || null;
+const foncByDiscord = d => (d ? (S.fonctionnaires || []).find(f => f.discordId === d && f.actif !== false) || (S.fonctionnaires || []).find(f => f.discordId === d) || null : null);
+const foncTri = (a, b) => (gradeRang(b.grade) - gradeRang(a.grade)) || String(a.nom || "").localeCompare(String(b.nom || ""), "fr");
+const foncs = () => (S.fonctionnaires || []).slice().sort(foncTri);
+const ptNom = p => { const f = foncByDiscord(p.discordId); return (f && f.nom) || p.nom || p.discordId || "Agent"; };
+
+/* Payes versées */
+const payeOf = k => (S.payes || []).find(p => p.id === k) || null;
+const payeVersee = p => !!p && p.statut === "versee";
+const payesVersees = () => (S.payes || []).filter(payeVersee);
+const payeTotal = p => (p.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0) + (p.rappels || []).reduce((t, r) => t + (Number(r.verse) || 0), 0);
+const payesDuMois = m => payesVersees().filter(p => moisDe(p.semaine || p.id) === m);
+// Demandes « budget salaires » de la Préfecture reprises dans une paye : comptées par la paye, pas deux fois.
+const payeRepris = () => new Set(payesVersees().filter(p => p.reprise && p.reprise.demandeId).map(p => p.reprise.demandeId));
+function payesImpute(service, m) {
+  if (norm(service) !== norm(payeSvc())) return { total: 0, list: [] };
+  const list = payesDuMois(m);
+  return { total: list.reduce((t, p) => t + payeTotal(p), 0), list };
+}
+
+/* Rappels : ceux nés d'un prorata se lisent sur les payes versées, les autres sont saisis à la main.
+   Ce qui en a été versé se lit aussi sur les payes : rien n'est compté deux fois. */
+function rappelsTous() {
+  const docs = new Map((S.rappels || []).map(r => [r.id, r])), out = [];
+  for (const p of payesVersees()) for (const l of p.lignes || []) {
+    const reste = Math.round((Number(l.brut) || 0) - (Number(l.verse) || 0));
+    if (reste <= 0) continue;
+    const id = `auto-${p.id}-${l.fid}`, o = docs.get(id);
+    out.push({ id, auto: true, fid: l.fid, nom: l.nom, grade: l.grade, semaine: p.id, montant: reste, heures: null,
+      motif: `Prorata de la paye de la semaine ${(bounds(p.id) || {}).week || p.id} (${Math.round((Number(p.coef) || 0) * 100)} % versés)`,
+      at: p.verseeLe, annule: !!(o && o.annule), annuleMotif: (o && o.motif) || "", annuleParNom: (o && o.parNom) || "" });
+  }
+  for (const r of S.rappels || []) if (!String(r.id).startsWith("auto-")) out.push(Object.assign({}, r, { auto: false, montant: Math.round(Number(r.montant) || 0), annule: r.statut === "annule" }));
+  const paid = new Map(), where = new Map();
+  for (const p of payesVersees()) for (const x of p.rappels || []) { paid.set(x.rid, (paid.get(x.rid) || 0) + (Number(x.verse) || 0)); if (!where.has(x.rid)) where.set(x.rid, []); where.get(x.rid).push(p.id); }
+  for (const r of out) { r.verse = paid.get(r.id) || 0; r.versePar = where.get(r.id) || []; r.reste = r.annule ? 0 : Math.max(0, r.montant - r.verse); }
+  return out.sort((a, b) => String(b.semaine).localeCompare(String(a.semaine)) || String(a.nom || "").localeCompare(String(b.nom || ""), "fr"));
+}
+const rappelsDus = () => rappelsTous().filter(r => r.reste > 0);
+// Ce qu'un agent a déjà eu pour une semaine (paye versée et rappels saisis) : borne les nouveaux rappels.
+function droitsSemaine(fid, k) {
+  const p = payeOf(k), l = payeVersee(p) ? (p.lignes || []).find(z => z.fid === fid) : null;
+  const man = (S.rappels || []).filter(r => !String(r.id).startsWith("auto-") && r.fid === fid && r.semaine === k && r.statut !== "annule");
+  const f = foncOf(fid);
+  return { ligne: l, heures: (l ? Number(l.heuresPayees) || 0 : 0) + man.reduce((t, r) => t + (Number(r.heures) || 0), 0),
+    montant: (l ? Number(l.brut) || 0 : 0) + man.reduce((t, r) => t + (Number(r.montant) || 0), 0), taux: l && Number(l.taux) ? Number(l.taux) : gradeTaux(f && f.grade) };
+}
+
+/* Calcul d'une semaine */
+function payeLignesPrep(k, p) {
+  const c = payeCfg(), saisie = (p && p.saisie) || {}, max = payeMaxOf(c);
+  return foncs().filter(f => f.actif !== false || saisie[f.id] || ptSemaine(f.discordId, k).h > 0).map(f => {
+    const taux = gradeTaux(f.grade), pt = f.discordId ? ptSemaine(f.discordId, k) : null, man = saisie[f.id];
+    const manH = man && man.heures != null && man.heures !== "" && Number.isFinite(Number(man.heures)) ? Math.max(0, Number(man.heures)) : null;
+    const heures = roundH(manH != null ? manH : pt ? pt.h : 0), hp = roundH(Math.min(heures, Number(c.plafondHeures) || 0));
+    const brut = Math.min(Math.round(hp * taux), max);
+    return { fid: f.id, nom: f.nom || "", grade: f.grade || "", discordId: f.discordId || "", taux, heuresPointees: pt ? pt.h : null, heures, manuel: manH != null,
+      note: (man && man.note) || "", heuresPayees: hp, brut, enCours: !!(pt && pt.open), aVerifier: pt ? pt.verif : 0, plafonne: brut < Math.round(hp * taux) };
+  });
+}
+function payeBudget(k, p) {
+  const c = payeCfg(), m = moisDe(k), bm = Math.max(0, Math.round(Number(c.budgetMois) || 0));
+  const deja = payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0), reste = bm - deja;
+  const semaines = semainesDuMois(m).filter(w => w === k || (w > k && !payeVersee(payeOf(w))));
+  const n = Math.max(1, semaines.length), lisse = Math.max(0, Math.floor(reste / n));
+  const cap = envCap(c.service, m), used = (envUse(m)[norm(c.service)] || 0) - (payeVersee(p) ? payeTotal(p) : 0);
+  const envReste = cap ? Math.max(0, cap - used) : null;
+  const imp = p && p.budgetImpose != null && p.budgetImpose !== "" && Number.isFinite(Number(p.budgetImpose)) ? Math.max(0, Math.round(Number(p.budgetImpose))) : null;
+  let dispo = lisse, limite = "lisse";
+  if (imp != null) { dispo = Math.min(imp, Math.max(0, reste)); limite = imp > Math.max(0, reste) ? "mois" : "impose"; }
+  if (envReste != null && envReste < dispo) { dispo = envReste; limite = "enveloppe"; }
+  return { mois: m, budgetMois: bm, deja, reste, semaines, n, lisse, envCap: cap || 0, envReste, impose: imp, dispo: Math.max(0, dispo), limite };
+}
+function payeCalc(k) {
+  const p = payeOf(k);
+  if (payeVersee(p)) {
+    const lignes = p.lignes || [], rappels = p.rappels || [], sum = (l, f) => l.reduce((t, x) => t + (Number(x[f]) || 0), 0);
+    return { k, p, versee: true, lignes, rappels, budget: p.budget || {}, coef: p.coef == null ? 1 : Number(p.coef), coefRappels: p.coefRappels == null ? 1 : Number(p.coefRappels),
+      totalDu: sum(lignes, "brut"), totalVerse: sum(lignes, "verse"), totalRappels: sum(rappels, "verse"), total: payeTotal(p) };
+  }
+  const lignes = payeLignesPrep(k, p), budget = payeBudget(k, p);
+  const totalDu = lignes.reduce((t, l) => t + l.brut, 0);
+  const coef = totalDu > budget.dispo ? (totalDu ? budget.dispo / totalDu : 1) : 1;
+  lignes.forEach(l => { l.verse = coef < 1 ? Math.floor(l.brut * coef) : l.brut; l.reste = l.brut - l.verse; });
+  const totalVerse = lignes.reduce((t, l) => t + l.verse, 0);
+  // Les rappels passent après les payes de la semaine, avec ce qui reste du budget.
+  const excl = new Set((p && p.rappelsExclus) || []), dus = rappelsDus().filter(r => String(r.semaine) < k);
+  const left = Math.max(0, budget.dispo - totalVerse), totR = dus.filter(r => !excl.has(r.id)).reduce((t, r) => t + r.reste, 0);
+  const coefRappels = coef < 1 ? 0 : totR > left ? (totR ? left / totR : 1) : 1;
+  const rappels = dus.map(r => ({ rid: r.id, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif, du: r.reste, inclus: !excl.has(r.id), verse: excl.has(r.id) ? 0 : coefRappels < 1 ? Math.floor(r.reste * coefRappels) : r.reste }));
+  const totalRappels = rappels.reduce((t, r) => t + r.verse, 0);
+  return { k, p, versee: false, lignes, rappels, budget, coef, coefRappels, totalDu, totalVerse, totalRappels, total: totalVerse + totalRappels };
+}
+
+/* Écritures de la paye */
+async function payeSet(k, patch) {
+  const p = payeOf(k);
+  if (payeVersee(p)) { toast("Cette paye est déjà versée : annulez d’abord le versement pour la modifier.", true); return false; }
+  const base = Object.assign({ semaine: k, mois: moisDe(k), statut: "preparation", saisie: {}, rappelsExclus: [], budgetImpose: null, at: nowISO() }, p || {});
+  delete base.id;
+  return write(() => S.db.doc("payes/" + k).set(Object.assign(base, patch, { modifieLe: nowISO(), modifieParNom: S.agentName || "" })));
+}
+async function payeHeures(k, fid, raw) {
+  const v = parseH(raw), p = payeOf(k), saisie = Object.assign({}, (p && p.saisie) || {});
+  const l = payeLignesPrep(k, p).find(x => x.fid === fid);
+  if (v != null && !(Number.isFinite(v) && v >= 0 && v <= 168)) { toast("Heures invalides : écrivez par exemple 12 h 30, 12:30 ou 12,5.", true); return false; }
+  if (v == null || (l && l.heuresPointees != null && roundH(v) === l.heuresPointees)) delete saisie[fid];
+  else saisie[fid] = { heures: roundH(v), note: (saisie[fid] && saisie[fid].note) || "", le: nowISO(), parNom: S.agentName || "" };
+  return payeSet(k, { saisie });
+}
+function payeLigneSnap(l) {
+  return { fid: l.fid, nom: l.nom, grade: l.grade, discordId: l.discordId || "", taux: l.taux, heuresPointees: l.heuresPointees, heures: l.heures, manuel: !!l.manuel, heuresPayees: l.heuresPayees, brut: l.brut, verse: l.verse, reste: l.reste };
+}
+function payeVerserDlg(k) {
+  if (!writer()) return;
+  const x = payeCalc(k), lignes = x.lignes.filter(l => l.heures > 0 || l.brut > 0), r0 = x.rappels.filter(r => r.inclus && r.verse > 0);
+  if (!lignes.length && !r0.length) { toast("Rien à verser cette semaine : aucune heure de service.", true); return; }
+  const enCours = lignes.filter(l => l.enCours), verif = lignes.filter(l => l.aVerifier), sansTaux = lignes.filter(l => !l.taux && l.heures > 0);
+  const manque = lignes.reduce((t, l) => t + l.reste, 0), rest = x.rappels.filter(r => r.inclus).reduce((t, r) => t + (r.du - r.verse), 0);
+  const notes = [
+    enCours.length ? h("p", { class: "py-note", text: `${enCours.length} agent${plural(enCours.length)} encore en service (${enCours.map(l => l.nom).join(", ")}) : ses heures sont comptées jusqu’à maintenant. Les heures pointées après le versement se paieront en rappel.` }) : null,
+    verif.length ? h("p", { class: "py-note", text: `Service de plus de 12 h à vérifier pour ${verif.map(l => l.nom).join(", ")} : corrigez le pointage avant de verser si c’est un oubli.` }) : null,
+    sansTaux.length ? h("p", { class: "py-note", text: `Sans taux horaire (grade absent du barème) : ${sansTaux.map(l => l.nom).join(", ")}. Leur paye vaut 0 €.` }) : null,
+    x.coef < 1 ? h("p", { class: "py-note", text: `Le budget de la semaine ne couvre que ${Math.round(x.coef * 100)} % des payes : chaque agent reçoit ${Math.round(x.coef * 100)} % de sa paye, et ${money(manque)} deviennent des rappels à verser plus tard.` }) : null,
+    rest > 0 ? h("p", { class: "py-note", text: `${money(rest)} de rappels restent dus après cette paye.` }) : null].filter(Boolean);
+  const go = h("button", { class: "btn ink small", type: "button", text: `Verser ${money(x.total)}` });
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    const now = payeCalc(k); // recalcul au dernier moment : un pointage a pu arriver
+    const p = payeOf(k), b = now.budget;
+    const body = {
+      semaine: k, mois: b.mois, statut: "versee",
+      lignes: now.lignes.filter(l => l.heures > 0 || l.brut > 0).map(payeLigneSnap),
+      rappels: now.rappels.filter(r => r.inclus && r.verse > 0).map(r => ({ rid: r.rid, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif || "", du: r.du, verse: r.verse })),
+      budget: { mois: b.mois, budgetMois: b.budgetMois, deja: b.deja, reste: b.reste, semaines: b.n, lisse: b.lisse, envCap: b.envCap, envReste: b.envReste, impose: b.impose, dispo: b.dispo, limite: b.limite },
+      bareme: { plafondHeures: payeCfg().plafondHeures, payeMax: payeCfg().payeMax },
+      coef: now.coef, coefRappels: now.coefRappels, totalDu: now.totalDu, totalVerse: now.totalVerse, totalRappels: now.totalRappels,
+      saisie: (p && p.saisie) || {}, rappelsExclus: (p && p.rappelsExclus) || [], budgetImpose: p && p.budgetImpose != null ? p.budgetImpose : null,
+      verseeLe: nowISO(), verseePar: S.uid || null, verseeParNom: S.agentName || "", at: (p && p.at) || nowISO()
+    };
+    if (!(await write(() => S.db.doc("payes/" + k).set(body)))) { go.disabled = false; return; }
+    toast(`Paye de la semaine ${(bounds(k) || {}).week} versée : ${money(payeTotal(body))}.`);
+    showDocImage(payeDoc(k), () => { closeDialog(); renderPayes(true); });
+  });
+  openDialog({ eyebrow: `Payes de la Préfecture · ${periodLabel(k)}`, title: "Verser la paye de la semaine ?", wide: true,
+    body: [kv([["Agents payés", String(lignes.filter(l => l.verse > 0).length)], ["Payes dues", money(x.totalDu)], ["Budget de la semaine", money(x.budget.dispo)],
+      ["Prorata", x.coef < 1 ? `${pctC(x.coef)} versés` : "aucun"], ["Payes versées", money(x.totalVerse)], r0.length ? ["Rappels versés", `${money(x.totalRappels)} · ${r0.length} rappel${plural(r0.length)}`] : null,
+      ["Total versé", money(x.total), "tot"], ["Imputé sur", `Enveloppe ${payeSvc()} · ${moisNom(x.budget.mois)}`]]), notes,
+      h("p", { class: "hint", style: "margin:10px 0 0", text: "La paye versée ne se modifie plus. Une erreur se corrige par un rappel, ou en annulant le versement." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function payeAnnulerDlg(k) {
+  if (!writer()) return;
+  const p = payeOf(k); if (!payeVersee(p)) return;
+  const nes = (p.lignes || []).filter(l => (Number(l.brut) || 0) > (Number(l.verse) || 0)).map(l => `auto-${k}-${l.fid}`);
+  const paidLater = payesVersees().filter(q => q.id !== k && (q.rappels || []).some(r => nes.includes(r.rid))).map(q => q.id);
+  if (paidLater.length) { toast(`Des rappels nés de cette paye sont déjà versés (semaine ${paidLater.map(z => (bounds(z) || {}).week).join(", ")}) : annulez d’abord ces payes-là.`, true); return; }
+  const motif = h("input", { autocomplete: "off", placeholder: "Erreur d’heures, mauvais grade…" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn danger small", type: "button", text: p.reprise ? "Annuler la reprise" : "Annuler le versement" });
+  go.addEventListener("click", async () => {
+    if (!motif.value.trim()) { err.textContent = "Indiquez pourquoi."; motif.focus(); return; }
+    go.disabled = true;
+    const ok = p.reprise ? await write(() => S.db.doc("payes/" + k).delete())
+      : await write(() => S.db.doc("payes/" + k).set({ semaine: k, mois: p.mois || moisDe(k), statut: "preparation", saisie: p.saisie || {}, rappelsExclus: p.rappelsExclus || [], budgetImpose: p.budgetImpose == null ? null : p.budgetImpose, at: p.at || nowISO(),
+        annulations: (p.annulations || []).concat([{ le: nowISO(), parNom: S.agentName || "", motif: motif.value.trim(), total: payeTotal(p), verseeLe: p.verseeLe }]) }));
+    if (!ok) { go.disabled = false; return; }
+    closeDialog(); toast(p.reprise ? "Reprise annulée : la demande compte de nouveau seule." : "Versement annulé : la paye est de nouveau en préparation.");
+  });
+  openDialog({ eyebrow: `Payes de la Préfecture · ${periodLabel(k)}`, title: p.reprise ? "Annuler la reprise de cette paye ?" : "Annuler le versement de la paye ?",
+    body: [h("p", { style: "margin:0", text: p.reprise ? `La paye reprise de la demande ${p.reprise.no || ""} est retirée des payes ; la demande accordée compte de nouveau sur l’enveloppe.` : `${money(payeTotal(p))} reviennent dans le budget ${deMois(p.mois || moisDe(k))}. Les heures saisies sont gardées : la paye repasse en préparation.` }), field("py-ann-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Retour" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => motif.focus(), 30);
+}
+
+/* Documents : état de paye de la semaine et bulletin d'un agent */
+function payeDoc(k) {
+  const x = payeCalc(k), b = bounds(k) || {}, ls = x.lignes.filter(l => l.heures > 0 || l.brut > 0);
+  const doc = {
+    kind: "ÉTAT DE PAYE", no: pyNo(k), date: x.versee ? "Versée le " + longDate(new Date(x.p.verseeLe)) : "En préparation au " + longDate(new Date()),
+    meta: [["Service", payeSvc()], ["Semaine", periodLabel(k)], ["Budget", `Enveloppe ${payeSvc()} · ${moisNom(moisDe(k))}`], ["Agents", String(ls.length)]],
+    lines: [["Payes dues", money(x.totalDu)], ["Budget de la semaine", money((x.budget || {}).dispo)]].concat(x.coef < 1 ? [[`Prorata appliqué (${pctC(x.coef)} versés)`, "− " + money(x.totalDu - x.totalVerse)]] : [])
+      .concat(x.totalRappels ? [[`Rappels versés (${x.rappels.filter(r => r.verse > 0).length})`, money(x.totalRappels)]] : []),
+    total: [x.versee ? "Total versé" : "Total à verser", money(x.total)],
+    stamp: x.versee ? ["VERSÉE", "ok"] : ["EN PRÉPARATION", "info"],
+    note: x.coef < 1 ? `Budget de la semaine insuffisant : ${money(x.totalDu - x.totalVerse)} restent dus aux agents en rappel.` : "", noteTitle: "Prorata",
+    footer: `Paye à l’heure de service, au taux horaire du grade, ${payeCfg().plafondHeures} h et ${money(payeCfg().payeMax)} au plus par semaine. Préfecture de police · Direction des impôts et cotisations.`,
+    discord: { channel: "services", mentions: [svcMention(payeSvc())].filter(Boolean), text: `**État de paye ${pyNo(k)}** · ${payeSvc()} · semaine ${b.week} : ${money(x.total)} ${x.versee ? "versés" : "à verser"} à ${ls.length} agent${plural(ls.length)}${x.coef < 1 ? ` (prorata ${Math.round(x.coef * 100)} %)` : ""}.` },
+    table: { title: "Agents", head: ["Agent", "Heures", "Taux", "Versé"], cols: [0, 0.52, 0.68, 0.84], align: ["left", "right", "right", "right"], mono: [1, 2, 3], strong0: true,
+      rows: ls.map(l => ({ cells: [l.nom, fmtH(l.heuresPayees), money(l.taux), money(l.verse)], sub: [l.grade, l.reste > 0 ? `${money(l.reste)} en rappel` : ""].filter(Boolean).join(" · ") }))
+        .concat(x.rappels.filter(r => r.verse > 0).map(r => ({ cells: [`Rappel · ${r.nom}`, "—", "—", money(r.verse)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}` }))) },
+    tableFirst: true
+  };
+  return doc;
+}
+function bulletinDoc(k, fid) {
+  const x = payeCalc(k), l = x.lignes.find(z => z.fid === fid), f = foncOf(fid) || {}, rs = x.rappels.filter(r => r.fid === fid && r.verse > 0);
+  const nom = (l && l.nom) || f.nom || "Agent", total = (l ? Number(l.verse) || 0 : 0) + rs.reduce((t, r) => t + r.verse, 0);
+  const lines = l ? [["Heures de service", fmtH(l.heures)], [`Heures payées (au plus ${payeCfg().plafondHeures} h)`, fmtH(l.heuresPayees)], ["Taux horaire du grade", money(l.taux)], ["Paye de la semaine", money(l.brut), true]]
+    .concat(l.reste > 0 ? [[`Prorata du budget (${pctC(x.coef)} versés)`, "− " + money(l.reste)]] : []) : [];
+  rs.forEach(r => lines.push([`Rappel · semaine ${(bounds(r.semaine) || {}).week || r.semaine}`, money(r.verse)]));
+  const reste = rappelsDus().filter(r => r.fid === fid).reduce((t, r) => t + r.reste, 0);
+  return {
+    kind: "BULLETIN DE PAYE", no: pyNo(k) + "-" + norm(nom).split(" ").map(w => w[0] || "").join("").toUpperCase().slice(0, 3), date: x.versee ? "Versé le " + longDate(new Date(x.p.verseeLe)) : "Prévision au " + longDate(new Date()),
+    meta: [["Agent", nom], ["Grade", (l && l.grade) || f.grade || "—"], ["Service", payeSvc()], ["Semaine", periodLabel(k)]],
+    lines, total: [x.versee ? "Net versé" : "Net à verser", money(total)], stamp: x.versee ? ["VERSÉ", "ok"] : ["PRÉVISION", "info"],
+    note: reste > 0 ? `${money(reste)} restent dus en rappel de salaire ; ils seront versés sur une prochaine paye.` : "", noteTitle: "Rappels",
+    footer: "Préfecture de police · Direction des impôts et cotisations.",
+    discord: { channel: "services", mentions: [f.discordId ? `<@${f.discordId}>` : ""].filter(Boolean), text: `**Bulletin de paye** · ${nom} · semaine ${(bounds(k) || {}).week} : ${money(total)} ${x.versee ? "versés" : "prévus"}.` }
+  };
+}
+
+/* Page Payes */
+function payeSemOptions(sel, k) {
+  const now = semKey(new Date()), st = startTime(), out = [];
+  let w = semSuiv(now);
+  for (let i = 0; i < 26; i++) { const b = bounds(w); if (!b || (b.end.getTime() < st && i > 2)) break; out.push(w); w = semPrec(w); }
+  for (const p of S.payes || []) if (/-S\d{2}$/.test(p.id) && !out.includes(p.id)) out.push(p.id);
+  if (k && !out.includes(k)) out.push(k);
+  out.sort().reverse();
+  fillSelect(sel, out.map(z => { const p = payeOf(z); return [z, `${periodLabel(z)}${z === now ? " · en cours" : ""}${payeVersee(p) ? " · versée" : p ? " · en préparation" : ""}`]; }), k);
+  sel.value = k;
+}
+function payeGo(k) { S.payeSem = k; renderPayes(true); }
+function repriseCandidats() {
+  const done = payeRepris();
+  return S.demandes.filter(dm => dm.nature === "salaires" && norm(dm.service) === norm(payeSvc()) && demAccorde(dm) > 0 && !done.has(dm.id));
+}
+function renderPayes(force) {
+  if (S.tab !== "payes") return;
+  const w = writer();
+  ["#py-reglages", "#py-rappel", "#py-fonc-new"].forEach(id => { $(id).hidden = !w; });
+  const box = $("#py-table");
+  const need = ["fonctionnaires", "payes", "pointages", "rappels", "config", "demandes", "arbitrages"];
+  if (!S.connected || need.some(n => !S.loaded.has(n))) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
+  if (!force && box.contains(document.activeElement) && document.activeElement.matches("input")) return;
+  const c = payeCfg(), k = S.payeSem = S.payeSem || semKey(new Date()), x = payeCalc(k), b = x.budget || {}, wk = (bounds(k) || {}).week;
+  $("#py-intro").textContent = `La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service × taux horaire du grade, ${c.plafondHeures} h et ${money(c.payeMax)} au plus par semaine. Elle est déduite de l’enveloppe ${c.service} ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.`;
+  payeSemOptions($("#py-sem"), k);
+  // Reprise des salaires déjà versés par une demande « budget salaires ».
+  const rep = repriseCandidats();
+  fill($("#py-reprise"), rep.map(dm => h("div", { class: "py-note info", style: "margin:0 0 12px" },
+    h("b", { text: "Salaires déjà versés à reprendre. " }), `La demande ${dmNo(dm)} « ${dm.objet || "Budget salaires"} » (${money(demAccorde(dm))}, accordée ${(S.arbitrages[dm.id] || {}).at ? "le " + longDate(new Date(S.arbitrages[dm.id].at)) : ""}) a payé des agents de la Préfecture. Reprenez-la dans les payes : chaque salaire est rattaché à son agent et compté dans le budget des payes, une seule fois. `,
+    w ? h("button", { class: "btn ink small", type: "button", style: "margin-top:8px", onclick: () => openReprise(dm.id), text: "Reprendre dans les payes" }) : null)));
+  // Chiffres
+  const dus = rappelsDus(), dusT = dus.reduce((t, r) => t + r.reste, 0);
+  setKpi("py-k-budget", money(b.dispo), x.versee ? "utilisé à la paye" : b.limite === "impose" ? "fixé à la main" : b.limite === "enveloppe" ? "limité par l’enveloppe" : b.limite === "mois" ? "reste du mois" : `${b.n} semaine${plural(b.n)} à payer ${deMois(b.mois)}`, b.dispo <= 0 && !x.versee ? "bad" : "");
+  setKpi("py-k-du", money(x.totalDu), `${x.lignes.filter(l => l.heures > 0).length} agent${plural(x.lignes.filter(l => l.heures > 0).length)} · ${fmtH(x.lignes.reduce((t, l) => t + (Number(l.heuresPayees) || 0), 0))} payées`);
+  setKpi("py-k-verse", money(x.total), x.coef < 1 ? `prorata : ${pctC(x.coef)} versés` : x.totalRappels ? `dont ${money(x.totalRappels)} de rappels` : x.versee ? "versé" : "sans prorata", x.coef < 1 ? "warn" : x.versee ? "ok" : "");
+  const bm = payeBudget(k, x.versee ? x.p : null), resteMois = bm.reste - x.total;
+  setKpi("py-k-mois", money(resteMois), `${MoisNom(bm.mois)}, après cette paye`, resteMois < 0 ? "bad" : "");
+  setKpi("py-k-rappels", money(dusT), dus.length ? `${dus.length} rappel${plural(dus.length)} · ${[...new Set(dus.map(r => r.fid))].length} agent${plural([...new Set(dus.map(r => r.fid))].length)}` : "aucun", dusT ? "warn" : "");
+  // État de la semaine
+  fill($("#py-etat"), x.versee ? chip(["Versée", "ok"]) : x.p ? chip(["En préparation", "info"]) : chip(["Pas commencée", "muted"]),
+    x.versee ? h("span", { class: "hint", text: ` le ${fmtDateTime(new Date(x.p.verseeLe))}${x.p.verseeParNom ? " par " + x.p.verseeParNom : ""}${x.p.reprise ? " · reprise de la demande " + (x.p.reprise.no || "") : ""}` }) : null);
+  const bl = [];
+  if (x.versee) {
+    bl.push(h("span", {}, "Budget utilisé : ", h("b", { text: money(b.dispo) }), b.limite === "reprise" ? " (salaires repris)" : b.limite === "impose" ? " (fixé à la main)" : b.limite === "enveloppe" ? " (limité par l’enveloppe)" : ` (lissé sur ${b.semaines || 1} semaine${plural(b.semaines || 1)})`));
+    if (x.coef < 1) bl.push(h("span", { class: "warn", text: `Prorata : ${pctC(x.coef)} versés` }));
+  } else {
+    bl.push(h("span", {}, `Budget des payes ${deMois(b.mois)} : `, h("b", { text: money(b.budgetMois) })), h("span", {}, "déjà versé : ", h("b", { text: money(b.deja) })),
+      h("span", {}, `reste ${money(b.reste)} pour ${b.n} semaine${plural(b.n)} (${b.semaines.map(z => "S" + (bounds(z) || {}).week).join(", ")}) → `, h("b", { text: money(b.lisse) }), " cette semaine"));
+    if (b.limite === "impose" || b.limite === "mois") bl.push(h("span", { class: "warn" }, `Budget fixé à la main : ${money(b.dispo)}`, w ? h("button", { class: "linkbtn", type: "button", style: "margin-left:6px", onclick: () => payeSet(k, { budgetImpose: null }), text: "revenir au budget lissé" }) : null));
+    if (b.limite === "enveloppe") bl.push(h("span", { class: "warn", text: `Limité par l’enveloppe ${c.service} : il n’y reste que ${money(b.envReste)}` }));
+    if (w) bl.push(h("button", { class: "linkbtn", type: "button", onclick: () => openPayeBudget(k), text: "Changer le budget de la semaine" }));
+  }
+  fill($("#py-budget"), h("div", { class: "py-budget" }, bl));
+  // Tableau des agents
+  const shown = x.lignes;
+  if (!(S.fonctionnaires || []).length && !x.versee) {
+    fill(box, h("div", { class: "empty" }, h("span", { text: "Aucun fonctionnaire enregistré. Ajoutez les agents de la Préfecture avec leur grade et, s’ils pointent, leur compte Discord : leurs heures de service rempliront la paye." }), w ? h("button", { class: "btn small", type: "button", onclick: () => openFoncForm(null), text: "Ajouter un fonctionnaire" }) : null));
+  } else if (!shown.length) fill(box, h("div", { class: "empty", text: "Personne n’a été payé cette semaine." }));
+  else {
+    const edit = w && !x.versee;
+    const rows = shown.map(l => {
+      const flags = [];
+      if (l.enCours) flags.push(chip(["En service", "info"]));
+      if (l.aVerifier) flags.push(chip(["Plus de 12 h à vérifier", "warn"]));
+      if (l.manuel) flags.push(chip(["Heures saisies", "muted"]));
+      if (!l.taux) flags.push(chip(["Grade sans taux", "bad"]));
+      if (l.plafonne) flags.push(chip([`Plafond ${money(c.payeMax)}`, "muted"]));
+      let hc;
+      if (edit) {
+        const inp = h("input", { class: "py-h", inputmode: "decimal", autocomplete: "off", "data-fid": l.fid, "aria-label": `Heures retenues · ${l.nom}`, placeholder: l.heuresPointees != null ? fmtH(l.heuresPointees) : "0 h 00" });
+        inp.value = l.manuel ? fmtH(l.heures) : "";
+        hc = h("td", { "data-l": "Heures retenues" }, h("div", { class: "py-h-row" }, inp, l.manuel ? h("button", { class: "icon-btn", type: "button", title: "Revenir aux heures pointées", "aria-label": `Revenir aux heures pointées · ${l.nom}`, onclick: () => payeHeures(k, l.fid, ""), text: "×" }) : null),
+          h("span", { class: "small-meta", text: l.manuel ? (l.heuresPointees != null ? `pointé ${fmtH(l.heuresPointees)}` : "saisi à la main") : l.heuresPointees != null ? "heures pointées" : "pas de pointeuse" }));
+      } else hc = h("td", { class: "num", "data-l": "Heures retenues", text: fmtH(l.heures) });
+      return h("tr", { class: l.heures > 0 || l.brut > 0 ? null : "py-off" },
+        h("td", {}, h("button", { class: "linkbtn py-nom", type: "button", onclick: () => openFonc(l.fid, k), text: l.nom || "Agent" }), h("span", { class: "small-meta", text: l.grade || "sans grade" }), flags.length ? h("div", { class: "py-flags" }, flags) : null),
+        h("td", { class: "num", "data-l": "Pointées", text: l.heuresPointees != null ? fmtH(l.heuresPointees) : "—" }),
+        hc,
+        h("td", { class: "num", "data-l": "Taux", text: l.taux ? money(l.taux) : "—" }),
+        h("td", { class: "num", "data-l": "Payées", text: fmtH(l.heuresPayees) }),
+        h("td", { class: "num", "data-l": "Paye due", text: money(l.brut) }),
+        h("td", { class: "num", "data-l": "Versée", style: "font-weight:650", text: money(l.verse) }),
+        h("td", { class: "num py-reste", "data-l": "Rappel", text: l.reste > 0 ? money(l.reste) : "" }));
+    });
+    const sumH = shown.reduce((t, l) => t + (Number(l.heuresPayees) || 0), 0);
+    fill(box, h("div", { class: "tbl-wrap" }, h("table", { class: "compact py-tbl" },
+      h("thead", {}, h("tr", {}, ["Agent", "Pointées", "Retenues", "Taux", "Payées", "Paye due", "Versée", "Rappel"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+      h("tbody", {}, rows),
+      h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), h("td", {}), h("td", {}), h("td", {}), h("td", { class: "num", "data-l": "Payées", text: fmtH(sumH) }), h("td", { class: "num", "data-l": "Paye due", text: money(x.totalDu) }), h("td", { class: "num", "data-l": "Versée", text: money(x.totalVerse) }), h("td", { class: "num py-reste", "data-l": "Rappel", text: x.totalDu - x.totalVerse > 0 ? money(x.totalDu - x.totalVerse) : "" }))))),
+      edit ? h("p", { class: "hint", style: "margin:8px 0 0", text: `Les heures pointées remplissent la paye toutes seules. Tapez d’autres heures pour un agent sans pointeuse ou pour corriger (12 h 30, 12:30 ou 12,5). Au-delà de ${c.plafondHeures} h, les heures ne sont pas payées.` }) : null);
+  }
+  // Rappels de cette paye
+  const rr = x.rappels.filter(r => x.versee || r.du > 0);
+  fill($("#py-rappels"), rr.length ? [h("h4", { style: "margin:16px 0 6px", text: x.versee ? "Rappels versés avec cette paye" : "Rappels à verser avec cette paye" }),
+    h("div", { class: "tbl-wrap", style: "margin-top:0" }, h("table", { class: "compact" },
+      h("thead", {}, h("tr", {}, ["Agent", "Semaine", "Motif", "Dû", "Versé", x.versee ? "" : "Verser"].map((t, i) => h("th", { class: [3, 4].includes(i) ? "num" : null, text: t })))),
+      h("tbody", {}, rr.map(r => {
+        let cb = null;
+        if (!x.versee) { cb = h("input", { type: "checkbox", "aria-label": `Verser le rappel de ${r.nom}`, disabled: !w }); cb.checked = r.inclus; cb.addEventListener("change", () => { const p = payeOf(k), ex = new Set((p && p.rappelsExclus) || []); if (cb.checked) ex.delete(r.rid); else ex.add(r.rid); payeSet(k, { rappelsExclus: [...ex] }); }); }
+        return h("tr", {}, h("td", { text: r.nom }), h("td", { text: "S" + ((bounds(r.semaine) || {}).week || "?") }), h("td", { text: r.motif || "" }),
+          h("td", { class: "num", text: money(r.du) }), h("td", { class: "num", text: money(r.verse) }), h("td", {}, cb));
+      })))),
+    !x.versee && x.coefRappels < 1 && x.rappels.some(r => r.inclus) ? h("p", { class: "hint", text: x.coef < 1 ? "Le budget ne couvre pas les payes de la semaine : les rappels attendent une prochaine paye." : `Il ne reste que ${money(Math.max(0, b.dispo - x.totalVerse))} pour les rappels : ils sont versés à ${Math.round(x.coefRappels * 100)} %, le reste attend.` }) : null] : []);
+  // Actions
+  const acts = [];
+  if (!x.versee && w) acts.push(h("button", { class: "btn ink", type: "button", disabled: !x.total, onclick: () => payeVerserDlg(k), text: x.total ? `Verser la paye · ${money(x.total)}` : "Verser la paye" }));
+  if (x.lignes.length || x.rappels.length) acts.push(h("button", { class: "btn ghost", type: "button", onclick: () => showDocImage(payeDoc(k), () => { closeDialog(); }), text: "État de paye" }));
+  if (x.versee && w) acts.push(h("button", { class: "btn danger small", type: "button", onclick: () => payeAnnulerDlg(k), text: x.p.reprise ? "Annuler la reprise" : "Annuler le versement" }));
+  if (!x.versee) acts.push(h("span", { class: "hint", text: `Imputée sur l’enveloppe ${c.service} ${deMois(moisDe(k))}.` }));
+  fill($("#py-actions"), acts);
+  $("#py-actions").style.marginTop = acts.length ? "14px" : "";
+  renderFoncList(k);
+  renderRappelList();
+  renderPayeHist();
+}
+function renderFoncList(k) {
+  const w = writer(), all = foncs(), act = all.filter(f => f.actif !== false), old = all.filter(f => f.actif === false);
+  const sans = [...new Set(ptActifs().filter(p => ptDans(p, k) > 0 && !foncByDiscord(p.discordId)).map(p => p.discordId))];
+  $("#py-fonc-sub").textContent = act.length ? `${act.length} agent${plural(act.length)} en service à la Préfecture · ${act.filter(f => f.discordId).length} relié${plural(act.filter(f => f.discordId).length)} à la pointeuse.` : "Les agents payés par la Préfecture, leur grade et leur compte de pointeuse.";
+  fill($("#py-fonc"),
+    sans.length ? h("div", { class: "py-note", style: "margin:0 0 10px" }, h("b", { text: "Pointages sans fiche. " }), sans.map((d, i) => { const p = ptActifs().find(z => z.discordId === d); const hh = ptSemaine(d, k).h; return h("span", {}, i ? " · " : "", `${(p && p.nom) || d} (${fmtH(hh)})`, w ? h("button", { class: "linkbtn", type: "button", style: "margin-left:4px", onclick: () => openFoncForm(null, { nom: (p && p.nom) || "", discordId: d }), text: "créer la fiche" }) : null); }), " : ces heures ne sont pas payées tant que l’agent n’a pas de fiche.") : null,
+    act.length ? h("ul", { class: "ent-list" }, act.map(f => {
+      const pt = ptSemaine(f.discordId, k), taux = gradeTaux(f.grade);
+      return h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFonc(f.id, k), text: f.nom || "Agent" }),
+          h("span", { class: "meta", text: `${f.grade || "sans grade"}${taux ? " · " + money(taux) + "/h" : " · pas de taux"} · ${f.discordId ? (pt.h ? fmtH(pt.h) + " pointées" : "pointeuse reliée") : "heures saisies à la main"}` })),
+        pt.open ? chip(["En service", "info"]) : h("span", {}),
+        w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openFoncForm(f), text: "Modifier" }) : h("span", {}));
+    })) : h("div", { class: "empty", text: "Aucun fonctionnaire enregistré." }),
+    old.length ? h("p", { class: "hint", style: "margin:10px 0 0" }, `Retirés des effectifs : `, old.map((f, i) => [i ? ", " : "", h("button", { class: "linkbtn", type: "button", onclick: () => openFonc(f.id, k), text: f.nom })])) : null);
+}
+function renderRappelList() {
+  const all = rappelsTous(), dus = all.filter(r => r.reste > 0), done = all.filter(r => r.reste <= 0).slice(0, 6);
+  $("#py-rap-sub").textContent = dus.length ? `${money(dus.reduce((t, r) => t + r.reste, 0))} dus à ${[...new Set(dus.map(r => r.fid))].length} agent${plural([...new Set(dus.map(r => r.fid))].length)}. Ils sont proposés sur la prochaine paye.` : "Ce qui reste dû aux agents : prorata, heures non payées, corrections.";
+  const li = r => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openRappel(r.id), text: `${r.nom || "Agent"} · semaine ${(bounds(r.semaine) || {}).week || "?"}` }),
+      h("span", { class: "meta", text: `${r.motif || "Rappel"} · ${money(r.montant)}${r.verse ? " · " + money(r.verse) + " versés" : ""}` })),
+    chip(r.annule ? ["Annulé", "muted"] : r.reste <= 0 ? ["Versé", "ok"] : r.verse ? ["En partie versé", "warn"] : ["Dû", "warn"]),
+    h("span", { class: "mono", text: r.reste > 0 ? money(r.reste) : "" }));
+  fill($("#py-rap"), all.length ? h("ul", { class: "ent-list" }, dus.map(li), done.map(li)) : h("div", { class: "empty", text: "Aucun rappel. Un rappel naît d’un prorata, ou se saisit pour des heures non payées (Ajouter un rappel)." }));
+}
+function renderPayeHist() {
+  const list = payesVersees().slice().sort((a, b) => String(b.id).localeCompare(String(a.id)));
+  fill($("#py-hist"), list.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
+    h("thead", {}, h("tr", {}, ["Semaine", "Mois", "Agents", "Payes versées", "Prorata", "Rappels", "Total", "Versée le"].map((t, i) => h("th", { class: [2, 3, 4, 5, 6].includes(i) ? "num" : null, text: t })))),
+    h("tbody", {}, list.map(p => h("tr", {},
+      h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => { payeGo(p.id); window.scrollTo({ top: 0, behavior: "smooth" }); }, text: periodLabel(p.id) }), p.reprise ? h("span", { class: "small-meta", text: "reprise de " + (p.reprise.no || "la demande") }) : null),
+      h("td", { text: MoisNom(p.mois || moisDe(p.id)) }),
+      h("td", { class: "num", text: String((p.lignes || []).length) }),
+      h("td", { class: "num", text: money((p.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0)) }),
+      h("td", { class: "num", text: Number(p.coef) < 1 ? pctC(p.coef) : "—" }),
+      h("td", { class: "num", text: (p.rappels || []).length ? money((p.rappels || []).reduce((t, r) => t + (Number(r.verse) || 0), 0)) : "—" }),
+      h("td", { class: "num", style: "font-weight:650", text: money(payeTotal(p)) }),
+      h("td", { text: p.verseeLe ? fmtDate(new Date(p.verseeLe)) : "—" })))))) : h("div", { class: "empty", text: "Aucune paye versée pour l’instant." }));
+}
+$("#py-sem").addEventListener("change", e => payeGo(e.target.value));
+$("#py-prev").addEventListener("click", () => payeGo(semPrec(S.payeSem || semKey(new Date()))));
+$("#py-next").addEventListener("click", () => payeGo(semSuiv(S.payeSem || semKey(new Date()))));
+$("#py-table").addEventListener("change", e => { const i = e.target.closest("input[data-fid]"); if (i && writer()) payeHeures(S.payeSem, i.dataset.fid, i.value).then(() => renderPayes(true)); });
+$("#py-table").addEventListener("keydown", e => { const i = e.target.closest("input[data-fid]"); if (i && e.key === "Enter") { e.preventDefault(); i.blur(); } });
+$("#py-fonc-new").addEventListener("click", () => openFoncForm(null));
+$("#py-rappel").addEventListener("click", () => openRappelForm({}));
+$("#py-reglages").addEventListener("click", () => openPayeReglages());
+
+function openPayeBudget(k) {
+  if (!writer()) return;
+  const p = payeOf(k), b = payeBudget(k, p);
+  const v = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" }); v.value = String(b.impose != null ? b.impose : b.lisse);
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Fixer ce budget" });
+  go.addEventListener("click", async () => {
+    const n = Math.round(Number(v.value));
+    if (!(n >= 0)) { err.textContent = "Indiquez un montant."; v.focus(); return; }
+    if (n > Math.max(0, b.reste)) { err.textContent = `Il ne reste que ${money(b.reste)} dans le budget des payes ${deMois(b.mois)}.`; return; }
+    go.disabled = true;
+    if (await payeSet(k, { budgetImpose: n === b.lisse ? null : n })) { closeDialog(); toast("Budget de la semaine enregistré."); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: `Payes de la Préfecture · ${periodLabel(k)}`, title: "Budget de la semaine",
+    body: [h("p", { style: "margin:0 0 10px", text: `Lissé, la semaine a droit à ${money(b.lisse)} : ${money(b.reste)} restent ${deMois(b.mois)} pour ${b.n} semaine${plural(b.n)}. En cas d’urgence, donnez-lui plus (au plus ${money(Math.max(0, b.reste))}) : les semaines suivantes auront moins.` }),
+      h("div", { class: "field" }, h("label", { for: "py-bud", text: "Budget de cette semaine" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(v, { id: "py-bud" }))), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), b.impose != null ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await payeSet(k, { budgetImpose: null })) closeDialog(); }, text: "Revenir au budget lissé" }) : null, h("span", { class: "spacer" }), go].filter(Boolean) });
+  setTimeout(() => v.focus(), 30);
+}
+
+/* Barème et budget des payes */
+function openPayeReglages() {
+  if (!writer()) return;
+  const c = payeCfg();
+  const svc = h("select", {}, cfg().services.concat(cfg().services.some(s => norm(s) === norm(c.service)) ? [] : [c.service]).map(s => h("option", { value: s, text: s }))); svc.value = c.service;
+  const bud = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" }); bud.value = String(c.budgetMois);
+  const plaf = h("input", { type: "number", min: "0", step: "0.5", inputmode: "decimal" }); plaf.value = String(c.plafondHeures);
+  const max = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" }); max.value = String(c.payeMax);
+  const rowsBox = h("div", { class: "art-rows" }), rows = [];
+  const addRow = g => {
+    const nom = h("input", { autocomplete: "off", placeholder: "Grade", "aria-label": "Grade" }), taux = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "aria-label": "Taux horaire" });
+    nom.value = g ? g.nom : ""; taux.value = g ? String(g.taux) : "";
+    const r = { orig: g ? g.nom : null, nom, taux };
+    const rm = h("button", { class: "btn ghost small art-rm", type: "button", "aria-label": "Retirer ce grade", text: "×" });
+    r.el = h("div", { class: "art-row", style: "grid-template-columns:minmax(0,1fr) 150px 32px" }, nom, h("div", { class: "money", "data-cur": cur() }, taux), rm);
+    rm.addEventListener("click", () => { const used = r.orig && (S.fonctionnaires || []).some(f => f.actif !== false && norm(f.grade) === norm(r.orig)); if (used) { err.textContent = `Des agents ont le grade « ${r.orig} » : changez d’abord leur grade.`; return; } rows.splice(rows.indexOf(r), 1); r.el.remove(); });
+    rows.push(r); rowsBox.append(r.el);
+  };
+  c.grades.forEach(addRow);
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const grades = rows.map(r => ({ orig: r.orig, nom: r.nom.value.trim(), taux: Math.round(Number(r.taux.value) || 0) })).filter(g => g.nom);
+    if (!grades.length) { err.textContent = "Gardez au moins un grade."; return; }
+    if (new Set(grades.map(g => norm(g.nom))).size !== grades.length) { err.textContent = "Deux grades portent le même nom."; return; }
+    if (grades.some(g => !(g.taux > 0))) { err.textContent = "Chaque grade a besoin d’un taux horaire."; return; }
+    const B = Math.round(Number(bud.value)), P = Number(plaf.value), M = Math.round(Number(max.value));
+    if (!(B >= 0) || !(P > 0 && P <= 168) || !(M >= 0)) { err.textContent = "Vérifiez le budget, le plafond d’heures et la paye maximum."; return; }
+    go.disabled = true;
+    const payes = Object.assign({}, (S.config || {}).payes || {}, { service: svc.value, budgetMois: B, plafondHeures: P, payeMax: M, grades: grades.map(g => ({ nom: g.nom, taux: g.taux })) });
+    if (!(await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { payes, updatedAt: nowISO() }))))) { go.disabled = false; return; }
+    // Grade renommé : les fiches des agents suivent.
+    for (const g of grades) if (g.orig && norm(g.orig) !== norm(g.nom)) for (const f of (S.fonctionnaires || []).filter(z => norm(z.grade) === norm(g.orig))) { const body = Object.assign({}, f, { grade: g.nom, modifieLe: nowISO() }); delete body.id; await write(() => S.db.doc("fonctionnaires/" + f.id).set(body)); }
+    closeDialog(); toast("Barème et budget des payes enregistrés.");
+  });
+  openDialog({ eyebrow: "Payes de la Préfecture", title: "Barème et budget", wide: true,
+    body: [h("div", { class: "row2" }, field("py-r-svc", "Enveloppe imputée", svc), h("div", { class: "field" }, h("label", { for: "py-r-bud", text: "Budget des payes par mois" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(bud, { id: "py-r-bud" })))),
+      h("div", { class: "row2" }, field("py-r-plaf", "Heures payées au plus par semaine", plaf), h("div", { class: "field" }, h("label", { for: "py-r-max", text: "Paye maximum par semaine" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(max, { id: "py-r-max" })))),
+      h("h4", { style: "margin:14px 0 2px", text: "Grades et taux horaires" }), h("p", { class: "hint", style: "margin:0", text: "Du premier grade au plus haut. Le taux horaire multiplie les heures de service de l’agent." }),
+      rowsBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addRow(null), text: "Ajouter un grade" }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+
+/* Fiche d'un fonctionnaire */
+function openFoncForm(f, preset, back) {
+  if (!writer()) return;
+  preset = preset || {};
+  const c = payeCfg();
+  const nom = h("input", { autocomplete: "off", placeholder: "Prénom Nom" }); nom.value = f ? f.nom || "" : preset.nom || "";
+  const grade = h("select", {}, c.grades.slice().reverse().map(g => h("option", { value: g.nom, text: `${g.nom} · ${money(g.taux)}/h` })));
+  const gv = f ? f.grade : preset.grade;
+  if (gv && !c.grades.some(g => norm(g.nom) === norm(gv))) grade.append(h("option", { value: gv, text: `${gv} · pas dans le barème` }));
+  grade.value = gv ? (c.grades.find(g => norm(g.nom) === norm(gv)) || { nom: gv }).nom : c.grades[0].nom;
+  const dsel = h("input", { autocomplete: "off", inputmode: "numeric", placeholder: "Identifiant Discord (facultatif)", list: "py-agents-dl" }); dsel.value = f ? f.discordId || "" : preset.discordId || "";
+  const dl = h("datalist", { id: "py-agents-dl" }, (S.agents || []).map(a => h("option", { value: a.discord_id, text: `${a.nom || "Sans nom"} · ${ROLE_LABEL[a.role] || a.role}` })));
+  const acces = h("input", { type: "checkbox", id: "py-f-acces" }); acces.checked = true;
+  const accesRow = h("label", { class: "switch", for: "py-f-acces" }, acces, "Lui donner l’accès « Pointeuse » au guichet");
+  const note = h("input", { autocomplete: "off", placeholder: "Matricule, remarque… (facultatif)" }); note.value = f ? f.note || "" : "";
+  const info = h("p", { class: "hint", style: "margin:4px 0 0" });
+  const sync = () => {
+    const id = dsel.value.replace(/\s/g, ""), known = (S.agents || []).find(a => a.discord_id === id);
+    accesRow.hidden = !S.admin || !/^\d{15,21}$/.test(id) || !!known;
+    info.textContent = !id ? "Sans compte Discord, ses heures se saisissent à la main dans la paye." : known ? `Compte « ${known.nom || id} » · ${ROLE_LABEL[known.role] || known.role} : il pointe déjà depuis le guichet.` : /^\d{15,21}$/.test(id) ? "Ce compte n’a pas encore accès au guichet." : "Un identifiant Discord compte 17 à 20 chiffres.";
+  };
+  dsel.addEventListener("input", sync); sync();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: f ? "Enregistrer" : "Ajouter" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const n = nom.value.trim(), d = dsel.value.replace(/\s/g, "");
+    if (!n) { err.textContent = "Indiquez le nom de l’agent."; nom.focus(); return; }
+    if (d && !/^\d{15,21}$/.test(d)) { err.textContent = "Un identifiant Discord compte 17 à 20 chiffres."; dsel.focus(); return; }
+    const dup = d && (S.fonctionnaires || []).find(z => z.discordId === d && z.actif !== false && (!f || z.id !== f.id));
+    if (dup) { err.textContent = `Ce compte Discord est déjà relié à ${dup.nom}.`; return; }
+    const same = (S.fonctionnaires || []).find(z => norm(z.nom) === norm(n) && z.actif !== false && (!f || z.id !== f.id));
+    if (same) { err.textContent = `${same.nom} a déjà une fiche.`; return; }
+    go.disabled = true;
+    const ref = f ? S.db.doc("fonctionnaires/" + f.id) : S.db.collection("fonctionnaires").doc();
+    const body = Object.assign({}, f || {}, { nom: n, grade: grade.value, discordId: d, note: note.value.trim(), actif: f ? f.actif !== false : true, at: f ? f.at || nowISO() : nowISO(), byNom: f ? f.byNom || S.agentName || "" : S.agentName || "", modifieLe: f ? nowISO() : null });
+    delete body.id;
+    if (!(await write(() => ref.set(body)))) { go.disabled = false; return; }
+    if (d && S.admin && !accesRow.hidden && acces.checked) {
+      const { error } = await S.sb.from("agents").insert({ discord_id: d, nom: n, role: "pointeuse" });
+      if (error) toast(/check constraint/i.test(error.message || "") ? "Fiche enregistrée. Pour l’accès Pointeuse, exécutez d’abord supabase/v18_payes_pointeuse.sql." : error.code === "23505" ? "Fiche enregistrée ; ce compte avait déjà un accès." : "Fiche enregistrée, mais l’accès Pointeuse a été refusé : " + error.message, true);
+      else { toast(`${n} ajouté, avec l’accès Pointeuse.`); loadAgents(); }
+    } else toast(f ? "Fiche modifiée." : `${n} ajouté aux fonctionnaires.`);
+    if (back) back(); else closeDialog();
+  });
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Annuler" })];
+  if (f && f.actif !== false) foot.push(h("button", { class: "btn danger small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, f, { actif: false, retireLe: nowISO(), modifieLe: nowISO() }); delete body.id; if (await write(() => S.db.doc("fonctionnaires/" + f.id).set(body))) { closeDialog(); toast(`${f.nom} retiré des effectifs : ses payes passées sont gardées.`); } }, text: "Retirer des effectifs" }));
+  if (f && f.actif === false) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, f, { actif: true, retireLe: null, modifieLe: nowISO() }); delete body.id; if (await write(() => S.db.doc("fonctionnaires/" + f.id).set(body))) { closeDialog(); toast(`${f.nom} de nouveau dans les effectifs.`); } }, text: "Remettre dans les effectifs" }));
+  foot.push(h("span", { class: "spacer" }), go);
+  openDialog({ eyebrow: "Payes de la Préfecture", title: f ? `Modifier · ${f.nom}` : "Ajouter un fonctionnaire",
+    body: [h("div", { class: "row2" }, field("py-f-nom", "Nom", nom), field("py-f-grade", "Grade", grade)), field("py-f-discord", "Compte Discord pour la pointeuse", dsel), dl, info, accesRow, field("py-f-note", "Note", note), err], foot });
+  setTimeout(() => nom.focus(), 30);
+}
+function openFonc(fid, k0) {
+  const f = foncOf(fid); if (!f) return;
+  const k = k0 || S.payeSem || semKey(new Date()), w = writer(), c = payeCfg(), reopen = () => openFonc(fid, k);
+  const taux = gradeTaux(f.grade), pt = ptSemaine(f.discordId, k), x = payeCalc(k), l = x.lignes.find(z => z.fid === fid);
+  const rap = rappelsTous().filter(r => r.fid === fid), dus = rap.filter(r => r.reste > 0);
+  const hist = payesVersees().map(p => ({ p, l: (p.lignes || []).find(z => z.fid === fid), r: (p.rappels || []).filter(z => z.fid === fid) })).filter(z => z.l || z.r.length).sort((a, b) => String(b.p.id).localeCompare(String(a.p.id)));
+  const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
+  const verseeK = payeVersee(payeOf(k));
+  const ptRows = pt.list.map(p => {
+    const kd = ptDans(p, k), full = ptDuree(p);
+    return h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${fmtDateTime(new Date(p.debut))} → ${p.fin ? fmtHr(new Date(p.fin)) : "en cours"}` }),
+        h("span", { class: "meta", text: [Math.abs(kd - full) > 0.01 ? `${fmtH(kd)} cette semaine sur ${fmtH(full)}` : fmtH(full), p.source === "direction" ? "saisi par la Direction" : "", (p.corrections || []).length ? "corrigé" : "", ptLong(p) ? "plus de 12 h, à vérifier" : ""].filter(Boolean).join(" · ") })),
+      p.fin ? h("span", { class: "mono", text: fmtH(kd) }) : chip(["En service", "info"]),
+      w ? h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openPtForm(p, null, reopen), text: p.fin ? "Corriger" : "Clore" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openPtAnnuler(p, reopen), text: "Annuler" })) : h("span", {}));
+  });
+  const body = [
+    h("div", { class: "minis" },
+      mk("Grade", f.grade || "—", taux ? `${money(taux)} de l’heure` : "pas de taux au barème", taux ? "" : "bad"),
+      mk("Heures de la semaine", fmtH(l ? l.heures : pt.h), l && l.manuel ? "saisies à la main" : f.discordId ? "pointées" : "à saisir dans la paye"),
+      mk(x.versee ? "Versé" : "Paye prévue", money(l ? l.verse : 0), l ? `${fmtH(l.heuresPayees)} payées${l.reste > 0 ? " · " + money(l.reste) + " en rappel" : ""}` : "pas d’heures", x.versee ? "ok" : ""),
+      mk("Rappels dus", money(dus.reduce((t, r) => t + r.reste, 0)), dus.length ? `${dus.length} rappel${plural(dus.length)}` : "aucun", dus.length ? "warn" : "")),
+    f.discordId ? sec(`Pointages · ${periodLabel(k)}`, pt.list.length ? h("ul", { class: "ent-list" }, ptRows) : h("p", { class: "muted", style: "margin:0", text: "Aucun pointage cette semaine." }),
+      verseeK && w ? h("p", { class: "hint", style: "margin:6px 0 0", text: "La paye de cette semaine est versée : corriger un pointage ne change pas ce qui a été versé. Ajoutez un rappel pour payer des heures en plus." }) : null,
+      w ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => openPtForm(null, { discordId: f.discordId, nom: f.nom, k }, reopen), text: "Ajouter un pointage" }) : null)
+      : sec("Heures", h("p", { class: "muted", style: "margin:0", text: "Pas de compte Discord relié : ses heures de service se saisissent dans la paye de chaque semaine." })),
+    hist.length ? sec(`Payes · ${hist.length}`, h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+      h("thead", {}, h("tr", {}, ["Semaine", "Heures payées", "Versé", "Rappels versés", "Reste"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+      h("tbody", {}, hist.map(z => h("tr", {}, h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => { closeDialog(); payeGo(z.p.id); }, text: periodLabel(z.p.id) })),
+        h("td", { class: "num", text: z.l ? fmtH(z.l.heuresPayees) : "—" }), h("td", { class: "num", text: z.l ? money(z.l.verse) : "—" }),
+        h("td", { class: "num", text: z.r.length ? money(z.r.reduce((t, r) => t + (Number(r.verse) || 0), 0)) : "—" }),
+        h("td", { class: "num", text: z.l && Number(z.l.reste) > 0 ? money(z.l.reste) : "—" }))))))) : null,
+    rap.length ? sec(`Rappels · ${rap.length}`, h("ul", { class: "ent-list" }, rap.map(r => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openRappel(r.id, reopen), text: `Semaine ${(bounds(r.semaine) || {}).week || "?"} · ${money(r.montant)}` }), h("span", { class: "meta", text: r.motif || "" })),
+      chip(r.annule ? ["Annulé", "muted"] : r.reste <= 0 ? ["Versé", "ok"] : ["Dû", "warn"]), h("span", { class: "mono", text: r.reste > 0 ? money(r.reste) : "" }))))) : null,
+    kv([["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"], f.note ? ["Note", f.note] : null, f.actif === false ? ["Retiré des effectifs", f.retireLe ? longDate(new Date(f.retireLe)) : "oui"] : null])
+  ];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semPrec(k)), text: "‹ Semaine" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semSuiv(k)), text: "Semaine ›" }), h("span", { class: "spacer" })];
+  if (l || x.rappels.some(r => r.fid === fid && r.verse > 0)) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(bulletinDoc(k, fid), reopen), text: "Bulletin" }));
+  if (w) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openRappelForm({ fid, back: reopen }), text: "Ajouter un rappel" }), h("button", { class: "btn ink small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: "Modifier" }));
+  openDialog({ eyebrow: `Fonctionnaire · ${periodLabel(k)}`, title: f.nom || "Agent", wide: true, stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : pt.open ? stamp(["EN SERVICE", "info"]) : null, body, foot });
+}
+
+/* Pointages : corrections de la Direction */
+function openPtForm(pt, preset, back) {
+  if (!writer()) return;
+  preset = preset || {};
+  const deb = h("input", { type: "datetime-local" }), fin = h("input", { type: "datetime-local" });
+  const b = preset.k ? bounds(preset.k) : null, d0 = b ? new Date(Math.min(Date.now(), b.end.getTime()) - 2 * 3600e3) : new Date(Date.now() - 2 * 3600e3);
+  deb.value = toLocalInput(pt ? new Date(pt.debut) : d0);
+  fin.value = pt ? toLocalInput(pt.fin ? new Date(pt.fin) : new Date()) : toLocalInput(new Date(d0.getTime() + 2 * 3600e3));
+  const motif = h("input", { autocomplete: "off", placeholder: pt ? (pt.fin ? "Erreur d’heure, oubli de fin de service…" : "Oubli de fin de service") : "Service fait sans pointer" });
+  const dur = h("p", { class: "hint", style: "margin:4px 0 0" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const sync = () => { const s = new Date(deb.value), e = new Date(fin.value); const ok = !isNaN(s) && !isNaN(e) && e > s; dur.textContent = ok ? `Durée : ${fmtH((e - s) / 3600e3)}${(e - s) / 3600e3 > 12 ? " · plus de 12 h, vérifiez" : ""}${payeVersee(payeOf(semKey(s))) ? ` · la paye de la semaine ${(bounds(semKey(s)) || {}).week} est déjà versée : la correction ne la change pas, payez la différence par un rappel` : ""}` : ""; };
+  deb.addEventListener("input", sync); fin.addEventListener("input", sync); sync();
+  const go = h("button", { class: "btn ink small", type: "button", text: pt ? (pt.fin ? "Enregistrer la correction" : "Clore le service") : "Ajouter le pointage" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const s = new Date(deb.value), e = fin.value ? new Date(fin.value) : null;
+    if (isNaN(s)) { err.textContent = "Indiquez le début du service."; deb.focus(); return; }
+    if (!e || isNaN(e)) { err.textContent = "Indiquez la fin du service."; fin.focus(); return; }
+    if (e <= s) { err.textContent = "La fin doit venir après le début."; fin.focus(); return; }
+    if (e.getTime() > Date.now() + 5 * 60e3) { err.textContent = "La fin ne peut pas être dans le futur."; fin.focus(); return; }
+    if (!motif.value.trim()) { err.textContent = "Indiquez le motif : il reste dans le dossier."; motif.focus(); return; }
+    const other = ptActifs().find(z => z.discordId === (pt ? pt.discordId : preset.discordId) && (!pt || z.id !== pt.id) && new Date(z.debut).getTime() < e.getTime() && ptFinT(z) > s.getTime());
+    if (other) { err.textContent = `Ce service chevauche celui du ${fmtDateTime(new Date(other.debut))} : corrigez plutôt celui-là.`; return; }
+    go.disabled = true;
+    const ref = pt ? S.db.doc("pointages/" + pt.id) : S.db.collection("pointages").doc();
+    const body = pt ? Object.assign({}, pt, { debut: s.toISOString(), fin: e.toISOString(), verifie: true, corrections: (pt.corrections || []).concat([{ le: nowISO(), parNom: S.agentName || "", motif: motif.value.trim(), avant: { debut: pt.debut, fin: pt.fin || null } }]) })
+      : { discordId: preset.discordId, nom: preset.nom || "", debut: s.toISOString(), fin: e.toISOString(), source: "direction", note: motif.value.trim(), verifie: true, at: nowISO(), parNom: S.agentName || "" };
+    delete body.id;
+    if (!(await write(() => ref.set(body)))) { go.disabled = false; return; }
+    toast(pt ? (pt.fin ? "Pointage corrigé." : "Service clos.") : "Pointage ajouté.");
+    if (back) back(); else closeDialog();
+  });
+  openDialog({ eyebrow: pt ? `Pointage · ${ptNom(pt)}` : `Pointage · ${preset.nom || ""}`, title: pt ? (pt.fin ? "Corriger le pointage" : "Clore le service") : "Ajouter un pointage",
+    body: [h("div", { class: "row2" }, field("pt-f-deb", "Début du service", deb), field("pt-f-fin", "Fin du service", fin)), dur, field("pt-f-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => (pt && !pt.fin ? fin : motif).focus(), 30);
+}
+function openPtAnnuler(pt, back) {
+  if (!writer()) return;
+  const motif = h("input", { autocomplete: "off", placeholder: "Pointage en double, erreur…" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn danger small", type: "button", text: "Annuler le pointage" });
+  go.addEventListener("click", async () => {
+    if (!motif.value.trim()) { err.textContent = "Indiquez pourquoi."; motif.focus(); return; }
+    go.disabled = true;
+    const body = Object.assign({}, pt, { annule: true, annuleLe: nowISO(), annuleParNom: S.agentName || "", annuleMotif: motif.value.trim(), fin: pt.fin || nowISO() }); delete body.id;
+    if (!(await write(() => S.db.doc("pointages/" + pt.id).set(body)))) { go.disabled = false; return; }
+    toast("Pointage annulé : ses heures ne comptent plus."); if (back) back(); else closeDialog();
+  });
+  openDialog({ eyebrow: `Pointage · ${ptNom(pt)}`, title: "Annuler ce pointage ?", body: [h("p", { style: "margin:0", text: `${fmtDateTime(new Date(pt.debut))} → ${pt.fin ? fmtHr(new Date(pt.fin)) : "en cours"} · ${fmtH(ptDuree(pt))}. Ses heures ne compteront plus dans la paye.` }), field("pt-a-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Retour" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => motif.focus(), 30);
+}
+
+/* Rappels de salaire */
+function openRappelForm(preset) {
+  if (!writer()) return;
+  preset = preset || {};
+  const c = payeCfg(), list = foncs();
+  if (!list.length) { toast("Ajoutez d’abord les fonctionnaires.", true); return; }
+  const agent = h("select", {}, list.map(f => h("option", { value: f.id, text: `${f.nom} · ${f.grade || "sans grade"}${f.actif === false ? " (retiré)" : ""}` }))); agent.value = preset.fid || list[0].id;
+  const now = semKey(new Date()), weeks = [];
+  for (let w = semPrec(now), i = 0; i < 16; i++, w = semPrec(w)) weeks.push(w);
+  for (const p of payesVersees()) if (!weeks.includes(p.id) && p.id < now) weeks.push(p.id);
+  weeks.sort().reverse();
+  const sem = h("select", {}, weeks.map(w => h("option", { value: w, text: periodLabel(w) + (payeVersee(payeOf(w)) ? " · paye versée" : "") })));
+  sem.value = preset.k && weeks.includes(preset.k) ? preset.k : (weeks.find(w => payeVersee(payeOf(w))) || weeks[0]);
+  const mode = h("select", {}, h("option", { value: "heures", text: "Des heures non payées" }), h("option", { value: "montant", text: "Un montant" }));
+  const hrs = h("input", { inputmode: "decimal", autocomplete: "off", placeholder: "Ex. : 15 h" }), mt = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric" });
+  if (preset.heures) hrs.value = fmtH(preset.heures);
+  const motif = h("input", { autocomplete: "off", placeholder: "Heures non payées sur l’avance, oubli de pointage…" }); motif.value = preset.motif || "";
+  const calc = h("div", { class: "py-note info" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const hrsF = field("py-rp-h", "Heures à payer", hrs), mtF = h("div", { class: "field" }, h("label", { for: "py-rp-m", text: "Montant du rappel" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(mt, { id: "py-rp-m" })));
+  let res = null;
+  const sync = () => {
+    const fid = agent.value, k = sem.value, d = droitsSemaine(fid, k), maxH = Math.max(0, roundH((Number(c.plafondHeures) || 0) - d.heures)), maxM = Math.max(0, payeMaxOf(c) - d.montant);
+    hrsF.hidden = mode.value !== "heures"; mtF.hidden = mode.value !== "montant";
+    let montant = 0, heures = null, note = "";
+    if (mode.value === "heures") {
+      const v = parseH(hrs.value);
+      if (v != null && Number.isFinite(v) && v > 0) { heures = roundH(Math.min(v, maxH)); montant = Math.min(Math.round(heures * d.taux), maxM === Infinity ? Infinity : maxM); if (v > maxH) note = ` Au-delà de ${c.plafondHeures} h dans la semaine, les heures ne sont pas payées : ${fmtH(heures)} retenues.`; }
+    } else { const v = Math.round(Number(mt.value) || 0); montant = Math.min(v, maxM); if (v > maxM) note = ` La paye d’une semaine ne dépasse pas ${money(c.payeMax)} : rappel ramené à ${money(montant)}.`; }
+    if (!Number.isFinite(montant)) montant = 0;
+    res = { fid, k, heures, montant, taux: d.taux };
+    calc.replaceChildren(h("b", { text: `Semaine ${(bounds(k) || {}).week} : ` }), d.ligne ? `${fmtH(d.heures)} déjà payées pour ${money(d.montant)}. ` : `rien de payé${payeVersee(payeOf(k)) ? " à cet agent" : " (paye pas versée)"}${d.heures ? ", " + fmtH(d.heures) + " en rappels" : ""}. `,
+      `Reste payable : ${fmtH(maxH)}${maxM !== Infinity ? ", " + money(maxM) : ""}. Taux : ${d.taux ? money(d.taux) + "/h" : "aucun"}.`, note, h("br"), "Rappel : ", h("b", { text: money(montant) }));
+  };
+  [agent, sem, mode, hrs, mt].forEach(el => { el.addEventListener("input", sync); el.addEventListener("change", sync); });
+  sync();
+  const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le rappel" });
+  go.addEventListener("click", async () => {
+    err.textContent = ""; sync();
+    if (!(res.montant > 0)) { err.textContent = mode.value === "heures" ? "Indiquez des heures payables (reste payable ci-dessus)." : "Indiquez un montant."; return; }
+    if (!motif.value.trim()) { err.textContent = "Indiquez le motif du rappel."; motif.focus(); return; }
+    go.disabled = true;
+    const f = foncOf(res.fid) || {};
+    const ref = S.db.collection("rappels").doc();
+    if (!(await write(() => ref.set({ fid: res.fid, nom: f.nom || "", grade: f.grade || "", semaine: res.k, heures: res.heures, taux: res.taux, montant: res.montant, motif: motif.value.trim(), origine: "manuel", statut: "du", at: nowISO(), byNom: S.agentName || "" })))) { go.disabled = false; return; }
+    toast(`Rappel de ${money(res.montant)} enregistré : il sera proposé sur la prochaine paye.`);
+    if (preset.back) preset.back(); else closeDialog();
+  });
+  openDialog({ eyebrow: "Payes de la Préfecture", title: "Ajouter un rappel de salaire",
+    body: [h("p", { class: "hint", style: "margin:0 0 8px", text: "Un rappel paie plus tard ce qui est dû pour une semaine passée : heures non payées, oubli de pointage, erreur. Il est versé avec une prochaine paye, dans la limite des heures et de la paye maximum de la semaine concernée." }),
+      h("div", { class: "row2" }, field("py-rp-a", "Agent", agent), field("py-rp-s", "Semaine concernée", sem)), field("py-rp-mode", "Ce qui reste dû", mode), hrsF, mtF, calc, field("py-rp-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: preset.back || closeDialog, text: preset.back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function openRappel(rid, back) {
+  const r = rappelsTous().find(z => z.id === rid); if (!r) return;
+  const w = writer(), reopen = () => openRappel(rid, back);
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Fermer" }), h("span", { class: "spacer" })];
+  if (w && !r.annule && r.reste > 0) foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => rappelAnnulerDlg(r, reopen), text: r.verse ? "Annuler le reste" : "Annuler le rappel" }));
+  if (w && r.annule) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const ok = r.auto ? await write(() => S.db.doc("rappels/" + r.id).delete()) : await write(() => S.db.doc("rappels/" + r.id).set(Object.assign({}, (S.rappels || []).find(z => z.id === r.id) || {}, { statut: "du", annuleLe: null, annuleMotif: null }))); if (ok) { toast("Rappel rétabli."); reopen(); } }, text: "Rétablir le rappel" }));
+  openDialog({ eyebrow: "Rappel de salaire", title: `${r.nom || "Agent"} · semaine ${(bounds(r.semaine) || {}).week || "?"}`, stampEl: stamp(r.annule ? ["ANNULÉ", "muted"] : r.reste <= 0 ? ["VERSÉ", "ok"] : ["DÛ", "warn"]),
+    body: [kv([["Motif", r.motif || "—"], ["Semaine concernée", periodLabel(r.semaine)], r.heures ? ["Heures", `${fmtH(r.heures)} à ${money(r.taux)}/h`] : null, ["Montant", money(r.montant)],
+      ["Déjà versé", r.verse ? `${money(r.verse)} · paye${plural(r.versePar.length)} ${r.versePar.map(z => "S" + ((bounds(z) || {}).week || "?")).join(", ")}` : "rien"], ["Reste dû", money(r.reste), "tot"],
+      r.annule ? ["Annulé", `${r.annuleMotif || ""}${r.annuleParNom ? " · " + r.annuleParNom : ""}`] : null, r.byNom ? ["Saisi par", r.byNom] : null])], foot });
+}
+function rappelAnnulerDlg(r, back) {
+  const motif = h("input", { autocomplete: "off", placeholder: "Déjà payé autrement, erreur…" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn danger small", type: "button", text: "Annuler" });
+  go.addEventListener("click", async () => {
+    if (!motif.value.trim()) { err.textContent = "Indiquez pourquoi."; motif.focus(); return; }
+    go.disabled = true;
+    const ok = r.auto ? await write(() => S.db.doc("rappels/" + r.id).set({ fid: r.fid, nom: r.nom, semaine: r.semaine, origine: "prorata", annule: true, motif: motif.value.trim(), le: nowISO(), parNom: S.agentName || "" }))
+      : await write(() => S.db.doc("rappels/" + r.id).set(Object.assign({}, (S.rappels || []).find(z => z.id === r.id) || {}, { statut: "annule", annuleLe: nowISO(), annuleMotif: motif.value.trim(), annuleParNom: S.agentName || "" })));
+    if (!ok) { go.disabled = false; return; }
+    toast(`Rappel annulé : ${money(r.reste)} ne sont plus dus.`); back();
+  });
+  openDialog({ eyebrow: "Rappel de salaire", title: `Annuler ${money(r.reste)} dus à ${r.nom} ?`, body: [h("p", { style: "margin:0", text: r.verse ? `${money(r.verse)} déjà versés restent acquis.` : "Rien n’a encore été versé sur ce rappel." }), field("py-ra-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+
+/* Reprise des salaires déjà versés par une demande « budget salaires » */
+const GRADE_ABR = { adj: "adjoint", sgdzp: "secretaire general", sgzds: "secretaire general", sgzdsp: "secretaire general", dfp: "directeur finances publiques", ifp: "inspecteur finances publiques" };
+const GRADE_STOP = new Set(["salaire", "salaires", "solde", "partiel", "partielle", "paye", "de", "la", "le", "les", "des", "du", "d", "l", "et", "en", "h", "heure", "heures", "semaine", "pour", "avance"]);
+function gradeGuess(text) {
+  const toks = s => norm(s).split(" ").filter(t => t && !GRADE_STOP.has(t) && !/^\d+(?:h\d*)?$/.test(t)).flatMap(t => (GRADE_ABR[t] || t).split(" "));
+  const tt = toks(text);
+  let best = null, bs = 0;
+  for (const g of payeCfg().grades) {
+    const gt = toks(g.nom); if (!gt.length) continue;
+    const hit = gt.filter(a => tt.some(b => (a.length >= 3 && b.length >= 3) ? (a.startsWith(b) || b.startsWith(a)) : a === b));
+    const full = hit.length === gt.length, lead = !full && hit.length >= 2 && hit.every((a, i) => gt[i] === a);
+    const score = full ? 100 + gt.length : lead ? hit.length : 0;
+    if (score > bs) { bs = score; best = g.nom; }
+  }
+  return best;
+}
+function repriseLignes(dm) {
+  const a = S.arbitrages[dm.id], al = a && Array.isArray(a.lignes) && a.lignes.length ? a.lignes.filter(r => ligneEtat(r) !== "refusee").map(r => ({ designation: r.designation, montant: Math.round((Number(r.quantite) || 0) * (Number(r.prixUnitaire) || 0)) })) : null;
+  return al || (demDetaillee(dm) ? dm.lignes.map(l => ({ designation: l.designation, montant: Math.round((Number(l.quantite) || 0) * (Number(l.prixUnitaire) || 0)) })) : [{ designation: dm.objet || "Salaires", montant: demAccorde(dm) }]);
+}
+function openReprise(id) {
+  if (!writer()) return;
+  const dm = S.demandes.find(d => d.id === id); if (!dm) return;
+  const c = payeCfg(), lignes = repriseLignes(dm), a = S.arbitrages[dm.id] || {};
+  // Semaine : celle écrite dans l'objet (« semaine 41 »), sinon celle de la réception.
+  const yr = new Date(dm.recueAt || dm.createdAt || Date.now()).getFullYear(), mw = /semaine\s*(\d{1,2})/i.exec(`${dm.objet || ""} ${dm.justification || ""}`);
+  const k0 = mw ? `${yr}-S${pad(+mw[1])}` : semKey(new Date(dm.recueAt || dm.createdAt || Date.now()));
+  const weeks = []; for (let w = semSuiv(semKey(new Date())), i = 0; i < 12; i++, w = semPrec(w)) weeks.push(w);
+  if (!weeks.includes(k0)) weeks.push(k0);
+  weeks.sort().reverse();
+  const sem = h("select", {}, weeks.map(w => h("option", { value: w, text: periodLabel(w) + (payeVersee(payeOf(w)) ? " · déjà versée" : "") }))); sem.value = k0;
+  const used = new Set();
+  const rows = lignes.map((l, i) => {
+    const g0 = gradeGuess(l.designation) || c.grades[0].nom;
+    const grade = h("select", { "aria-label": "Grade · " + l.designation }, c.grades.slice().reverse().map(g => h("option", { value: g.nom, text: g.nom }))); grade.value = g0;
+    const ex = (S.fonctionnaires || []).filter(f => f.actif !== false && norm(f.grade) === norm(g0) && !used.has(f.id));
+    if (ex.length === 1) used.add(ex[0].id);
+    const nom = h("input", { autocomplete: "off", "aria-label": "Agent · " + l.designation, list: "py-rep-dl" }); nom.value = ex.length === 1 ? ex[0].nom : "";
+    nom.placeholder = "Nom de l’agent";
+    const hm = /(\d+(?:[.,]\d+)?)\s*h(?:eures?)?\b/i.exec(l.designation);
+    const hrs = h("input", { class: "py-h", inputmode: "decimal", autocomplete: "off", "aria-label": "Heures · " + l.designation });
+    const flag = h("span", { class: "small-meta" });
+    const syncH = (first) => {
+      const t = gradeTaux(grade.value);
+      if (first || !hrs.dataset.touched) hrs.value = hm ? fmtH(Number(hm[1].replace(",", "."))) : t ? fmtH(roundH(l.montant / t)) : "";
+      const hh = parseH(hrs.value), bar = t && Number.isFinite(hh) ? Math.min(Math.round(Math.min(hh, c.plafondHeures) * t), payeMaxOf(c)) : null;
+      flag.textContent = bar == null ? "" : bar === l.montant ? `barème : ${fmtH(Math.min(hh, c.plafondHeures))} × ${money(t)}` : `barème : ${money(bar)} pour ${fmtH(Math.min(hh, c.plafondHeures))} à ${money(t)}/h · versé ${money(l.montant)}`;
+      flag.className = "small-meta" + (bar != null && bar !== l.montant ? " t-warn tone-text" : "");
+    };
+    grade.addEventListener("change", () => syncH(false)); hrs.addEventListener("input", () => { hrs.dataset.touched = "1"; syncH(false); });
+    syncH(true);
+    return { l, grade, nom, hrs, el: h("tr", {}, h("td", {}, h("span", { style: "font-weight:600", text: l.designation }), flag), h("td", {}, grade), h("td", {}, nom), h("td", {}, hrs), h("td", { class: "num", text: money(l.montant) })) };
+  });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: `Reprendre ${money(lignes.reduce((t, l) => t + l.montant, 0))}` });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const k = sem.value, p = payeOf(k);
+    if (payeVersee(p)) { err.textContent = `La paye de la semaine ${(bounds(k) || {}).week} est déjà versée : choisissez une autre semaine, ou annulez-la d’abord.`; return; }
+    const noms = rows.map(r => r.nom.value.trim());
+    if (noms.some(n => !n)) { err.textContent = "Indiquez le nom de chaque agent (une fiche est créée s’il n’en a pas)."; rows[noms.findIndex(n => !n)].nom.focus(); return; }
+    if (new Set(noms.map(norm)).size !== noms.length) { err.textContent = "Un agent figure deux fois : une ligne par agent."; return; }
+    const hs = rows.map(r => parseH(r.hrs.value));
+    if (hs.some(x => !(Number.isFinite(x) && x >= 0))) { err.textContent = "Vérifiez les heures de chaque ligne."; return; }
+    go.disabled = true;
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i], n = noms[i];
+      let f = (S.fonctionnaires || []).find(z => norm(z.nom) === norm(n) && z.actif !== false);
+      if (!f) {
+        const ref = S.db.collection("fonctionnaires").doc();
+        const body = { nom: n, grade: r.grade.value, discordId: "", note: `Fiche créée à la reprise de la demande ${dmNo(dm)}`, actif: true, at: nowISO(), byNom: S.agentName || "", modifieLe: null };
+        if (!(await write(() => ref.set(body)))) { go.disabled = false; return; }
+        f = Object.assign({ id: ref.id }, body);
+      }
+      const t = gradeTaux(r.grade.value), hh = roundH(hs[i]);
+      out.push({ fid: f.id, nom: f.nom, grade: r.grade.value, discordId: f.discordId || "", taux: t, heuresPointees: null, heures: hh, manuel: true, heuresPayees: roundH(Math.min(hh, c.plafondHeures)), brut: r.l.montant, verse: r.l.montant, reste: 0, designation: r.l.designation, reprise: true });
+    }
+    const tot = out.reduce((t, l) => t + l.verse, 0), m = moisDe(k);
+    const body = { semaine: k, mois: m, statut: "versee", lignes: out, rappels: [],
+      budget: { mois: m, budgetMois: Math.round(Number(c.budgetMois) || 0), deja: payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0), reste: null, semaines: 1, lisse: tot, envCap: envCap(c.service, m) || 0, envReste: null, impose: null, dispo: tot, limite: "reprise" },
+      bareme: { plafondHeures: c.plafondHeures, payeMax: c.payeMax }, coef: 1, coefRappels: 1, totalDu: tot, totalVerse: tot, totalRappels: 0,
+      saisie: (p && p.saisie) || {}, rappelsExclus: [], budgetImpose: null,
+      verseeLe: a.at || dm.recueAt || nowISO(), verseePar: a.by || null, verseeParNom: `Demande ${dmNo(dm)}`,
+      reprise: { demandeId: dm.id, no: dmNo(dm), objet: dm.objet || "", montant: demAccorde(dm), le: nowISO(), parNom: S.agentName || "" }, at: nowISO() };
+    if (!(await write(() => S.db.doc("payes/" + k).set(body)))) { go.disabled = false; return; }
+    closeDialog(); S.payeSem = k; renderPayes(true);
+    toast(`${money(tot)} repris dans la paye de la semaine ${(bounds(k) || {}).week} : comptés une seule fois sur l’enveloppe ${c.service}.`);
+  });
+  openDialog({ eyebrow: `Reprise · ${dmNo(dm)}`, title: dm.objet || "Salaires déjà versés", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0 0 8px", text: "Chaque salaire de la demande devient la paye d’un agent pour la semaine choisie, au montant déjà versé. Vérifiez le grade et le nom de chacun : une fiche est créée pour les agents qui n’en ont pas. La demande reste au dossier, mais ne compte plus sur l’enveloppe : la paye compte à sa place." }),
+      field("py-rep-sem", "Semaine payée", sem),
+      h("div", { class: "tbl-wrap" }, h("table", { class: "compact" }, h("thead", {}, h("tr", {}, ["Ligne de la demande", "Grade", "Agent", "Heures", "Versé"].map((t, i) => h("th", { class: i === 4 ? "num" : null, text: t })))), h("tbody", {}, rows.map(r => r.el)))),
+      h("datalist", { id: "py-rep-dl" }, foncs().map(f => h("option", { value: f.nom }))), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+
+/* ---------- Pointeuse ---------- */
+// Tout le monde pointe (Direction, Inspection, Lecture seule et le rôle « pointeuse », qui ne voit
+// que cette page). L'heure de prise et de fin de service est celle de la base (fonction pointer).
+async function pointer(action, btn) {
+  if (!S.sb || !S.connected) return false;
+  if (btn) btn.disabled = true;
+  let res;
+  try { res = await S.sb.rpc("pointer", { p_action: action }); } catch (e) { res = { error: { message: "Réseau indisponible" } }; }
+  if (btn) btn.disabled = false;
+  const { data, error } = res || {};
+  if (error) {
+    const msg = String(error.message || "");
+    if (error.code === "PGRST202" || /could not find the function|schema cache/i.test(msg)) { S.ptMissing = true; toast("La pointeuse n’est pas encore installée : la Direction doit exécuter supabase/v18_payes_pointeuse.sql.", true); }
+    else toast(msg || "Pointage refusé.", true);
+    renderPointeuse(); return false;
+  }
+  S.ptMissing = false;
+  if (data && data.id && data.data && S.db && S.db.local) S.db.local("pointages/" + data.id, data.data);
+  const d = data && data.data;
+  if (action === "debut") toast(`Service pris à ${fmtHr(new Date(d && d.debut ? d.debut : Date.now()))}.`);
+  else toast(`Service fini · ${d ? fmtH(ptDuree(d)) : ""}.`);
+  renderPointeuse();
+  return true;
+}
+function renderPointeuse() {
+  if (S.tab !== "pointeuse") return;
+  const box = $("#pt-me");
+  if (!S.connected || !S.loaded.has("pointages")) { fill(box, h("div", { class: "empty", text: S.offline ? "Pointeuse indisponible hors connexion." : "Chargement…" })); fill($("#pt-week")); $("#pt-now-card").hidden = true; return; }
+  const me = S.discordId, open = ptOuvert(me), k = semKey(new Date()), wk = ptSemaine(me, k), c = payeCfg();
+  const mine = ptActifs().filter(p => p.discordId === me).sort((a, b) => String(b.debut).localeCompare(String(a.debut)));
+  const last = mine.find(p => p.fin);
+  const go = h("button", { class: "btn pt-go" + (open ? "" : " ink"), type: "button", disabled: !me, text: open ? "Finir mon service" : "Prendre mon service" });
+  go.addEventListener("click", () => pointer(open ? "fin" : "debut", go));
+  fill(box, h("div", { class: open ? "pt-on" : "" },
+    h("div", { class: "pt-state" }, h("span", { class: "pt-dot", "aria-hidden": "true" }), open ? "En service" : "Hors service"),
+    h("div", { class: "pt-clock", "aria-live": "polite", title: open ? "Durée du service en cours" : "Heure", text: open ? fmtH(ptDuree(open)) : fmtHr(new Date()) }),
+    h("p", { class: "pt-since", text: open ? `Depuis ${fmtDateTime(new Date(open.debut))}` : last ? `Dernier service : ${fmtDateTime(new Date(last.debut))} → ${fmtHr(new Date(last.fin))}, ${fmtH(ptDuree(last))}` : "Aucun service pointé pour l’instant." }),
+    go,
+    S.ptMissing ? h("p", { class: "py-note pt-warn", text: "La pointeuse n’est pas encore installée sur la base : la Direction doit exécuter supabase/v18_payes_pointeuse.sql." }) : null,
+    open && ptLong(open) ? h("p", { class: "py-note pt-warn", text: "Service ouvert depuis plus de 12 h : pensez à le finir. La Direction vérifiera ces heures avant la paye." }) : null,
+    !me ? h("p", { class: "py-note pt-warn", text: "Votre compte Discord n’est pas reconnu : reconnectez-vous." }) : null));
+  const weekList = mine.filter(p => ptDans(p, k) > 0 || p === open);
+  fill($("#pt-week"), h("h3", { text: "Ma semaine" }), h("p", { class: "sub", style: "margin:2px 0 8px", text: periodLabel(k) }),
+    h("div", { class: "pt-week-h", text: fmtH(wk.h) }),
+    h("p", { class: "hint", style: "margin:4px 0 0", text: `${fmtH(Math.min(wk.h, c.plafondHeures))} payables : au plus ${c.plafondHeures} h par semaine.` }),
+    weekList.length ? h("ul", { class: "pt-list" }, weekList.map(p => h("li", {},
+      h("span", { text: `${fmtDate(new Date(p.debut))} · ${fmtHr(new Date(p.debut))} → ${p.fin ? fmtHr(new Date(p.fin)) : "en cours"}` }),
+      h("span", { class: "mono", text: fmtH(ptDans(p, k)) }),
+      (p.corrections || []).length || p.source === "direction" ? h("span", { class: "meta", text: p.source === "direction" ? "saisi par la Direction" : "corrigé par la Direction" }) : null))) : h("p", { class: "muted", style: "margin:12px 0 0", text: "Aucun service cette semaine." }),
+    mine.length > weekList.length ? h("details", { style: "margin-top:12px" }, h("summary", { class: "hint", text: "Services précédents" }),
+      h("ul", { class: "pt-list" }, mine.filter(p => !weekList.includes(p)).slice(0, 15).map(p => h("li", {}, h("span", { text: `${fmtDate(new Date(p.debut))} · ${fmtHr(new Date(p.debut))} → ${p.fin ? fmtHr(new Date(p.fin)) : "en cours"}` }), h("span", { class: "mono", text: fmtH(ptDuree(p)) }))))) : null);
+  // Qui est en service : pour la Direction, l'Inspection et la lecture seule.
+  const all = S.role !== "pointeuse", nowCard = $("#pt-now-card");
+  nowCard.hidden = !all;
+  if (all) {
+    const opens = ptActifs().filter(p => !p.fin).sort((a, b) => String(a.debut).localeCompare(String(b.debut))), w = writer();
+    $("#pt-now-sub").textContent = opens.length ? `${opens.length} agent${plural(opens.length)} en service.` : "";
+    fill($("#pt-now"), opens.length ? h("ul", { class: "ent-list" }, opens.map(p => { const f = foncByDiscord(p.discordId); return h("li", {},
+      h("div", { style: "min-width:0" }, f ? h("button", { class: "linkbtn", type: "button", onclick: () => openFonc(f.id), text: ptNom(p) }) : h("span", { style: "font-weight:600", text: ptNom(p) }),
+        h("span", { class: "meta", text: `depuis ${fmtDateTime(new Date(p.debut))}${f ? " · " + (f.grade || "") : " · pas de fiche fonctionnaire"}${ptLong(p) ? " · plus de 12 h" : ""}` })),
+      h("span", { class: "mono", text: fmtH(ptDuree(p)) }),
+      w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openPtForm(p), text: "Clore" }) : h("span", {})); })) : h("div", { class: "empty", text: "Personne n’est en service en ce moment." }));
+  }
+}
+// L'horloge de la pointeuse et les heures en cours avancent toutes seules.
+setInterval(() => { if (document.visibilityState !== "visible" || !S.connected) return; if (S.tab === "pointeuse") renderPointeuse(); else if (S.tab === "payes" && ptActifs().some(p => !p.fin)) renderPayes(); }, 30e3);
+
 
 /* Tableau des déclarations */
 function setSegCounts(seg, counts, active) {
@@ -5662,7 +6726,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA" }[e.collection]; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -7843,7 +8907,7 @@ function openContratForm(e, opts) {
   const envBox = h("dl", { class: "kv" });
   const impBox = h("div", {}, h("div", { class: "row2" }, field("ct-per", "Mois d’imputation", per), field("ct-dem", "Financement", dem)), envBox);
   const fillDem = () => {
-    const s = ach.value, list = S.demandes.filter(dm => norm(dm.service) === norm(s) && demAccorde(dm) > 0);
+    const s = ach.value, rep = payeRepris(), list = S.demandes.filter(dm => norm(dm.service) === norm(s) && demAccorde(dm) > 0 && !rep.has(dm.id));
     fill(dem, h("option", { value: "", text: "Enveloppe du service" }), list.map(dm => h("option", { value: dm.id, text: `Demande ${dossierNo("DM", dm.id)} · ${dm.objet || ""} · ${money(demAccorde(dm))} accordés` })));
     const want = ed ? ed.demandeId : fromDem ? fromDem.id : null;
     dem.value = want && list.some(dm => dm.id === want) ? want : "";
@@ -11774,7 +12838,7 @@ function ouvrirDossier(spec) {
   const [, col, id] = m, need = col === "penalites" ? "penalites" : col === "decisions" ? "declarations" : col;
   if (!S.connected || !S.loaded.has(need)) { S.pendingOpen = spec; return false; }
   S.pendingOpen = null;
-  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "svc", arbitrages: "svc", catalogue: "catalogue", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations", contrats: "contrats", conventions: "contrats", prestations: "contrats", versements: "amendes" }[col] || "dashboard";
+  const tab = { declarations: "dashboard", decisions: "dashboard", demandes: "svc", arbitrages: "svc", catalogue: "catalogue", penalites: "entreprises", prets: "prets", controles: "recouvrement", vehicules: "vehicules", convocations: "convocations", contrats: "contrats", conventions: "contrats", prestations: "contrats", versements: "amendes", payes: "payes", fonctionnaires: "payes", rappels: "payes", pointages: "pointeuse" }[col] || "dashboard";
   showTab(tab);
   try { history.replaceState(null, "", "#" + tab); } catch (e) { /* sans historique */ }
   if (col === "declarations" || col === "decisions") { if (S.declarations.some(d => d.id === id)) { openDecl(id); return true; } }
@@ -12293,13 +13357,13 @@ function showTab(name) {
   if (name === "reglages" && S.admin) { loadAgents(); loadKeys(); }
   if (name === "journal") loadJournal();
   const btn = tabBtn(name);
-  if (!btn || btn.hidden) name = "dashboard";
+  if (!btn || btn.hidden) name = S.role === "pointeuse" ? "pointeuse" : "dashboard";
   S.tab = name;
   navLast[grpOf(name)] = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
   navSync();
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue", "payes", "pointeuse"].includes(name)) schedule();
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
   const rail = $("#sub-rail"), cur = tabBtn(name);
   if (rail && cur && rail.scrollWidth > rail.clientWidth) {
@@ -12368,7 +13432,9 @@ function newActions() {
       ["Versement des amendes", "Fonds des services arrivés par convoi", () => openVersementForm()]]],
     ["Services publics", [
       ["Demande de moyens", "Saisir la demande d’un service, article par article", () => newDemFor(null)],
-      w ? ["Article au catalogue", "Prix de référence d’un article demandé par les services", () => openCatForm(null)] : null]]
+      w ? ["Article au catalogue", "Prix de référence d’un article demandé par les services", () => openCatForm(null)] : null,
+      w ? ["Fonctionnaire", "Agent de la Préfecture payé à l’heure de service", () => openFoncForm(null)] : null,
+      w ? ["Rappel de salaire", "Heures ou somme restant dues à un agent", () => openRappelForm({})] : null]]
   ].map(([t, items]) => [t, items.filter(Boolean)]).filter(([, items]) => items.length);
 }
 function newPopClose() { const pop = $("#new-pop"); if (!pop.hidden) { pop.hidden = true; $("#new-btn").setAttribute("aria-expanded", "false"); } }
@@ -12399,7 +13465,7 @@ $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; ren
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "svc", "enveloppes", "catalogue", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "svc", "enveloppes", "payes", "catalogue", "pointeuse", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 render();
 init();
 })();
