@@ -178,8 +178,11 @@ function actualiser() {
   });
   // Payes versées : imputées sur l'enveloppe du service des payes, au mois de leur semaine.
   const payeConf = conf.payes && typeof conf.payes === "object" ? conf.payes : {}, svcPaye = payeConf.service || "Préfecture";
-  const payeTot = d => (d.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0) + (d.rappels || []).reduce((t, x) => t + (Number(x.verse) || 0), 0);
+  const payeTot = d => (d.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0) + (d.rappels || []).reduce((t, x) => t + (Number(x.verse) || 0), 0) - (d.retenues || []).reduce((t, x) => t + (Number(x.retenu) || 0), 0);
   payesV.forEach(r => { const x = envDe(svcPaye, r.data.mois || moisDe(r.id)); x.payes = (x.payes || 0) + payeTot(r.data); });
+  // Trop-perçus remboursés directement : rendus au budget du mois de la semaine concernée.
+  const tropPercus = col("rappels").filter(r => r.data.origine === "retenue");
+  tropPercus.forEach(r => { const rb = (r.data.remboursements || []).reduce((t, x) => t + (Number(x.montant) || 0), 0); if (rb) { const x = envDe(svcPaye, moisDe(r.data.semaine)); x.payes = (x.payes || 0) - rb; } });
   ecrire("Enveloppes", ["Mois", "Service", "Demandes", "Demandé", "Accordé", "En attente", "Acheté sous contrat", "Payes versées", "Plafond", "Reste"],
     Object.keys(env).map(k => env[k]).sort((a, b) => (a.k < b.k ? 1 : a.k > b.k ? -1 : a.service.localeCompare(b.service)))
       .map(x => { const p = plafond(x.service, x.k), achete = x.achete || 0, py = x.payes || 0; return [x.k, x.service, x.n, x.demande, x.accorde, x.attente, achete, py, p, p === "" ? "" : p - x.accorde - achete - py]; }));
@@ -190,6 +193,7 @@ function actualiser() {
     const d = r.data, coef = d.coef == null ? 1 : Number(d.coef);
     (d.lignes || []).forEach(l => lignesPaye.push([r.id, d.mois || moisDe(r.id), l.nom || "", l.grade || "", l.heuresPointees == null ? "" : heures(l.heuresPointees), heures(l.heures), heures(l.heuresPayees), Number(l.taux) || 0, Number(l.brut) || 0, Number(l.verse) || 0, Math.max(0, (Number(l.brut) || 0) - (Number(l.verse) || 0)), coef, "Paye", date(d.verseeLe), d.verseeParNom || ""]));
     (d.rappels || []).forEach(x => lignesPaye.push([r.id, d.mois || moisDe(r.id), x.nom || "", "", "", "", "", "", Number(x.du) || 0, Number(x.verse) || 0, "", "", "Rappel de la semaine " + x.semaine, date(d.verseeLe), d.verseeParNom || ""]));
+    (d.retenues || []).forEach(x => lignesPaye.push([r.id, d.mois || moisDe(r.id), x.nom || "", "", "", "", "", "", "", -(Number(x.retenu) || 0), "", "", "Trop-perçu retenu (semaine " + x.semaine + ")", date(d.verseeLe), d.verseeParNom || ""]));
   });
   ecrire("Payes", ["Semaine", "Mois", "Agent", "Grade", "Heures pointées", "Heures retenues", "Heures payées", "Taux horaire", "Paye due", "Versé", "Reste en rappel", "Prorata", "Nature", "Versée le", "Par"], lignesPaye);
   const docsRap = {}; col("rappels").forEach(r => { docsRap[r.id] = r.data; });
@@ -197,9 +201,13 @@ function actualiser() {
   const lignesRap = [];
   payesV.forEach(r => (r.data.lignes || []).forEach(l => { const reste = Math.round((Number(l.brut) || 0) - (Number(l.verse) || 0)); if (reste <= 0) return; const id = "auto-" + r.id + "-" + l.fid, o = docsRap[id], v = verseRap[id] || 0;
     lignesRap.push([l.nom || "", r.id, "Prorata de la paye", reste, v, o && o.annule ? 0 : Math.max(0, reste - v), o && o.annule ? "Annulé" : reste - v <= 0 ? "Versé" : "Dû", date(r.data.verseeLe)]); }));
-  col("rappels").forEach(r => { if (String(r.id).indexOf("auto-") === 0) return; const d = r.data, m = Number(d.montant) || 0, v = verseRap[r.id] || 0;
+  col("rappels").forEach(r => { if (String(r.id).indexOf("auto-") === 0 || r.data.origine === "retenue") return; const d = r.data, m = Number(d.montant) || 0, v = verseRap[r.id] || 0;
     lignesRap.push([d.nom || "", d.semaine || "", d.motif || "", m, v, d.statut === "annule" ? 0 : Math.max(0, m - v), d.statut === "annule" ? "Annulé" : m - v <= 0 ? "Versé" : "Dû", date(d.at)]); });
   ecrire("Rappels de salaire", ["Agent", "Semaine concernée", "Motif", "Montant", "Versé", "Reste dû", "État", "Né le"], lignesRap);
+  const retenuTp = {}; payesV.forEach(r => (r.data.retenues || []).forEach(x => { retenuTp[x.rid] = (retenuTp[x.rid] || 0) + (Number(x.retenu) || 0); }));
+  ecrire("Trop-perçus", ["Agent", "Semaine concernée", "Motif", "Versé en trop", "Retenu sur les payes", "Remboursé", "Reste à retenir", "État", "Noté le"],
+    tropPercus.map(r => { const d = r.data, m = Number(d.montant) || 0, rt = retenuTp[r.id] || 0, rb = (d.remboursements || []).reduce((t, x) => t + (Number(x.montant) || 0), 0), reste = d.statut === "annule" ? 0 : Math.max(0, m - rt - rb);
+      return [d.nom || "", d.semaine || "", d.motif || "", m, rt, rb, reste, d.statut === "annule" ? "Annulé" : reste <= 0 ? "Régularisé" : "À retenir", date(d.at)]; }));
   ecrire("Pointages", ["Agent", "Compte Discord", "Début", "Fin", "Durée (h)", "Source", "Corrections", "Annulé"],
     col("pointages").map(r => { const d = r.data, a = d.debut ? new Date(d.debut) : null, b = d.fin ? new Date(d.fin) : null;
       return [d.nom || "", d.discordId || "", a || "", b || "en cours", a && b ? heures((b - a) / 3600e3) : "", d.source === "direction" ? "Saisi par la Direction" : "Pointeuse", (d.corrections || []).map(c => c.motif).join(" · "), d.annule ? "Oui" : ""]; })

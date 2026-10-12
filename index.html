@@ -1030,7 +1030,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
         <div id="py-fonc"><div class="empty">Chargement…</div></div>
       </div>
       <div class="card">
-        <div class="card-head"><div><h3>Rappels de salaire</h3><p class="sub" id="py-rap-sub">Ce qui reste dû aux agents : prorata, heures non payées, corrections.</p></div></div>
+        <div class="card-head"><div><h3>Rappels et trop-perçus</h3><p class="sub" id="py-rap-sub">Ce qui reste dû aux agents (prorata, heures non payées) et ce qu’ils ont touché en trop.</p></div><button class="btn ghost small" type="button" id="py-tp-new" hidden>Ajouter un trop-perçu</button></div>
         <div id="py-rap"><div class="empty">Chargement…</div></div>
       </div>
     </div>
@@ -2354,7 +2354,7 @@ function treasury() {
     if (a && !rep.has(dm.id) && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
   }
   // Payes des fonctionnaires de la Préfecture (une demande « budget salaires » reprise en paye n'est comptée qu'une fois).
-  const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0);
+  const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0) - retenuesTous().reduce((t, r) => t + r.rembourse, 0);
   const budget = Number(cfg().budgetInitial) || 0;
   // Prêts : le capital versé sort du Trésor, les remboursements (intérêts compris) y reviennent.
   let pv = 0, pr = 0, pd = 0;
@@ -3290,6 +3290,8 @@ function treasurySeries(keys) {
   const rep = payeRepris();
   for (const dm of S.demandes) { const v = demAccorde(dm), a = S.arbitrages[dm.id]; if (v && !rep.has(dm.id)) { const k = keyOf(new Date((a && a.at) || dm.recueAt || dm.createdAt || Date.now())); if (k in dep) dep[k] += v; } }
   for (const p of payesVersees()) { const k = keyOf(new Date(p.verseeLe || p.at || Date.now())); if (k in dep) dep[k] += payeTotal(p); }
+  // Trop-perçus remboursés directement par les agents : la somme revient au Trésor.
+  for (const r of retenuesTous()) for (const x of r.remboursements || []) { const k = keyOf(new Date(x.le)); if (k in rec) rec[k] += Number(x.montant) || 0; }
   for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) { if (p.mode === "impot") continue; const k = p.periode || keyOf(new Date(p.at)); if (k in dep) dep[k] += Number(p.montant) || 0; }
   // Compensation : la somme déduite d'un avis est à la fois une recette et le paiement d'un contrat.
   for (const d of S.declarations) if (d.periode in dep && dStatus(d) !== "rejetee") dep[d.periode] += dComp(d);
@@ -3785,14 +3787,15 @@ const ptNom = p => { const f = foncByDiscord(p.discordId); return (f && f.nom) |
 const payeOf = k => (S.payes || []).find(p => p.id === k) || null;
 const payeVersee = p => !!p && p.statut === "versee";
 const payesVersees = () => (S.payes || []).filter(payeVersee);
-const payeTotal = p => (p.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0) + (p.rappels || []).reduce((t, r) => t + (Number(r.verse) || 0), 0);
+// Ce qu'une paye a coûté : payes et rappels versés, moins les trop-perçus retenus sur cette paye.
+const payeTotal = p => (p.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0) + (p.rappels || []).reduce((t, r) => t + (Number(r.verse) || 0), 0) - (p.retenues || []).reduce((t, r) => t + (Number(r.retenu) || 0), 0);
 const payesDuMois = m => payesVersees().filter(p => moisDe(p.semaine || p.id) === m);
 // Demandes « budget salaires » de la Préfecture reprises dans une paye : comptées par la paye, pas deux fois.
 const payeRepris = () => new Set(payesVersees().filter(p => p.reprise && p.reprise.demandeId).map(p => p.reprise.demandeId));
 function payesImpute(service, m) {
   if (norm(service) !== norm(payeSvc())) return { total: 0, list: [] };
   const list = payesDuMois(m);
-  return { total: list.reduce((t, p) => t + payeTotal(p), 0), list };
+  return { total: list.reduce((t, p) => t + payeTotal(p), 0) - rembMois(m), list };
 }
 
 /* Rappels : ceux nés d'un prorata se lisent sur les payes versées, les autres sont saisis à la main.
@@ -3807,17 +3810,41 @@ function rappelsTous() {
       motif: `Prorata de la paye de la semaine ${(bounds(p.id) || {}).week || p.id} (${Math.round((Number(p.coef) || 0) * 100)} % versés)`,
       at: p.verseeLe, annule: !!(o && o.annule), annuleMotif: (o && o.motif) || "", annuleParNom: (o && o.parNom) || "" });
   }
-  for (const r of S.rappels || []) if (!String(r.id).startsWith("auto-")) out.push(Object.assign({}, r, { auto: false, montant: Math.round(Number(r.montant) || 0), annule: r.statut === "annule" }));
+  for (const r of S.rappels || []) if (!String(r.id).startsWith("auto-") && r.origine !== "retenue") out.push(Object.assign({}, r, { auto: false, montant: Math.round(Number(r.montant) || 0), annule: r.statut === "annule" }));
   const paid = new Map(), where = new Map();
   for (const p of payesVersees()) for (const x of p.rappels || []) { paid.set(x.rid, (paid.get(x.rid) || 0) + (Number(x.verse) || 0)); if (!where.has(x.rid)) where.set(x.rid, []); where.get(x.rid).push(p.id); }
   for (const r of out) { r.verse = paid.get(r.id) || 0; r.versePar = where.get(r.id) || []; r.reste = r.annule ? 0 : Math.max(0, r.montant - r.verse); }
   return out.sort((a, b) => String(b.semaine).localeCompare(String(a.semaine)) || String(a.nom || "").localeCompare(String(b.nom || ""), "fr"));
 }
 const rappelsDus = () => rappelsTous().filter(r => r.reste > 0);
+/* Trop-perçus : la somme versée en trop à un agent pour une semaine. Elle est retenue sur ses payes
+   suivantes (ce qui est retenu se lit sur les payes versées), ou il la rembourse directement : le
+   remboursement rend la somme au budget du mois de la semaine concernée et au Trésor. */
+function retenuesTous() {
+  const out = (S.rappels || []).filter(r => r.origine === "retenue").map(r => Object.assign({}, r, { montant: Math.round(Number(r.montant) || 0), annule: r.statut === "annule" }));
+  const got = new Map(), where = new Map();
+  for (const p of payesVersees()) for (const x of p.retenues || []) { got.set(x.rid, (got.get(x.rid) || 0) + (Number(x.retenu) || 0)); if (!where.has(x.rid)) where.set(x.rid, []); where.get(x.rid).push(p.id); }
+  for (const r of out) {
+    r.retenu = got.get(r.id) || 0; r.retenuPar = where.get(r.id) || [];
+    r.rembourse = (r.remboursements || []).reduce((t, x) => t + (Number(x.montant) || 0), 0);
+    r.reste = r.annule ? 0 : Math.max(0, r.montant - r.retenu - r.rembourse);
+  }
+  return out.sort((a, b) => String(a.semaine).localeCompare(String(b.semaine)) || String(a.at || "").localeCompare(String(b.at || "")));
+}
+const retenuesDues = () => retenuesTous().filter(r => r.reste > 0);
+const rembMois = m => retenuesTous().filter(r => moisDe(r.semaine) === m).reduce((t, r) => t + r.rembourse, 0);
+// Ce qu'un agent a touché pour une semaine versée : sa paye, ses rappels versés et promis, moins ses trop-perçus.
+function percuSemaine(fid, k) {
+  const p = payeOf(k), l = payeVersee(p) ? (p.lignes || []).find(z => z.fid === fid) : null;
+  const rappels = rappelsTous().filter(r => r.fid === fid && r.semaine === k).reduce((t, r) => t + r.verse + r.reste, 0);
+  const tropPercus = retenuesTous().filter(r => r.fid === fid && r.semaine === k).reduce((t, r) => t + (r.annule ? r.retenu + r.rembourse : r.montant), 0);
+  const paye = l ? Number(l.verse) || 0 : 0;
+  return { ligne: l, paye, rappels, tropPercus, total: paye + rappels - tropPercus, taux: l && Number(l.taux) ? Number(l.taux) : gradeTaux((foncOf(fid) || {}).grade) };
+}
 // Ce qu'un agent a déjà eu pour une semaine (paye versée et rappels saisis) : borne les nouveaux rappels.
 function droitsSemaine(fid, k) {
   const p = payeOf(k), l = payeVersee(p) ? (p.lignes || []).find(z => z.fid === fid) : null;
-  const man = (S.rappels || []).filter(r => !String(r.id).startsWith("auto-") && r.fid === fid && r.semaine === k && r.statut !== "annule");
+  const man = (S.rappels || []).filter(r => !String(r.id).startsWith("auto-") && r.origine !== "retenue" && r.fid === fid && r.semaine === k && r.statut !== "annule");
   const f = foncOf(fid);
   return { ligne: l, heures: (l ? Number(l.heuresPayees) || 0 : 0) + man.reduce((t, r) => t + (Number(r.heures) || 0), 0),
     montant: (l ? Number(l.brut) || 0 : 0) + man.reduce((t, r) => t + (Number(r.montant) || 0), 0), taux: l && Number(l.taux) ? Number(l.taux) : gradeTaux(f && f.grade) };
@@ -3837,7 +3864,7 @@ function payeLignesPrep(k, p) {
 }
 function payeBudget(k, p) {
   const c = payeCfg(), m = moisDe(k), bm = Math.max(0, Math.round(Number(c.budgetMois) || 0));
-  const deja = payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0), reste = bm - deja;
+  const deja = payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0) - rembMois(m), reste = bm - deja;
   const semaines = semainesDuMois(m).filter(w => w === k || (w > k && !payeVersee(payeOf(w))));
   const n = Math.max(1, semaines.length), lisse = Math.max(0, Math.floor(reste / n));
   const cap = envCap(c.service, m), used = (envUse(m)[norm(c.service)] || 0) - (payeVersee(p) ? payeTotal(p) : 0);
@@ -3851,9 +3878,10 @@ function payeBudget(k, p) {
 function payeCalc(k) {
   const p = payeOf(k);
   if (payeVersee(p)) {
-    const lignes = p.lignes || [], rappels = p.rappels || [], sum = (l, f) => l.reduce((t, x) => t + (Number(x[f]) || 0), 0);
-    return { k, p, versee: true, lignes, rappels, budget: p.budget || {}, coef: p.coef == null ? 1 : Number(p.coef), coefRappels: p.coefRappels == null ? 1 : Number(p.coefRappels),
-      totalDu: sum(lignes, "brut"), totalVerse: sum(lignes, "verse"), totalRappels: sum(rappels, "verse"), total: payeTotal(p) };
+    const rappels = p.rappels || [], retenues = p.retenues || [], sum = (l, f) => l.reduce((t, x) => t + (Number(x[f]) || 0), 0);
+    const lignes = (p.lignes || []).map(l => Object.assign({}, l, { retenue: retenues.filter(r => r.fid === l.fid).reduce((t, r) => t + (Number(r.retenu) || 0), 0) }));
+    return { k, p, versee: true, lignes, rappels, retenues, budget: p.budget || {}, coef: p.coef == null ? 1 : Number(p.coef), coefRappels: p.coefRappels == null ? 1 : Number(p.coefRappels),
+      totalDu: sum(lignes, "brut"), totalVerse: sum(lignes, "verse"), totalRappels: sum(rappels, "verse"), totalRetenues: sum(retenues, "retenu"), total: payeTotal(p) };
   }
   const lignes = payeLignesPrep(k, p), budget = payeBudget(k, p);
   const totalDu = lignes.reduce((t, l) => t + l.brut, 0);
@@ -3866,14 +3894,25 @@ function payeCalc(k) {
   const coefRappels = coef < 1 ? 0 : totR > left ? (totR ? left / totR : 1) : 1;
   const rappels = dus.map(r => ({ rid: r.id, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif, du: r.reste, inclus: !excl.has(r.id), verse: excl.has(r.id) ? 0 : coefRappels < 1 ? Math.floor(r.reste * coefRappels) : r.reste }));
   const totalRappels = rappels.reduce((t, r) => t + r.verse, 0);
-  return { k, p, versee: false, lignes, rappels, budget, coef, coefRappels, totalDu, totalVerse, totalRappels, total: totalVerse + totalRappels };
+  // Trop-perçus : retenus sur ce que l'agent touche cette semaine (paye et rappels), les plus anciens d'abord.
+  const exR = new Set((p && p.retenuesExclues) || []), cash = new Map();
+  lignes.forEach(l => cash.set(l.fid, (cash.get(l.fid) || 0) + l.verse));
+  rappels.forEach(r => { if (r.verse > 0) cash.set(r.fid, (cash.get(r.fid) || 0) + r.verse); });
+  const retenues = retenuesDues().filter(r => String(r.semaine) < k).map(r => {
+    const inclus = !exR.has(r.id); let retenu = 0;
+    if (inclus) { const cv = cash.get(r.fid) || 0; retenu = Math.min(cv, r.reste); cash.set(r.fid, cv - retenu); }
+    return { rid: r.id, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif || "", du: r.reste, inclus, retenu };
+  });
+  lignes.forEach(l => { l.retenue = retenues.filter(r => r.fid === l.fid).reduce((t, r) => t + r.retenu, 0); });
+  const totalRetenues = retenues.reduce((t, r) => t + r.retenu, 0);
+  return { k, p, versee: false, lignes, rappels, retenues, budget, coef, coefRappels, totalDu, totalVerse, totalRappels, totalRetenues, total: totalVerse + totalRappels - totalRetenues };
 }
 
 /* Écritures de la paye */
 async function payeSet(k, patch) {
   const p = payeOf(k);
   if (payeVersee(p)) { toast("Cette paye est déjà versée : annulez d’abord le versement pour la modifier.", true); return false; }
-  const base = Object.assign({ semaine: k, mois: moisDe(k), statut: "preparation", saisie: {}, rappelsExclus: [], budgetImpose: null, at: nowISO() }, p || {});
+  const base = Object.assign({ semaine: k, mois: moisDe(k), statut: "preparation", saisie: {}, rappelsExclus: [], retenuesExclues: [], budgetImpose: null, at: nowISO() }, p || {});
   delete base.id;
   return write(() => S.db.doc("payes/" + k).set(Object.assign(base, patch, { modifieLe: nowISO(), modifieParNom: S.agentName || "" })));
 }
@@ -3886,11 +3925,11 @@ async function payeHeures(k, fid, raw) {
   return payeSet(k, { saisie });
 }
 function payeLigneSnap(l) {
-  return { fid: l.fid, nom: l.nom, grade: l.grade, discordId: l.discordId || "", taux: l.taux, heuresPointees: l.heuresPointees, heures: l.heures, manuel: !!l.manuel, heuresPayees: l.heuresPayees, brut: l.brut, verse: l.verse, reste: l.reste };
+  return { fid: l.fid, nom: l.nom, grade: l.grade, discordId: l.discordId || "", taux: l.taux, heuresPointees: l.heuresPointees, heures: l.heures, manuel: !!l.manuel, heuresPayees: l.heuresPayees, brut: l.brut, verse: l.verse, reste: l.reste, retenue: l.retenue || 0 };
 }
 function payeVerserDlg(k) {
   if (!writer()) return;
-  const x = payeCalc(k), lignes = x.lignes.filter(l => l.heures > 0 || l.brut > 0), r0 = x.rappels.filter(r => r.inclus && r.verse > 0);
+  const x = payeCalc(k), lignes = x.lignes.filter(l => l.heures > 0 || l.brut > 0), r0 = x.rappels.filter(r => r.inclus && r.verse > 0), t0 = x.retenues.filter(r => r.inclus && r.retenu > 0);
   if (!lignes.length && !r0.length) { toast("Rien à verser cette semaine : aucune heure de service.", true); return; }
   const enCours = lignes.filter(l => l.enCours), verif = lignes.filter(l => l.aVerifier), sansTaux = lignes.filter(l => !l.taux && l.heures > 0);
   const manque = lignes.reduce((t, l) => t + l.reste, 0), rest = x.rappels.filter(r => r.inclus).reduce((t, r) => t + (r.du - r.verse), 0);
@@ -3899,7 +3938,8 @@ function payeVerserDlg(k) {
     verif.length ? h("p", { class: "py-note", text: `Service de plus de 12 h à vérifier pour ${verif.map(l => l.nom).join(", ")} : corrigez le pointage avant de verser si c’est un oubli.` }) : null,
     sansTaux.length ? h("p", { class: "py-note", text: `Sans taux horaire (grade absent du barème) : ${sansTaux.map(l => l.nom).join(", ")}. Leur paye vaut 0 €.` }) : null,
     x.coef < 1 ? h("p", { class: "py-note", text: `Le budget de la semaine ne couvre que ${Math.round(x.coef * 100)} % des payes : chaque agent reçoit ${Math.round(x.coef * 100)} % de sa paye, et ${money(manque)} deviennent des rappels à verser plus tard.` }) : null,
-    rest > 0 ? h("p", { class: "py-note", text: `${money(rest)} de rappels restent dus après cette paye.` }) : null].filter(Boolean);
+    rest > 0 ? h("p", { class: "py-note", text: `${money(rest)} de rappels restent dus après cette paye.` }) : null,
+    x.retenues.some(r => r.inclus && r.du > r.retenu) ? h("p", { class: "py-note info", text: `${money(x.retenues.filter(r => r.inclus).reduce((t, r) => t + r.du - r.retenu, 0))} de trop-perçus restent à retenir sur les payes suivantes.` }) : null].filter(Boolean);
   const go = h("button", { class: "btn ink small", type: "button", text: `Verser ${money(x.total)}` });
   go.addEventListener("click", async () => {
     go.disabled = true;
@@ -3909,10 +3949,11 @@ function payeVerserDlg(k) {
       semaine: k, mois: b.mois, statut: "versee",
       lignes: now.lignes.filter(l => l.heures > 0 || l.brut > 0).map(payeLigneSnap),
       rappels: now.rappels.filter(r => r.inclus && r.verse > 0).map(r => ({ rid: r.rid, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif || "", du: r.du, verse: r.verse })),
+      retenues: now.retenues.filter(r => r.inclus && r.retenu > 0).map(r => ({ rid: r.rid, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif || "", du: r.du, retenu: r.retenu })),
       budget: { mois: b.mois, budgetMois: b.budgetMois, deja: b.deja, reste: b.reste, semaines: b.n, lisse: b.lisse, envCap: b.envCap, envReste: b.envReste, impose: b.impose, dispo: b.dispo, limite: b.limite },
       bareme: { plafondHeures: payeCfg().plafondHeures, payeMax: payeCfg().payeMax },
-      coef: now.coef, coefRappels: now.coefRappels, totalDu: now.totalDu, totalVerse: now.totalVerse, totalRappels: now.totalRappels,
-      saisie: (p && p.saisie) || {}, rappelsExclus: (p && p.rappelsExclus) || [], budgetImpose: p && p.budgetImpose != null ? p.budgetImpose : null,
+      coef: now.coef, coefRappels: now.coefRappels, totalDu: now.totalDu, totalVerse: now.totalVerse, totalRappels: now.totalRappels, totalRetenues: now.totalRetenues,
+      saisie: (p && p.saisie) || {}, rappelsExclus: (p && p.rappelsExclus) || [], retenuesExclues: (p && p.retenuesExclues) || [], budgetImpose: p && p.budgetImpose != null ? p.budgetImpose : null,
       verseeLe: nowISO(), verseePar: S.uid || null, verseeParNom: S.agentName || "", at: (p && p.at) || nowISO()
     };
     if (!(await write(() => S.db.doc("payes/" + k).set(body)))) { go.disabled = false; return; }
@@ -3922,6 +3963,7 @@ function payeVerserDlg(k) {
   openDialog({ eyebrow: `Payes de la Préfecture · ${periodLabel(k)}`, title: "Verser la paye de la semaine ?", wide: true,
     body: [kv([["Agents payés", String(lignes.filter(l => l.verse > 0).length)], ["Payes dues", money(x.totalDu)], ["Budget de la semaine", money(x.budget.dispo)],
       ["Prorata", x.coef < 1 ? `${pctC(x.coef)} versés` : "aucun"], ["Payes versées", money(x.totalVerse)], r0.length ? ["Rappels versés", `${money(x.totalRappels)} · ${r0.length} rappel${plural(r0.length)}`] : null,
+      t0.length ? ["Trop-perçus retenus", `− ${money(x.totalRetenues)} · ${t0.length} agent${plural(new Set(t0.map(r => r.fid)).size)}`] : null,
       ["Total versé", money(x.total), "tot"], ["Imputé sur", `Enveloppe ${payeSvc()} · ${moisNom(x.budget.mois)}`]]), notes,
       h("p", { class: "hint", style: "margin:10px 0 0", text: "La paye versée ne se modifie plus. Une erreur se corrige par un rappel, ou en annulant le versement." })],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
@@ -3932,13 +3974,15 @@ function payeAnnulerDlg(k) {
   const nes = (p.lignes || []).filter(l => (Number(l.brut) || 0) > (Number(l.verse) || 0)).map(l => `auto-${k}-${l.fid}`);
   const paidLater = payesVersees().filter(q => q.id !== k && (q.rappels || []).some(r => nes.includes(r.rid))).map(q => q.id);
   if (paidLater.length) { toast(`Des rappels nés de cette paye sont déjà versés (semaine ${paidLater.map(z => (bounds(z) || {}).week).join(", ")}) : annulez d’abord ces payes-là.`, true); return; }
+  const tpPris = retenuesTous().filter(r => r.semaine === k && (r.retenu > 0 || r.rembourse > 0));
+  if (tpPris.length) { toast(`Des trop-perçus de cette semaine sont déjà retenus ou remboursés (${tpPris.map(r => r.nom).join(", ")}) : annulez d’abord ces payes ou ces remboursements.`, true); return; }
   const motif = h("input", { autocomplete: "off", placeholder: "Erreur d’heures, mauvais grade…" }), err = h("span", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn danger small", type: "button", text: p.reprise ? "Annuler la reprise" : "Annuler le versement" });
   go.addEventListener("click", async () => {
     if (!motif.value.trim()) { err.textContent = "Indiquez pourquoi."; motif.focus(); return; }
     go.disabled = true;
     const ok = p.reprise ? await write(() => S.db.doc("payes/" + k).delete())
-      : await write(() => S.db.doc("payes/" + k).set({ semaine: k, mois: p.mois || moisDe(k), statut: "preparation", saisie: p.saisie || {}, rappelsExclus: p.rappelsExclus || [], budgetImpose: p.budgetImpose == null ? null : p.budgetImpose, at: p.at || nowISO(),
+      : await write(() => S.db.doc("payes/" + k).set({ semaine: k, mois: p.mois || moisDe(k), statut: "preparation", saisie: p.saisie || {}, rappelsExclus: p.rappelsExclus || [], retenuesExclues: p.retenuesExclues || [], budgetImpose: p.budgetImpose == null ? null : p.budgetImpose, at: p.at || nowISO(),
         annulations: (p.annulations || []).concat([{ le: nowISO(), parNom: S.agentName || "", motif: motif.value.trim(), total: payeTotal(p), verseeLe: p.verseeLe }]) }));
     if (!ok) { go.disabled = false; return; }
     closeDialog(); toast(p.reprise ? "Reprise annulée : la demande compte de nouveau seule." : "Versement annulé : la paye est de nouveau en préparation.");
@@ -3956,7 +4000,8 @@ function payeDoc(k) {
     kind: "ÉTAT DE PAYE", no: pyNo(k), date: x.versee ? "Versée le " + longDate(new Date(x.p.verseeLe)) : "En préparation au " + longDate(new Date()),
     meta: [["Service", payeSvc()], ["Semaine", periodLabel(k)], ["Budget", `Enveloppe ${payeSvc()} · ${moisNom(moisDe(k))}`], ["Agents", String(ls.length)]],
     lines: [["Payes dues", money(x.totalDu)], ["Budget de la semaine", money((x.budget || {}).dispo)]].concat(x.coef < 1 ? [[`Prorata appliqué (${pctC(x.coef)} versés)`, "− " + money(x.totalDu - x.totalVerse)]] : [])
-      .concat(x.totalRappels ? [[`Rappels versés (${x.rappels.filter(r => r.verse > 0).length})`, money(x.totalRappels)]] : []),
+      .concat(x.totalRappels ? [[`Rappels versés (${x.rappels.filter(r => r.verse > 0).length})`, money(x.totalRappels)]] : [])
+      .concat(x.totalRetenues ? [[`Trop-perçus retenus (${x.retenues.filter(r => r.retenu > 0).length})`, "− " + money(x.totalRetenues)]] : []),
     total: [x.versee ? "Total versé" : "Total à verser", money(x.total)],
     stamp: x.versee ? ["VERSÉE", "ok"] : ["EN PRÉPARATION", "info"],
     note: x.coef < 1 ? `Budget de la semaine insuffisant : ${money(x.totalDu - x.totalVerse)} restent dus aux agents en rappel.` : "", noteTitle: "Prorata",
@@ -3964,23 +4009,26 @@ function payeDoc(k) {
     discord: { channel: "services", mentions: [svcMention(payeSvc())].filter(Boolean), text: `**État de paye ${pyNo(k)}** · ${payeSvc()} · semaine ${b.week} : ${money(x.total)} ${x.versee ? "versés" : "à verser"} à ${ls.length} agent${plural(ls.length)}${x.coef < 1 ? ` (prorata ${Math.round(x.coef * 100)} %)` : ""}.` },
     table: { title: "Agents", head: ["Agent", "Heures", "Taux", "Versé"], cols: [0, 0.52, 0.68, 0.84], align: ["left", "right", "right", "right"], mono: [1, 2, 3], strong0: true,
       rows: ls.map(l => ({ cells: [l.nom, fmtH(l.heuresPayees), money(l.taux), money(l.verse)], sub: [l.grade, l.reste > 0 ? `${money(l.reste)} en rappel` : ""].filter(Boolean).join(" · ") }))
-        .concat(x.rappels.filter(r => r.verse > 0).map(r => ({ cells: [`Rappel · ${r.nom}`, "—", "—", money(r.verse)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}` }))) },
+        .concat(x.rappels.filter(r => r.verse > 0).map(r => ({ cells: [`Rappel · ${r.nom}`, "—", "—", money(r.verse)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}` })))
+        .concat(x.retenues.filter(r => r.retenu > 0).map(r => ({ cells: [`Trop-perçu · ${r.nom}`, "—", "—", "− " + money(r.retenu)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}${r.du > r.retenu ? ` · ${money(r.du - r.retenu)} restent à retenir` : ""}` }))) },
     tableFirst: true
   };
   return doc;
 }
 function bulletinDoc(k, fid) {
-  const x = payeCalc(k), l = x.lignes.find(z => z.fid === fid), f = foncOf(fid) || {}, rs = x.rappels.filter(r => r.fid === fid && r.verse > 0);
-  const nom = (l && l.nom) || f.nom || "Agent", total = (l ? Number(l.verse) || 0 : 0) + rs.reduce((t, r) => t + r.verse, 0);
+  const x = payeCalc(k), l = x.lignes.find(z => z.fid === fid), f = foncOf(fid) || {}, rs = x.rappels.filter(r => r.fid === fid && r.verse > 0), ts = (x.retenues || []).filter(r => r.fid === fid && r.retenu > 0);
+  const nom = (l && l.nom) || f.nom || "Agent", total = (l ? Number(l.verse) || 0 : 0) + rs.reduce((t, r) => t + r.verse, 0) - ts.reduce((t, r) => t + r.retenu, 0);
   const lines = l ? [["Heures de service", fmtH(l.heures)], [`Heures payées (au plus ${payeCfg().plafondHeures} h)`, fmtH(l.heuresPayees)], ["Taux horaire du grade", money(l.taux)], ["Paye de la semaine", money(l.brut), true]]
     .concat(l.reste > 0 ? [[`Prorata du budget (${pctC(x.coef)} versés)`, "− " + money(l.reste)]] : []) : [];
   rs.forEach(r => lines.push([`Rappel · semaine ${(bounds(r.semaine) || {}).week || r.semaine}`, money(r.verse)]));
+  ts.forEach(r => lines.push([`Trop-perçu retenu · semaine ${(bounds(r.semaine) || {}).week || r.semaine}`, "− " + money(r.retenu)]));
   const reste = rappelsDus().filter(r => r.fid === fid).reduce((t, r) => t + r.reste, 0);
+  const aRetenir = x.versee ? retenuesDues().filter(r => r.fid === fid).reduce((t, r) => t + r.reste, 0) : (x.retenues || []).filter(r => r.fid === fid).reduce((t, r) => t + r.du - r.retenu, 0);
   return {
     kind: "BULLETIN DE PAYE", no: pyNo(k) + "-" + norm(nom).split(" ").map(w => w[0] || "").join("").toUpperCase().slice(0, 3), date: x.versee ? "Versé le " + longDate(new Date(x.p.verseeLe)) : "Prévision au " + longDate(new Date()),
     meta: [["Agent", nom], ["Grade", (l && l.grade) || f.grade || "—"], ["Service", payeSvc()], ["Semaine", periodLabel(k)]],
     lines, total: [x.versee ? "Net versé" : "Net à verser", money(total)], stamp: x.versee ? ["VERSÉ", "ok"] : ["PRÉVISION", "info"],
-    note: reste > 0 ? `${money(reste)} restent dus en rappel de salaire ; ils seront versés sur une prochaine paye.` : "", noteTitle: "Rappels",
+    note: [reste > 0 ? `${money(reste)} restent dus en rappel de salaire ; ils seront versés sur une prochaine paye.` : "", aRetenir > 0 ? `${money(aRetenir)} de trop-perçu restent à retenir sur les prochaines payes.` : ""].filter(Boolean).join(" "), noteTitle: "Rappels et trop-perçus",
     footer: "Préfecture de police · Direction des impôts et cotisations.",
     discord: { channel: "services", mentions: [f.discordId ? `<@${f.discordId}>` : ""].filter(Boolean), text: `**Bulletin de paye** · ${nom} · semaine ${(bounds(k) || {}).week} : ${money(total)} ${x.versee ? "versés" : "prévus"}.` }
   };
@@ -4022,10 +4070,11 @@ function renderPayes(force) {
   const dus = rappelsDus(), dusT = dus.reduce((t, r) => t + r.reste, 0);
   setKpi("py-k-budget", money(b.dispo), x.versee ? "utilisé à la paye" : b.limite === "impose" ? "fixé à la main" : b.limite === "enveloppe" ? "limité par l’enveloppe" : b.limite === "mois" ? "reste du mois" : `${b.n} semaine${plural(b.n)} à payer ${deMois(b.mois)}`, b.dispo <= 0 && !x.versee ? "bad" : "");
   setKpi("py-k-du", money(x.totalDu), `${x.lignes.filter(l => l.heures > 0).length} agent${plural(x.lignes.filter(l => l.heures > 0).length)} · ${fmtH(x.lignes.reduce((t, l) => t + (Number(l.heuresPayees) || 0), 0))} payées`);
-  setKpi("py-k-verse", money(x.total), x.coef < 1 ? `prorata : ${pctC(x.coef)} versés` : x.totalRappels ? `dont ${money(x.totalRappels)} de rappels` : x.versee ? "versé" : "sans prorata", x.coef < 1 ? "warn" : x.versee ? "ok" : "");
+  setKpi("py-k-verse", money(x.total), [x.coef < 1 ? `prorata : ${pctC(x.coef)} versés` : "", x.totalRappels ? `${money(x.totalRappels)} de rappels` : "", x.totalRetenues ? `− ${money(x.totalRetenues)} de trop-perçus` : ""].filter(Boolean).join(" · ") || (x.versee ? "versé" : "sans prorata"), x.coef < 1 ? "warn" : x.versee ? "ok" : "");
   const bm = payeBudget(k, x.versee ? x.p : null), resteMois = bm.reste - x.total;
   setKpi("py-k-mois", money(resteMois), `${MoisNom(bm.mois)}, après cette paye`, resteMois < 0 ? "bad" : "");
-  setKpi("py-k-rappels", money(dusT), dus.length ? `${dus.length} rappel${plural(dus.length)} · ${[...new Set(dus.map(r => r.fid))].length} agent${plural([...new Set(dus.map(r => r.fid))].length)}` : "aucun", dusT ? "warn" : "");
+  const tps = retenuesDues(), tpsT = tps.reduce((t, r) => t + r.reste, 0);
+  setKpi("py-k-rappels", money(dusT), [dus.length ? `${dus.length} rappel${plural(dus.length)} · ${[...new Set(dus.map(r => r.fid))].length} agent${plural([...new Set(dus.map(r => r.fid))].length)}` : "aucun rappel", tpsT ? `${money(tpsT)} de trop-perçus à retenir` : ""].filter(Boolean).join(" · "), dusT ? "warn" : "");
   // État de la semaine
   fill($("#py-etat"), x.versee ? chip(["Versée", "ok"]) : x.p ? chip(["En préparation", "info"]) : chip(["Pas commencée", "muted"]),
     x.versee ? h("span", { class: "hint", text: ` le ${fmtDateTime(new Date(x.p.verseeLe))}${x.p.verseeParNom ? " par " + x.p.verseeParNom : ""}${x.p.reprise ? " · reprise de la demande " + (x.p.reprise.no || "") : ""}` }) : null);
@@ -4047,7 +4096,7 @@ function renderPayes(force) {
     fill(box, h("div", { class: "empty" }, h("span", { text: "Aucun fonctionnaire enregistré. Ajoutez les agents de la Préfecture avec leur grade et, s’ils pointent, leur compte Discord : leurs heures de service rempliront la paye." }), w ? h("button", { class: "btn small", type: "button", onclick: () => openFoncForm(null), text: "Ajouter un fonctionnaire" }) : null));
   } else if (!shown.length) fill(box, h("div", { class: "empty", text: "Personne n’a été payé cette semaine." }));
   else {
-    const edit = w && !x.versee;
+    const edit = w && !x.versee, anyRet = shown.some(l => l.retenue > 0);
     const rows = shown.map(l => {
       const flags = [];
       if (l.enCours) flags.push(chip(["En service", "info"]));
@@ -4070,13 +4119,14 @@ function renderPayes(force) {
         h("td", { class: "num", "data-l": "Payées", text: fmtH(l.heuresPayees) }),
         h("td", { class: "num", "data-l": "Paye due", text: money(l.brut) }),
         h("td", { class: "num", "data-l": "Versée", style: "font-weight:650", text: money(l.verse) }),
+        anyRet ? h("td", { class: "num py-reste", "data-l": "Trop-perçu retenu", text: l.retenue > 0 ? "− " + money(l.retenue) : "" }) : null,
         h("td", { class: "num py-reste", "data-l": "Rappel", text: l.reste > 0 ? money(l.reste) : "" }));
     });
     const sumH = shown.reduce((t, l) => t + (Number(l.heuresPayees) || 0), 0);
     fill(box, h("div", { class: "tbl-wrap" }, h("table", { class: "compact py-tbl" },
-      h("thead", {}, h("tr", {}, ["Agent", "Pointées", "Retenues", "Taux", "Payées", "Paye due", "Versée", "Rappel"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+      h("thead", {}, h("tr", {}, ["Agent", "Pointées", "Retenues", "Taux", "Payées", "Paye due", "Versée"].concat(anyRet ? ["Trop-perçu"] : [], ["Rappel"]).map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
       h("tbody", {}, rows),
-      h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), h("td", {}), h("td", {}), h("td", {}), h("td", { class: "num", "data-l": "Payées", text: fmtH(sumH) }), h("td", { class: "num", "data-l": "Paye due", text: money(x.totalDu) }), h("td", { class: "num", "data-l": "Versée", text: money(x.totalVerse) }), h("td", { class: "num py-reste", "data-l": "Rappel", text: x.totalDu - x.totalVerse > 0 ? money(x.totalDu - x.totalVerse) : "" }))))),
+      h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), h("td", {}), h("td", {}), h("td", {}), h("td", { class: "num", "data-l": "Payées", text: fmtH(sumH) }), h("td", { class: "num", "data-l": "Paye due", text: money(x.totalDu) }), h("td", { class: "num", "data-l": "Versée", text: money(x.totalVerse) }), anyRet ? h("td", { class: "num py-reste", "data-l": "Trop-perçu retenu", text: "− " + money(x.totalRetenues) }) : null, h("td", { class: "num py-reste", "data-l": "Rappel", text: x.totalDu - x.totalVerse > 0 ? money(x.totalDu - x.totalVerse) : "" }))))),
       edit ? h("p", { class: "hint", style: "margin:8px 0 0", text: `Les heures pointées remplissent la paye toutes seules. Tapez d’autres heures pour un agent sans pointeuse ou pour corriger (12 h 30, 12:30 ou 12,5). Au-delà de ${c.plafondHeures} h, les heures ne sont pas payées.` }) : null);
   }
   // Rappels de cette paye
@@ -4090,11 +4140,24 @@ function renderPayes(force) {
         return h("tr", {}, h("td", { text: r.nom }), h("td", { text: "S" + ((bounds(r.semaine) || {}).week || "?") }), h("td", { text: r.motif || "" }),
           h("td", { class: "num", text: money(r.du) }), h("td", { class: "num", text: money(r.verse) }), h("td", {}, cb));
       })))),
-    !x.versee && x.coefRappels < 1 && x.rappels.some(r => r.inclus) ? h("p", { class: "hint", text: x.coef < 1 ? "Le budget ne couvre pas les payes de la semaine : les rappels attendent une prochaine paye." : `Il ne reste que ${money(Math.max(0, b.dispo - x.totalVerse))} pour les rappels : ils sont versés à ${Math.round(x.coefRappels * 100)} %, le reste attend.` }) : null] : []);
+    !x.versee && x.coefRappels < 1 && x.rappels.some(r => r.inclus) ? h("p", { class: "hint", text: x.coef < 1 ? "Le budget ne couvre pas les payes de la semaine : les rappels attendent une prochaine paye." : `Il ne reste que ${money(Math.max(0, b.dispo - x.totalVerse))} pour les rappels : ils sont versés à ${Math.round(x.coefRappels * 100)} %, le reste attend.` }) : null] : [],
+    // Trop-perçus retenus sur cette paye
+    (x.retenues || []).length ? [h("h4", { style: "margin:16px 0 6px", text: x.versee ? "Trop-perçus retenus sur cette paye" : "Trop-perçus à retenir sur cette paye" }),
+      h("div", { class: "tbl-wrap", style: "margin-top:0" }, h("table", { class: "compact" },
+        h("thead", {}, h("tr", {}, ["Agent", "Semaine", "Motif", "Dû", "Retenu", x.versee ? "" : "Retenir"].map((t, i) => h("th", { class: [3, 4].includes(i) ? "num" : null, text: t })))),
+        h("tbody", {}, x.retenues.map(r => {
+          let cb = null;
+          if (!x.versee) { cb = h("input", { type: "checkbox", "aria-label": `Retenir le trop-perçu de ${r.nom}`, disabled: !w }); cb.checked = r.inclus; cb.addEventListener("change", () => { const p = payeOf(k), ex = new Set((p && p.retenuesExclues) || []); if (cb.checked) ex.delete(r.rid); else ex.add(r.rid); payeSet(k, { retenuesExclues: [...ex] }); }); }
+          return h("tr", {}, h("td", { text: r.nom }), h("td", { text: "S" + ((bounds(r.semaine) || {}).week || "?") }), h("td", { text: r.motif || "" }),
+            h("td", { class: "num", text: money(r.du) }), h("td", { class: "num", text: r.retenu ? "− " + money(r.retenu) : "—" }), h("td", {}, cb));
+        })))),
+      !x.versee && x.retenues.some(r => r.inclus && r.retenu < r.du) ? h("p", { class: "hint", text: "Un trop-perçu se retient sur ce que l’agent touche cette semaine (paye et rappels) : ce qui dépasse attend la paye suivante. Un agent sans heures cette semaine n’a rien de retenu." }) : null] : []);
   // Actions
   const acts = [];
-  if (!x.versee && w) acts.push(h("button", { class: "btn ink", type: "button", disabled: !x.total, onclick: () => payeVerserDlg(k), text: x.total ? `Verser la paye · ${money(x.total)}` : "Verser la paye" }));
+  const aVerser = x.lignes.some(l => l.heures > 0 || l.brut > 0) || x.rappels.some(r => r.inclus && r.verse > 0);
+  if (!x.versee && w) acts.push(h("button", { class: "btn ink", type: "button", disabled: !aVerser, onclick: () => payeVerserDlg(k), text: aVerser ? `Verser la paye · ${money(x.total)}` : "Verser la paye" }));
   if (x.lignes.length || x.rappels.length) acts.push(h("button", { class: "btn ghost", type: "button", onclick: () => showDocImage(payeDoc(k), () => { closeDialog(); }), text: "État de paye" }));
+  if (x.versee && w) acts.push(h("button", { class: "btn ghost", type: "button", onclick: () => openRegulariser(k), text: "Régulariser la semaine" }));
   if (x.versee && w) acts.push(h("button", { class: "btn danger small", type: "button", onclick: () => payeAnnulerDlg(k), text: x.p.reprise ? "Annuler la reprise" : "Annuler le versement" }));
   if (!x.versee) acts.push(h("span", { class: "hint", text: `Imputée sur l’enveloppe ${c.service} ${deMois(moisDe(k))}.` }));
   fill($("#py-actions"), acts);
@@ -4121,18 +4184,26 @@ function renderFoncList(k) {
 }
 function renderRappelList() {
   const all = rappelsTous(), dus = all.filter(r => r.reste > 0), done = all.filter(r => r.reste <= 0).slice(0, 6);
-  $("#py-rap-sub").textContent = dus.length ? `${money(dus.reduce((t, r) => t + r.reste, 0))} dus à ${[...new Set(dus.map(r => r.fid))].length} agent${plural([...new Set(dus.map(r => r.fid))].length)}. Ils sont proposés sur la prochaine paye.` : "Ce qui reste dû aux agents : prorata, heures non payées, corrections.";
+  const tp = retenuesTous(), tpd = tp.filter(r => r.reste > 0), tpo = tp.filter(r => r.reste <= 0).slice(0, 6);
+  $("#py-tp-new").hidden = !writer();
+  $("#py-rap-sub").textContent = [dus.length ? `${money(dus.reduce((t, r) => t + r.reste, 0))} de rappels dus à ${[...new Set(dus.map(r => r.fid))].length} agent${plural([...new Set(dus.map(r => r.fid))].length)}, proposés sur la prochaine paye.` : "",
+    tpd.length ? `${money(tpd.reduce((t, r) => t + r.reste, 0))} de trop-perçus à retenir sur ${[...new Set(tpd.map(r => r.fid))].length} agent${plural([...new Set(tpd.map(r => r.fid))].length)}.` : ""].filter(Boolean).join(" ") || "Ce qui reste dû aux agents (prorata, heures non payées) et ce qu’ils ont touché en trop.";
+  const liT = r => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTropPercu(r.id), text: `${r.nom || "Agent"} · trop-perçu semaine ${(bounds(r.semaine) || {}).week || "?"}` }),
+      h("span", { class: "meta", text: `${r.motif || "Trop-perçu"} · ${money(r.montant)}${r.retenu ? " · " + money(r.retenu) + " retenus" : ""}${r.rembourse ? " · " + money(r.rembourse) + " remboursés" : ""}` })),
+    chip(r.annule ? ["Annulé", "muted"] : r.reste <= 0 ? ["Régularisé", "ok"] : r.retenu || r.rembourse ? ["En partie retenu", "warn"] : ["À retenir", "warn"]),
+    h("span", { class: "mono py-reste", text: r.reste > 0 ? "− " + money(r.reste) : "" }));
   const li = r => h("li", {},
     h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openRappel(r.id), text: `${r.nom || "Agent"} · semaine ${(bounds(r.semaine) || {}).week || "?"}` }),
       h("span", { class: "meta", text: `${r.motif || "Rappel"} · ${money(r.montant)}${r.verse ? " · " + money(r.verse) + " versés" : ""}` })),
     chip(r.annule ? ["Annulé", "muted"] : r.reste <= 0 ? ["Versé", "ok"] : r.verse ? ["En partie versé", "warn"] : ["Dû", "warn"]),
     h("span", { class: "mono", text: r.reste > 0 ? money(r.reste) : "" }));
-  fill($("#py-rap"), all.length ? h("ul", { class: "ent-list" }, dus.map(li), done.map(li)) : h("div", { class: "empty", text: "Aucun rappel. Un rappel naît d’un prorata, ou se saisit pour des heures non payées (Ajouter un rappel)." }));
+  fill($("#py-rap"), all.length || tp.length ? h("ul", { class: "ent-list" }, dus.map(li), tpd.map(liT), done.map(li), tpo.map(liT)) : h("div", { class: "empty", text: "Aucun rappel ni trop-perçu. Un rappel naît d’un prorata ou se saisit pour des heures non payées ; un trop-perçu se note quand un agent a touché trop, ou par « Régulariser la semaine »." }));
 }
 function renderPayeHist() {
   const list = payesVersees().slice().sort((a, b) => String(b.id).localeCompare(String(a.id)));
   fill($("#py-hist"), list.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
-    h("thead", {}, h("tr", {}, ["Semaine", "Mois", "Agents", "Payes versées", "Prorata", "Rappels", "Total", "Versée le"].map((t, i) => h("th", { class: [2, 3, 4, 5, 6].includes(i) ? "num" : null, text: t })))),
+    h("thead", {}, h("tr", {}, ["Semaine", "Mois", "Agents", "Payes versées", "Prorata", "Rappels", "Trop-perçus retenus", "Total", "Versée le"].map((t, i) => h("th", { class: [2, 3, 4, 5, 6, 7].includes(i) ? "num" : null, text: t })))),
     h("tbody", {}, list.map(p => h("tr", {},
       h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => { payeGo(p.id); window.scrollTo({ top: 0, behavior: "smooth" }); }, text: periodLabel(p.id) }), p.reprise ? h("span", { class: "small-meta", text: "reprise de " + (p.reprise.no || "la demande") }) : null),
       h("td", { text: MoisNom(p.mois || moisDe(p.id)) }),
@@ -4140,6 +4211,7 @@ function renderPayeHist() {
       h("td", { class: "num", text: money((p.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0)) }),
       h("td", { class: "num", text: Number(p.coef) < 1 ? pctC(p.coef) : "—" }),
       h("td", { class: "num", text: (p.rappels || []).length ? money((p.rappels || []).reduce((t, r) => t + (Number(r.verse) || 0), 0)) : "—" }),
+      h("td", { class: "num", text: (p.retenues || []).length ? "− " + money((p.retenues || []).reduce((t, r) => t + (Number(r.retenu) || 0), 0)) : "—" }),
       h("td", { class: "num", style: "font-weight:650", text: money(payeTotal(p)) }),
       h("td", { text: p.verseeLe ? fmtDate(new Date(p.verseeLe)) : "—" })))))) : h("div", { class: "empty", text: "Aucune paye versée pour l’instant." }));
 }
@@ -4150,6 +4222,7 @@ $("#py-table").addEventListener("change", e => { const i = e.target.closest("inp
 $("#py-table").addEventListener("keydown", e => { const i = e.target.closest("input[data-fid]"); if (i && e.key === "Enter") { e.preventDefault(); i.blur(); } });
 $("#py-fonc-new").addEventListener("click", () => openFoncForm(null));
 $("#py-rappel").addEventListener("click", () => openRappelForm({}));
+$("#py-tp-new").addEventListener("click", () => openTropPercuForm({}));
 $("#py-reglages").addEventListener("click", () => openPayeReglages());
 
 function openPayeBudget(k) {
@@ -4274,7 +4347,7 @@ function openFonc(fid, k0) {
   const f = foncOf(fid); if (!f) return;
   const k = k0 || S.payeSem || semKey(new Date()), w = writer(), c = payeCfg(), reopen = () => openFonc(fid, k);
   const taux = gradeTaux(f.grade), pt = ptSemaine(f.discordId, k), x = payeCalc(k), l = x.lignes.find(z => z.fid === fid);
-  const rap = rappelsTous().filter(r => r.fid === fid), dus = rap.filter(r => r.reste > 0);
+  const rap = rappelsTous().filter(r => r.fid === fid), dus = rap.filter(r => r.reste > 0), tps = retenuesTous().filter(r => r.fid === fid), tpd = tps.filter(r => r.reste > 0);
   const hist = payesVersees().map(p => ({ p, l: (p.lignes || []).find(z => z.fid === fid), r: (p.rappels || []).filter(z => z.fid === fid) })).filter(z => z.l || z.r.length).sort((a, b) => String(b.p.id).localeCompare(String(a.p.id)));
   const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
   const verseeK = payeVersee(payeOf(k));
@@ -4291,7 +4364,8 @@ function openFonc(fid, k0) {
       mk("Grade", f.grade || "—", taux ? `${money(taux)} de l’heure` : "pas de taux au barème", taux ? "" : "bad"),
       mk("Heures de la semaine", fmtH(l ? l.heures : pt.h), l && l.manuel ? "saisies à la main" : f.discordId ? "pointées" : "à saisir dans la paye"),
       mk(x.versee ? "Versé" : "Paye prévue", money(l ? l.verse : 0), l ? `${fmtH(l.heuresPayees)} payées${l.reste > 0 ? " · " + money(l.reste) + " en rappel" : ""}` : "pas d’heures", x.versee ? "ok" : ""),
-      mk("Rappels dus", money(dus.reduce((t, r) => t + r.reste, 0)), dus.length ? `${dus.length} rappel${plural(dus.length)}` : "aucun", dus.length ? "warn" : "")),
+      mk("Rappels dus", money(dus.reduce((t, r) => t + r.reste, 0)), dus.length ? `${dus.length} rappel${plural(dus.length)}` : "aucun", dus.length ? "warn" : ""),
+      tps.length ? mk("Trop-perçus", "− " + money(tpd.reduce((t, r) => t + r.reste, 0)), tpd.length ? "à retenir sur ses payes" : "régularisés", tpd.length ? "warn" : "") : null),
     f.discordId ? sec(`Pointages · ${periodLabel(k)}`, pt.list.length ? h("ul", { class: "ent-list" }, ptRows) : h("p", { class: "muted", style: "margin:0", text: "Aucun pointage cette semaine." }),
       verseeK && w ? h("p", { class: "hint", style: "margin:6px 0 0", text: "La paye de cette semaine est versée : corriger un pointage ne change pas ce qui a été versé. Ajoutez un rappel pour payer des heures en plus." }) : null,
       w ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => openPtForm(null, { discordId: f.discordId, nom: f.nom, k }, reopen), text: "Ajouter un pointage" }) : null)
@@ -4305,11 +4379,14 @@ function openFonc(fid, k0) {
     rap.length ? sec(`Rappels · ${rap.length}`, h("ul", { class: "ent-list" }, rap.map(r => h("li", {},
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openRappel(r.id, reopen), text: `Semaine ${(bounds(r.semaine) || {}).week || "?"} · ${money(r.montant)}` }), h("span", { class: "meta", text: r.motif || "" })),
       chip(r.annule ? ["Annulé", "muted"] : r.reste <= 0 ? ["Versé", "ok"] : ["Dû", "warn"]), h("span", { class: "mono", text: r.reste > 0 ? money(r.reste) : "" }))))) : null,
+    tps.length ? sec(`Trop-perçus · ${tps.length}`, h("ul", { class: "ent-list" }, tps.map(r => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTropPercu(r.id, reopen), text: `Semaine ${(bounds(r.semaine) || {}).week || "?"} · ${money(r.montant)}` }), h("span", { class: "meta", text: [r.motif || "", r.retenu ? money(r.retenu) + " retenus" : "", r.rembourse ? money(r.rembourse) + " remboursés" : ""].filter(Boolean).join(" · ") })),
+      chip(r.annule ? ["Annulé", "muted"] : r.reste <= 0 ? ["Régularisé", "ok"] : ["À retenir", "warn"]), h("span", { class: "mono", text: r.reste > 0 ? "− " + money(r.reste) : "" }))))) : null,
     kv([["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"], f.note ? ["Note", f.note] : null, f.actif === false ? ["Retiré des effectifs", f.retireLe ? longDate(new Date(f.retireLe)) : "oui"] : null])
   ];
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semPrec(k)), text: "‹ Semaine" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semSuiv(k)), text: "Semaine ›" }), h("span", { class: "spacer" })];
   if (l || x.rappels.some(r => r.fid === fid && r.verse > 0)) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(bulletinDoc(k, fid), reopen), text: "Bulletin" }));
-  if (w) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openRappelForm({ fid, back: reopen }), text: "Ajouter un rappel" }), h("button", { class: "btn ink small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: "Modifier" }));
+  if (w) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openRappelForm({ fid, back: reopen }), text: "Ajouter un rappel" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openTropPercuForm({ fid, back: reopen }), text: "Trop-perçu" }), h("button", { class: "btn ink small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: "Modifier" }));
   openDialog({ eyebrow: `Fonctionnaire · ${periodLabel(k)}`, title: f.nom || "Agent", wide: true, stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : pt.open ? stamp(["EN SERVICE", "info"]) : null, body, foot });
 }
 
@@ -4442,6 +4519,138 @@ function rappelAnnulerDlg(r, back) {
   });
   openDialog({ eyebrow: "Rappel de salaire", title: `Annuler ${money(r.reste)} dus à ${r.nom} ?`, body: [h("p", { style: "margin:0", text: r.verse ? `${money(r.verse)} déjà versés restent acquis.` : "Rien n’a encore été versé sur ce rappel." }), field("py-ra-motif", "Motif", motif), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+
+/* Trop-perçus : saisie, remboursement, annulation */
+function openTropPercuForm(preset) {
+  if (!writer()) return;
+  preset = preset || {};
+  const list = foncs();
+  if (!list.length) { toast("Ajoutez d’abord les fonctionnaires.", true); return; }
+  const weeks = payesVersees().map(p => p.id).sort().reverse();
+  if (!weeks.length) { toast("Aucune paye versée : un trop-perçu se rapporte à une semaine déjà payée.", true); return; }
+  const agent = h("select", {}, list.map(f => h("option", { value: f.id, text: `${f.nom} · ${f.grade || "sans grade"}${f.actif === false ? " (retiré)" : ""}` }))); agent.value = preset.fid || list[0].id;
+  const sem = h("select", {}, weeks.map(w => h("option", { value: w, text: periodLabel(w) }))); sem.value = preset.k && weeks.includes(preset.k) ? preset.k : weeks[0];
+  const mt = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric" }); if (preset.montant) mt.value = String(preset.montant);
+  const motif = h("input", { autocomplete: "off", placeholder: "Avance supérieure à la paye due, erreur de grade…" }); motif.value = preset.motif || "";
+  const calc = h("div", { class: "py-note info" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const sync = () => { const d = percuSemaine(agent.value, sem.value); calc.replaceChildren(h("b", { text: `Semaine ${(bounds(sem.value) || {}).week} : ` }), `${money(d.total)} touchés par l’agent (paye ${money(d.paye)}${d.rappels ? ", rappels " + money(d.rappels) : ""}${d.tropPercus ? ", trop-perçus déjà notés " + money(d.tropPercus) : ""}). Le trop-perçu ne peut pas dépasser cette somme. Il sera retenu sur ses prochaines payes.`); };
+  [agent, sem].forEach(el => el.addEventListener("change", sync)); sync();
+  const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le trop-perçu" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const v = Math.round(Number(mt.value) || 0), d = percuSemaine(agent.value, sem.value);
+    if (!(v > 0)) { err.textContent = "Indiquez le montant versé en trop."; mt.focus(); return; }
+    if (v > d.total) { err.textContent = `L’agent n’a touché que ${money(d.total)} pour cette semaine.`; mt.focus(); return; }
+    if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+    go.disabled = true;
+    const f = foncOf(agent.value) || {}, ref = S.db.collection("rappels").doc();
+    if (!(await write(() => ref.set({ fid: agent.value, nom: f.nom || "", grade: f.grade || "", semaine: sem.value, montant: v, motif: motif.value.trim(), origine: "retenue", statut: "du", remboursements: [], at: nowISO(), byNom: S.agentName || "" })))) { go.disabled = false; return; }
+    toast(`Trop-perçu de ${money(v)} enregistré : il sera retenu sur les prochaines payes de ${f.nom}.`);
+    if (preset.back) preset.back(); else closeDialog();
+  });
+  openDialog({ eyebrow: "Payes de la Préfecture", title: "Ajouter un trop-perçu",
+    body: [h("p", { class: "hint", style: "margin:0 0 8px", text: "Une somme versée en trop à un agent pour une semaine payée. Elle est retenue toute seule sur ses payes suivantes ; s’il la rembourse directement, notez le remboursement sur le trop-perçu." }),
+      h("div", { class: "row2" }, field("py-tp-a", "Agent", agent), field("py-tp-s", "Semaine concernée", sem)), calc,
+      h("div", { class: "field" }, h("label", { for: "py-tp-m", text: "Montant versé en trop" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(mt, { id: "py-tp-m" }))), field("py-tp-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: preset.back || closeDialog, text: preset.back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => mt.focus(), 30);
+}
+function openTropPercu(rid, back) {
+  const r = retenuesTous().find(z => z.id === rid); if (!r) return;
+  const w = writer(), reopen = () => openTropPercu(rid, back), doc = (S.rappels || []).find(z => z.id === rid) || {};
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Fermer" }), h("span", { class: "spacer" })];
+  if (w && !r.annule && r.reste > 0) foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => tropPercuAnnulerDlg(r, reopen), text: r.retenu || r.rembourse ? "Annuler le reste" : "Annuler" }),
+    h("button", { class: "btn ink small", type: "button", onclick: () => tropPercuRembDlg(r, reopen), text: "Noter un remboursement" }));
+  if (w && r.annule) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, doc, { statut: "du", annuleLe: null, annuleMotif: null }); delete body.id; if (await write(() => S.db.doc("rappels/" + rid).set(body))) { toast("Trop-perçu rétabli."); reopen(); } }, text: "Rétablir" }));
+  if (w && !r.retenu && (r.remboursements || []).length) foot.splice(2, 0, h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, doc, { remboursements: (doc.remboursements || []).slice(0, -1) }); delete body.id; if (await write(() => S.db.doc("rappels/" + rid).set(body))) { toast("Dernier remboursement retiré."); reopen(); } }, text: "Retirer le dernier remboursement" }));
+  openDialog({ eyebrow: "Trop-perçu", title: `${r.nom || "Agent"} · semaine ${(bounds(r.semaine) || {}).week || "?"}`, stampEl: stamp(r.annule ? ["ANNULÉ", "muted"] : r.reste <= 0 ? ["RÉGULARISÉ", "ok"] : ["À RETENIR", "warn"]),
+    body: [kv([["Motif", r.motif || "—"], ["Semaine concernée", periodLabel(r.semaine)], ["Versé en trop", money(r.montant)],
+      ["Retenu sur les payes", r.retenu ? `${money(r.retenu)} · paye${plural(r.retenuPar.length)} ${r.retenuPar.map(z => "S" + ((bounds(z) || {}).week || "?")).join(", ")}` : "rien"],
+      ["Remboursé par l’agent", r.rembourse ? (r.remboursements || []).map(x => `${money(x.montant)} le ${fmtDate(new Date(x.le))}`).join(", ") : "rien"],
+      ["Reste à retenir", money(r.reste), "tot"], r.annule ? ["Annulé", `${r.annuleMotif || ""}${r.annuleParNom ? " · " + r.annuleParNom : ""}`] : null, r.byNom ? ["Saisi par", r.byNom] : null])], foot });
+}
+function tropPercuRembDlg(r, back) {
+  const mt = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric" }); mt.value = String(r.reste);
+  const err = h("span", { class: "err", "aria-live": "polite" }), go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le remboursement" });
+  go.addEventListener("click", async () => {
+    const v = Math.round(Number(mt.value) || 0);
+    if (!(v > 0) || v > r.reste) { err.textContent = `Entre 1 et ${money(r.reste)}.`; mt.focus(); return; }
+    go.disabled = true;
+    const doc = (S.rappels || []).find(z => z.id === r.id) || {}, body = Object.assign({}, doc, { remboursements: (doc.remboursements || []).concat([{ le: nowISO(), montant: v, parNom: S.agentName || "" }]) }); delete body.id;
+    if (!(await write(() => S.db.doc("rappels/" + r.id).set(body)))) { go.disabled = false; return; }
+    toast(`${money(v)} remboursés par ${r.nom} : rendus au budget des payes ${deMois(moisDe(r.semaine))} et au Trésor.`); back();
+  });
+  openDialog({ eyebrow: "Trop-perçu", title: `Remboursement de ${r.nom}`,
+    body: [h("p", { style: "margin:0 0 8px", text: `L’agent rend directement tout ou partie des ${money(r.reste)} versés en trop. La somme revient au budget des payes ${deMois(moisDe(r.semaine))} et au Trésor ; elle ne sera plus retenue sur sa paye.` }),
+      h("div", { class: "field" }, h("label", { for: "py-tr-m", text: "Somme remboursée" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(mt, { id: "py-tr-m" }))), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => mt.focus(), 30);
+}
+function tropPercuAnnulerDlg(r, back) {
+  const motif = h("input", { autocomplete: "off", placeholder: "Erreur, décision de la Direction…" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn danger small", type: "button", text: "Annuler" });
+  go.addEventListener("click", async () => {
+    if (!motif.value.trim()) { err.textContent = "Indiquez pourquoi."; motif.focus(); return; }
+    go.disabled = true;
+    const doc = (S.rappels || []).find(z => z.id === r.id) || {}, body = Object.assign({}, doc, { statut: "annule", annuleLe: nowISO(), annuleMotif: motif.value.trim(), annuleParNom: S.agentName || "" }); delete body.id;
+    if (!(await write(() => S.db.doc("rappels/" + r.id).set(body)))) { go.disabled = false; return; }
+    toast(`Trop-perçu annulé : ${money(r.reste)} ne seront pas retenus.`); back();
+  });
+  openDialog({ eyebrow: "Trop-perçu", title: `Ne plus retenir ${money(r.reste)} à ${r.nom} ?`, body: [h("p", { style: "margin:0", text: r.retenu || r.rembourse ? `${money(r.retenu + r.rembourse)} déjà retenus ou remboursés restent acquis.` : "Rien n’a encore été retenu." }), field("py-ta-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+
+/* Régulariser une semaine versée sur une base d'heures : compléments et trop-perçus, agent par agent */
+function openRegulariser(k) {
+  if (!writer()) return;
+  const p = payeOf(k); if (!payeVersee(p)) return;
+  const c = payeCfg(), wk = (bounds(k) || {}).week;
+  const hIn = h("input", { inputmode: "decimal", autocomplete: "off", class: "py-h" }); hIn.value = "10 h 00";
+  const motif = h("input", { autocomplete: "off" }); motif.value = `Régularisation de la semaine ${wk} sur la base de 10 h de service`;
+  let touchedMotif = false; motif.addEventListener("input", () => { touchedMotif = true; });
+  const box = h("div"), err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer" });
+  let rows = [];
+  const sync = () => {
+    const H = parseH(hIn.value), ok = Number.isFinite(H) && H >= 0;
+    if (!touchedMotif && ok) motif.value = `Régularisation de la semaine ${wk} sur la base de ${fmtH(H).replace(" h 00", " h")} de service`;
+    rows = (p.lignes || []).map(l => {
+      const taux = Number(l.taux) || gradeTaux(l.grade), du = ok ? Math.min(Math.round(Math.min(H, c.plafondHeures) * taux), payeMaxOf(c)) : 0;
+      const d = percuSemaine(l.fid, k), ecart = d.total - du;
+      return { l, taux, du, percu: d.total, ecart, cb: Object.assign(h("input", { type: "checkbox", "aria-label": `Régulariser ${l.nom}` }), { checked: true }) };
+    });
+    const plus = rows.filter(r => r.ecart > 0), moins = rows.filter(r => r.ecart < 0);
+    box.replaceChildren(
+      h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
+        h("thead", {}, h("tr", {}, ["", "Agent", "Taux", `Dû pour ${ok ? fmtH(Math.min(H, c.plafondHeures)) : "—"}`, "Touché", "Régularisation"].map((t, i) => h("th", { class: [2, 3, 4].includes(i) ? "num" : null, text: t })))),
+        h("tbody", {}, rows.map(r => h("tr", { class: r.ecart ? null : "py-off" }, h("td", {}, r.ecart ? r.cb : null), h("td", {}, h("span", { style: "font-weight:600", text: r.l.nom }), h("span", { class: "small-meta", text: r.l.grade || "" })),
+          h("td", { class: "num", text: money(r.taux) }), h("td", { class: "num", text: money(r.du) }), h("td", { class: "num", text: money(r.percu) }),
+          h("td", { class: r.ecart > 0 ? "py-reste" : null, style: "font-weight:600", text: r.ecart > 0 ? `Trop-perçu : ${money(r.ecart)}` : r.ecart < 0 ? `Complément : ${money(-r.ecart)}` : "à jour" })))))),
+      h("p", { class: "hint", style: "margin:8px 0 0", text: ok ? `${plus.length} trop-perçu${plural(plus.length)} (${money(plus.reduce((t, r) => t + r.ecart, 0))}) retenu${plural(plus.length)} sur les prochaines payes, ${moins.length} complément${plural(moins.length)} (${money(-moins.reduce((t, r) => t + r.ecart, 0))}) versé${plural(moins.length)} en rappel avec la prochaine paye. « Touché » compte la paye, les rappels et les trop-perçus déjà notés : relancer la régularisation ne compte rien deux fois.` : "Indiquez une base d’heures valable." }));
+  };
+  hIn.addEventListener("input", sync); sync();
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const H = parseH(hIn.value);
+    if (!(Number.isFinite(H) && H >= 0 && H <= c.plafondHeures)) { err.textContent = `Une base entre 0 et ${c.plafondHeures} h.`; hIn.focus(); return; }
+    if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+    const todo = rows.filter(r => r.ecart && r.cb.checked);
+    if (!todo.length) { err.textContent = "Rien à régulariser."; return; }
+    go.disabled = true;
+    let n = 0;
+    for (const r of todo) {
+      const ref = S.db.collection("rappels").doc(), base = { fid: r.l.fid, nom: r.l.nom || "", grade: r.l.grade || "", semaine: k, motif: motif.value.trim(), statut: "du", at: nowISO(), byNom: S.agentName || "", regularisation: { base: roundH(H), du: r.du, percu: r.percu } };
+      const body = r.ecart > 0 ? Object.assign(base, { origine: "retenue", montant: r.ecart, remboursements: [] }) : Object.assign(base, { origine: "manuel", montant: -r.ecart, heures: r.taux ? roundH(-r.ecart / r.taux) : null, taux: r.taux });
+      if (await write(() => ref.set(body))) n++; else break;
+    }
+    closeDialog(); renderPayes(true);
+    toast(n === todo.length ? `Semaine ${wk} régularisée : ${n} agent${plural(n)}. Compléments et trop-perçus passent sur la prochaine paye.` : `${n} régularisation${plural(n)} sur ${todo.length} enregistrée${plural(n)} : relancez pour les autres.`, n !== todo.length);
+  });
+  openDialog({ eyebrow: `Payes de la Préfecture · ${periodLabel(k)}`, title: `Régulariser la semaine ${wk}`, wide: true,
+    body: [h("p", { class: "hint", style: "margin:0 0 8px", text: "Ramène la paye de chaque agent à une même base d’heures, au taux de son grade : ce qu’il a touché en plus devient un trop-perçu, retenu sur ses prochaines payes ; ce qui lui manque, un rappel versé avec la prochaine paye. La paye versée reste au dossier telle quelle." }),
+      h("div", { class: "row2" }, field("py-rg-h", "Base d’heures pour chaque agent", hIn), field("py-rg-motif", "Motif", motif)), box, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 
 /* Reprise des salaires déjà versés par une demande « budget salaires » */
@@ -13434,7 +13643,8 @@ function newActions() {
       ["Demande de moyens", "Saisir la demande d’un service, article par article", () => newDemFor(null)],
       w ? ["Article au catalogue", "Prix de référence d’un article demandé par les services", () => openCatForm(null)] : null,
       w ? ["Fonctionnaire", "Agent de la Préfecture payé à l’heure de service", () => openFoncForm(null)] : null,
-      w ? ["Rappel de salaire", "Heures ou somme restant dues à un agent", () => openRappelForm({})] : null]]
+      w ? ["Rappel de salaire", "Heures ou somme restant dues à un agent", () => openRappelForm({})] : null,
+      w ? ["Trop-perçu", "Somme versée en trop à un agent, retenue sur ses payes", () => openTropPercuForm({})] : null]]
   ].map(([t, items]) => [t, items.filter(Boolean)]).filter(([, items]) => items.length);
 }
 function newPopClose() { const pop = $("#new-pop"); if (!pop.hidden) { pop.hidden = true; $("#new-btn").setAttribute("aria-expanded", "false"); } }
