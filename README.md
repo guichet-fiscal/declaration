@@ -218,6 +218,8 @@ Depuis un dossier, une alerte, la fiche d’une entreprise ou **Recouvrement →
 
 L’Inspection mène le contrôle jusqu’à la proposition ; seule la Direction met en recouvrement et retire une pièce.
 
+**Contrôle avant la déclaration.** Quand des opérations suspectes sont constatées pendant la semaine (par exemple de grosses sommes en liquide versées puis reversées en salaires), le contrôle peut commencer sans attendre la déclaration. C’est le modèle de la flagrance fiscale (art. L16-0 BA du LPF), qui permet à l’administration d’agir avant la date limite de déclaration. À l’ouverture, depuis la fiche de l’entreprise ou **Recouvrement → Contrôles fiscaux**, cochez la semaine en cours, ou la précédente tant que sa date limite n’est pas passée. Rangez les captures du compte dans les pièces. Dès qu’un agent saisit la déclaration de cette semaine, elle rejoint le contrôle et son avis attend la fin du contrôle ; les rectifications et la proposition se font alors sur elle. L’avis de vérification peut partir tout de suite, ou plus tard pour ne pas alerter l’entreprise avant qu’elle déclare. Si la date limite passe sans déclaration, la relance suit son cours (mise en demeure, taxation d’office).
+
 ## Recouvrement forcé et justice
 
 Le guichet reprend, en plus court, la procédure des impôts et de l’URSSAF. Les délais et taux se règlent dans **Réglages → Recouvrement**.

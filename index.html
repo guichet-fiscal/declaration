@@ -285,7 +285,7 @@ pre.tpl{margin:12px 0 0;background:var(--field);border:1px solid var(--rule);bor
 /* Fenêtre étroite : les boutons d'une ligne passent dessous au lieu de pousser la fenêtre. */
 @media (max-width:560px){.ent-list li{grid-template-columns:minmax(0,1fr) auto}.ent-list li>.row-actions{grid-column:1/-1;justify-content:flex-start}.todo-list li>.btn{display:none}}
 .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink-2)}
-.switch input{width:auto}
+.switch input{width:auto;flex:none}
 .access{margin:10px 0 0;padding:0 0 0 18px;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
 .access b{color:var(--ink)}
 
@@ -788,7 +788,12 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
 @media (max-width:560px){
   dialog{width:100%;max-width:100%;max-height:92vh;margin:auto 0 0;border-radius:18px 18px 0 0;border-bottom:0}
   dialog[open]{animation:sheet-up .22s ease-out}
-  .dlg-head{padding:16px 16px 12px}
+  .dlg-head{padding:16px 16px 12px;flex-wrap:wrap;row-gap:8px}
+  /* Le tampon passe sous le titre : il ne l’écrase plus en colonne étroite. */
+  .dlg-side{display:contents}
+  .dlg-titles{flex:1 1 calc(100% - 64px)}
+  .dlg-side .icon-btn{order:1}
+  .dlg-side .stamp{order:2;margin-left:2px}
   .dlg-body{padding:14px 16px 16px}
   .dlg-foot{padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
   main .wrap{padding-block:18px 64px}
@@ -5260,6 +5265,7 @@ function openDecl(id) {
   const older = !d.remplace && d.rectificative ? S.declarations.filter(x => x.id !== d.id && x.periode === d.periode && sameEnt(x, entOf(d)) && dStatus(x) !== "rejetee" && String(x.createdAt || "") < String(d.createdAt || "")).sort(byCreatedDesc)[0] : null;
   if (older && st === "soumise") body.unshift(h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: `Rectificative de ${dossierNo("DF", older.id)}. ` }),
     dStatus(older) === "controle" ? "La déclaration d’origine est en contrôle : la Direction tranchera à sa clôture." : "La déclaration d’origine est déjà payée : la Direction doit valider le remplacement avant l’avis, pour que le paiement soit repris en avoir.")));
+  if (ctl && !(ctl.declIds || []).includes(d.id)) body.unshift(h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {}, h("strong", { text: `Le contrôle ${dossierNo("CF", ctl.id)} attend cette déclaration. ` }), "Ouvrez le contrôle pour l’y joindre : son avis attendra la fin du contrôle.")));
   if (st === "controle" && ctl) body.unshift(h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {}, h("strong", { text: `Avis suspendu par le contrôle ${dossierNo("CF", ctl.id)}. ` }), "Il redeviendra payable à la clôture du contrôle.")));
   // L’Inspection émet l’avis et place en contrôle tant que le dossier n’est ni payé ni rejeté.
   const inspOk = ag && ["soumise", "validee", "controle"].includes(st);
@@ -5307,7 +5313,7 @@ function openDecl(id) {
   if (w && st !== "rejetee" && !locked) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { const m = mIn ? Number(mIn.value) : dMontant(d); if (await decide(d, "rejetee", m, nIn ? nIn.value.trim() : "")) { await dropLinkedMajorations(d); await undoReplacement(d); closeDialog(); } }, text: "Rejeter" }));
   // Une déclaration remplacée par sa rectificative ne revit pas : on agit sur la rectificative.
   // Un avis suspendu par un contrôle en cours attend la fin du contrôle.
-  if ((w || inspOk) && !replaced && !(older && st === "soumise") && st !== "validee" && st !== "payee" && !(st === "controle" && ctl)) foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
+  if ((w || inspOk) && !replaced && !(older && st === "soumise") && st !== "validee" && st !== "payee" && !(st === "controle" && ctl) && !(ctl && !(ctl.declIds || []).includes(d.id))) foot.push(h("button", { class: "btn small", type: "button", onclick: () => go("validee"), text: "Émettre l’avis" }));
   // Rectificative saisie par l'Inspection sur une déclaration déjà payée : la Direction valide le remplacement.
   if (w && older && st === "soumise" && dStatus(older) !== "controle") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => {
     const credit = Math.max(0, Math.round(dEncaisse(older) - dComp(older)));
@@ -5881,6 +5887,9 @@ $("#form-decl").addEventListener("submit", async e => {
     const dd = S.declarations.find(x => x.id === ref.id);
     if (dd) await decide(dd, "validee", body.total, "Imposition établie d’office après une mise en demeure restée sans réponse.");
   }
+  // Contrôle ouvert avant la déclaration : elle le rejoint, et son avis attend la fin du contrôle.
+  const cj = await joindreAuControle(S.declarations.find(x => x.id === ref.id), { sansSuspendre: !!tax });
+  if (cj) replNote += ` · rejoint le contrôle ${dossierNo("CF", cj.id)}${dStatus(S.declarations.find(x => x.id === ref.id) || {}) === "controle" ? ", avis à la fin du contrôle" : ""}`;
   const rc = $("#d-receipt");
   rc.className = "receipt";
   rc.replaceChildren(stamp([editing ? "Modifiée" : "Enregistrée", "ok"]),
@@ -5896,7 +5905,7 @@ $("#form-decl").addEventListener("submit", async e => {
   $("#d-date").value = toLocalInput(new Date());
   $("#d-per").value = defaultKey();
   renderDeclPreview();
-  toast(editing ? "Déclaration modifiée." : "Déclaration enregistrée.");
+  toast((editing ? "Déclaration modifiée" : "Déclaration enregistrée") + (cj ? ` : elle rejoint le contrôle ${dossierNo("CF", cj.id)}.` : "."));
   window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -7290,9 +7299,10 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le dossier de justice de ${v.entrepriseNom}`;
       return `a enregistré une suite au dossier de justice de ${a.entrepriseNom} : ${((TSTAT[a.statut] || TSTAT.transmis)[0]).toLowerCase()}`;
     case "controles": {
-      if (x === "ajout") return `a ouvert le contrôle fiscal de ${v.entrepriseNom} (${(v.periodes || []).map(periodPlain).join(", ")})`;
+      if (x === "ajout") return `a ouvert le contrôle fiscal de ${v.entrepriseNom} (${(v.periodes || []).map(periodPlain).join(", ")}${(v.enCours || []).length ? ", avant la déclaration" : ""})`;
       if (x === "suppression") return `a supprimé le contrôle fiscal de ${v.entrepriseNom}`;
       if (a.statut !== b.statut) return ({ propose: `a notifié une proposition de rectification à ${a.entrepriseNom} (${money(a.total)})`, recouvre: `a mis en recouvrement le redressement de ${a.entrepriseNom} (${money(a.total)})`, sans_suite: `a classé sans suite le contrôle de ${a.entrepriseNom}`, ouvert: `a repris l’instruction du contrôle de ${a.entrepriseNom}` })[a.statut] || `a mis à jour le contrôle de ${a.entrepriseNom}`;
+      if ((a.declIds || []).length > (b.declIds || []).length) { const nd = (a.declIds || []).filter(i => !(b.declIds || []).includes(i)).map(i => S.declarations.find(d => d.id === i)).filter(Boolean); return `a joint ${nd.length ? "la déclaration de " + nd.map(d => periodPlain(d.periode).toLowerCase()).join(" et ") : "une déclaration"} au contrôle de ${a.entrepriseNom}`; }
       if ((a.pieces || []).length > (b.pieces || []).length) return `a ajouté une pièce au contrôle de ${a.entrepriseNom}`;
       if ((a.notes || []).length > (b.notes || []).length) return `a ajouté une note au contrôle de ${a.entrepriseNom}`;
       return `a mis à jour le contrôle de ${a.entrepriseNom}`;
@@ -10873,6 +10883,7 @@ const QUALIF = {
 };
 const ORIGINES = { alerte: "Alerte du guichet", signalement: "Signalement", aleatoire: "Contrôle aléatoire", blanchiment: "Surveillance des comptes", vehicules: "Véhicules de société", autre: "Autre" };
 const PIECE_URLS = new Map();
+const JOINT_TENTE = new Set();
 const PIECES_QUOTA = 1024 * 1048576;
 const shortId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const fmtSize = b => (b >= 1048576 ? (b / 1048576).toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " Mo" : Math.max(1, Math.round(b / 1024)) + " Ko");
@@ -10880,7 +10891,30 @@ const piecesUsed = () => S.controles.reduce((s, c) => s + (c.pieces || []).reduc
   + (S.releves || []).reduce((s, r) => s + (Number(r.preuve && r.preuve.taille) || 0), 0)
   + S.declarations.reduce((s, d) => s + (Number(d.soldePreuve && d.soldePreuve.taille) || 0), 0)
   + (S.vehicules || []).reduce((s, v) => s + [v.facture, (v.requalification || {}).rembourseePreuve].concat((v.constats || []).map(x => x.preuve)).reduce((t, p) => t + (Number(p && p.taille) || 0), 0), 0);
-const ctrlOf = d => S.controles.find(c => (c.declIds || []).includes(d.id) && (c.statut === "ouvert" || c.statut === "propose")) || null;
+// Contrôle ouvert avant la déclaration (sur le modèle de la flagrance fiscale, art. L16-0 BA du LPF) :
+// il vise une période pas encore déclarée (« attente ») et la déclaration le rejoint dès sa saisie.
+const ctrlAttend = (e, k) => S.controles.find(c => c.statut === "ouvert" && (c.attente || []).includes(k) && sameEnt(c, e)) || null;
+const ctrlOf = d => S.controles.find(c => (c.declIds || []).includes(d.id) && (c.statut === "ouvert" || c.statut === "propose")) || (dStatus(d) !== "rejetee" ? ctrlAttend(entOf(d), d.periode) : null);
+// Périodes que l'entreprise peut encore déclarer (la semaine en cours, la précédente avant sa date limite)
+// et qu'elle n'a pas déclarées : un contrôle peut les viser sans attendre.
+function periodesAttendues(e) {
+  const deb = e.debutActivite && bounds(e.debutActivite) ? keyStart(e.debutActivite) : -Infinity;
+  return [...new Set([defaultKey(), keyOf(new Date())])].filter(k => bounds(k) && bounds(k).end.getTime() >= Math.max(deb, startTime())
+    && Date.now() <= deadline(k).getTime() && !isClosed(k) && !periodDecl(e, k)).sort();
+}
+// La déclaration d'une période attendue rejoint le contrôle ; son avis attend la fin du contrôle
+// (sauf une imposition d'office, notifiée aussitôt).
+async function joindreAuControle(d, o) {
+  const c = d && dStatus(d) !== "rejetee" ? ctrlAttend(entOf(d), d.periode) : null;
+  if (!c || (c.declIds || []).includes(d.id)) return null;
+  const st = dStatus(d), susp = c.suspendre !== false && !(o && o.sansSuspendre) && (st === "soumise" || st === "validee");
+  const patch = { declIds: (c.declIds || []).concat([d.id]), periodes: [...new Set((c.periodes || []).concat([d.periode]))].sort(), attente: (c.attente || []).filter(k => k !== d.periode) };
+  if (susp) { patch.suspendus = (c.suspendus || []).concat([d.id]); patch.avant = Object.assign({}, c.avant, { [d.id]: st }); }
+  S.forceWrite = "controles/" + c.id;
+  if (!(await saveControle(c, patch))) return null;
+  if (susp) await decide(d, "controle", dMontant(d), (S.decisions[d.id] || {}).note || `Contrôle fiscal ${dossierNo("CF", c.id)}`, { quiet: true });
+  return c;
+}
 // Un contrôle mis en recouvrement devient « Soldé » quand le redressement est payé, « Dégrevé » s'il est annulé.
 const ctrlPen = c => (c && c.penaliteId ? S.penalites.find(p => p.id === c.penaliteId) : null) || null;
 function ctrlState(c) {
@@ -10950,13 +10984,18 @@ function avisVerifDoc(c) {
       discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Demande de justifications ${dossierNo("CF", c.id)}** · ${e.nom} · ${money(c.justif.ecarts.reduce((t, x) => t + x.ecart, 0))} portés au compte sans origine connue, réponse avant le ${lim}.` }
     };
   }
+  // Contrôle ouvert pendant la période, avant la déclaration (flagrance fiscale, art. L16-0 BA du LPF).
+  const enc = c.enCours || [];
   return {
     kind: "AVIS DE VÉRIFICATION", no: dossierNo("CF", c.id), date: "Notifié le " + longDate(new Date(c.ouvertLe)),
     meta: [["Entreprise", e.nom], ["Patron", e.patron || "—"], ["Périodes vérifiées", (c.periodes || []).map(periodPlain).join(", ") || "—"], ["Inspecteur", c.inspecteur || "—"]],
-    lines: [["Origine du contrôle", ORIGINES[c.origine] || "—"], ["Ouverture", fmtDateTime(new Date(c.ouvertLe))]],
+    lines: [["Origine du contrôle", ORIGINES[c.origine] || "—"], ["Ouverture", fmtDateTime(new Date(c.ouvertLe))]]
+      .concat(enc.map(k => [`Déclaration attendue · ${periodPlain(k)}`, "avant le " + longDate(deadline(k))])),
     total: ["Contrôle fiscal", "Ouvert"], stamp: ["CONTRÔLE FISCAL", "accent"],
-    footer: "La Direction des impôts et cotisations vérifie les déclarations des périodes ci-dessus (art. L47 du LPF). Tenez vos justificatifs à sa disposition : factures, relevés de compte, liste et salaires des employés. Vous pouvez vous faire assister d’un conseil. S’opposer au contrôle entraîne une majoration de 100 % (art. 1732 du CGI).",
-    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Avis de vérification ${dossierNo("CF", c.id)}** · ${e.nom} · contrôle fiscal de ${(c.periodes || []).map(periodPlain).join(", ").toLowerCase()}.` }
+    footer: enc.length
+      ? `La Direction des impôts et cotisations a constaté, pendant la période en cours, des opérations qui justifient un contrôle sans attendre la déclaration (sur le modèle de la flagrance fiscale, art. L16-0 BA du LPF). Déclarez cette période dans le délai habituel : la déclaration sera vérifiée dès son dépôt, et son avis d’imposition suivra la fin du contrôle. Tenez vos justificatifs à disposition : factures, relevés de compte, liste et salaires des employés. S’opposer au contrôle entraîne une majoration de 100 % (art. 1732 du CGI).`
+      : "La Direction des impôts et cotisations vérifie les déclarations des périodes ci-dessus (art. L47 du LPF). Tenez vos justificatifs à sa disposition : factures, relevés de compte, liste et salaires des employés. Vous pouvez vous faire assister d’un conseil. S’opposer au contrôle entraîne une majoration de 100 % (art. 1732 du CGI).",
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Avis de vérification ${dossierNo("CF", c.id)}** · ${e.nom} · contrôle fiscal de ${(c.periodes || []).map(periodPlain).join(", ").toLowerCase()}${enc.length ? ", ouvert avant la déclaration" : ""}.` }
   };
 }
 function propositionDoc(c) {
@@ -10995,26 +11034,37 @@ const amrDocFromPen = p => amrDoc(S.controles.find(c => c.id === p.controleId) |
 function newControle(e, declIds, opts) {
   opts = opts || {};
   const ds = declsOf(e).filter(d => dStatus(d) !== "rejetee").sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 16);
-  if (!ds.length) { toast("Cette entreprise n’a encore aucune déclaration à contrôler.", true); return; }
-  const pre = new Set(declIds && declIds.length ? declIds : [ds[0].id]);
+  // Périodes pas encore déclarées : le contrôle peut commencer sans attendre la déclaration.
+  const att = declIds && declIds.length ? [] : periodesAttendues(e);
+  if (!ds.length && !att.length) { toast("Cette entreprise n’a aucune déclaration à contrôler, et aucune période qu’elle puisse encore déclarer.", true); return; }
+  const pre = new Set(declIds && declIds.length ? declIds : ds.length ? [ds[0].id] : []);
+  const nowK = keyOf(new Date()), preAtt = ds.length ? null : att.includes(nowK) ? nowK : att[att.length - 1];
   const boxes = ds.map(d => { const cb = h("input", { type: "checkbox", id: "nc-" + d.id, "data-decl": d.id }); cb.checked = pre.has(d.id); const busy = ctrlOf(d); cb.disabled = !!busy;
     return h("label", { class: "switch", for: "nc-" + d.id }, cb, `${periodPlain(d.periode)} · ${money(d.ca)} de chiffre d’affaires · ${(DSTAT[dStatus(d)] || DSTAT.soumise)[0].toLowerCase()}${busy ? " · déjà dans " + dossierNo("CF", busy.id) : ""}`); });
-  const motif = h("textarea", { id: "nc-motif", rows: "3", placeholder: "Pourquoi ce contrôle : alertes, signalement, incohérences…" });
+  const attBoxes = att.map(k => { const cb = h("input", { type: "checkbox", id: "nc-att-" + k, "data-att": k }); const busy = ctrlAttend(e, k); cb.checked = !busy && k === preAtt; cb.disabled = !!busy;
+    return h("label", { class: "switch", for: "nc-att-" + k }, cb, `${periodLabel(k)}${k === nowK ? " (en cours)" : ""} · pas encore déclarée${busy ? " · déjà dans " + dossierNo("CF", busy.id) : ` · à déclarer avant le ${fmtDate(deadline(k))}`}`); });
+  const motif = h("textarea", { id: "nc-motif", rows: "3", placeholder: att.length && !ds.length ? "Ce qui a été constaté : mouvements du compte, ventes, salaires…" : "Pourquoi ce contrôle : alertes, signalement, incohérences…" });
   const al = [...new Set(ds.filter(d => pre.has(d.id)).flatMap(activeAlerts))];
   motif.value = opts.motif || (al.length ? "Alertes du guichet : " + al.join(" ; ") + "." : "");
   const orig = h("select", { id: "nc-orig" }, Object.entries(ORIGINES).map(([v, l]) => h("option", { value: v, text: l })));
-  orig.value = opts.origine || (al.length ? "alerte" : "aleatoire");
+  // Avant la déclaration, ce sont les opérations observées sur le compte qui déclenchent le contrôle.
+  orig.value = opts.origine || (al.length ? "alerte" : preAtt ? "blanchiment" : "aleatoire");
   const insp = h("input", { id: "nc-insp", autocomplete: "off" }); insp.value = S.agentName || "";
   const susp = h("input", { type: "checkbox", id: "nc-susp" }); susp.checked = true;
+  // L'avis de vérification part sur Discord à l'ouverture ; avant la déclaration, l'inspecteur peut
+  // préférer attendre qu'elle soit déposée sans prévenir l'entreprise.
+  const pub = autoOn("controles") ? h("input", { type: "checkbox", id: "nc-pub" }) : null; if (pub) pub.checked = true;
   const err = h("span", { class: "err", "aria-live": "polite" });
   const create = async ev => {
     const ids = $$("input[data-decl]", dlg).filter(b => b.checked && !b.disabled).map(b => b.dataset.decl);
-    if (!ids.length) { err.textContent = "Cochez au moins une période à contrôler."; return; }
+    const attK = $$("input[data-att]", dlg).filter(b => b.checked && !b.disabled).map(b => b.dataset.att);
+    if (!ids.length && !attK.length) { err.textContent = "Cochez au moins une période à contrôler."; return; }
     const btn = ev.currentTarget; btn.disabled = true;
     const ref = S.db.collection("controles").doc();
     const sel = ids.map(id => S.declarations.find(d => d.id === id)).filter(Boolean);
-    const c = { entrepriseId: e.id || null, entrepriseNom: e.nom, declIds: ids, periodes: [...new Set(sel.map(d => d.periode))].sort(), motif: motif.value.trim(), origine: orig.value, inspecteur: insp.value.trim(),
+    const c = { entrepriseId: e.id || null, entrepriseNom: e.nom, declIds: ids, periodes: [...new Set(sel.map(d => d.periode).concat(attK))].sort(), motif: motif.value.trim(), origine: orig.value, inspecteur: insp.value.trim(),
       statut: "ouvert", ouvertLe: nowISO(), ouvertPar: S.agentName || "", by: S.uid || null, notes: [], pieces: [], rectifications: {}, qualification: "bonne_foi", suspendus: [], calcV: 2 };
+    if (attK.length) Object.assign(c, { attente: attK, enCours: attK.slice(), suspendre: susp.checked });
     // On garde l'état de chaque avis avant suspension pour le rétablir exactement à la fin du contrôle.
     c.avant = {};
     if (opts.rectifications) for (const id of ids) if (opts.rectifications[id]) c.rectifications[id] = opts.rectifications[id];
@@ -11024,16 +11074,19 @@ function newControle(e, declIds, opts) {
     if (susp.checked) for (const d of sel) { const st = dStatus(d); if (st === "soumise" || st === "validee") { c.suspendus.push(d.id); c.avant[d.id] = st; } }
     if (!(await write(() => ref.set(c)))) { btn.disabled = false; return; }
     for (const id of c.suspendus) { const d = S.declarations.find(x => x.id === id); if (d) await decide(d, "controle", dMontant(d), (S.decisions[id] || {}).note || `Contrôle fiscal ${dossierNo("CF", ref.id)}`, { quiet: true }); }
-    toast(`Contrôle ${dossierNo("CF", ref.id)} ouvert.`);
-    autoPublish("controles", avisVerifDoc(Object.assign({ id: ref.id }, c)), "Contrôle ouvert.");
+    toast(`Contrôle ${dossierNo("CF", ref.id)} ouvert${attK.length ? " : la déclaration de " + attK.map(periodPlain).join(" et ").toLowerCase() + " le rejoindra dès sa saisie" : ""}.`);
+    if (!pub || pub.checked) autoPublish("controles", avisVerifDoc(Object.assign({ id: ref.id }, c)), "Contrôle ouvert.");
     openControle(ref.id);
   };
   openDialog({
     eyebrow: "Contrôle fiscal", title: "Ouvrir un contrôle · " + e.nom,
-    body: [sec("Périodes à vérifier", h("div", { class: "checks-col" }, boxes)),
+    body: [sec("Périodes à vérifier", h("div", { class: "checks-col" }, boxes, attBoxes),
+        att.length ? h("p", { class: "hint", style: "margin:6px 0 0", text: "Une période pas encore déclarée peut être contrôlée sans attendre, quand des opérations suspectes sont constatées pendant la période (sur le modèle de la flagrance fiscale, art. L16-0 BA du LPF). Rangez les captures du compte dans les pièces du contrôle ; la déclaration rejoindra le contrôle dès sa saisie, et son avis attendra la fin du contrôle." }) : null),
       h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "nc-orig", text: "Origine" }), orig), h("div", { class: "field" }, h("label", { for: "nc-insp", text: "Inspecteur chargé du dossier" }), insp)),
       h("div", { class: "field" }, h("label", { for: "nc-motif", text: "Motif" }), motif),
-      h("label", { class: "switch", for: "nc-susp" }, susp, "Suspendre les avis non payés de ces périodes pendant le contrôle"), err],
+      h("label", { class: "switch", for: "nc-susp" }, susp, att.length ? "Suspendre les avis non payés de ces périodes pendant le contrôle (une déclaration attendue n’aura son avis qu’à la fin du contrôle)" : "Suspendre les avis non payés de ces périodes pendant le contrôle"),
+      pub ? h("label", { class: "switch", for: "nc-pub" }, pub, "Prévenir l’entreprise maintenant : avis de vérification publié sur Discord") : null,
+      pub && att.length ? h("p", { class: "hint", style: "margin:0", text: "Décochez pour attendre sa déclaration sans l’alerter : l’avis pourra être publié plus tard depuis le contrôle." }) : null, err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: create, text: "Ouvrir le contrôle" })]
   });
 }
@@ -11092,19 +11145,28 @@ async function addPieces(c, files, legende) {
 function openControle(id) {
   const c0 = S.controles.find(x => x.id === id);
   if (!c0) return;
+  const ag = canAgent(), dir = writer();
+  // Déclaration attendue saisie entre-temps (par exemple depuis une page restée sur l'ancienne version) : elle rejoint le contrôle.
+  if (ag && c0.statut === "ouvert" && (c0.attente || []).length) {
+    const arr = c0.attente.map(k => periodDecl(entOf(c0), k)).filter(d => d && !JOINT_TENTE.has(d.id));
+    if (arr.length) { arr.forEach(d => JOINT_TENTE.add(d.id)); (async () => { for (const d of arr) { const cj = await joindreAuControle(d); if (cj) toast(`La déclaration de ${periodPlain(d.periode).toLowerCase()} rejoint le contrôle.`); } openControle(id); })(); return; }
+  }
   const c = JSON.parse(JSON.stringify(c0));
   c.rectifications = c.rectifications || {};
-  const ag = canAgent(), dir = writer();
   const live = c.statut === "ouvert", open = c.statut === "ouvert" || c.statut === "propose";
   const reopen = () => openControle(id);
-  const k0 = rectifCalc(c);
+  const k0 = rectifCalc(c), attente = c.statut === "ouvert" ? c.attente || [] : [];
 
   const perim = h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
     h("thead", {}, h("tr", {}, ["Période", "Chiffre d’affaires", "Charges", "Salaires", "Droits sur la base déclarée", "Statut"].map((t, i) => h("th", { class: i && i < 5 ? "num" : null, text: t })))),
     h("tbody", {}, k0.lines.map(l => h("tr", {},
       h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(l.d.id), text: periodPlain(l.d.periode) })),
       h("td", { class: "num", text: money(l.d.ca) }), h("td", { class: "num", text: money(l.d.charges) }), h("td", { class: "num", text: money(l.d.masse) }),
-      h("td", { class: "num", text: money(l.baseDroits) }), h("td", {}, dChip(l.d)))))));
+      h("td", { class: "num", text: money(l.baseDroits) }), h("td", {}, dChip(l.d)))),
+      attente.map(k => { const late = Date.now() > deadline(k).getTime(); return h("tr", {},
+        h("td", { text: periodPlain(k) }),
+        h("td", { colspan: "4", class: "muted", text: late ? `Pas déclarée : la date limite (${fmtDate(deadline(k))}) est passée, la relance suit son cours` : `Pas encore déclarée : à déclarer avant le ${fmtDate(deadline(k))}, elle rejoindra le contrôle dès sa saisie` }),
+        h("td", {}, chip(late ? ["Non déclarée", "bad"] : ["Déclaration attendue", "warn"]))); }))));
 
   // Pièces : captures rangées dans l'espace privé, ou liens.
   const gal = h("div", { class: "pieces" });
@@ -11223,7 +11285,9 @@ function openControle(id) {
     sec("Constats", motifIn),
     sec("Pièces", gal, pieceForm),
     sec("Instruction", notesBox),
-    sec("Rectifications", h("div", { class: "tbl-wrap" }, rectTable), h("div", { class: "row2", style: "margin-top:10px;align-items:start" }, h("div", { class: "field" }, h("label", { for: "ct-qual", text: "Qualification des manquements" }), qual), sumBox),
+    sec("Rectifications",
+      attente.length ? h("p", { class: "hint", style: "margin:0 0 6px", text: `${k0.lines.length ? "Les rectifications de" : "Les rectifications se feront sur"} la déclaration de ${attente.map(periodPlain).join(" et ").toLowerCase()}${k0.lines.length ? " s’ajouteront dès sa saisie" : ", dès sa saisie"}. En attendant, rangez les captures du compte dans les pièces et notez les constats.` }) : null,
+      k0.lines.length ? h("div", { class: "tbl-wrap" }, rectTable) : null, h("div", { class: "row2", style: "margin-top:10px;align-items:start" }, h("div", { class: "field" }, h("label", { for: "ct-qual", text: "Qualification des manquements" }), qual), sumBox),
       h("p", { class: "hint", style: "margin:0", text: "Le rappel est la différence entre les droits sur les montants retenus et ceux sur les montants déclarés, au barème actuel et exonération comprise." }))
   ];
   if (c.statut === "propose" || c.reponse) {
@@ -11264,10 +11328,12 @@ function openControle(id) {
     foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => closeSansSuite(c0, collect(), restoreAvis), text: "Classer sans suite" }));
     foot.push(h("button", { class: "btn ink small", type: "button", onclick: async () => {
       const v = collect();
+      if (!k0.lines.length && attente.length) { toast(`La déclaration de ${attente.map(periodPlain).join(" et ").toLowerCase()} n’est pas encore saisie : la proposition se fera sur elle.`, true); return; }
       if (v.total <= 0) { toast("Aucun rappel : modifiez les montants retenus ou classez le contrôle sans suite.", true); return; }
       const days = Math.max(1, Number(cfg().delaiReponseJours) || 2);
-      const patch = Object.assign(v, { statut: "propose", proposeLe: nowISO(), delaiReponse: new Date(Date.now() + days * 864e5).toISOString() });
-      if (!(await saveControle(c0, patch, "Proposition de rectification notifiée."))) return;
+      // Une période encore attendue sort du contrôle : la proposition porte sur ce qui est déclaré.
+      const patch = Object.assign(v, { statut: "propose", proposeLe: nowISO(), delaiReponse: new Date(Date.now() + days * 864e5).toISOString() }, attente.length ? { attente: [], periodes: (c0.periodes || []).filter(k => !attente.includes(k)) } : {});
+      if (!(await saveControle(c0, patch, attente.length ? `Proposition notifiée : ${attente.map(periodPlain).join(" et ").toLowerCase()}, pas encore déclarée, sort du contrôle.` : "Proposition de rectification notifiée."))) return;
       const c1 = S.controles.find(x => x.id === id);
       autoPublish("controles", propositionDoc(c1), "Proposition notifiée.");
       showDocImage(propositionDoc(c1), reopen);
@@ -11317,7 +11383,7 @@ function pickEntreprise(title, then, eyebrow) {
 function ctrlListItem(c) {
   return h("li", {},
     h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openControle(c.id), text: `${dossierNo("CF", c.id)} · ${c.entrepriseNom}` }),
-      h("span", { class: "meta", text: [(c.periodes || []).map(periodPlain).join(", "), c.total ? money(c.total) + " rappelés" : "", c.inspecteur || "", (c.pieces || []).length ? `${c.pieces.length} pièce${plural(c.pieces.length)}` : ""].filter(Boolean).join(" · ") })),
+      h("span", { class: "meta", text: [(c.periodes || []).map(periodPlain).join(", "), c.statut === "ouvert" && (c.attente || []).length ? "déclaration attendue" : "", c.total ? money(c.total) + " rappelés" : "", c.inspecteur || "", (c.pieces || []).length ? `${c.pieces.length} pièce${plural(c.pieces.length)}` : ""].filter(Boolean).join(" · ") })),
     chip(ctrlState(c)),
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(c.id), text: "Ouvrir" })));
 }
