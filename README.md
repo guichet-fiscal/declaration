@@ -36,6 +36,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v16_contrats_suppression.sql` : la suppression d’un contrat sans paiement par la Direction
 - `supabase/v17_budget_mensuel.sql` : le passage du budget des services publics au mois (dossiers déjà enregistrés rangés au mois, plafonds par semaine × 4,33)
 - `supabase/v18_payes_pointeuse.sql` : la pointeuse (prise et fin de service à l’heure du serveur) et le rôle d’accès « Pointeuse », qui ne voit que ses propres pointages
+- `supabase/v19_pointeuse_paye.sql` : la paye de la semaine sur la pointeuse pour le rôle « Pointeuse » (sa propre fiche et le barème, rien d’autre)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 
@@ -56,7 +57,7 @@ Adresse du site : **https://guichet-fiscal.github.io/declaration/**
 3. Tout en bas, remplacez `VOTRE_ID_DISCORD` par votre identifiant Discord. Pour l’obtenir : dans Discord, **Paramètres → Avancés → Mode développeur**, puis clic droit sur votre profil → **Copier l’identifiant**.
 4. Cliquez **Run**. Le message *Success* doit apparaître.
 5. Ouvrez une nouvelle requête, collez le contenu de `supabase/v2_journal_export.sql` et cliquez **Run**. Il ajoute le journal des actions et l’export vers Google Sheets.
-5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat), `supabase/v13_conventions.sql` (conventions de partenariat), `supabase/v14_amendes.sql` (amendes versées au Trésor), `supabase/v15_conventions_forfait.sql` (réduction fixe des conventions) `supabase/v16_contrats_suppression.sql` (suppression des contrats sans paiement), `supabase/v17_budget_mensuel.sql` (budget des services au mois) et `supabase/v18_payes_pointeuse.sql` (pointeuse et rôle Pointeuse). Toujours dans cet ordre.
+5 bis. Faites de même avec `supabase/v3_discord.sql` (table privée des salons Discord), puis avec `supabase/v4_inspection_cloture.sql` (rôle Inspection et clôture des semaines), `supabase/v5_pieces.sql` (captures des contrôles) `supabase/v6_direct.sql` (journal en direct et présence des agents), `supabase/v7_blanchiment.sql` (relevés de compte), `supabase/v8_prets.sql` (demandes de prêt), `supabase/v9_vehicules.sql` (véhicules de société), `supabase/v10_notifications.sql` (notifications), `supabase/v11_convocations.sql` (convocations), `supabase/v12_contrats.sql` (contrats d’achat), `supabase/v13_conventions.sql` (conventions de partenariat), `supabase/v14_amendes.sql` (amendes versées au Trésor), `supabase/v15_conventions_forfait.sql` (réduction fixe des conventions) `supabase/v16_contrats_suppression.sql` (suppression des contrats sans paiement), `supabase/v17_budget_mensuel.sql` (budget des services au mois) et `supabase/v18_payes_pointeuse.sql` (pointeuse et rôle Pointeuse), `supabase/v19_pointeuse_paye.sql` (paye de la semaine sur la pointeuse). Toujours dans cet ordre.
 6. Ouvrez **Project Settings → API** (ou **API Keys** selon la version de l’interface). Copiez la **Project URL** et la clé **publique** (nommée `anon` ou `publishable`).
 
 ### 3. Relier Discord
@@ -327,7 +328,7 @@ Une demande saisie avant le détail par article compte pour un seul montant : **
 - **Barème et budget** : grades et taux horaires, budget des payes par mois, heures et paye maximum par semaine, enveloppe imputée.
 - **Salaires déjà versés par une demande** « budget salaires » de la Préfecture : le bandeau **Reprendre dans les payes** rattache chaque salaire à son agent et à sa semaine. La demande reste au dossier mais ne compte plus sur l’enveloppe ni dans le Trésor : la paye compte à sa place, une seule fois.
 
-La pointeuse demande `supabase/v18_payes_pointeuse.sql` ; sans ce script, les payes fonctionnent avec des heures saisies à la main.
+La pointeuse demande `supabase/v18_payes_pointeuse.sql` ; sans ce script, les payes fonctionnent avec des heures saisies à la main. Sur la pointeuse, chacun voit **sa paye de la semaine** (heures pointées × taux de son grade, dans la limite de 20 h et 100 000 €), qui monte à la seconde pendant le service, avec la durée du service en heures, minutes et secondes. C’est un montant brut indicatif : la paye versée tient compte aussi du budget de la semaine et des retenues. Pour les agents qui n’ont que l’accès « Pointeuse », il faut `supabase/v19_pointeuse_paye.sql`.
 
 ## Contrats d’achat
 
