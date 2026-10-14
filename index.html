@@ -333,6 +333,16 @@ img{max-width:100%}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 /* Connexion */
 body[data-gate] nav.tabs,body[data-gate] .panel{display:none!important}
+/* Espace entreprise : seule la page du patron */
+body[data-portail] nav.tabs,body[data-portail] .panel,body[data-portail] #gate,body[data-portail] #notice,body[data-portail] #netbar{display:none!important}
+#portail{display:grid;gap:16px;padding-block:20px 48px;max-width:860px;margin-inline:auto}
+#portail .card{margin:0}
+.pt-ent h2{margin:0;font-size:24px}
+.pt-ent .meta{display:block;color:var(--ink-2);font-size:14px;margin-top:4px}
+.pt-total{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--rule);margin-top:8px;font-weight:700}
+.pd-sal{display:grid;gap:6px}
+.pd-sal-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,9em) auto;gap:6px;align-items:center}
+@media (max-width:560px){.pd-sal-row{grid-template-columns:minmax(0,1fr) minmax(0,7em) auto}}
 .who{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .gate{display:grid;place-items:center;padding-block:32px}
 .gate-card{background:var(--sheet);border:1px solid var(--rule);border-radius:8px;padding:28px 26px 24px;max-width:500px;width:100%;display:grid;gap:12px;justify-items:start}
@@ -873,6 +883,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <div class="gate-actions" id="gate-actions"></div>
     </div>
   </section>
+  <section id="portail" hidden></section>
   <div class="notice netbar" id="netbar" role="status" hidden></div>
   <div class="notice" id="notice" hidden></div>
 
@@ -1532,6 +1543,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       </div>
     </div>
     <div id="d-receipt" hidden></div>
+    <div class="card" id="d-online" hidden></div>
     <div class="notice edit-banner" id="d-editing" hidden></div>
     <div class="form-grid">
       <div>
@@ -2064,6 +2076,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             </form>
             <p class="hint" style="margin:8px 0 0">L’ID Discord se copie avec un clic droit sur le membre → Copier l’identifiant (mode développeur activé dans Discord). Une nouvelle entreprise est attendue à partir de la période en cours ; changez son début d’activité avec « Modifier ».</p>
             <span id="e-msg" class="err" aria-live="polite"></span>
+            <div class="paste-row" style="margin-top:8px"><button class="btn ghost small" type="button" id="ent-liens">Espaces entreprise : liens des patrons</button></div>
             <ul class="ent-list" id="ent-admin"></ul>
           </div>
           <div class="card" id="card-veh">
@@ -2235,7 +2248,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -3090,6 +3103,7 @@ function subscribe() {
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("rappels", s => { S.rappels = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("depots", s => { S.depots = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
 }
 
 /* ---------- Rendu ---------- */
@@ -3125,6 +3139,7 @@ function render() {
   if (S.tab === "journal" && S.journalLoaded) renderJournal();
   renderPrets();
   renderVehicules();
+  renderDepots();
   renderConvocations();
   renderContrats();
   renderConventions();
@@ -3462,6 +3477,8 @@ function todoItems() {
     const l = rappelCandidats(ep.k).filter(y => !y.deja);
     add(l.length, `Rappel avant la date limite · ${periodPlain(ep.k).toLowerCase()}`, `${l.length} entreprise${plural(l.length)} sans déclaration, à déposer avant le ${jourLimite(ep.lim)} à 23 h 59`, openRappelEcheance);
   }
+  const dr = depotsRecus();
+  add(dr.length, `Déclaration${plural(dr.length)} reçue${plural(dr.length)} en ligne à enregistrer`, dr.slice(0, 3).map(d => d.entrepriseNom).join(", "), () => { allerA("declaration"); setTimeout(() => { const el = $("#d-online"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 120); }, "info");
   const av = S.declarations.filter(d => dStatus(d) === "soumise");
   add(av.length, `Déclaration${plural(av.length)} à valider`, `${money(sum(av, d => d.total))} calculés`, () => { S.declFilter = "atraiter"; render(); $("#decl-table").scrollIntoView({ behavior: "smooth", block: "start" }); }, "info");
   if (w) {
@@ -5836,6 +5853,7 @@ const declKeys = k =>
   /^(declarant|patron|gerant|nom)/.test(k) ? "declarant" :
   /^(observation|note|remarque|commentaire)/.test(k) ? "note" : null;
 function parseDecl() {
+  S.depotSaisie = null;
   const p = parseTemplate($("#d-paste").value, declKeys, ["note"], ["salaries"]);
   const rawCap = String($("#d-paste").value || "").split(/\r?\n/).find(l => /^[\s*_>]*(capture|preuve|justificatif|image)/i.test(norm(l)));
   if (rawCap) { const m = /https?:\/\/[^\s<>*`]+/i.exec(rawCap); if (m) p.capture = m[0]; }
@@ -5868,9 +5886,11 @@ $("#d-parse").addEventListener("click", parseDecl);
 $("#d-paste").addEventListener("paste", () => setTimeout(parseDecl, 0));
 ["#d-solde", "#d-ent"].forEach(sel => $(sel).addEventListener("input", () => renderDeclPreview()));
 
-$("#form-decl").addEventListener("submit", async e => {
+// Enregistrement d'une déclaration (saisie, message Discord collé ou dépôt reçu en ligne) :
+// rend l'identifiant de la déclaration, ou null si rien n'a été enregistré.
+async function submitDecl(e) {
   e.preventDefault();
-  if (!canAgent()) return;
+  if (!canAgent()) return null;
   const err = $("#d-err");
   err.textContent = "";
   $$("#form-decl [aria-invalid]").forEach(x => x.removeAttribute("aria-invalid"));
@@ -5890,7 +5910,7 @@ $("#form-decl").addEventListener("submit", async e => {
     bad.forEach(([id]) => $("#" + id).setAttribute("aria-invalid", "true"));
     $("#" + bad[0][0]).focus();
     err.textContent = "À compléter : " + bad.map(b => b[1]).join(", ") + ".";
-    return;
+    return null;
   }
   const tax = S.taxOffice && S.taxOffice.periode === key ? S.taxOffice : null;
   // Rectificative : la nouvelle déclaration remplace la précédente de la même période, qui est rejetée,
@@ -5910,7 +5930,7 @@ $("#form-decl").addEventListener("submit", async e => {
   const r = office ? r1 : applyMecenat(r1, ent, key, c, late, [editing && editing.id, repl && repl.id].filter(Boolean));
   const rcomp = applyCompensation(r, ent, [editing && editing.id, repl && repl.id].filter(Boolean));
   const lockedK = isClosed(key) ? key : editing && isClosed(editing.periode) ? editing.periode : null;
-  if (lockedK) { err.textContent = `${closedNote(lockedK)} : la Direction doit la rouvrir pour y ajouter ou modifier une déclaration.`; return; }
+  if (lockedK) { err.textContent = `${closedNote(lockedK)} : la Direction doit la rouvrir pour y ajouter ou modifier une déclaration.`; return null; }
   const dup = S.declarations.some(d => (!editing || d.id !== editing.id) && d.periode === key && (ent ? d.entrepriseId === ent.id : norm(d.entrepriseNom) === norm(name)));
   const body = {
     entrepriseId: ent ? ent.id : null, entrepriseNom: ent ? ent.nom : name, periode: key,
@@ -5938,7 +5958,7 @@ $("#form-decl").addEventListener("submit", async e => {
   if (sf) { const pr = await uploadProof(`soldes/${ref.id}`, sf); if (pr) body.soldePreuve = pr; }
   const ok = await write(() => ref.set(body));
   btn.disabled = !canAgent();
-  if (!ok) return;
+  if (!ok) return null;
   if (editing) {
     const dec = S.decisions[editing.id];
     if (dec && Number(dec.montant) === Number(editing.total) && body.total !== editing.total) await write(() => S.db.doc("decisions/" + editing.id).set(Object.assign({}, dec, { montant: body.total })));
@@ -5978,9 +5998,19 @@ $("#form-decl").addEventListener("submit", async e => {
   $("#d-date").value = toLocalInput(new Date());
   $("#d-per").value = defaultKey();
   renderDeclPreview();
-  toast((editing ? "Déclaration modifiée" : "Déclaration enregistrée") + (cj ? ` : elle rejoint le contrôle ${dossierNo("CF", cj.id)}.` : "."));
-  window.scrollTo({ top: 0, behavior: "smooth" });
-});
+  // Déclaration reçue en ligne : le dépôt est marqué enregistré, avec la déclaration créée.
+  const dep = S.depotSaisie ? (S.depots || []).find(x => x.id === S.depotSaisie) : null;
+  S.depotSaisie = null;
+  if (dep && !editing && (body.entrepriseId ? body.entrepriseId === dep.entrepriseId : norm(body.entrepriseNom) === norm(dep.entrepriseNom))) {
+    const b2 = Object.assign({}, dep, { statut: "saisie", declId: ref.id, saisieLe: nowISO(), saisieParNom: S.agentName || "" }); delete b2.id;
+    S.forceWrite = "depots/" + dep.id;
+    await write(() => S.db.doc("depots/" + dep.id).set(b2));
+  }
+  toast((editing ? "Déclaration modifiée" : "Déclaration enregistrée") + (cj ? ` : elle rejoint le contrôle ${dossierNo("CF", cj.id)}.` : ".") + (dep ? " Le dépôt en ligne est classé." : ""));
+  if (!S.declLot) window.scrollTo({ top: 0, behavior: "smooth" });
+  return ref.id;
+}
+$("#form-decl").addEventListener("submit", submitDecl);
 
 /* ---------- Services publics : demandes article par article ---------- */
 // Mois proposés pour une demande ou un achat : ceux du suivi, le mois en cours et les deux suivants.
@@ -6507,7 +6537,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -7140,6 +7170,7 @@ function openFiche(e, opts) {
     sec("Pénalités et redressements", pens, penForm),
     compteSection(e, reopen),
     convocationsSection(e),
+    espaceSection(e),
     contratsSection(e),
     conventionsSection(e),
     pretsSection(e),
@@ -7292,7 +7323,7 @@ async function loadJournal() {
 }
 const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
 // Auteur d'une ligne du journal : l'agent, ou l'envoi automatique de la base.
-const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : "Sans nom");
+const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : e.collection === "depots" ? "Espace entreprise" : "Sans nom");
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -7388,6 +7419,12 @@ function describe(e) {
       return a.revoqueeLe && !b.revoqueeLe ? `a révoqué l’attestation de ${a.entrepriseNom}` : `a modifié l’attestation de ${a.entrepriseNom}`;
     case "clotures":
       return x === "suppression" ? `a rouvert ${periodPlain(e.doc_id).toLowerCase()}` : `a clôturé ${periodPlain(e.doc_id).toLowerCase()}`;
+    case "depots":
+      if (x === "suppression") return `a supprimé la déclaration reçue en ligne de ${v.entrepriseNom} (${periodPlain(v.periode)})`;
+      if (x === "ajout") return `${v.entrepriseNom} a déposé en ligne sa déclaration de la ${periodPlain(v.periode).toLowerCase()} (${money(v.ca)} de chiffre d’affaires)`;
+      if (a.statut === "saisie" && b.statut !== "saisie") return `a enregistré la déclaration reçue en ligne de ${a.entrepriseNom} (${periodPlain(a.periode)})`;
+      if (a.statut === "refuse" && b.statut !== "refuse") return `a refusé la déclaration reçue en ligne de ${a.entrepriseNom} (${periodPlain(a.periode)})${a.refusMotif ? " : " + a.refusMotif : ""}`;
+      return `${a.entrepriseNom} a ${b.statut === "refuse" ? "renvoyé" : "corrigé"} en ligne sa déclaration de la ${periodPlain(a.periode).toLowerCase()}`;
     case "relances":
       if (x === "suppression") return `a supprimé une relance de ${v.entrepriseNom}`;
       if (v.type === "echeance") return `a rappelé à ${v.entrepriseNom} de déclarer la ${(v.periodes || []).map(periodPlain).join(", ").toLowerCase()} avant la date limite`;
@@ -7860,6 +7897,7 @@ function cancelEdit(kind) {
   if (kind === "decl") {
     S.editDecl = null;
     S.taxOffice = null;
+    S.depotSaisie = null;
     $("#form-decl").reset();
     if (salMode()) setSalaries([]);
     $("#d-date").value = toLocalInput(new Date());
@@ -10722,7 +10760,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels"]);
+const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -12157,6 +12195,7 @@ $("#scv-save").addEventListener("click", async () => {
   if (ok) { S.convDirty = false; $("#scv-msg").textContent = "Réglages des convocations enregistrés."; toast("Réglages des convocations enregistrés."); renderConvSettings(true); }
 });
 $("#card-recouv").addEventListener("input", () => { S.recDirty = true; $("#r-msg").textContent = "Modifications non enregistrées."; });
+$("#ent-liens").addEventListener("click", openLiensEspaces);
 $("#r-save").addEventListener("click", async () => {
   if (!writer()) return;
   const v = {
@@ -14301,13 +14340,344 @@ $("#new-pop").addEventListener("keydown", ev => {
 });
 $("#dash-per").addEventListener("change", e => { S.dashKey = e.target.value; render(); });
 
+/* ---------- Espace entreprise ---------- */
+// Chaque entreprise peut recevoir un lien personnel (…/#espace=<jeton>), sans compte : son patron y
+// voit ses déclarations, ses avis, ce qu'elle doit et ses dates limites, et il y dépose ses déclarations
+// (supabase/v21_espace_entreprise.sql). Un dépôt arrive dans « Reçues en ligne » : un agent l'enregistre
+// avec le calcul du guichet, ou le refuse. La saisie depuis le message Discord reste possible.
+const ESPACE_RE = /^#espace=([0-9a-f]{36})$/i;
+const espaceLien = j => location.origin + location.pathname + "#espace=" + j;
+const espaceMessage = (e, j) => `Bonjour, voici l’espace de ${e.nom} auprès de la Direction des impôts et cotisations de la Préfecture de police : ${espaceLien(j)}\nVous y retrouvez vos avis, ce que vous devez et vos dates limites, et vous pouvez y déposer vos déclarations. Ce lien est personnel : ne le partagez pas.`;
+
+// Côté agents : dépôts reçus en ligne.
+const depotsRecus = () => (S.depots || []).filter(d => d.statut === "recu").sort((a, b) => String(a.recuLe).localeCompare(String(b.recuLe)));
+function depotDeja(dep) {
+  const e = S.entreprises.find(x => x.id === dep.entrepriseId) || { id: dep.entrepriseId, nom: dep.entrepriseNom };
+  return periodDecl(e, dep.periode);
+}
+function renderDepots() {
+  const box = $("#d-online");
+  if (!box) return;
+  const l = canAgent() ? depotsRecus() : [];
+  box.hidden = !l.length;
+  if (!l.length) { fill(box); return; }
+  const libres = l.filter(d => !depotDeja(d));
+  fill(box,
+    h("div", { class: "card-head" },
+      h("div", {}, h("h3", { text: `Reçues en ligne · ${l.length}` }),
+        h("p", { class: "sub", text: "Déposées par les patrons dans leur espace entreprise. « Enregistrer » fait le calcul comme une saisie : la déclaration passe à valider. « Vérifier » remplit le formulaire ci-dessous sans enregistrer." })),
+      libres.length > 1 && canAgent() ? h("button", { class: "btn small", type: "button", id: "d-online-all", onclick: enregistrerDepots, text: `Enregistrer les ${libres.length}` }) : null),
+    h("ul", { class: "ent-list" }, l.map(d => {
+      const deja = depotDeja(d), late = new Date(d.recuLe).getTime() > deadline(d.periode).getTime();
+      return h("li", {},
+        h("div", { style: "min-width:0" },
+          h("span", { style: "font-weight:600", text: `${d.entrepriseNom} · ${periodPlain(d.periode)}` }), " ",
+          late ? h("span", { class: "tag warn", text: "retard" }) : null, deja ? h("span", { class: "tag bad", title: `${dossierNo("DF", deja.id)} existe déjà pour cette période`, text: "déjà déclarée" }) : null,
+          h("span", { class: "meta", text: `reçue le ${fmtDateTime(new Date(d.recuLe))}${d.envois > 1 ? " · corrigée" : ""} · ${money(d.ca)} de chiffre d’affaires · déclarant : ${d.declarant || "—"}` })),
+        h("span", {}),
+        h("span", { class: "row-actions" },
+          !deja ? h("button", { class: "btn ghost small", type: "button", "data-dep": d.id, onclick: ev => { ev.currentTarget.disabled = true; enregistrerDepot(d); }, text: "Enregistrer" }) : null,
+          h("button", { class: "btn ghost small", type: "button", onclick: () => remplirDepuisDepot(d), text: "Vérifier" }),
+          h("button", { class: "btn ghost small", type: "button", onclick: () => refuserDepot(d), text: "Refuser" })));
+    })));
+}
+function remplirDepuisDepot(d) {
+  if (S.editDecl) cancelEdit("decl");
+  showTab("declaration");
+  $("#form-decl").reset();
+  S.taxOffice = null;
+  const e = S.entreprises.find(x => x.id === d.entrepriseId);
+  $("#d-ent").value = e ? e.nom : d.entrepriseNom;
+  ensureOption($("#d-per"), d.periode, periodLabel(d.periode));
+  $("#d-ca").value = String(d.ca || 0); $("#d-ch").value = String(d.charges || 0); $("#d-ms").value = String(d.masse || 0); $("#d-nb").value = String(d.nbSalaries || 0);
+  if (salMode()) {
+    const nb = Number(d.nbSalaries) || 0;
+    setSalaries(Array.isArray(d.salaries) && d.salaries.length ? d.salaries.map(x => ({ nom: x.nom, salaire: x.salaire }))
+      : nb > 0 ? Array.from({ length: Math.min(nb, 60) }, (_, i) => ({ nom: `Salarié ${i + 1}`, salaire: Math.round((Number(d.masse) || 0) / nb) })) : []);
+  }
+  $("#d-solde").value = d.solde == null ? "" : String(d.solde);
+  $("#d-solde-lien").value = d.capture || "";
+  $("#d-decl").value = d.declarant || "";
+  $("#d-note").value = d.note || "";
+  $("#d-date").value = toLocalInput(new Date(d.recuLe));
+  $("#d-paste").value = "";
+  $("#d-parse-msg").textContent = `Déclaration reçue en ligne de ${d.entrepriseNom} le ${fmtDateTime(new Date(d.recuLe))} : vérifiez puis enregistrez.`;
+  S.depotSaisie = d.id;
+  renderDeclPreview();
+  if (!S.declLot) $("#form-decl").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+async function enregistrerDepot(d, lot) {
+  S.declLot = !!lot;
+  remplirDepuisDepot(d);
+  let id = null;
+  try { id = await submitDecl({ preventDefault() {} }); } finally { S.declLot = false; }
+  if (!id && !lot) $("#form-decl").scrollIntoView({ behavior: "smooth", block: "start" });
+  return id;
+}
+async function enregistrerDepots() {
+  const l = depotsRecus().filter(d => !depotDeja(d));
+  const b = $("#d-online-all"); if (b) b.disabled = true;
+  let n = 0;
+  for (const d of l) { const cur = (S.depots || []).find(x => x.id === d.id); if (!cur || cur.statut !== "recu" || depotDeja(cur)) continue; if (await enregistrerDepot(cur, true)) n++; else break; }
+  toast(`${n} déclaration${plural(n)} reçue${plural(n)} en ligne enregistrée${plural(n)}${n < l.length ? " : vérifiez la suivante dans le formulaire" : ""}.`, n < l.length);
+}
+function refuserDepot(d) {
+  const t = h("textarea", { id: "dp-motif", rows: "3", placeholder: "Ex. : chiffre d’affaires incomplet, capture du compte manquante…" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: "Déclaration reçue en ligne", title: `Refuser · ${d.entrepriseNom} · ${periodPlain(d.periode)}`,
+    body: [h("p", { style: "margin:0", text: "Le patron voit le refus et son motif dans son espace, et peut renvoyer une déclaration corrigée." }), h("div", { class: "field" }, h("label", { for: "dp-motif", text: "Motif communiqué à l’entreprise" }), t), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ink small", type: "button", onclick: async ev => {
+        if (!t.value.trim()) { err.textContent = "Indiquez le motif."; return; }
+        ev.currentTarget.disabled = true;
+        const cur = (S.depots || []).find(x => x.id === d.id) || d, b2 = Object.assign({}, cur, { statut: "refuse", refuseLe: nowISO(), refuseParNom: S.agentName || "", refusMotif: t.value.trim() }); delete b2.id;
+        S.forceWrite = "depots/" + d.id;
+        if (await write(() => S.db.doc("depots/" + d.id).set(b2))) { closeDialog(); toast("Déclaration refusée : l’entreprise voit le motif dans son espace."); }
+      }, text: "Refuser la déclaration" })] });
+  setTimeout(() => t.focus(), 30);
+}
+
+// Côté Direction : les liens.
+async function chargerLiens() {
+  if (!S.sb || !writer()) return;
+  const { data, error } = await S.sb.from("liens_entreprises").select("entreprise_id,jeton,cree_le,cree_par,derniere_visite");
+  if (error) { S.liens = {}; S.liensEtat = tableMissing(error) ? "absent" : "erreur"; return; }
+  S.liens = Object.fromEntries((data || []).map(r => [r.entreprise_id, r])); S.liensEtat = "ok";
+}
+async function lienAction(e, action) {
+  const { data, error } = await S.sb.rpc("lien_entreprise", { p_entreprise: e.id, p_action: action });
+  if (error) { toast(/PGRST202|schema cache/i.test((error.code || "") + (error.message || "")) ? "Exécutez d’abord supabase/v21_espace_entreprise.sql dans Supabase." : "Refusé : " + error.message, true); return null; }
+  S.liens = S.liens || {};
+  if (action === "couper") { delete S.liens[e.id]; toast(`Accès de ${e.nom} coupé : son lien ne marche plus.`); return null; }
+  S.liens[e.id] = { entreprise_id: e.id, jeton: data.jeton, cree_le: data.cree_le, cree_par: data.cree_par, derniere_visite: null };
+  copyText(espaceMessage(e, data.jeton), `Lien de ${e.nom} créé : message copié, envoyez-le au patron en message privé.`);
+  return data.jeton;
+}
+function espaceSection(e) {
+  if (!e.id || !writer()) return null;
+  const box = h("div", {});
+  const draw = () => {
+    if (!S.liens) { fill(box, h("p", { class: "muted", style: "margin:0", text: "Chargement…" })); return; }
+    if (S.liensEtat === "absent") { fill(box, h("p", { class: "muted", style: "margin:0", text: "Pour ouvrir les espaces entreprise, exécutez supabase/v21_espace_entreprise.sql dans Supabase." })); return; }
+    const l = S.liens[e.id];
+    const act = (txt, fn, cls) => h("button", { class: cls || "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; await fn(); draw(); }, text: txt });
+    const dep = (S.depots || []).filter(d => d.entrepriseId === e.id && d.statut === "recu");
+    fill(box,
+      h("p", { class: "hint", style: "margin:0 0 6px", text: "Un lien personnel, sans compte : le patron y voit ses avis, ce qu’il doit et ses dates limites, et y dépose ses déclarations." }),
+      l ? h("p", { style: "margin:0", text: `Lien créé le ${fmtDateTime(new Date(l.cree_le))}${l.cree_par ? " par " + l.cree_par : ""} · ${l.derniere_visite ? "dernière visite le " + fmtDateTime(new Date(l.derniere_visite)) : "pas encore ouvert"}.` })
+        : h("p", { class: "muted", style: "margin:0", text: "Pas encore de lien." }),
+      dep.length ? h("p", { style: "margin:6px 0 0" }, h("strong", { text: `${dep.length} déclaration${plural(dep.length)} reçue${plural(dep.length)} en ligne à enregistrer. ` }), h("button", { class: "linkbtn", type: "button", onclick: () => { closeDialog(); allerA("declaration"); }, text: "Voir" })) : null,
+      h("div", { class: "paste-row", style: "margin-top:8px" },
+        l ? act("Copier le message pour le patron", async () => copyText(espaceMessage(e, l.jeton), "Message copié : envoyez-le au patron en message privé."), "btn small") : act("Créer le lien", () => lienAction(e, "creer"), "btn small"),
+        l ? act("Copier le lien", async () => copyText(espaceLien(l.jeton), "Lien copié.")) : null,
+        l ? act("Nouveau lien", () => lienAction(e, "creer")) : null,
+        l ? act("Couper l’accès", () => lienAction(e, "couper")) : null));
+  };
+  if (!S.liens) chargerLiens().then(draw);
+  draw();
+  return sec("Espace entreprise", box);
+}
+async function openLiensEspaces() {
+  if (!writer()) return;
+  await chargerLiens();
+  if (S.liensEtat === "absent") { toast("Exécutez d’abord supabase/v21_espace_entreprise.sql dans Supabase.", true); return; }
+  const ents = activeEnts();
+  const list = h("ul", { class: "ent-list" });
+  const draw = () => fill(list, ents.map(e => {
+    const l = (S.liens || {})[e.id];
+    return h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: e.nom }), h("span", { class: "meta", text: l ? (l.derniere_visite ? `ouvert le ${fmtDateTime(new Date(l.derniere_visite))}` : "lien pas encore ouvert") : "pas de lien" })),
+      chip(l ? (l.derniere_visite ? ["Ouvert", "ok"] : ["Lien créé", "info"]) : ["Pas de lien", "muted"]),
+      h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; if (l) copyText(espaceMessage(e, l.jeton), `Message de ${e.nom} copié.`); else await lienAction(e, "creer"); draw(); }, text: l ? "Copier le message" : "Créer le lien" })));
+  }));
+  draw();
+  openDialog({ eyebrow: "Entreprises", title: "Espaces entreprise", wide: true,
+    body: [h("p", { style: "margin:0", text: "Chaque lien ouvre l’espace d’une seule entreprise, sans compte. Copiez le message et envoyez-le au patron en message privé. Un nouveau lien, ou l’accès coupé, se règle sur la fiche de l’entreprise." }), list],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
+
+// Côté patron : la page de son entreprise.
+const P_STAT = { soumise: ["Reçue · avis à venir", "info"], validee: ["Avis émis · à payer", "warn"], payee: ["Payée", "ok"], rejetee: ["Rejetée", "muted"], controle: ["En cours d’examen", "accent"] };
+const depotDe = k => (S.depots || []).find(d => d.periode === k) || null;
+function portailPeriodes(e) {
+  const st = Math.max(startTime(), entStartTime(e));
+  return recentKeys(10).filter(k => keyStart(k) >= st && !isClosed(k) && !hasDecl(e, k)).sort();
+}
+function portailMessage(titre, texte) {
+  fill($("#portail"), h("div", { class: "gate-card", style: "margin:24px auto" },
+    h("img", { class: "logo", src: "assets/logo-prefecture.png", alt: "", width: "64", height: "64" }), h("h2", { text: titre }), h("p", { class: "sub", text: texte })));
+}
+async function initPortail(jeton) {
+  document.body.dataset.portail = "1";
+  delete document.body.dataset.gate;
+  $("#gate").hidden = true;
+  $("#role").textContent = "Espace entreprise";
+  $("#portail").hidden = false;
+  const conf = window.GUICHET_CONFIG || {};
+  if (!window.supabase || !conf.supabaseUrl || !conf.supabaseKey || /VOTRE|XXXX/.test(conf.supabaseUrl + conf.supabaseKey)) { portailMessage("Espace indisponible", "Le site n’est pas encore relié à sa base."); return; }
+  S.sb = window.supabase.createClient(conf.supabaseUrl, conf.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  S.downloads = browserDownloads;
+  S.portail = { jeton };
+  portailMessage("Chargement de votre espace…", "Un instant.");
+  await chargerEspace();
+}
+async function chargerEspace() {
+  let res;
+  try { res = await S.sb.rpc("espace_entreprise", { p_jeton: S.portail.jeton }); } catch (err) { res = { error: err }; }
+  const { data, error } = res || {};
+  if (error) {
+    const absent = /PGRST202|schema cache|does not exist/i.test((error.code || "") + " " + (error.message || ""));
+    portailMessage(absent ? "Espace pas encore ouvert" : "Connexion impossible", absent ? "La Préfecture n’a pas encore ouvert les espaces entreprise. Réessayez plus tard." : "Le registre ne répond pas. Vérifiez votre connexion, puis rechargez la page.");
+    return;
+  }
+  if (!data) { portailMessage("Lien inconnu ou coupé", "Ce lien ne donne plus accès à un espace entreprise. Demandez un nouveau lien à la Direction des impôts et cotisations de la Préfecture de police."); return; }
+  S.config = data.config || {};
+  const e = Object.assign({}, data.entreprise);
+  S.entreprises = [e];
+  S.declarations = data.declarations || []; S.decisions = data.decisions || {}; S.echeanciers = data.echeanciers || {};
+  S.penalites = data.penalites || []; S.relances = data.relances || []; S.prets = data.prets || []; S.depots = data.depots || [];
+  S.clotures = Object.fromEntries((data.clotures || []).map(k => [k, {}]));
+  S.portail.e = e;
+  document.title = `${e.nom} · Espace entreprise`;
+  renderPortail();
+}
+function renderPortail() {
+  const e = S.portail.e, box = $("#portail");
+  const ferme = e.actif === false, nowK = keyOf(new Date());
+  const pers = ferme ? [] : portailPeriodes(e);
+  const xo = exoSituation(e);
+  const head = h("div", { class: "card pt-ent" },
+    h("div", { class: "card-head" },
+      h("div", { style: "min-width:0" }, h("p", { class: "eyebrow", style: "margin:0", text: "Espace entreprise · Direction des impôts et cotisations" }), h("h2", { text: e.nom }),
+        h("span", { class: "meta", text: [e.secteur, e.patron ? "patron : " + e.patron : ""].filter(Boolean).join(" · ") })),
+      h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; await chargerEspace(); toast("Espace à jour."); }, text: "Mettre à jour" })),
+    ferme ? h("div", { class: "notice", style: "margin:8px 0 0" }, h("div", { text: "Votre entreprise est fermée au registre : elle ne peut plus déposer de déclaration." })) : null,
+    xo ? h("div", { class: "exo-line", style: "margin-top:8px" }, h("strong", { text: "Exonération :" }), chip([xo.text, xo.tone])) : null);
+  // À déclarer
+  const todo = pers.map(k => {
+    const dp = depotDe(k), late = Date.now() > deadline(k).getTime(), cur = k === nowK && Date.now() <= bounds(k).end.getTime();
+    const state = dp && dp.statut === "recu" ? ["Envoyée", "info"] : dp && dp.statut === "refuse" ? ["Refusée · à renvoyer", "bad"] : late ? ["En retard", "bad"] : cur ? ["En cours", "muted"] : ["À déclarer", "warn"];
+    const txt = dp && dp.statut === "recu" ? `Envoyée le ${fmtDateTime(new Date(dp.modifieLe || dp.recuLe))}${dp.envois > 1 ? " (corrigée)" : ""}. La Préfecture l’enregistre, puis vous envoie l’avis.`
+      : dp && dp.statut === "refuse" ? `Refusée le ${fmtDateTime(new Date(dp.refuseLe))}${dp.refusMotif ? " : " + dp.refusMotif : ""}. Corrigez-la et renvoyez-la.`
+      : `À déposer au plus tard le ${jourLimite(deadline(k))} à 23 h 59${late ? `. Le délai est passé : majoration de ${pct(cfg().majoration)}` : ""}.`;
+    return h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: periodLabel(k) }), h("span", { class: "meta", text: txt })),
+      chip(state), h("span", { class: "row-actions" }, h("button", { class: dp && dp.statut === "recu" ? "btn ghost small" : "btn small", type: "button", "data-per": k, onclick: () => openDepotForm(k), text: dp && dp.statut === "recu" ? "Corriger" : "Déclarer" })));
+  });
+  const cardTodo = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Déclarations à déposer" })),
+    todo.length ? h("ul", { class: "ent-list", id: "pt-todo" }, todo) : h("p", { class: "muted", style: "margin:0", text: ferme ? "Aucune." : "Toutes vos déclarations sont déposées." }),
+    !ferme ? h("p", { class: "hint", style: "margin:8px 0 0", text: `Chaque ${/-S\d{2}$/.test(nowK) ? "semaine (du lundi au dimanche) se déclare au plus tard le mardi suivant à 23 h 59" : "période se déclare avant sa date limite"}. Vous pouvez aussi déclarer sur Discord avec le modèle habituel.` }) : null);
+  // À payer
+  const ip = unpaidItems(e), ae = aEchoirItems(e), items = ip.map(x => Object.assign({ late: true }, x)).concat(ae), tot = items.reduce((t, x) => t + x.montant, 0);
+  const cardPay = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "À payer" })),
+    items.length ? h("ul", { class: "ent-list", id: "pt-pay" }, items.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${x.label}` }), h("span", { class: "meta", text: `${x.ref}${x.late ? " · délai de paiement dépassé" : x.exigible ? " · à payer avant le " + fmtDateTime(new Date(x.exigible)) : ""}` })),
+      chip(x.late ? ["En retard", "bad"] : ["À payer", "warn"]), h("span", { class: "num", style: "font-weight:700", text: money(x.montant) })))) : h("p", { class: "muted", style: "margin:0", text: "Rien à payer pour l’instant." }),
+    items.length ? h("div", { class: "pt-total" }, h("span", { text: "Total" }), h("span", { class: "num", text: money(tot) })) : null,
+    items.length ? h("p", { class: "hint", style: "margin:8px 0 0", text: "Réglez ces sommes auprès de la Direction des impôts et cotisations de la Préfecture de police. Une somme en retard est relancée, puis majorée." }) : null);
+  // Déclarations déposées
+  const ds = declsOf(e).slice().sort((a, b) => String(b.periode).localeCompare(String(a.periode)) || byCreatedDesc(a, b));
+  const cardDecl = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Vos déclarations" })),
+    ds.length ? h("ul", { class: "ent-list", id: "pt-decl" }, ds.map(d => { const st = dStatus(d);
+      return h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: periodLabel(d.periode) }),
+          h("span", { class: "meta", text: `${money(d.ca)} de chiffre d’affaires · ${st === "soumise" ? "montant calculé" : "montant de l’avis"} : ${money(dMontant(d))}${d.enRetard ? " · déposée en retard" : ""}` })),
+        chip(P_STAT[st] || P_STAT.soumise),
+        h("span", { class: "row-actions" },
+          ["validee", "payee"].includes(st) ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisDoc(d)), text: "Avis" }) : null,
+          st === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittanceDeclDoc(d)), text: "Quittance" }) : null)); }))
+      : h("p", { class: "muted", style: "margin:0", text: "Aucune déclaration enregistrée pour l’instant." }));
+  // Relances
+  const rl = relancesOf(e);
+  const cardRl = rl.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Rappels et relances reçus" })),
+    h("ul", { class: "ent-list" }, rl.slice(0, 12).map(r => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: rlLabel(r) }), h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)}` })),
+      rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Voir" })))))) : null;
+  fill(box, head, cardTodo, cardPay, cardDecl, cardRl,
+    h("p", { class: "hint", style: "margin:0;text-align:center", text: "Ce lien est personnel : ne le partagez pas. En cas de perte, demandez-en un nouveau à la Préfecture ; l’ancien ne marchera plus." }));
+}
+function openDepotForm(k0) {
+  const e = S.portail.e, pers = portailPeriodes(e);
+  if (!pers.length) return;
+  const sm = salMode(), soldeOblig = !!(cfg().blanchiment && cfg().blanchiment.soldeObligatoire);
+  const per = h("select", { id: "pd-per" }, pers.map(k => h("option", { value: k, text: periodLabel(k) })));
+  per.value = pers.includes(k0) ? k0 : pers[pers.length - 1];
+  const num = id => h("input", { id, type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "0" });
+  const ca = num("pd-ca"), ch = num("pd-ch"), ms = num("pd-ms"), nb = num("pd-nb");
+  const solde = h("input", { id: "pd-solde", type: "number", step: "1", inputmode: "numeric", placeholder: soldeOblig ? "Obligatoire" : "Facultatif" });
+  const cap = h("input", { id: "pd-cap", type: "url", autocomplete: "off", placeholder: "https://… (message Discord, Imgur…)" });
+  const decl = h("input", { id: "pd-decl", autocomplete: "name" }), note = h("textarea", { id: "pd-note", rows: "2", placeholder: "Facultatif" });
+  const salBox = h("div", { class: "pd-sal" });
+  const salRowP = x => { const n = h("input", { "data-s": "nom", autocomplete: "off", placeholder: "Nom du salarié", "aria-label": "Nom du salarié" }), v = h("input", { "data-s": "salaire", type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "Salaire", "aria-label": "Salaire" });
+    if (x) { n.value = x.nom || ""; v.value = x.salaire == null ? "" : String(x.salaire); }
+    const r = h("div", { class: "pd-sal-row" }, n, v, h("button", { class: "btn ghost small", type: "button", onclick: () => { r.remove(); refresh(); }, text: "Retirer" }));
+    return r; };
+  const addSal = h("button", { class: "btn ghost small", type: "button", onclick: () => { salBox.append(salRowP(null)); refresh(); }, text: "Ajouter un salarié" });
+  const prev = h("dl", { class: "kv", style: "margin:0" }), err = h("span", { class: "err", "aria-live": "polite" });
+  const fillFrom = dp => {
+    ca.value = dp ? String(dp.ca || 0) : ""; ch.value = dp ? String(dp.charges || 0) : ""; ms.value = dp ? String(dp.masse || 0) : ""; nb.value = dp ? String(dp.nbSalaries || 0) : "";
+    solde.value = dp && dp.solde != null ? String(dp.solde) : ""; cap.value = (dp && dp.capture) || ""; decl.value = (dp && dp.declarant) || e.patron || ""; note.value = (dp && dp.note) || "";
+    fill(salBox, (dp && Array.isArray(dp.salaries) && dp.salaries.length ? dp.salaries : [null]).map(salRowP));
+  };
+  const values = () => {
+    const n = el => { const v = Number(el.value); return el.value === "" || !Number.isFinite(v) ? 0 : Math.max(0, Math.round(v)); };
+    if (sm) {
+      const sal = $$(".pd-sal-row", salBox).map(r => ({ nom: $("[data-s=nom]", r).value.trim(), salaire: n($("[data-s=salaire]", r)) })).filter(x => x.nom || x.salaire);
+      return { ca: n(ca), ch: n(ch), ms: sal.reduce((t, x) => t + x.salaire, 0), nb: sal.length, sal };
+    }
+    return { ca: n(ca), ch: n(ch), ms: n(ms), nb: n(nb), sal: null };
+  };
+  const refresh = () => {
+    const v = values(), k = per.value, late = Date.now() > deadline(k).getTime();
+    const r = applyExo(compute(v.ca, v.ch, v.ms, late, cfg(), v.nb, v.sal), e, k, cfg(), late);
+    const rows = [["Résultat", money(r.resultat)], ["Impôt", money(r.impot)], ["Cotisations", money(r.cotisations)]];
+    if (r.exoneration) rows.push([`Exonération de début d’activité (période ${r.exoneration.rang} sur ${r.exoneration.sur})`, "− " + money((r.exoneration.montantIS || 0) + (r.exoneration.montantCot || 0))]);
+    if (late) rows.push([`Majoration de retard (${pct(cfg().majoration)})`, money(r.majoration)]);
+    fill(prev, rows.flatMap(([a, b]) => [h("dt", { text: a }), h("dd", { class: "num", text: b })]), h("dt", { class: "tot-dt", text: "Montant estimé" }), h("dd", { class: "tot-dd num", text: money(r.total) }));
+  };
+  fillFrom(depotDe(per.value));
+  per.addEventListener("change", () => { fillFrom(depotDe(per.value)); refresh(); });
+  const go = h("button", { class: "btn ink small", type: "button", id: "pd-send", text: "Envoyer la déclaration" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    if (ca.value === "") { err.textContent = "Indiquez le chiffre d’affaires (0 s’il n’y en a pas)."; ca.focus(); return; }
+    if (!decl.value.trim()) { err.textContent = "Indiquez le nom du déclarant."; decl.focus(); return; }
+    if (soldeOblig && solde.value === "") { err.textContent = "Indiquez le solde du compte de l’entreprise."; solde.focus(); return; }
+    if (cap.value.trim() && !/^https:\/\/\S+$/.test(cap.value.trim())) { err.textContent = "Le lien de la capture doit commencer par https://"; cap.focus(); return; }
+    const v = values();
+    go.disabled = true; go.textContent = "Envoi…";
+    const payload = { periode: per.value, ca: v.ca, charges: v.ch, masse: v.ms, nbSalaries: v.nb, salaries: sm ? v.sal : null,
+      solde: solde.value === "" ? null : Math.round(Number(solde.value)), capture: cap.value.trim() || null, declarant: decl.value.trim(), note: note.value.trim() };
+    let res;
+    try { res = await S.sb.rpc("deposer_declaration", { p_jeton: S.portail.jeton, p_depot: payload }); } catch (x) { res = { error: x }; }
+    if (res.error) { err.textContent = (res.error.message || "Envoi refusé.").replace(/^.*?ERROR:\s*/, ""); go.disabled = false; go.textContent = "Envoyer la déclaration"; return; }
+    const k = per.value;
+    await chargerEspace();
+    openDialog({ eyebrow: "Déclaration envoyée", title: `${e.nom} · ${periodLabel(k)}`, stampEl: stamp(["Envoyée", "ok"]),
+      body: [h("p", { style: "margin:0", text: `Reçue le ${fmtDateTime(new Date(res.data.recuLe))}. La Préfecture l’enregistre, puis vous envoie l’avis d’imposition. Vous pouvez la corriger ici tant qu’elle n’est pas enregistrée.` })],
+      foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+  });
+  [ca, ch, ms, nb].forEach(i => i.addEventListener("input", refresh));
+  salBox.addEventListener("input", refresh);
+  openDialog({ eyebrow: "Espace entreprise", title: "Déclarer · " + e.nom, wide: true,
+    body: [h("div", { class: "field" }, h("label", { for: "pd-per", text: "Période" }), per),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pd-ca", text: "Chiffre d’affaires" }), h("div", { class: "money", "data-cur": cur() }, ca)),
+        h("div", { class: "field" }, h("label", { for: "pd-ch", text: "Charges (hors salaires)" }), h("div", { class: "money", "data-cur": cur() }, ch))),
+      sm ? sec("Salariés et salaires de la période", salBox, addSal)
+        : h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pd-ms", text: "Masse salariale" }), h("div", { class: "money", "data-cur": cur() }, ms)),
+          h("div", { class: "field" }, h("label", { for: "pd-nb", text: "Nombre de salariés" }), nb)),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pd-solde", text: "Solde du compte de l’entreprise" }), h("div", { class: "money", "data-cur": cur() }, solde)),
+        h("div", { class: "field" }, h("label", { for: "pd-cap", text: "Lien de la capture du compte" }), cap)),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pd-decl", text: "Déclarant" }), decl), h("div", { class: "field" }, h("label", { for: "pd-note", text: "Observation" }), note)),
+      sec("Montant estimé", prev, h("p", { class: "hint", style: "margin:6px 0 0", text: "Calcul indicatif au barème en vigueur. Le montant de l’avis est fixé par la Préfecture, réductions des conventions comprises." })), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+  refresh();
+}
+
 /* ---------- Démarrage ---------- */
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
 showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "svc", "enveloppes", "payes", "catalogue", "pointeuse", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
-render();
-init();
+{ const m = ESPACE_RE.exec(location.hash || ""); if (m) initPortail(m[1].toLowerCase()); else { render(); init(); } }
 })();
 </script>
 </body>
