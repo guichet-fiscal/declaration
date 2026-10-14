@@ -286,6 +286,7 @@ pre.tpl{margin:12px 0 0;background:var(--field);border:1px solid var(--rule);bor
 @media (max-width:560px){.ent-list li{grid-template-columns:minmax(0,1fr) auto}.ent-list li>.row-actions{grid-column:1/-1;justify-content:flex-start}.todo-list li>.btn{display:none}}
 .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink-2)}
 .switch input{width:auto;flex:none}
+.lot-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:0 0 12px;padding:10px 12px;border-radius:10px;background:var(--accent-soft,rgba(37,72,160,.08));font-size:14px;color:var(--ink-2)}
 .access{margin:10px 0 0;padding:0 0 0 18px;display:grid;gap:8px;font-size:14px;color:var(--ink-2)}
 .access b{color:var(--ink)}
 
@@ -5082,6 +5083,58 @@ function setSegCounts(seg, counts, active) {
     $(".count", b).textContent = c == null ? "" : String(c);
   });
 }
+// Ce qui empêche d'émettre l'avis d'une déclaration sans l'examiner (null : rien).
+function avisBloque(d) {
+  if (dStatus(d) !== "soumise") return "déjà traitée";
+  const dec = S.decisions[d.id];
+  if (dec && dec.remplaceePar) return "remplacée";
+  if (ctrlOf(d)) return "en contrôle";
+  const older = !d.remplace && d.rectificative && S.declarations.some(x => x.id !== d.id && x.periode === d.periode && sameEnt(x, entOf(d)) && dStatus(x) !== "rejetee" && String(x.createdAt || "") < String(d.createdAt || ""));
+  if (older) return "rectificative à examiner";
+  if (!d.entrepriseId || !S.entreprises.some(e => e.id === d.entrepriseId)) return "entreprise non enregistrée";
+  if (activeAlerts(d).length) return "alerte";
+  return null;
+}
+// Émettre en une fois les avis des déclarations à valider qui n'ont rien à examiner.
+function openAvisLot() {
+  if (!canAgent()) return;
+  const all = S.declarations.filter(d => dStatus(d) === "soumise").sort((a, b) => String(a.entrepriseNom).localeCompare(String(b.entrepriseNom), "fr") || String(a.periode).localeCompare(String(b.periode)));
+  const okL = all.filter(d => !avisBloque(d)), koL = all.filter(d => avisBloque(d));
+  if (!okL.length) { toast("Aucun avis à émettre sans examen : ouvrez les déclarations une par une.", true); return; }
+  const boxes = okL.map(d => { const cb = h("input", { type: "checkbox", id: "al-" + d.id, "data-lot": d.id }); cb.checked = true;
+    return h("label", { class: "switch", for: "al-" + d.id }, cb, `${d.entrepriseNom} · ${periodPlain(d.periode)} · ${money(dMontant(d))}${d.enRetard ? " · en retard" : ""}${d.exoneration ? ` · ${money(exoMontant(d))} d’exonération` : ""}`); });
+  const pub = hookFor("entreprises") ? h("input", { type: "checkbox", id: "al-pub" }) : null; if (pub) pub.checked = autoOn("avis");
+  const sumEl = h("strong", {}), listBox = h("div", { class: "checks-col" }, boxes);
+  const sel = () => $$("input[data-lot]", listBox).filter(b => b.checked).map(b => okL.find(d => d.id === b.dataset.lot)).filter(Boolean);
+  const go = h("button", { class: "btn ink small", type: "button" });
+  const upd = () => { const l = sel(); sumEl.textContent = `${l.length} avis · ${money(l.reduce((t, d) => t + dMontant(d), 0))}`; go.textContent = l.length ? `Émettre ${l.length} avis` : "Émettre les avis"; go.disabled = !l.length; };
+  go.addEventListener("click", async () => {
+    const l = sel(); if (!l.length) return;
+    go.disabled = true;
+    let n = 0, np = 0;
+    for (const d0 of l) {
+      go.textContent = `Émission… ${n + 1}/${l.length}`;
+      const d = S.declarations.find(x => x.id === d0.id);
+      if (!d || avisBloque(d)) continue; // changée entre-temps par un autre agent
+      if (!(await decide(d, "validee", dMontant(d), (S.decisions[d.id] || {}).note || "", { quiet: true }))) break;
+      n++;
+      const d1 = S.declarations.find(x => x.id === d.id) || d;
+      if (pub && pub.checked && dStatus(d1) === "validee") { if (await publishDoc(avisDoc(d1))) np++; await new Promise(r => setTimeout(r, 700)); }
+    }
+    closeDialog();
+    toast(`${n} avis émis${pub && pub.checked ? `, ${np} publié${plural(np)} sur Discord` : ""}.`, n < l.length);
+  });
+  openDialog({
+    eyebrow: "Déclarations à valider", title: "Émettre les avis en une fois", wide: true,
+    body: [h("p", { style: "margin:0", text: "Les déclarations ci-dessous n’ont ni alerte, ni contrôle, ni rectificative à examiner : leur avis peut être émis tel qu’il a été calculé. Décochez celles à garder." }),
+      sec(`Avis à émettre · ${okL.length}`, listBox),
+      koL.length ? sec(`À examiner une par une · ${koL.length}`, h("ul", { class: "ent-list" }, koL.map(d => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: `${d.entrepriseNom} · ${periodPlain(d.periode)}` }), h("span", { class: "meta", text: `${money(dMontant(d))} · ${avisBloque(d)}${avisBloque(d) === "alerte" ? " : " + activeAlerts(d).slice(0, 2).join(" ; ") : ""}` })), h("span", {}), h("span", {}))))) : null,
+      pub ? h("label", { class: "switch", for: "al-pub" }, pub, "Publier chaque avis sur Discord, avec la mention du patron") : null,
+      h("p", { class: "hint", style: "margin:0" }, sumEl)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+  listBox.addEventListener("change", upd); upd();
+}
 function renderDeclTable(key) {
   const box = $("#decl-table");
   const all = S.declarations.slice().sort(byCreatedDesc);
@@ -5106,6 +5159,7 @@ function renderDeclTable(key) {
     let act = null;
     const ec = echOf(d), nx = ec ? nextEcheance(ec) : -1;
     if (w && st === "validee" && ec && nx >= 0) act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); payEcheance(d, nx); }, text: `Encaisser ${nx + 1}/${ec.echeances.length}` });
+    else if (canAgent() && st === "soumise" && ["en contrôle", "rectificative à examiner", "remplacée"].includes(avisBloque(d))) act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); openDecl(d.id); }, text: "Ouvrir" });
     else if (canAgent() && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
     else if (w && st === "validee") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || ""); }, text: "Encaisser" });
     return h("tr", {},
@@ -5124,7 +5178,9 @@ function renderDeclTable(key) {
       h("td", { class: "c-chip" }, dChip(d)),
       h("td", { class: "act c-act" }, act));
   });
-  box.replaceChildren(h("div", { class: "tbl-wrap" }, h("table", { class: "cards" },
+  const lot = S.declFilter === "atraiter" && canAgent() ? F.atraiter.filter(d => !avisBloque(d)) : [];
+  box.replaceChildren(lot.length > 1 ? h("div", { class: "lot-bar" }, h("span", { text: `${lot.length} avis peuvent être émis sans examen (ni alerte ni contrôle) · ${money(lot.reduce((t, d) => t + dMontant(d), 0))}` }), h("button", { class: "btn small", type: "button", id: "decl-lot", onclick: openAvisLot, text: "Émettre les avis en une fois" })) : "",
+    h("div", { class: "tbl-wrap" }, h("table", { class: "cards" },
     h("thead", {}, h("tr", {}, ["N°", "Entreprise", "Période", "Chiffre d’affaires", "Résultat", "Montant dû", "Statut", ""].map((t, i) => h("th", { class: [3, 4, 5].includes(i) ? "num" : null, text: t })))),
     h("tbody", {}, rows))));
 }
