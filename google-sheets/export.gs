@@ -233,11 +233,11 @@ function actualiser() {
   ecrire("Échéanciers", ["Déclaration", "Entreprise", "Échéance", "Date limite", "Montant", "État", "Payée le"], lignesEch);
 
   const NIVEAUX = { "declaration:relance": "Rappel de déclaration", "declaration:mise_en_demeure": "Mise en demeure de déclarer",
-    "paiement:relance": "Relance de paiement", "paiement:mise_en_demeure": "Mise en demeure de payer" };
+    "paiement:relance": "Relance de paiement", "paiement:mise_en_demeure": "Mise en demeure de payer", "echeance:rappel": "Rappel avant la date limite" };
   ecrire("Relances", ["N°", "Entreprise", "Type", "Périodes ou somme", "Envoyée le", "Délai", "Par", "Acte"],
     col("relances").map(r => { const med = r.data.niveau === "mise_en_demeure";
-      return [no(med ? "MED" : "RL", r.id), r.data.entrepriseNom, r.data.type === "declaration" ? "Déclaration manquante" : "Impayé",
-        r.data.type === "declaration" ? (r.data.periodes || []).join(", ") : r.data.montant, date(r.data.at), date(r.data.echeance), r.data.byNom || "",
+      return [no(med ? "MED" : "RL", r.id), r.data.entrepriseNom, r.data.type === "echeance" ? "Rappel avant la date limite" : r.data.type === "declaration" ? "Déclaration manquante" : "Impayé",
+        r.data.type !== "paiement" ? (r.data.periodes || []).join(", ") : r.data.montant, date(r.data.at), date(r.data.echeance), r.data.byNom || "",
         NIVEAUX[r.data.type + ":" + (r.data.niveau || "relance")] || "Relance"]; }));
 
   const SAISIES = { satd: "Saisie à tiers détenteur", vente: "Saisie-vente des biens" };

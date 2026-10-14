@@ -2004,6 +2004,11 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
                 <div class="field"><label for="r-tiers">Tiers détenteur habituel</label><input id="r-tiers" autocomplete="off" placeholder="Ex. : la banque du serveur"><span class="hint">Proposé à chaque saisie à tiers détenteur.</span></div>
                 <div class="field"><label for="r-dest">Destinataire des dossiers de justice</label><input id="r-dest" autocomplete="off"></div>
               </div>
+              <div class="row2" style="align-items:end">
+                <label class="switch" for="r-rap-on"><input type="checkbox" id="r-rap-on"> Rappel avant la date limite, envoyé automatiquement sur Discord la veille</label>
+                <div class="field"><label for="r-rap-h">Heure du rappel</label><input id="r-rap-h" type="number" min="0" max="23" step="1" inputmode="numeric"><span class="hint">La veille de la date limite, heure de Paris.</span></div>
+              </div>
+              <p class="hint" id="r-rap-etat" style="margin:0"></p>
               <div class="paste-row">
                 <button class="btn" type="button" id="r-save">Enregistrer</button>
                 <span id="r-msg" class="hint" aria-live="polite"></span>
@@ -2996,6 +3001,7 @@ async function init() {
     if (S.admin) loadAgents();
     else setNotice([h("div", {}, h("strong", { text: "Inspection. " }), "Vous saisissez les déclarations et les demandes, émettez les avis, placez un dossier en contrôle et relancez les entreprises. Les encaissements, annulations, pénalités, arbitrages et réglages restent à la Direction.")]);
     loadPrivate();
+    chargerRappelAuto();
   }
   if (S.tab === "journal" && S.role !== "pointeuse") loadJournal();
   if (S.tab === "reglages" && S.admin) loadKeys();
@@ -3450,6 +3456,12 @@ function todoItems() {
   if (!canAgent()) return [];
   const w = writer(), out = [], sum = (l, f) => l.reduce((t, x) => t + (Number(f(x)) || 0), 0);
   const add = (n, label, sub, go, tone) => { if (n > 0) out.push({ n, label, sub, go, tone: tone || "warn" }); };
+  // Rappel avant la date limite pas encore parti (envoi automatique absent, désactivé ou en retard).
+  const ep = echeanceProchaine();
+  if (ep && ep.ouverte && Date.now() <= ep.lim.getTime() && Date.now() >= ep.moment.getTime() + (rappelAutoOk() ? 30 * 60e3 : 0)) {
+    const l = rappelCandidats(ep.k).filter(y => !y.deja);
+    add(l.length, `Rappel avant la date limite · ${periodPlain(ep.k).toLowerCase()}`, `${l.length} entreprise${plural(l.length)} sans déclaration, à déposer avant le ${jourLimite(ep.lim)} à 23 h 59`, openRappelEcheance);
+  }
   const av = S.declarations.filter(d => dStatus(d) === "soumise");
   add(av.length, `Déclaration${plural(av.length)} à valider`, `${money(sum(av, d => d.total))} calculés`, () => { S.declFilter = "atraiter"; render(); $("#decl-table").scrollIntoView({ behavior: "smooth", block: "start" }); }, "info");
   if (w) {
@@ -7279,6 +7291,8 @@ async function loadJournal() {
   renderJournal();
 }
 const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
+// Auteur d'une ligne du journal : l'agent, ou l'envoi automatique de la base.
+const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : "Sans nom");
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -7376,6 +7390,7 @@ function describe(e) {
       return x === "suppression" ? `a rouvert ${periodPlain(e.doc_id).toLowerCase()}` : `a clôturé ${periodPlain(e.doc_id).toLowerCase()}`;
     case "relances":
       if (x === "suppression") return `a supprimé une relance de ${v.entrepriseNom}`;
+      if (v.type === "echeance") return `a rappelé à ${v.entrepriseNom} de déclarer la ${(v.periodes || []).map(periodPlain).join(", ").toLowerCase()} avant la date limite`;
       if (v.niveau === "mise_en_demeure") return v.type === "declaration" ? `a mis ${v.entrepriseNom} en demeure de déclarer ${(v.periodes || []).map(periodPlain).join(", ").toLowerCase()}` : `a mis ${v.entrepriseNom} en demeure de payer ${money(v.montant)}`;
       return v.type === "declaration" ? `a relancé ${v.entrepriseNom} pour ${(v.periodes || []).map(periodPlain).join(", ")}` : `a relancé ${v.entrepriseNom} pour ${money(v.montant)} d’impayés`;
     case "entreprises":
@@ -7523,11 +7538,11 @@ function renderJournal() {
   if (S.journalError === "missing") { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: "Le journal n’est pas encore installé dans la base. Exécutez le fichier supabase/v2_journal_export.sql dans le SQL Editor de Supabase (voir le README)." })); fill(more); return; }
   if (S.journalError) { fill(ul, h("li", { class: "err", style: "grid-template-columns:1fr", text: "Impossible de charger le journal : " + S.journalError })); fill(more); return; }
   if (!S.journalLoaded) { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: "Chargement du journal…" })); fill(more); return; }
-  const agents = [...new Set(S.journal.map(e => e.auteur || "Sans nom"))].sort((x, y) => x.localeCompare(y, "fr"));
+  const agents = [...new Set(S.journal.map(jWho))].sort((x, y) => x.localeCompare(y, "fr"));
   const sel = $("#j-agent"), curA = sel.value;
   if (sel.dataset.sig !== agents.join("|")) { fill(sel, h("option", { value: "", text: "Tous les agents" }), agents.map(n => h("option", { value: n, text: n }))); sel.dataset.sig = agents.join("|"); sel.value = agents.includes(curA) ? curA : ""; }
   const type = $("#j-type").value, agent = sel.value, q = norm($("#j-q").value);
-  const rows = S.journal.map(e => ({ e, text: describe(e), no: jNo(e), who: e.auteur || "Sans nom" }))
+  const rows = S.journal.map(e => ({ e, text: describe(e), no: jNo(e), who: jWho(e) }))
     .filter(r => (!type || r.e.collection === type) && (!agent || r.who === agent) && (!q || norm(r.who + " " + r.text + " " + r.no).includes(q)));
   if (!rows.length) { fill(ul, h("li", { class: "muted", style: "grid-template-columns:1fr", text: S.journal.length ? "Aucune action ne correspond à ces filtres." : "Aucune action enregistrée pour l’instant." })); fill(more); return; }
   const shown = rows.slice(0, S.jLimit);
@@ -8311,10 +8326,12 @@ const justiceEnCours = t => justiceOpen(t) || (t.statut === "transmis" && !(t.it
 const relanceFor = (e, type, keysOrItems) => relancesOf(e).find(r => r.type === type && (type === "declaration"
   ? (r.periodes || []).some(k => keysOrItems.includes(k))
   : (r.items || []).some(i => keysOrItems.some(x => sameItem(i, x))))) || null;
-const rlSettled = r => r.type === "declaration"
+const rlSettled = r => r.type === "echeance" ? (r.periodes || []).every(k => hasDecl(entOf(r), k))
+  : r.type === "declaration"
   ? (r.periodes || []).every(k => { const e = entOf(r); return hasDecl(e, k) || (isClosed(k) && defautOf(e, k)); })
   : (r.items || []).length > 0 && (r.items || []).every(itemSettled);
 function rlStateChip(r) {
+  if (r.type === "echeance") return rlSettled(r) ? chip(["Déclarée", "ok"]) : new Date(r.echeance).getTime() < Date.now() ? chip(["Date limite passée", "warn"]) : chip(["Avant la date limite", "muted"]);
   if (rlSettled(r)) return chip(["Régularisée", "ok"]);
   return isMed(r) ? chip(medExpired(r) ? ["Délai expiré", "bad"] : ["Délai en cours", "warn"]) : chip(new Date(r.echeance).getTime() < Date.now() ? ["Sans réponse", "warn"] : ["Délai en cours", "muted"]);
 }
@@ -8331,12 +8348,13 @@ function impayes() {
 // Comme dans la procédure réelle : une relance amiable, puis une mise en demeure qui ouvre un délai
 // (de payer : art. L257-0 A du LPF ; de déclarer : art. 1728 du CGI), puis les poursuites.
 const RL_KIND = {
+  "echeance:rappel": "RAPPEL AVANT LA DATE LIMITE",
   "declaration:relance": "RAPPEL DE DÉCLARATION",
   "declaration:mise_en_demeure": "MISE EN DEMEURE DE DÉCLARER",
   "paiement:relance": "LETTRE DE RELANCE",
   "paiement:mise_en_demeure": "MISE EN DEMEURE DE PAYER"
 };
-const RL_LABEL = { "declaration:relance": "Rappel de déclaration", "declaration:mise_en_demeure": "Mise en demeure de déclarer", "paiement:relance": "Relance de paiement", "paiement:mise_en_demeure": "Mise en demeure de payer" };
+const RL_LABEL = { "echeance:rappel": "Rappel avant la date limite", "declaration:relance": "Rappel de déclaration", "declaration:mise_en_demeure": "Mise en demeure de déclarer", "paiement:relance": "Relance de paiement", "paiement:mise_en_demeure": "Mise en demeure de payer" };
 const rlKey = r => r.type + ":" + (r.niveau || "relance");
 const isMed = r => !!r && r.niveau === "mise_en_demeure";
 const rlLabel = r => RL_LABEL[rlKey(r)] || "Relance";
@@ -8347,6 +8365,17 @@ const medExpired = r => isMed(r) && new Date(r.echeance).getTime() < Date.now();
 // Dernière mise en demeure de payer restée sans effet (délai écoulé), ou null.
 const lastMedPaiement = (e, items) => { const its = items || unpaidItems(e); return relancesOf(e).find(r => r.type === "paiement" && isMed(r) && (r.items || []).some(i => its.some(x => sameItem(i, x)))) || null; };
 function relanceDoc(r) {
+  if (r.type === "echeance") {
+    const e = entOf(r), d = new Date(r.echeance);
+    return {
+      kind: "RAPPEL AVANT LA DATE LIMITE", no: rlNo(r), date: "Envoyé le " + longDate(new Date(r.at)),
+      meta: [["Entreprise", e.nom || r.entrepriseNom], ["Patron", e.patron || "—"], ["Date limite", `${longDate(d)} à 23 h 59`], ["Envoyé par", r.auto ? "Rappel automatique" : r.byNom || "Direction des impôts et cotisations"]],
+      lines: (r.periodes || []).map(k => [periodLabel(k), hasDecl(e, k) ? "déposée" : "à déposer"]),
+      total: ["Déclaration attendue avant le", longDate(d)], stamp: ["RAPPEL", "accent"],
+      footer: `Déposez votre déclaration avant la date limite, avec le modèle habituel. Après, elle sera majorée de ${pct(cfg().majoration)} pour retard, puis relancée.`,
+      discord: { channel: "relances", mentions: [entMention(e)], text: `**Rappel avant la date limite ${rlNo(r)}** · ${e.nom || r.entrepriseNom} · ${(r.periodes || []).map(periodPlain).join(", ")} à déclarer avant le ${longDate(d)} à 23 h 59.` }
+    };
+  }
   const e = entOf(r), c = cfg(), lim = longDate(new Date(r.echeance)), decl = r.type === "declaration", med = isMed(r);
   const footer = decl
     ? (med ? `Faute de dépôt avant le ${lim}, l’imposition sera établie d’office à partir des éléments dont dispose la Direction, avec une majoration de ${pct(c.majorationOffice)} (taxation d’office, art. L66 du LPF et 1728 du CGI).`
@@ -8381,6 +8410,88 @@ async function relanceOne(x, type, niveau, opts) {
   if (hookFor("relances")) { await publishDoc(doc, `${label} enregistré${fem ? "e" : ""}.`); if (opts.back) opts.back(); }
   else { toast(`${label} enregistré${fem ? "e" : ""} : postez l’image sur Discord.`); showDocImage(doc, opts.back); }
   return r;
+}
+
+/* ---------- Rappel avant la date limite ---------- */
+// La veille de la date limite (le lundi pour une limite le mardi), un rappel aux entreprises qui
+// n'ont pas encore déclaré. La base l'envoie toute seule (supabase/v20_rappel_echeance.sql) ;
+// le site permet aussi de l'envoyer à la main. Une entreprise n'est jamais rappelée deux fois.
+const rappelCfg = () => { const r = Object.assign({ actif: true, heure: 18 }, cfg().rappelEcheance || {}); const hh = Number(r.heure); r.heure = Number.isFinite(hh) ? Math.max(0, Math.min(23, Math.round(hh))) : 18; return r; };
+function echeanceProchaine() {
+  const nowK = keyOf(new Date()), prev = prevKey(nowK);
+  const k = Date.now() <= deadline(prev).getTime() ? prev : nowK;
+  if (!bounds(k) || keyStart(k) < startTime() || isClosed(k)) return null;
+  const lim = deadline(k), moment = new Date(lim);
+  moment.setDate(moment.getDate() - 1); moment.setHours(rappelCfg().heure, 0, 0, 0);
+  return { k, lim, moment, ouverte: Date.now() > bounds(k).end.getTime() };
+}
+const rappelDe = (e, k) => relancesOf(e).find(r => r.type === "echeance" && (r.periodes || []).includes(k)) || null;
+const rappelCandidats = k => activeEnts().filter(e => e.id && entStartTime(e) <= keyStart(k) && !hasDecl(e, k)).map(e => ({ e, deja: rappelDe(e, k) }));
+const dePeriode = k => (/-S\d{2}$/.test(k) ? "de la " + periodPlain(k).toLowerCase() : deMois(k));
+const jourLimite = d => d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+function rappelEcheanceParts(x, ents) {
+  const head = `**Rappel : déclaration ${dePeriode(x.k)}**\nLa date limite de dépôt est le **${jourLimite(x.lim)} à 23 h 59**. Les entreprises suivantes n’ont pas encore déposé leur déclaration :`;
+  const foot = `\nDéposez-la avec le modèle habituel avant la date limite. Après, elle sera majorée de ${pct(cfg().majoration)} pour retard.\n— Préfecture de police · Direction des impôts et cotisations`;
+  return ents.length ? splitMessage(ents.map(e => `• **${e.nom}** ${entMention(e) || "(sans ping)"}`), head, foot) : [];
+}
+// Envoi automatique : l'aperçu de la base dit si le script est installé et ce qui partira.
+async function chargerRappelAuto() {
+  if (!S.sb || !canAgent() || S.rappelAutoEnCours) return;
+  S.rappelAutoEnCours = true;
+  try {
+    const { data, error } = await S.sb.rpc("rappel_echeance", { p_simulation: true });
+    S.rappelAuto = error ? { absent: /PGRST202|function|does not exist|schema cache/i.test((error.code || "") + " " + (error.message || "")), erreur: error.message || "erreur" } : data || {};
+  } catch (e) { S.rappelAuto = { erreur: (e && e.message) || "erreur" }; }
+  finally { S.rappelAutoEnCours = false; }
+  renderRappelEtat(); if (S.tab === "recouvrement") renderRecouvrement(); renderTodo();
+}
+const rappelAutoOk = () => !!(S.rappelAuto && S.rappelAuto.installe && rappelCfg().actif);
+function openRappelEcheance() {
+  if (!canAgent()) return;
+  const x = echeanceProchaine();
+  if (!x) { toast("Aucune période à rappeler pour l’instant.", true); return; }
+  const list = rappelCandidats(x.k);
+  if (!list.length) { toast(`Toutes les entreprises ont déclaré ${dePeriode(x.k).replace(/^de la /, "la ")}.`); return; }
+  const boxes = list.map(({ e, deja }, i) => { const cb = h("input", { type: "checkbox", id: "re-" + i }); cb.checked = !deja; return [e, cb, deja]; });
+  const pre = h("pre", { class: "discord-preview", id: "re-preview" }), count = h("span", { class: "hint" });
+  const chosen = () => boxes.filter(([, cb]) => cb.checked).map(([e]) => e);
+  const copyBtn = h("button", { class: "btn ghost small", type: "button", text: "Enregistrer et copier le message" });
+  const sendBtn = hookFor("relances") ? h("button", { class: "btn ink small", type: "button", text: "Enregistrer et publier sur Discord" }) : null;
+  const refresh = () => {
+    const p = rappelEcheanceParts(x, chosen()), n = chosen().length;
+    pre.textContent = p.length ? p.join("\n\n— — —\n\n") : "Aucune entreprise cochée.";
+    count.textContent = `${n} entreprise${plural(n)} cochée${plural(n)}`;
+    copyBtn.disabled = !n; if (sendBtn) sendBtn.disabled = !n;
+  };
+  const commit = async () => {
+    let n = 0;
+    for (const e of chosen()) {
+      const ref = S.db.collection("relances").doc();
+      if (await write(() => ref.set({ entrepriseId: e.id, entrepriseNom: e.nom, type: "echeance", niveau: "rappel", periodes: [x.k], items: [], montant: 0, echeance: x.lim.toISOString(), at: nowISO(), by: S.uid || null, byNom: S.agentName || "", groupee: true }))) n++;
+    }
+    return n;
+  };
+  copyBtn.addEventListener("click", async () => { copyBtn.disabled = true; const text = rappelEcheanceParts(x, chosen()).join("\n\n"), n = await commit(); closeDialog(); copyText(text, `${n} rappel${plural(n)} enregistré${plural(n)} : message copié pour Discord.`); });
+  if (sendBtn) sendBtn.addEventListener("click", async () => {
+    sendBtn.disabled = true; copyBtn.disabled = true;
+    const ps = rappelEcheanceParts(x, chosen()), mentions = chosen().map(entMention).filter(Boolean), n = await commit();
+    let ok = true;
+    for (const p of ps) { const r = await postDiscord("relances", { content: p, mentions }); if (!r.ok) { ok = false; toast("Rappels enregistrés, mais Discord a refusé l’envoi : " + r.error + ".", true); break; } }
+    closeDialog();
+    if (ok) toast(`${n} rappel${plural(n)} enregistré${plural(n)} et publié${plural(n)} sur Discord.`);
+  });
+  const auto = rappelAutoOk() ? `Le rappel automatique part ${Date.now() < x.moment.getTime() ? "le " + jourLimite(x.moment) + " à " + rappelCfg().heure + " h" : "dès la prochaine vérification"} ; une entreprise déjà rappelée ici ne le sera pas une seconde fois.` : "";
+  openDialog({
+    eyebrow: "Recouvrement", title: "Rappel avant la date limite", wide: true,
+    body: [h("p", { style: "margin:0", text: `${periodLabel(x.k)} : à déclarer au plus tard le ${jourLimite(x.lim)} à 23 h 59. Les entreprises ci-dessous ne l’ont pas encore fait. Le message mentionne chaque patron dont l’ID Discord est connu ; le rappel est inscrit à leur dossier. ${auto}` }),
+      h("ul", { class: "rl-pick" }, boxes.map(([e, cb, deja], i) => h("li", {},
+        h("label", { class: "switch", for: "re-" + i }, cb, h("strong", { text: e.nom })), " ", pingTag(e),
+        deja ? h("span", { class: "meta", text: `déjà rappelée le ${fmtDateTime(new Date(deja.at))}${deja.auto ? " (automatique)" : deja.byNom ? " par " + deja.byNom : ""}` }) : null))),
+      sec("Aperçu du message", pre)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), count, h("span", { class: "spacer" }), copyBtn, sendBtn].filter(Boolean)
+  });
+  boxes.forEach(([, cb]) => cb.addEventListener("change", refresh));
+  refresh();
 }
 
 // Relance groupée : un seul message, chaque patron mentionné. On peut décocher une entreprise avant l'envoi.
@@ -8496,7 +8607,11 @@ function renderRecouvrement() {
     ? `${rt.length} entreprise${plural(rt.length)} n’${rt.length > 1 ? "ont" : "a"} pas déposé toutes ${rt.length > 1 ? "leurs" : "ses"} déclarations échues depuis ${periodPlain(c.debutSuivi).toLowerCase()}. Procédure : rappel, mise en demeure de déclarer, puis taxation d’office.`
     : "Toutes les entreprises actives ont déposé leurs déclarations échues.";
   $("#rc-retards-all").hidden = !ag || !rt.some(x => x.keys.length);
-  fill($("#rc-retards"), rt.length ? h("ul", { class: "rc-list" }, rt.slice(0, S.rcAll.rt ? 500 : RC_LIMIT).map(x => {
+  const ep = echeanceProchaine(), epL = ep && ep.ouverte ? rappelCandidats(ep.k) : [], epN = epL.filter(y => !y.deja).length;
+  const epBar = ag && epL.length ? h("div", { class: "lot-bar" },
+    h("span", { text: `${periodLabel(ep.k)} à déclarer avant le ${jourLimite(ep.lim)} à 23 h 59 : ${epL.length} entreprise${plural(epL.length)} ne l’${epL.length > 1 ? "ont" : "a"} pas encore déclarée${epN < epL.length ? `, ${epL.length - epN} déjà rappelée${plural(epL.length - epN)}` : ""}.${rappelAutoOk() && Date.now() < ep.moment.getTime() ? ` Rappel automatique le ${jourLimite(ep.moment)} à ${rappelCfg().heure} h.` : ""}` }),
+    h("button", { class: "btn small", type: "button", id: "rc-rappel", onclick: openRappelEcheance, text: "Rappel avant la date limite" })) : "";
+  fill($("#rc-retards"), epBar, rt.length ? h("ul", { class: "rc-list" }, rt.slice(0, S.rcAll.rt ? 500 : RC_LIMIT).map(x => {
     const last = x.keys.length ? relanceFor(x.e, "declaration", x.keys) : null;
     const med = relancesOf(x.e).find(r => r.type === "declaration" && isMed(r) && medExpired(r) && x.keys.some(k => (r.periodes || []).includes(k)));
     const toKey = med ? x.keys.find(k => (med.periodes || []).includes(k)) : null;
@@ -8575,7 +8690,7 @@ function renderRecouvrement() {
       h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; let n = 0; for (const r of orphans) if (await write(() => S.db.doc("relances/" + r.id).delete())) n++; toast(`${n} relance${plural(n)} supprimée${plural(n)}.`); }, text: "Les supprimer" }))) : null,
     hist.length ? h("ul", { class: "ent-list" }, hist.slice(0, S.rcAll.hist ? 500 : RC_LIMIT).map(r => h("li", {},
     h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${r.entrepriseNom}` }), orphan(r) ? h("span", { class: "tag", text: "entreprise retirée" }) : null,
-      h("span", { class: "meta", text: `${rlLabel(r)} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · ${fmtDateTime(new Date(r.at))}${r.byNom ? " · " + r.byNom : ""}${r.groupee ? " · groupée" : ""}` })),
+      h("span", { class: "meta", text: `${rlLabel(r)} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · ${fmtDateTime(new Date(r.at))}${r.byNom ? " · " + r.byNom : ""}${r.groupee ? " · groupée" : ""}` })),
     rlStateChip(r),
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Image" }),
       dir ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
@@ -10637,7 +10752,7 @@ function openRestore(e) {
     else go.disabled = false;
   });
   openDialog({
-    eyebrow: "Journal · restauration", title: `${e.auteur || "Sans nom"} ${describe(e)}`,
+    eyebrow: "Journal · restauration", title: `${jWho(e)} ${describe(e)}`,
     body: [h("p", { style: "margin:0", text: `${what} Action du ${fmtDateTime(new Date(e.at))}.` }),
       changedSince && current !== undefined && e.action !== "suppression" ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Le dossier a encore changé depuis. " }), "Les changements plus récents seront eux aussi effacés.")) : null,
       e.action === "suppression" && current !== undefined ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Un dossier porte déjà ce numéro. " }), "Il sera remplacé par la version supprimée.")) : null,
@@ -11679,7 +11794,7 @@ function justiceFacts(e) {
   const sais = saisiesOf(e).slice().reverse();
   const events = [];
   for (const d of ds) { const dec = S.decisions[d.id]; if (dec && dec.at && ["validee", "payee", "controle"].includes(dec.statut)) events.push([dec.at, "Avis d’imposition émis", `${dossierNo("DF", d.id)} · ${periodPlain(d.periode)} · ${money(dMontant(d))}`]); if (d.taxationOffice) events.push([d.createdAt, "Taxation d’office", `${periodPlain(d.periode)} · majoration de ${pct(d.majPct)}`]); }
-  for (const r of rls) events.push([r.at, rlLabel(r), `${rlNo(r)} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · à régulariser avant le ${fmtDate(new Date(r.echeance))}${r.byNom ? " · " + r.byNom : ""}`]);
+  for (const r of rls) events.push([r.at, rlLabel(r), `${rlNo(r)} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · à régulariser avant le ${fmtDate(new Date(r.echeance))}${r.byNom ? " · " + r.byNom : ""}`]);
   for (const p of pensOf(e)) events.push([p.createdAt, p.type === "redressement" ? "Avis de mise en recouvrement" : p.type === "majoration" ? "Majoration pour paiement tardif" : p.type === "convocation" ? "Sanction d’une absence à une convocation" : "Pénalité infligée", `${p.motif || ""} · ${money(p.montant)} · ${(PSTAT[p.statut] || PSTAT.due)[0].toLowerCase()}`]);
   for (const c of ctrls) {
     events.push([c.ouvertLe, "Avis de vérification", `${dossierNo("CF", c.id)} · ${(c.periodes || []).map(periodPlain).join(", ")}`]);
@@ -12001,6 +12116,20 @@ function renderRecouvSettings(force) {
   $("#r-off").value = String(c.majorationOffice ?? 40);
   $("#r-tiers").value = c.tiersDefaut || "";
   $("#r-dest").value = c.justiceDestinataire || "";
+  const rc = rappelCfg();
+  $("#r-rap-on").checked = rc.actif; $("#r-rap-h").value = String(rc.heure);
+  renderRappelEtat();
+}
+function renderRappelEtat() {
+  const el = $("#r-rap-etat"), a = S.rappelAuto;
+  if (!el) return;
+  if (!a) { el.textContent = "Vérification de l’envoi automatique…"; chargerRappelAuto(); return; }
+  if (a.absent) { el.textContent = "Pour l’envoi automatique, exécutez supabase/v20_rappel_echeance.sql dans Supabase. En attendant, envoyez le rappel à la main depuis Dossiers → Recouvrement."; return; }
+  if (a.erreur) { el.textContent = "Impossible de vérifier l’envoi automatique : " + a.erreur; return; }
+  if (!a.actif) { el.textContent = "Envoi automatique désactivé : le rappel se fait à la main depuis Dossiers → Recouvrement."; return; }
+  if (a.raison) { el.textContent = "Envoi automatique installé. " + a.raison; return; }
+  const n = (a.entreprises || []).length, m = a.moment ? new Date(a.moment) : null;
+  el.textContent = `Envoi automatique installé. Prochain rappel : ${m ? jourLimite(m) + " à " + a.heure + " h" : "—"}, pour la ${periodPlain(a.periode).toLowerCase()}${a.dans_fenetre ? " (c’est maintenant)" : ""} · ${n} entreprise${plural(n)} sans déclaration pour l’instant.`;
 }
 function renderConvSettings(force) {
   const box = $("#card-conv");
@@ -12035,10 +12164,11 @@ $("#r-save").addEventListener("click", async () => {
     majorationImpaye: Math.min(100, Math.max(0, Number($("#r-maj").value) || 0)),
     majorationOffice: Math.min(100, Math.max(0, Number($("#r-off").value) || 0)),
     tiersDefaut: $("#r-tiers").value.trim(),
-    justiceDestinataire: $("#r-dest").value.trim() || DEFAULTS.justiceDestinataire
+    justiceDestinataire: $("#r-dest").value.trim() || DEFAULTS.justiceDestinataire,
+    rappelEcheance: { actif: $("#r-rap-on").checked, heure: Math.max(0, Math.min(23, Math.round(Number($("#r-rap-h").value)))) || 0 }
   };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, v, { updatedAt: nowISO() })));
-  if (ok) { S.recDirty = false; $("#r-msg").textContent = "Réglages du recouvrement enregistrés."; toast("Réglages du recouvrement enregistrés."); renderRecouvSettings(true); }
+  if (ok) { S.recDirty = false; S.rappelAuto = null; $("#r-msg").textContent = "Réglages du recouvrement enregistrés."; toast("Réglages du recouvrement enregistrés."); renderRecouvSettings(true); }
 });
 
 /* ---------- Prêts aux entreprises ---------- */
