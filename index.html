@@ -5473,6 +5473,10 @@ function openDem(id) {
   // Articles : la Direction fixe, ligne par ligne, la quantité accordée et le prix retenu.
   const totEl = h("dd", { class: "num tot-dd" }), afterEl = h("dd", { class: "num" }), envDt = h("dt", {}), envDd = h("dd", { class: "num" });
   let perSel = null, cIn = null, go = null;
+  // Publication de la décision (accord, accord partiel, refus) : cochée d'office si les décisions partent
+  // automatiquement ; jamais pour l'accusé de réception d'une demande seulement enregistrée.
+  const pubDec = w && hookFor("services") ? h("input", { type: "checkbox", id: "dlg-pub" }) : null;
+  if (pubDec) pubDec.checked = autoOn("decisions");
   const upd = [];
   const rowsEls = work.map(x => {
     const totC = h("span", { class: "arb-tot" }), refC = h("td", { class: "num arb-ref", "data-l": "Prix de réf." });
@@ -5554,7 +5558,8 @@ function openDem(id) {
     body.push(h("div", { class: "decide" },
       h("dl", { class: "kv", style: "margin:0" }, sumKv.flatMap(([k, v]) => [h("dt", { text: k }), h("dd", { class: "num", text: v })]), h("dt", { class: "tot-dt", text: "Total accordé" }), totEl,
         h("dt", { text: "Solde du Trésor après cette décision" }), afterEl, envDt, envDd),
-      h("div", { class: "row2" }, field("dlg-per", "Imputé sur l’enveloppe de", perSel), h("div", { class: "field" }, h("label", { for: "dlg-motif", text: "Motif communiqué au service" }), cIn))));
+      h("div", { class: "row2" }, field("dlg-per", "Imputé sur l’enveloppe de", perSel), h("div", { class: "field" }, h("label", { for: "dlg-motif", text: "Motif communiqué au service" }), cIn)),
+      pubDec ? h("label", { class: "switch", for: "dlg-pub" }, pubDec, `Publier la décision sur Discord, dans le salon des services${svcMention(dm.service) ? ", avec le rôle " + dm.service : ""}`) : null));
   } else {
     if (decided) sumKv.push(["Total accordé", money(granted ? a.montantAccorde : 0), "tot"]);
     body.push(kv(sumKv));
@@ -5585,7 +5590,7 @@ function openDem(id) {
     if (ok) {
       const msg = keepAt ? `Décision modifiée : ${money(m)} accordés.` : { accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut];
       toast(msg); closeDialog();
-      if (statut !== "etude") autoPublish("decisions", decisionDoc(dm), msg);
+      if (statut !== "etude" && (pubDec ? pubDec.checked : autoOn("decisions"))) publishDoc(decisionDoc(S.demandes.find(x => x.id === id) || dm), msg);
     }
   };
   const resetDecision = async () => {
@@ -7995,8 +8000,8 @@ const DISCORD_AUTO = [
   ["versements", "Amendes reçues au Trésor (reçu du versement)", "services"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
-  ["decisions", "Décisions budgétaires (accord, accord partiel, refus)", "services"],
-  ["demandes", "Demandes de moyens reçues (accusé de réception)", "services"]
+  ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
+  ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"]
 ];
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
