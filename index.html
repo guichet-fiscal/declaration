@@ -7190,6 +7190,7 @@ function openFiche(e, opts) {
     w && !e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const d = sm.ds[0]; if (d) registerFromDecl(d); }, text: "Enregistrer au registre" }) : null,
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e, () => openFiche(S.entreprises.find(x => x.id === e.id) || e)), text: "Modifier l’entreprise" }) : null,
     e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openAttestation(e, reopen), text: "Attestation de régularité" }) : null,
+    e.fermetureAdm && e.actif === false ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(fermetureDoc(e), reopen), text: "Arrêté de fermeture" }) : null,
     canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(e), text: "Contrôle fiscal" }) : null,
     canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(e), text: "Convoquer" }) : null,
     w && unpaidItems(e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisie(e), text: "Saisie" }) : null,
@@ -7407,6 +7408,7 @@ function describe(e) {
     case "controles": {
       if (x === "ajout") return `a ouvert le contrôle fiscal de ${v.entrepriseNom} (${(v.periodes || []).map(periodPlain).join(", ")}${(v.enCours || []).length ? ", avant la déclaration" : ""})`;
       if (x === "suppression") return `a supprimé le contrôle fiscal de ${v.entrepriseNom}`;
+      if (a.statut !== b.statut && a.statut === "justice") return `a clos le contrôle de ${a.entrepriseNom} et l’a transmis à la justice`;
       if (a.statut !== b.statut) return ({ propose: `a notifié une proposition de rectification à ${a.entrepriseNom} (${money(a.total)})`, recouvre: `a mis en recouvrement le redressement de ${a.entrepriseNom} (${money(a.total)})`, sans_suite: `a classé sans suite le contrôle de ${a.entrepriseNom}`, ouvert: `a repris l’instruction du contrôle de ${a.entrepriseNom}` })[a.statut] || `a mis à jour le contrôle de ${a.entrepriseNom}`;
       if ((a.declIds || []).length > (b.declIds || []).length) { const nd = (a.declIds || []).filter(i => !(b.declIds || []).includes(i)).map(i => S.declarations.find(d => d.id === i)).filter(Boolean); return `a joint ${nd.length ? "la déclaration de " + nd.map(d => periodPlain(d.periode).toLowerCase()).join(" et ") : "une déclaration"} au contrôle de ${a.entrepriseNom}`; }
       if ((a.pieces || []).length > (b.pieces || []).length) return `a ajouté une pièce au contrôle de ${a.entrepriseNom}`;
@@ -7535,7 +7537,7 @@ function describe(e) {
 }
 const shortJson = s => (s === undefined ? "—" : s.length > 90 ? s.slice(0, 87) + "…" : s);
 const FIELD_LABEL = {
-  nom: "Nom", secteur: "Secteur", patron: "Patron", discord: "ID Discord", debutActivite: "Début d’activité", actif: "Active", fermeLe: "Fermée le", fermeMotif: "Motif de la fermeture",
+  nom: "Nom", secteur: "Secteur", patron: "Patron", discord: "ID Discord", debutActivite: "Début d’activité", actif: "Active", fermeLe: "Fermée le", fermeMotif: "Motif de la fermeture", fermetureAdm: "Fermeture administrative",
   entrepriseNom: "Entreprise", periode: "Période", ca: "Chiffre d’affaires", charges: "Charges", masse: "Masse salariale", nbSalaries: "Salariés",
   resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
@@ -11093,7 +11095,7 @@ $("#x-save").addEventListener("click", async () => {
 // Déroulé inspiré de la procédure réelle : avis de vérification (art. L47 du LPF), instruction et
 // pièces, proposition de rectification avec délai de réponse (art. L57 du LPF), majorations de 40,
 // 80 ou 100 % (art. 1729 et 1732 du CGI), puis avis de mise en recouvrement (art. L256 du LPF).
-const CSTAT = { ouvert: ["Instruction en cours", "accent"], propose: ["Proposition notifiée", "warn"], recouvre: ["Mis en recouvrement", "bad"], sans_suite: ["Classé sans suite", "muted"] };
+const CSTAT = { ouvert: ["Instruction en cours", "accent"], propose: ["Proposition notifiée", "warn"], recouvre: ["Mis en recouvrement", "bad"], sans_suite: ["Classé sans suite", "muted"], justice: ["Clos · transmis à la justice", "bad"] };
 const QUALIF = {
   bonne_foi: ["Bonne foi : aucune majoration", 0],
   manquement: ["Manquement délibéré : 40 % (art. 1729 a du CGI)", 40],
@@ -11144,7 +11146,7 @@ function ctrlState(c) {
   }
   return CSTAT[c.statut] || CSTAT.ouvert;
 }
-const ctrlDone = c => c.statut === "sans_suite" || (c.statut === "recouvre" && (ctrlPen(c) || {}).statut !== "due");
+const ctrlDone = c => c.statut === "sans_suite" || c.statut === "justice" || (c.statut === "recouvre" && (ctrlPen(c) || {}).statut !== "due");
 const ctrlsOf = e => S.controles.filter(c => sameEnt(c, e)).sort((a, b) => String(b.ouvertLe).localeCompare(String(a.ouvertLe)));
 // Droits (impôt et cotisations, exonération et réduction des partenaires comprises) recalculés au barème actuel.
 // La réduction des partenaires reste celle accordée au dépôt (sans dépasser l'impôt recalculé).
@@ -11525,6 +11527,9 @@ function openControle(id) {
     ["Avis", pen ? dossierNo("AMR", pen.id) : "—"], ["Mis en recouvrement le", c.recouvreLe ? fmtDateTime(new Date(c.recouvreLe)) : "—"],
     ["Paiement", pen ? chip(pen.statut === "annulee" ? ["Dégrevé", "muted"] : PSTAT[pen.statut] || PSTAT.due) : "—"], pen && pen.paidAt && pen.statut === "payee" ? ["Payé le", fmtDateTime(new Date(pen.paidAt))] : null, ["Somme", money(c.total), "tot"]])));
   if (c.statut === "sans_suite") body.push(sec("Conclusion", h("p", { class: "prewrap", style: "margin:0", text: c.conclusion || "Classé sans suite." })));
+  if (c.statut === "justice") { const tj = S.transmissions.filter(t => sameEnt(t, entOf(c0))).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
+    body.push(sec("Conclusion", h("p", { class: "prewrap", style: "margin:0", text: `Clos le ${fmtDateTime(new Date(c.closLe))} et transmis à la justice. ${c.conclusion || ""}` }),
+      h("div", { class: "paste-row", style: "margin-top:6px" }, tj ? h("button", { class: "btn ghost small", type: "button", onclick: () => openTransmission(tj.id), text: `Dossier de justice ${dossierNo("TJ", tj.id)}` }) : h("button", { class: "btn small", type: "button", onclick: () => openJustice(entOf(c0)), text: "Transmettre à la justice" })))); }
 
   // Les avis suspendus pendant le contrôle redeviennent payables à sa clôture.
   // Un avis émis avant le contrôle redevient payable sans nouvel envoi ; une déclaration qui n'avait
@@ -11545,6 +11550,7 @@ function openControle(id) {
   if (ag && live) {
     foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await saveControle(c0, collect(), "Contrôle enregistré.")) reopen(); }, text: "Enregistrer" }));
     foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => closeSansSuite(c0, collect(), restoreAvis), text: "Classer sans suite" }));
+    if (dir) foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => closeJustice(c0, collect(), restoreAvis), text: "Clore et transmettre à la justice" }));
     foot.push(h("button", { class: "btn ink small", type: "button", onclick: async () => {
       const v = collect();
       if (!k0.lines.length && attente.length) { toast(`La déclaration de ${attente.map(periodPlain).join(" et ").toLowerCase()} n’est pas encore saisie : la proposition se fera sur elle.`, true); return; }
@@ -11562,6 +11568,7 @@ function openControle(id) {
     foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await saveControle(c0, { statut: "ouvert" }, "Retour à l’instruction.")) reopen(); }, text: "Reprendre l’instruction" }));
     foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => closeSansSuite(c0, {}, restoreAvis), text: "Abandonner le redressement" }));
   }
+  if (dir && c.statut === "propose") foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => closeJustice(c0, {}, restoreAvis), text: "Clore et transmettre à la justice" }));
   if (dir && c.statut === "propose") foot.push(h("button", { class: "btn ink small", type: "button", onclick: async ev => {
     ev.currentTarget.disabled = true;
     const ref = S.db.collection("penalites").doc();
@@ -11578,6 +11585,49 @@ function openControle(id) {
   if (cvs.length) body.push(sec("Convocations", h("ul", { class: "ent-list" }, cvs.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(x.id), text: `${convNo(x)} · ${convWhen(x)}` }), h("span", { class: "meta", text: x.lieu || "" })), chip(convState(x)), h("span", {}))))));
   if (ag && (c.statut === "ouvert" || c.statut === "propose")) foot.splice(foot.findIndex(b => b.classList && b.classList.contains("spacer")), 0, h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(entOf(c0), { motif: "controle", controleId: id }), text: "Convoquer" }));
   openDialog({ eyebrow: `Contrôle fiscal ${dossierNo("CF", id)} · ouvert le ${fmtDate(new Date(c.ouvertLe))}${c.inspecteur ? " · " + c.inspecteur : ""}`, title: c.entrepriseNom, wide: true, stampEl: stamp(ctrlState(c)), body, foot });
+}
+// Clôture d'un contrôle qui part à la justice, avec, au besoin, la fermeture administrative de
+// l'établissement prononcée par le préfet de police (sur le modèle de l'art. L3332-15 du CSP).
+const FERMETURE_DUREES = [["justice", "Jusqu’à la décision de la justice"], ["7", "1 semaine"], ["14", "2 semaines"], ["30", "1 mois"], ["90", "3 mois"], ["180", "6 mois (maximum)"]];
+function fermetureDoc(e) {
+  const f = e.fermetureAdm || {}, jq = f.jusqua ? longDate(new Date(f.jusqua)) : "la décision de la justice";
+  return {
+    kind: "ARRÊTÉ DE FERMETURE ADMINISTRATIVE", no: dossierNo("FA", (e.id || "") + (f.at || "")), date: "Pris le " + longDate(new Date(f.at || Date.now())),
+    meta: [["Établissement", e.nom], ["Exploitant", e.patron || "—"], ["Fermé à compter du", fmtDateTime(new Date(f.at || Date.now()))], ["Jusqu’à", jq]],
+    lines: [["Motif", f.motif || "—"]].concat(f.controleId ? [["Contrôle fiscal", dossierNo("CF", f.controleId)]] : []),
+    total: ["Durée de la fermeture", f.jusqua ? `${Math.max(1, Math.round((new Date(f.jusqua) - new Date(f.at || Date.now())) / 864e5))} jours` : "Indéterminée"], stamp: ["FERMETURE", "bad"],
+    footer: "Le préfet de police ordonne la fermeture de l’établissement, sur le modèle de l’article L3332-15 du Code de la santé publique (fermeture jusqu’à six mois lorsque des actes délictueux sont commis à l’occasion de l’exploitation). Pendant la fermeture, l’établissement ne peut ni ouvrir au public ni exercer son activité ; toute réouverture est punie. Le dossier est transmis à la justice.",
+    discord: { channel: "entreprises", mentions: [entMention(e)].concat(policeMentions()).filter(Boolean), text: `**Arrêté de fermeture administrative** · ${e.nom} · fermé à compter de ce jour, ${f.jusqua ? "jusqu’au " + jq : "jusqu’à la décision de la justice"}.` }
+  };
+}
+function closeJustice(c0, patch, restoreAvis) {
+  const e = entOf(c0);
+  const t = h("textarea", { id: "cj-txt", rows: "4" }); t.value = c0.motif || "";
+  const ferm = h("input", { type: "checkbox", id: "cj-ferm" }); ferm.checked = e.actif !== false;
+  const duree = h("select", { id: "cj-duree" }, FERMETURE_DUREES.map(([v, l]) => h("option", { value: v, text: l })));
+  const pub = hookFor("entreprises") ? h("input", { type: "checkbox", id: "cj-pub" }) : null; if (pub) pub.checked = true;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn danger small", type: "button", text: "Clore et ouvrir la transmission" });
+  go.addEventListener("click", async () => {
+    if (!t.value.trim()) { err.textContent = "Écrivez la conclusion du contrôle."; t.focus(); return; }
+    go.disabled = true;
+    if (!(await saveControle(c0, Object.assign({}, patch, { statut: "justice", closLe: nowISO(), conclusion: t.value.trim(), attente: [] }), "Contrôle clos."))) { go.disabled = false; return; }
+    await restoreAvis(`Contrôle ${dossierNo("CF", c0.id)} clos et transmis à la justice`);
+    if (ferm.checked && e.id && e.actif !== false) {
+      const d = duree.value, at = nowISO(), jusqua = d === "justice" ? null : new Date(Date.now() + Number(d) * 864e5).toISOString();
+      const fa = { at, jusqua, motif: t.value.trim(), controleId: c0.id, byNom: S.agentName || "" };
+      const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ actif: false, fermeLe: at, fermeMotif: `Fermeture administrative ${jusqua ? "jusqu’au " + fmtDate(new Date(jusqua)) : "jusqu’à la décision de la justice"} · contrôle ${dossierNo("CF", c0.id)}`, fermetureAdm: fa }));
+      if (ok) { const e2 = S.entreprises.find(x => x.id === e.id) || Object.assign({}, e, { fermetureAdm: fa }); if (pub && pub.checked) await publishDoc(fermetureDoc(e2), "Arrêté de fermeture publié."); else toast(`${e.nom} est fermée : l’arrêté est sur sa fiche.`); }
+    }
+    openJustice(S.entreprises.find(x => x.id === e.id) || e);
+  });
+  openDialog({ eyebrow: `Contrôle fiscal ${dossierNo("CF", c0.id)}`, title: "Clore et transmettre à la justice · " + e.nom,
+    body: [h("p", { style: "margin:0", text: "Le contrôle est clos avec sa conclusion, puis la fenêtre de transmission à la justice s’ouvre : le PDF reprend le contrôle, ses constats, ses notes et ses pièces." }),
+      h("div", { class: "field" }, h("label", { for: "cj-txt", text: "Conclusion du contrôle" }), t),
+      e.id && e.actif !== false ? h("label", { class: "switch", for: "cj-ferm" }, ferm, "Prononcer la fermeture administrative de l’établissement (arrêté du préfet de police)") : h("p", { class: "hint", style: "margin:0", text: "L’entreprise est déjà fermée au registre." }),
+      e.id && e.actif !== false ? h("div", { class: "field" }, h("label", { for: "cj-duree", text: "Durée de la fermeture" }), duree, h("span", { class: "hint", text: "L’entreprise passe inactive : plus attendue aux déclarations, plus relancée, son espace en ligne est fermé. Pour la rouvrir : Réglages → Entreprises." })) : null,
+      pub && e.actif !== false ? h("label", { class: "switch", for: "cj-pub" }, pub, "Publier l’arrêté de fermeture sur Discord (patron et police mentionnés)") : null, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(c0.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
 }
 function closeSansSuite(c0, patch, restoreAvis) {
   const t = h("textarea", { id: "ss-txt", rows: "3", placeholder: "Conclusion : rien d’anormal, justificatifs fournis…" });
@@ -11884,10 +11934,11 @@ function autoExpose(e, f, qualifs) {
   if (rd.length) parts.push(`Elle a été relancée ${rd.length} fois pour des déclarations non déposées.`);
   for (const c of f.ctrls.filter(c => c.statut === "recouvre" || c.statut === "propose")) parts.push(`Le contrôle fiscal ${dossierNo("CF", c.id)} a établi un rappel de ${money(c.droits)} de droits, majoré de ${(QUALIF[c.qualification] || QUALIF.bonne_foi)[1]} % (${(QUALIF[c.qualification] || QUALIF.bonne_foi)[0].split(" :")[0].toLowerCase()})${c.motif ? ". Constats : " + c.motif.replace(/\.$/, "") : ""}.`);
   // Contrôle en cours, ouvert le cas échéant avant la déclaration (flagrance fiscale).
-  for (const c of f.ctrls.filter(c => c.statut === "ouvert")) {
-    const att = c.attente || [], np = (c.pieces || []).length;
-    parts.push(`Le contrôle fiscal ${dossierNo("CF", c.id)} a été ouvert le ${longDate(new Date(c.ouvertLe))}${ORIGINES[c.origine] ? " (" + ORIGINES[c.origine].toLowerCase() + ")" : ""}${att.length ? `, avant même la déclaration de la ${att.map(k => periodPlain(k).toLowerCase()).join(" et de la ")}, sur le modèle de la flagrance fiscale` : ""}${c.motif ? ". Constats : " + c.motif.replace(/\s*\n\s*/g, " ").replace(/\.$/, "") : ""}.${np ? ` ${np > 1 ? "Les " + np + " pièces" : "La pièce"} du contrôle figure${np > 1 ? "nt" : ""} en annexe.` : ""}`);
+  for (const c of f.ctrls.filter(c => c.statut === "ouvert" || c.statut === "justice")) {
+    const att = c.attente || [], np = (c.pieces || []).length, avant = (c.enCours || []).length > 0, txt = c.statut === "justice" ? c.conclusion || c.motif : c.motif;
+    parts.push(`Le contrôle fiscal ${dossierNo("CF", c.id)} a été ouvert le ${longDate(new Date(c.ouvertLe))}${ORIGINES[c.origine] ? " (" + ORIGINES[c.origine].toLowerCase() + ")" : ""}${att.length || (c.statut === "justice" && avant) ? `, avant même la déclaration de la ${(att.length ? att : c.enCours).map(k => periodPlain(k).toLowerCase()).join(" et de la ")}, sur le modèle de la flagrance fiscale` : ""}${c.statut === "justice" && c.closLe ? `, et clos le ${longDate(new Date(c.closLe))}` : ""}${txt ? ". Constats : " + txt.replace(/\s*\n\s*/g, " ").replace(/\.$/, "") : ""}.${np ? ` ${np > 1 ? "Les " + np + " pièces" : "La pièce"} du contrôle figure${np > 1 ? "nt" : ""} en annexe.` : ""}`);
   }
+  if (e.fermetureAdm) parts.push(`Le préfet de police a prononcé la fermeture administrative de l’établissement le ${longDate(new Date(e.fermetureAdm.at))}, ${e.fermetureAdm.jusqua ? "jusqu’au " + longDate(new Date(e.fermetureAdm.jusqua)) : "jusqu’à la décision de la justice"}.`);
   const cv = convsOf(e).filter(c => c.statut === "convoquee" && new Date(c.date).getTime() > Date.now());
   if (cv.length) parts.push(`${cv[0].convoque || "Son dirigeant"} est convoqué${cv.length > 1 ? " à plusieurs reprises, la première fois" : ""} le ${longDate(new Date(cv[0].date))} à ${new Date(cv[0].date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ")}.`);
   const ex = f.sais.filter(s => s.statut === "executee"), open = f.sais.filter(s => s.statut === "notifiee");
@@ -11923,7 +11974,7 @@ async function buildJusticePdf(t, e) {
   if (t.denonciation) pw.p("Dénonciation obligatoire : les rappels de droits et leurs majorations atteignent le seuil de l’article L228 du LPF.", { bold: true, color: "#b3261e" });
   pw.h2("1. Identité du redevable");
   pw.kv([["Entreprise", e.nom], ["Secteur", e.secteur || "—"], ["Dirigeant", e.patron || "—"], ["Identifiant Discord", e.discord ? (parseMention(e.discord) || {}).id || "—" : "—"],
-    ["Au registre depuis", e.createdAt ? longDate(new Date(e.createdAt)) : "—"], ["État", e.actif === false ? "Inactive" : "Active"],
+    ["Au registre depuis", e.createdAt ? longDate(new Date(e.createdAt)) : "—"], ["État", e.fermetureAdm && e.actif === false ? `Fermeture administrative depuis le ${fmtDate(new Date(e.fermetureAdm.at))}` : e.actif === false ? "Inactive" : "Active"],
     ["Déjà payé", money(f.paid)], ["Déclarations déposées", String(f.ds.filter(d => dStatus(d) !== "rejetee").length)]]);
   pw.h2("2. Qualification des faits");
   pw.bullets((t.qualifs || []).map(q => QUALIFS_J[q]));
@@ -11947,6 +11998,7 @@ async function buildJusticePdf(t, e) {
       ["Qualification", c.statut === "ouvert" ? "à établir à la fin du contrôle" : (QUALIF[c.qualification] || QUALIF.bonne_foi)[0]]]);
     if (att.length) pw.p(`Contrôle ouvert avant la déclaration, sur le modèle de la flagrance fiscale (art. L16-0 BA du LPF) : ${att.map(x => `${periodPlain(x).toLowerCase()} à déclarer avant le ${longDate(deadline(x))}`).join(", ")}.`);
     if (c.motif) pw.p("Constats : " + c.motif);
+    if (c.statut === "justice" && c.conclusion && c.conclusion !== c.motif) pw.p(`Conclusion (${c.closLe ? fmtDate(new Date(c.closLe)) : "—"}) : ${c.conclusion}`, { bold: true });
     if (k.lines.length) {
       pw.table([{ t: "Période", w: 1 }, { t: "Base déclarée", w: 1.2, num: true }, { t: "Base retenue", w: 1.2, num: true }, { t: "Rappel", w: 1, num: true }, { t: "Motif", w: 2 }],
         k.lines.map(l => [periodPlain(l.d.periode), money(l.baseDroits), money(l.retenuDroits), money(l.droits), l.motif || "—"]));
