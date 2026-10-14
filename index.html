@@ -1964,7 +1964,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               </div>
               <label class="switch exo-field" for="x-deg"><input type="checkbox" id="x-deg"> Dégressive : la réduction baisse à chaque période jusqu’à la fin</label>
               <p class="hint" id="x-ex" style="margin:0"></p>
-              <p class="hint" style="margin:0">Une entreprise est « nouvelle » si son début d’activité est postérieur au début du suivi. Dans « Modifier l’entreprise », la Direction peut aussi accorder ou refuser l’exonération au cas par cas.</p>
+              <p class="hint" style="margin:0">Une entreprise est « nouvelle » si son activité commence au début du suivi ou après : celles de l’ouverture du serveur en profitent aussi. Dans « Modifier l’entreprise », la Direction peut aussi accorder ou refuser l’exonération au cas par cas.</p>
               <div class="paste-row">
                 <button class="btn" type="button" id="x-save">Enregistrer l’exonération</button>
                 <span id="x-msg" class="hint" aria-live="polite"></span>
@@ -10785,7 +10785,9 @@ function exoStartKey(e, c) {
   if (!c.exoActive || !e || !e.id || e.exoneration === "refusee") return null;
   const deb = e.debutActivite && bounds(e.debutActivite) ? e.debutActivite : null;
   if (e.exoneration === "accordee") return deb || c.debutSuivi;
-  return deb && keyStart(deb) > startTime() ? deb : null;
+  // Nouvelle : son activité commence avec le suivi ou après. Les entreprises présentes à l'ouverture
+  // (début d'activité = première semaine suivie) sont donc exonérées, comme celles qui ouvrent ensuite.
+  return deb && keyStart(deb) >= startTime() ? deb : null;
 }
 function exoInfo(e, key, c) {
   c = c || cfg();
