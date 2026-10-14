@@ -7079,7 +7079,7 @@ function openFiche(e, opts) {
         rl.map(r => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${rlLabel(r)}` }), h("span", { class: "meta", text: `${fmtDate(new Date(r.at))} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · avant le ${fmtDate(new Date(r.echeance))}` })),
           rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r), reopen), text: "Image" })))),
         sa.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSaisieDetail(x.id), text: `${dossierNo("SA", x.id)} · ${SAISIE_TYPES[x.type]}` }), h("span", { class: "meta", text: `${fmtDate(new Date(x.at))} · ${money(x.montant)}${x.tiers ? " · " + x.tiers : ""}` })), x.statut === "notifiee" && !saisieOpen(x) ? chip(["Sommes réglées · à lever", "warn"]) : chip(SSTAT[x.statut] || SSTAT.notifiee), h("span", {}))),
-        tj.map(t => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTransmission(t.id), text: `${dossierNo("TJ", t.id)} · Dossier de justice` }), h("span", { class: "meta", text: `${fmtDate(new Date(t.at))} · ${money(t.montant)}` })), t.statut === "transmis" && !justiceOpen(t) ? chip(["Dette réglée ?", "warn"]) : chip(TSTAT[t.statut] || TSTAT.transmis), h("span", {})))));
+        tj.map(t => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTransmission(t.id), text: `${dossierNo("TJ", t.id)} · Dossier de justice` }), h("span", { class: "meta", text: `${fmtDate(new Date(t.at))} · ${money(t.montant)}` })), t.statut === "transmis" && !justiceEnCours(t) ? chip(["Dette réglée ?", "warn"]) : chip(TSTAT[t.statut] || TSTAT.transmis), h("span", {})))));
     })()
   ];
   const foot = [
@@ -7320,7 +7320,7 @@ function describe(e) {
     case "entreprises":
       if (x === "ajout") return `a ajouté l’entreprise ${v.nom} au registre`;
       if (x === "suppression") return `a retiré l’entreprise ${v.nom} du registre`;
-      if (a.actif !== b.actif) return a.actif === false ? `a désactivé l’entreprise ${a.nom}` : `a réactivé l’entreprise ${a.nom}`;
+      if (a.actif !== b.actif) return a.actif === false ? `a ${a.fermeMotif && a.fermeLe !== b.fermeLe ? "fermé" : "désactivé"} l’entreprise ${a.nom}${a.fermeMotif && a.fermeLe !== b.fermeLe ? " (" + a.fermeMotif + ")" : ""}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
       const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
@@ -7422,7 +7422,7 @@ function describe(e) {
 }
 const shortJson = s => (s === undefined ? "—" : s.length > 90 ? s.slice(0, 87) + "…" : s);
 const FIELD_LABEL = {
-  nom: "Nom", secteur: "Secteur", patron: "Patron", discord: "ID Discord", debutActivite: "Début d’activité", actif: "Active",
+  nom: "Nom", secteur: "Secteur", patron: "Patron", discord: "ID Discord", debutActivite: "Début d’activité", actif: "Active", fermeLe: "Fermée le", fermeMotif: "Motif de la fermeture",
   entrepriseNom: "Entreprise", periode: "Période", ca: "Chiffre d’affaires", charges: "Charges", masse: "Masse salariale", nbSalaries: "Salariés",
   resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
@@ -8244,6 +8244,8 @@ const sameItem = (a, b) => (a.id && b.id ? a.id === b.id : a.ref === b.ref);
 const saisieOfItem = x => S.saisies.find(s => s.statut === "notifiee" && (s.items || []).some(i => sameItem(i, x))) || null;
 const saisieOpen = s => s.statut === "notifiee" && (s.items || []).some(i => !itemSettled(i));
 const justiceOpen = t => t.statut === "transmis" && (t.items || []).some(i => !itemSettled(i));
+// Dossier sans créance qui signale des délits (blanchiment avant toute déclaration, par exemple) : il reste en cours.
+const justiceEnCours = t => justiceOpen(t) || (t.statut === "transmis" && !(t.items || []).length && (t.qualifs || []).some(q => q !== "impaye"));
 // Relances : la plus récente qui porte sur ces semaines ou ces sommes ; régularisée quand tout est fait.
 const relanceFor = (e, type, keysOrItems) => relancesOf(e).find(r => r.type === type && (type === "declaration"
   ? (r.periodes || []).some(k => keysOrItems.includes(k))
@@ -8501,7 +8503,7 @@ function renderRecouvrement() {
   fill($("#rc-justice"), ts.length ? h("ul", { class: "ent-list" }, ts.slice(0, S.rcAll.tj ? 500 : RC_LIMIT).map(t => h("li", {},
     h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTransmission(t.id), text: `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}` }),
       h("span", { class: "meta", text: `${money(t.montant)} · transmis le ${fmtDate(new Date(t.at))}${t.byNom ? " par " + t.byNom : ""}` })),
-    t.statut === "transmis" && !justiceOpen(t) ? chip(["Dette réglée ?", "warn"]) : chip(TSTAT[t.statut] || TSTAT.transmis),
+    t.statut === "transmis" && !justiceEnCours(t) ? chip(["Dette réglée ?", "warn"]) : chip(TSTAT[t.statut] || TSTAT.transmis),
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openTransmission(t.id), text: "Ouvrir" }))))) : h("div", { class: "empty", text: "Aucun dossier transmis à la justice." }), rcMore("tj", ts.length));
 
   const hist = S.relances.slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -10636,6 +10638,7 @@ function regularite(e) {
   if (unpaid.length) manques.push(`${money(unpaid.reduce((s, x) => s + x.montant, 0))} échus non payés (${unpaid.map(x => x.ref).join(", ")})`);
   if (S.saisies.some(x => sameEnt(x, e) && saisieOpen(x))) manques.push("Saisie en cours");
   if (S.transmissions.some(x => sameEnt(x, e) && justiceOpen(x))) manques.push("Dossier transmis à la justice en cours, dette non réglée");
+  else if (S.transmissions.some(x => sameEnt(x, e) && justiceEnCours(x))) manques.push("Dossier transmis à la justice en cours");
   for (const v of vehsOf(e)) if (vehRembRetard(v)) manques.push(`Véhicule ${v.plaque} requalifié : le dirigeant n’a pas remboursé ${money(v.requalification.montant)} à l’entreprise`);
   if (e.actif === false) manques.push("Entreprise inactive");
   if (!e.id) manques.push("Entreprise absente du registre");
@@ -11570,9 +11573,12 @@ const MESURES_J = {
   saisie_comptes: "Saisie des sommes détenues sur les comptes de l’entreprise, à hauteur de la dette",
   saisie_biens: "Saisie et vente des biens de l’entreprise : véhicules, stocks, matériel",
   fermeture: "Fermeture administrative temporaire de l’établissement",
+  fermeture_def: "Fermeture définitive de l’établissement qui a servi à commettre les faits (art. 131-39, 4° du Code pénal)",
+  dissolution: "Dissolution de l’entreprise, détournée de son objet pour commettre les faits (art. 131-39, 1° du Code pénal)",
   poursuites: "Poursuites pénales contre le dirigeant",
   interdiction: "Interdiction de gérer une entreprise, à titre de peine complémentaire",
   confiscation: "Confiscation des sommes d’origine illicite figurant sur le compte de l’entreprise",
+  confiscation_produit: "Confiscation du produit de l’infraction, y compris les sommes reversées en salaires ou en primes (art. 131-21 du Code pénal)",
   confiscation_vehicules: "Confiscation des véhicules payés par l’entreprise pour l’usage personnel du dirigeant, et remboursement de leur prix à l’entreprise"
 };
 // Repères du droit réel, rappelés en fin de dossier.
@@ -11584,7 +11590,7 @@ const FONDEMENTS = {
   opposition: "Opposition au contrôle fiscal : les droits sont majorés de 100 % (art. 1732 du CGI) ; mettre les agents dans l’impossibilité d’exercer leurs fonctions est un délit (art. 1746 du CGI).",
   insolvabilite: "Organiser ou aggraver son insolvabilité pour échapper au paiement de l’impôt est réprimé comme une fraude fiscale (art. 1741 du CGI) et comme une organisation frauduleuse d’insolvabilité (art. 314-7 du Code pénal).",
   abs: "Abus de biens sociaux (art. L241-3 4° du Code de commerce pour les SARL, L242-6 3° pour les SA et SAS) : faire, de mauvaise foi, des biens ou du crédit de la société un usage que le dirigeant sait contraire à l’intérêt de celle-ci, à des fins personnelles ; 5 ans d’emprisonnement et 375 000 € d’amende, 7 ans et 500 000 € quand les faits passent par des comptes ou des structures à l’étranger. Sur le plan fiscal, une dépense engagée dans l’intérêt personnel du dirigeant n’est pas une charge déductible (art. 39-1 du CGI) et l’avantage est imposé comme un revenu distribué (art. 111 c du CGI).",
-  blanchiment: "Blanchiment (art. 324-1 du Code pénal) : faciliter la justification mensongère de l’origine de fonds, ou concourir à leur placement, dissimulation ou conversion ; 5 ans d’emprisonnement et 375 000 € d’amende, 10 ans et 750 000 € s’il est habituel, facilité par une activité professionnelle ou commis en bande organisée (art. 324-2). Les fonds sont présumés d’origine illicite quand l’opération n’a d’autre justification que d’en dissimuler l’origine (art. 324-1-1). Les sommes portées au compte sans origine justifiée peuvent aussi être imposées d’office (art. L16 et L69 du LPF), et les soupçons sont signalés à TRACFIN (art. L561-15 du Code monétaire et financier)."
+  blanchiment: "Blanchiment (art. 324-1 du Code pénal) : faciliter la justification mensongère de l’origine de fonds, ou concourir à leur placement, dissimulation ou conversion ; 5 ans d’emprisonnement et 375 000 € d’amende, 10 ans et 750 000 € s’il est habituel, facilité par une activité professionnelle ou commis en bande organisée (art. 324-2). Les fonds sont présumés d’origine illicite quand l’opération n’a d’autre justification que d’en dissimuler l’origine (art. 324-1-1). Les sommes portées au compte sans origine justifiée peuvent aussi être imposées d’office (art. L16 et L69 du LPF), et les soupçons sont signalés à TRACFIN (art. L561-15 du Code monétaire et financier). L’entreprise peut elle-même être condamnée (art. 121-2 du Code pénal) : amende jusqu’au quintuple de celle des personnes physiques (art. 131-38), dissolution si elle a été détournée de son objet pour commettre un délit puni d’au moins trois ans, fermeture définitive de ses établissements, confiscation (art. 131-39)."
 };
 // Dénonciation obligatoire (art. L228 du LPF) : plus de 100 000 € de droits rappelés à 80 ou 100 %,
 // ou à 40 % quand l'entreprise a déjà été sanctionnée.
@@ -11652,20 +11658,29 @@ function justiceFacts(e) {
 }
 function autoExpose(e, f, qualifs) {
   const parts = [];
-  parts.push(`L’entreprise ${e.nom}${e.secteur ? ", du secteur " + e.secteur.toLowerCase() : ""}, dirigée par ${e.patron || "un dirigeant non identifié"}, reste devoir ${money(f.total)} à la Direction des impôts et cotisations.`);
+  const debut = e.debutActivite && /-S\d{2}$/.test(e.debutActivite) && bounds(e.debutActivite) ? `, en activité depuis la ${periodPlain(e.debutActivite).toLowerCase()}` : "";
+  parts.push(f.total > 0 ? `L’entreprise ${e.nom}${e.secteur ? ", du secteur " + e.secteur.toLowerCase() : ""}, dirigée par ${e.patron || "un dirigeant non identifié"}, reste devoir ${money(f.total)} à la Direction des impôts et cotisations.`
+    : `L’entreprise ${e.nom}${e.secteur ? ", du secteur " + e.secteur.toLowerCase() : ""}, dirigée par ${e.patron || "un dirigeant non identifié"}${debut}, ne doit à ce jour aucune somme à la Direction des impôts et cotisations.`);
   if (f.debts.length) parts.push(`Cette somme correspond à ${f.debts.length} créance${plural(f.debts.length)} : ${f.debts.map(x => `${x.ref} (${money(x.reste)})`).join(", ")}.`);
   const rp = f.rls.filter(r => r.type === "paiement");
   if (rp.length) parts.push(`Elle a reçu ${rp.length} relance${plural(rp.length)} de paiement${f.lastMed ? `, dont une mise en demeure de payer le ${longDate(new Date(f.lastMed.at))} qui lui laissait jusqu’au ${longDate(new Date(f.lastMed.echeance))} pour régulariser` : ""}, sans effet.`);
   const rd = f.rls.filter(r => r.type === "declaration");
   if (rd.length) parts.push(`Elle a été relancée ${rd.length} fois pour des déclarations non déposées.`);
   for (const c of f.ctrls.filter(c => c.statut === "recouvre" || c.statut === "propose")) parts.push(`Le contrôle fiscal ${dossierNo("CF", c.id)} a établi un rappel de ${money(c.droits)} de droits, majoré de ${(QUALIF[c.qualification] || QUALIF.bonne_foi)[1]} % (${(QUALIF[c.qualification] || QUALIF.bonne_foi)[0].split(" :")[0].toLowerCase()})${c.motif ? ". Constats : " + c.motif.replace(/\.$/, "") : ""}.`);
+  // Contrôle en cours, ouvert le cas échéant avant la déclaration (flagrance fiscale).
+  for (const c of f.ctrls.filter(c => c.statut === "ouvert")) {
+    const att = c.attente || [], np = (c.pieces || []).length;
+    parts.push(`Le contrôle fiscal ${dossierNo("CF", c.id)} a été ouvert le ${longDate(new Date(c.ouvertLe))}${ORIGINES[c.origine] ? " (" + ORIGINES[c.origine].toLowerCase() + ")" : ""}${att.length ? `, avant même la déclaration de la ${att.map(k => periodPlain(k).toLowerCase()).join(" et de la ")}, sur le modèle de la flagrance fiscale` : ""}${c.motif ? ". Constats : " + c.motif.replace(/\s*\n\s*/g, " ").replace(/\.$/, "") : ""}.${np ? ` ${np > 1 ? "Les " + np + " pièces" : "La pièce"} du contrôle figure${np > 1 ? "nt" : ""} en annexe.` : ""}`);
+  }
+  const cv = convsOf(e).filter(c => c.statut === "convoquee" && new Date(c.date).getTime() > Date.now());
+  if (cv.length) parts.push(`${cv[0].convoque || "Son dirigeant"} est convoqué${cv.length > 1 ? " à plusieurs reprises, la première fois" : ""} le ${longDate(new Date(cv[0].date))} à ${new Date(cv[0].date).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", " h ")}.`);
   const ex = f.sais.filter(s => s.statut === "executee"), open = f.sais.filter(s => s.statut === "notifiee");
   if (ex.length || open.length) parts.push(`${ex.length ? `${ex.length} saisie${plural(ex.length)} a permis de recouvrer ${money(ex.reduce((s, x) => s + (x.recouvre || 0), 0))}` : ""}${ex.length && open.length ? ", et " : ""}${open.length ? `${open.length} saisie${plural(open.length)} reste${open.length > 1 ? "nt" : ""} sans effet` : ""}.`);
   if (qualifs.includes("travail")) parts.push("Des salariés ont été employés sans être déclarés.");
   if (qualifs.includes("insolvabilite")) parts.push("L’entreprise a organisé son insolvabilité pour échapper au paiement.");
   const absVs = (f.vehs || []).filter(vehAbs);
   if (qualifs.includes("abs") && absVs.length) parts.push(`Des véhicules payés avec l’argent de l’entreprise servent à l’usage personnel de son dirigeant : ${absVs.map(v => `${v.modele || "véhicule"} ${v.plaque} (${money(v.prix)}${v.statut === "requalifie" ? ", requalifié" + (vehRembRetard(v) ? ", non remboursé" : "") : ""})`).join(", ")}.`);
-  parts.push("La Direction sollicite les mesures ci-après pour recouvrer ces sommes et faire cesser les manquements.");
+  parts.push(f.total > 0 ? "La Direction sollicite les mesures ci-après pour recouvrer ces sommes et faire cesser les manquements." : "La Direction sollicite les mesures ci-après pour faire cesser les faits et priver l’entreprise et son dirigeant de leur produit.");
   return parts.join(" ");
 }
 async function buildJusticePdf(t, e) {
@@ -11682,8 +11697,13 @@ async function buildJusticePdf(t, e) {
   g.font = `400 20px ${PF.body}`; g.fillStyle = pw.ink2; g.fillText("Le " + longDate(new Date(t.at)), pw.W - pw.M, pw.y + 62); g.textAlign = "left";
   pw.y += 160; g.fillStyle = pw.ink; g.fillRect(pw.M, pw.y, pw.inner, 4); pw.y += 40;
   pw.h1("Dossier de transmission à la justice");
-  pw.kv([["Destinataire", t.destinataire || cfg().justiceDestinataire], ["Objet", `${(t.qualifs || []).some(q => q !== "impaye") ? "Signalement de délits et recouvrement forcé" : "Recouvrement forcé"} · ${e.nom}`]]);
-  pw.box("Somme à recouvrer", money(t.montant), `${(t.items || []).length} créance${plural((t.items || []).length)} · situation au ${longDate(new Date(t.at))}`);
+  const delits = (t.qualifs || []).some(q => q !== "impaye"), cause = Number(t.sommesEnCause) || 0;
+  pw.kv([["Destinataire", t.destinataire || cfg().justiceDestinataire], ["Objet", `${delits ? (t.montant > 0 ? "Signalement de délits et recouvrement forcé" : "Signalement de délits") : "Recouvrement forcé"} · ${e.nom}`]]);
+  if (!(t.montant > 0) && cause > 0) pw.box("Sommes en cause", money(cause), `opérations d’origine suspecte · aucune créance fiscale au ${longDate(new Date(t.at))}`);
+  else {
+    pw.box("Somme à recouvrer", money(t.montant), `${(t.items || []).length} créance${plural((t.items || []).length)} · situation au ${longDate(new Date(t.at))}`);
+    if (cause > 0) pw.p(`Sommes d’origine suspecte en cause : ${money(cause)}.`, { bold: true });
+  }
   if (t.denonciation) pw.p("Dénonciation obligatoire : les rappels de droits et leurs majorations atteignent le seuil de l’article L228 du LPF.", { bold: true, color: "#b3261e" });
   pw.h2("1. Identité du redevable");
   pw.kv([["Entreprise", e.nom], ["Secteur", e.secteur || "—"], ["Dirigeant", e.patron || "—"], ["Identifiant Discord", e.discord ? (parseMention(e.discord) || {}).id || "—" : "—"],
@@ -11692,7 +11712,8 @@ async function buildJusticePdf(t, e) {
   pw.h2("2. Qualification des faits");
   pw.bullets((t.qualifs || []).map(q => QUALIFS_J[q]));
   pw.h2("3. Créances impayées à la date de transmission");
-  pw.table([{ t: "Référence", w: 1.1 }, { t: "Nature", w: 1.5 }, { t: "Période ou motif", w: 1.9 }, { t: "Émise le", w: 0.9 }, { t: "Exigible", w: 0.9 }, { t: "Reste dû", w: 1.1, num: true }],
+  if (!(t.items || []).length) pw.p("Aucune créance impayée à cette date.", { color: pw.ink2 });
+  else pw.table([{ t: "Référence", w: 1.1 }, { t: "Nature", w: 1.5 }, { t: "Période ou motif", w: 1.9 }, { t: "Émise le", w: 0.9 }, { t: "Exigible", w: 0.9 }, { t: "Reste dû", w: 1.1, num: true }],
     (t.items || []).map(x => [x.ref, x.nature, x.periode, x.at ? fmtDate(new Date(x.at)) : "—", x.echu === false ? "à échoir" : "oui", money(x.reste)]).concat([["", "", "Total", "", "", money(t.montant)]]));
   const aEchoir = (t.items || []).filter(x => x.echu === false).reduce((s, x) => s + (Number(x.reste) || 0), 0);
   if (aEchoir > 0) pw.p(`Dont ${money(t.montant - aEchoir)} exigibles à ce jour ; ${money(aEchoir)} encore dans le délai de paiement (saisissables à l’échéance).`, { size: 19, color: pw.ink2 });
@@ -11705,11 +11726,17 @@ async function buildJusticePdf(t, e) {
   for (const c of f.ctrls) {
     const k = rectifCalc(c);
     pw.h2(`${++sn}. Contrôle fiscal ${dossierNo("CF", c.id)}`);
-    pw.kv([["Statut", ctrlState(c)[0]], ["Inspecteur", c.inspecteur || "—"], ["Périodes vérifiées", (c.periodes || []).map(periodPlain).join(", ")], ["Qualification", (QUALIF[c.qualification] || QUALIF.bonne_foi)[0]]]);
+    const att = c.statut === "ouvert" ? c.attente || [] : [];
+    pw.kv([["Statut", ctrlState(c)[0]], ["Ouvert le", longDate(new Date(c.ouvertLe))], ["Origine", ORIGINES[c.origine] || "—"], ["Inspecteur", c.inspecteur || "—"], ["Périodes vérifiées", (c.periodes || []).map(periodPlain).join(", ")],
+      ["Qualification", c.statut === "ouvert" ? "à établir à la fin du contrôle" : (QUALIF[c.qualification] || QUALIF.bonne_foi)[0]]]);
+    if (att.length) pw.p(`Contrôle ouvert avant la déclaration, sur le modèle de la flagrance fiscale (art. L16-0 BA du LPF) : ${att.map(x => `${periodPlain(x).toLowerCase()} à déclarer avant le ${longDate(deadline(x))}`).join(", ")}.`);
     if (c.motif) pw.p("Constats : " + c.motif);
-    pw.table([{ t: "Période", w: 1 }, { t: "Base déclarée", w: 1.2, num: true }, { t: "Base retenue", w: 1.2, num: true }, { t: "Rappel", w: 1, num: true }, { t: "Motif", w: 2 }],
-      k.lines.map(l => [periodPlain(l.d.periode), money(l.baseDroits), money(l.retenuDroits), money(l.droits), l.motif || "—"]));
-    pw.p(`Droits rappelés ${money(k.droits)} · majoration ${k.taux} % : ${money(k.majoration)} · total ${money(k.total)}.`, { bold: true });
+    if (k.lines.length) {
+      pw.table([{ t: "Période", w: 1 }, { t: "Base déclarée", w: 1.2, num: true }, { t: "Base retenue", w: 1.2, num: true }, { t: "Rappel", w: 1, num: true }, { t: "Motif", w: 2 }],
+        k.lines.map(l => [periodPlain(l.d.periode), money(l.baseDroits), money(l.retenuDroits), money(l.droits), l.motif || "—"]));
+      pw.p(`Droits rappelés ${money(k.droits)} · majoration ${k.taux} % : ${money(k.majoration)} · total ${money(k.total)}.`, { bold: true });
+    }
+    if ((c.pieces || []).length) pw.p(`${c.pieces.length} pièce${plural(c.pieces.length)} en annexe.`, { size: 19, color: pw.ink2 });
     if (c.reponse && (c.reponse.texte || c.reponse.position)) pw.p(`Réponse de l’entreprise (${c.reponse.position === "accepte" ? "accepte" : c.reponse.position === "conteste" ? "conteste" : "sans position"}) : ${c.reponse.texte || "—"}`);
     const notes = (c.notes || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
     if (notes.length) { pw.p("Instruction :", { bold: true, after: 4 }); pw.bullets(notes.map(n => `${fmtDate(new Date(n.at))} · ${n.auteur || "—"} : ${n.texte}`), { size: 20 }); }
@@ -11718,6 +11745,7 @@ async function buildJusticePdf(t, e) {
   if (syn.length || (t.qualifs || []).includes("blanchiment")) {
     pw.h2(`${++sn}. Compte de l’entreprise`);
     pw.p("Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un relevé fait par un agent fait foi face au solde déclaré.", { size: 18, color: pw.ink2 });
+    if (!syn.length) pw.p("Aucun solde observé entre deux déclarations : les opérations en cause figurent dans les pièces des contrôles, en annexe.", { size: 19 });
     if (syn.length) pw.table([{ t: "Période", w: 1 }, { t: "Solde retenu", w: 1.2, num: true }, { t: "Source", w: 1.3 }, { t: "Attendu", w: 1.2, num: true }, { t: "Écart", w: 1.1, num: true }],
       syn.map(x => [periodPlain(x.k), money(x.cur.pos), x.cur.source === "releve" ? `relevé (${x.cur.rel.agent || "agent"})` : "déclaré", x.attendu != null ? money(x.attendu) : "—", x.ecart != null ? (x.ecart > 0 ? "+" : "") + money(x.ecart) : "—"]));
     const sp = soupconsOf(e);
@@ -11737,7 +11765,8 @@ async function buildJusticePdf(t, e) {
       f.sais.map(s => [dossierNo("SA", s.id), SAISIE_TYPES[s.type] || "Saisie", s.tiers || "—", money(s.montant), (SSTAT[s.statut] || SSTAT.notifiee)[0] + (s.statut === "executee" ? ` (${money(s.recouvre || 0)})` : "")]));
   }
   pw.h2(`${++sn}. Historique des déclarations`);
-  pw.table([{ t: "Période", w: 1 }, { t: "Chiffre d’affaires", w: 1.3, num: true }, { t: "Résultat", w: 1.2, num: true }, { t: "Montant dû", w: 1.2, num: true }, { t: "Payé", w: 1.1, num: true }, { t: "Statut", w: 1.3 }],
+  if (!f.ds.length) pw.p("Aucune déclaration déposée à cette date.", { color: pw.ink2 });
+  else pw.table([{ t: "Période", w: 1 }, { t: "Chiffre d’affaires", w: 1.3, num: true }, { t: "Résultat", w: 1.2, num: true }, { t: "Montant dû", w: 1.2, num: true }, { t: "Payé", w: 1.1, num: true }, { t: "Statut", w: 1.3 }],
     f.ds.map(d => [periodPlain(d.periode) + (d.enRetard ? " (retard)" : ""), money(d.ca), money(d.resultat), money(dMontant(d)), money(dEncaisse(d)), (DSTAT[dStatus(d)] || DSTAT.soumise)[0]]));
   pw.h2(`${++sn}. Exposé des faits`);
   pw.p(t.expose);
@@ -11778,7 +11807,12 @@ function openJustice(e) {
   // « Défaut de paiement » n'est coché d'office que si une somme est déjà exigible.
   const blEcarts = comptesSynthese(e, 8).filter(x => ecartSuspect(x) && x.ecart > blc().seuil);
   const absV = f.vehs.filter(vehAbs);
-  const defaults = { impaye: f.debts.some(x => x.echu !== false), fraude, travail, opposition, insolvabilite: false, blanchiment: soupconsOf(e).length > 0 || blEcarts.length > 0, abs: absV.length > 0 };
+  // Un contrôle ouvert sur la surveillance des comptes suffit à qualifier le blanchiment.
+  const ctrlBl = f.ctrls.filter(x => x.origine === "blanchiment" && x.statut !== "sans_suite");
+  const defaults = { impaye: f.debts.some(x => x.echu !== false), fraude, travail, opposition, insolvabilite: false, blanchiment: soupconsOf(e).length > 0 || blEcarts.length > 0 || ctrlBl.length > 0, abs: absV.length > 0 };
+  // Sommes d'origine suspecte : écarts du compte, soupçons, justifications demandées ; corrigeables à la main.
+  const cause0 = Math.max(blEcarts.reduce((t, x) => t + x.ecart, 0), soupconsOf(e).reduce((t, x) => t + (Number(x.montant) || 0), 0), ctrlBl.reduce((t, c) => t + ((c.justif && c.justif.ecarts) || []).reduce((s, x) => s + (Number(x.ecart) || 0), 0), 0));
+  const cause = h("input", { id: "j-cause", type: "number", min: "0", step: "1", inputmode: "numeric", placeholder: "0" }); cause.value = cause0 > 0 ? String(Math.round(cause0)) : "";
   const denon = denonciationObligatoire(e);
   const medOk = !!f.lastMed && medExpired(f.lastMed);
   const checks = h("ul", { class: "checklist" },
@@ -11788,7 +11822,7 @@ function openJustice(e) {
     f.ctrls.length ? h("li", { class: "yes", text: `${f.ctrls.length} contrôle${plural(f.ctrls.length)} fiscal${f.ctrls.length > 1 ? "aux" : ""} au dossier` }) : null,
     f.sais.length ? h("li", { class: "yes", text: `${f.sais.length} saisie${plural(f.sais.length)} au dossier` }) : null);
   const qBoxes = Object.entries(QUALIFS_J).map(([k, l]) => box("jq-" + k, l, defaults[k]));
-  const mBoxes = Object.entries(MESURES_J).map(([k, l]) => box("jm-" + k, l, k === "saisie_comptes" ? f.total > 0 : k === "poursuites" ? fraude || travail || opposition || absV.length > 0 : k === "confiscation_vehicules" ? absV.some(v => v.statut === "requalifie" && vehRembRetard(v)) : false));
+  const mBoxes = Object.entries(MESURES_J).map(([k, l]) => box("jm-" + k, l, k === "saisie_comptes" ? f.total > 0 : k === "poursuites" ? fraude || travail || opposition || absV.length > 0 || defaults.blanchiment : k === "confiscation" ? defaults.blanchiment : k === "confiscation_vehicules" ? absV.some(v => v.statut === "requalifie" && vehRembRetard(v)) : false));
   const exp = h("textarea", { id: "j-expose", rows: "6" });
   exp.value = autoExpose(e, f, Object.keys(defaults).filter(k => defaults[k]));
   const dest = h("input", { id: "j-dest", autocomplete: "off" });
@@ -11798,7 +11832,8 @@ function openJustice(e) {
   const gather = () => ({
     entrepriseId: e.id || null, entrepriseNom: e.nom, patron: e.patron || "", at: nowISO(), by: S.uid || null, byNom: S.agentName || "",
     montant: f.total, items: f.debts, qualifs: Object.keys(QUALIFS_J).filter(k => $("#jq-" + k).checked), mesures: Object.keys(MESURES_J).filter(k => $("#jm-" + k).checked),
-    expose: exp.value.trim(), destinataire: dest.value.trim() || c.justiceDestinataire, statut: "transmis", suites: [], denonciation: denon
+    expose: exp.value.trim(), destinataire: dest.value.trim() || c.justiceDestinataire, statut: "transmis", suites: [], denonciation: denon,
+    sommesEnCause: Math.max(0, Math.round(Number(cause.value) || 0))
   });
   const valid = t => {
     if (!t.qualifs.length) { err.textContent = "Cochez au moins une qualification."; return false; }
@@ -11826,7 +11861,7 @@ function openJustice(e) {
     try { pdf = await buildJusticePdf(full, e); } catch (x) { pdf = null; }
     const name = pdfName(full, e);
     const mjs = justiceMentions();
-    const text = `${mjs.length ? mjs.join(" ") + " " : ""}**Dossier transmis à la justice ${dossierNo("TJ", ref.id)}** · ${e.nom}${entMention(e) ? " (" + entMention(e) + ")" : ""}\nSomme à recouvrer : **${money(t.montant)}**\nQualification : ${t.qualifs.map(q => QUALIFS_J[q].split(" :")[0].split(" (")[0].toLowerCase()).join(", ")}\nMesures sollicitées : ${t.mesures.map(m => MESURES_J[m].split(",")[0].toLowerCase()).join(" ; ")}\nLe dossier complet est joint en PDF.\n— Préfecture de police · Direction des impôts et cotisations`;
+    const text = `${mjs.length ? mjs.join(" ") + " " : ""}**Dossier transmis à la justice ${dossierNo("TJ", ref.id)}** · ${e.nom}${entMention(e) ? " (" + entMention(e) + ")" : ""}\n${!(t.montant > 0) && t.sommesEnCause > 0 ? `Sommes en cause : **${money(t.sommesEnCause)}** (aucune créance fiscale à ce jour)` : `Somme à recouvrer : **${money(t.montant)}**${t.sommesEnCause > 0 ? `\nSommes en cause : **${money(t.sommesEnCause)}**` : ""}`}\nQualification : ${t.qualifs.map(q => QUALIFS_J[q].split(" :")[0].split(" (")[0].toLowerCase()).join(", ")}\nMesures sollicitées : ${t.mesures.map(m => MESURES_J[m].split(",")[0].toLowerCase()).join(" ; ")}\nLe dossier complet est joint en PDF.\n— Préfecture de police · Direction des impôts et cotisations`;
     if (hookFor("justice") && pdf) {
       const r = await postDiscord("justice", { content: text, mentions: [...mjs, entMention(e)].filter(Boolean), files: [{ blob: pdf, name }] });
       toast(r.ok ? "Dossier transmis à la justice sur Discord." : "Dossier enregistré, mais Discord a refusé l’envoi : " + r.error, !r.ok);
@@ -11838,8 +11873,10 @@ function openJustice(e) {
     eyebrow: "Transmission à la justice", title: e.nom, wide: true, stampEl: stamp(["Dossier", "bad"]),
     body: [
       denon ? h("div", { class: "notice", style: "margin:0;border-left-color:var(--bad)" }, h("div", {}, h("strong", { text: "Dénonciation obligatoire. " }), "Plus de 100 000 € de droits rappelés avec une majoration de fraude ou d’opposition : dans la réalité, l’administration doit saisir le procureur (art. L228 du LPF).")) : null,
-      sec("Préalables", checks), !medOk ? h("label", { class: "switch", for: "j-force" }, force, "Transmettre quand même (sans mise en demeure expirée)") : null,
+      sec("Préalables", checks), !medOk && f.debts.length ? h("label", { class: "switch", for: "j-force" }, force, "Transmettre quand même (sans mise en demeure expirée)") : null,
       h("div", { class: "dlg-cols" }, sec("Qualification", h("div", { class: "checks-col" }, qBoxes)), sec("Mesures sollicitées", h("div", { class: "checks-col" }, mBoxes))),
+      h("div", { class: "field" }, h("label", { for: "j-cause", text: "Sommes d’origine suspecte en cause" }), h("div", { class: "money", "data-cur": cur() }, cause),
+        h("span", { class: "hint", text: "Montant des opérations constatées, par exemple les sommes blanchies. Il figure en tête du dossier ; il ne s’ajoute pas à la somme à recouvrer." })),
       h("div", { class: "field" }, h("label", { for: "j-dest", text: "Destinataire" }), dest),
       h("div", { class: "field" }, h("label", { for: "j-expose", text: "Exposé des faits" }), exp),
       h("p", { class: "hint", style: "margin:0", text: "Le PDF reprend l’identité de l’entreprise, les créances, chaque relance, mise en demeure et saisie, les contrôles fiscaux avec leurs pièces, l’historique des déclarations, l’exposé, les mesures et les références juridiques." }), err],
@@ -11856,16 +11893,21 @@ function openTransmission(id) {
   sel.value = t.statut || "transmis";
   const note = h("input", { id: "tj-note", autocomplete: "off", placeholder: "Ex. : jugement du…, 12 000 € saisis…", disabled: !dir });
   const suites = (t.suites || []).slice().reverse();
+  // Condamnation à la fermeture ou à la dissolution : l'entreprise sort du registre actif (plus attendue ni relancée).
+  const ent = e.id ? S.entreprises.find(x => x.id === e.id) : null;
+  const fermer = h("input", { type: "checkbox", id: "tj-fermer" }); fermer.checked = (t.mesures || []).some(m => m === "dissolution" || m === "fermeture_def");
+  const fermerBox = dir && ent && ent.actif !== false ? h("label", { class: "switch", for: "tj-fermer" }, fermer, "Fermer l’entreprise au registre : elle devient inactive, n’est plus attendue ni relancée") : null;
+  if (fermerBox) { fermerBox.hidden = sel.value !== "condamnation"; sel.addEventListener("change", () => { fermerBox.hidden = sel.value !== "condamnation"; }); }
   openDialog({
     eyebrow: `Dossier ${dossierNo("TJ", id)} · transmis le ${fmtDate(new Date(t.at))}${t.byNom ? " par " + t.byNom : ""}`, title: t.entrepriseNom, stampEl: stamp(TSTAT[t.statut] || TSTAT.transmis),
-    body: [kv([["Somme à recouvrer", money(t.montant), "tot"], ["Destinataire", t.destinataire || "—"]]),
-      t.statut === "transmis" && !justiceOpen(t) ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Toutes les créances du dossier sont réglées. " }), "Enregistrez la suite « Dette réglée », ou une autre suite si la justice poursuit pour d’autres faits.")) : null,
+    body: [kv([!(t.montant > 0) && t.sommesEnCause > 0 ? ["Sommes en cause", money(t.sommesEnCause), "tot"] : ["Somme à recouvrer", money(t.montant), "tot"], t.montant > 0 && t.sommesEnCause > 0 ? ["Sommes en cause", money(t.sommesEnCause)] : null, ["Destinataire", t.destinataire || "—"]].filter(Boolean)),
+      t.statut === "transmis" && !justiceEnCours(t) ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Toutes les créances du dossier sont réglées. " }), "Enregistrez la suite « Dette réglée », ou une autre suite si la justice poursuit pour d’autres faits.")) : null,
       t.denonciation ? h("p", { class: "hint", style: "margin:0", text: "Dénonciation obligatoire (art. L228 du LPF)." }) : null,
       sec("Qualification", h("ul", { class: "access" }, (t.qualifs || []).map(q => h("li", { text: QUALIFS_J[q] || q })))),
       sec("Mesures sollicitées", h("ul", { class: "access" }, (t.mesures || []).map(m => h("li", { text: MESURES_J[m] || m })))),
       sec("Exposé des faits", h("p", { class: "prewrap", style: "margin:0", text: t.expose || "—" })),
       sec("Suites données", suites.length ? h("ul", { class: "notes" }, suites.map(s => h("li", {}, h("span", { class: "meta", text: `${fmtDateTime(new Date(s.at))} · ${s.auteur || "—"} · ${(TSTAT[s.statut] || TSTAT.transmis)[0]}` }), s.note ? h("p", { class: "prewrap", text: s.note }) : null))) : h("p", { class: "muted", style: "margin:0", text: "Aucune suite enregistrée." }),
-        dir ? h("div", { class: "row2", style: "margin-top:8px" }, h("div", { class: "field" }, h("label", { for: "tj-st", text: "Suite" }), sel), h("div", { class: "field" }, h("label", { for: "tj-note", text: "Précision" }), note)) : null)],
+        dir ? h("div", { class: "row2", style: "margin-top:8px" }, h("div", { class: "field" }, h("label", { for: "tj-st", text: "Suite" }), sel), h("div", { class: "field" }, h("label", { for: "tj-note", text: "Précision" }), note)) : null, fermerBox)],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(e), text: "Fiche de l’entreprise" }), h("span", { class: "spacer" }),
       h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
         const b = ev.currentTarget; b.disabled = true; toast("Préparation du PDF…");
@@ -11877,7 +11919,11 @@ function openTransmission(id) {
         S.forceWrite = "transmissions/" + t.id;
         const body = Object.assign({}, t2, { statut: sel.value, suites: (t2.suites || []).concat([{ at: nowISO(), statut: sel.value, note: note.value.trim(), auteur: S.agentName || "" }]) });
         delete body.id;
-        if (await write(() => S.db.doc("transmissions/" + id).set(body))) { toast("Suite enregistrée."); openTransmission(id); }
+        if (!(await write(() => S.db.doc("transmissions/" + id).set(body)))) return;
+        const close = fermerBox && !fermerBox.hidden && fermer.checked && sel.value === "condamnation";
+        if (close && await write(() => S.db.doc("entreprises/" + ent.id).update({ actif: false, fermeLe: nowISO(), fermeMotif: `Condamnation · dossier ${dossierNo("TJ", id)}${note.value.trim() ? " · " + note.value.trim() : ""}` }))) toast(`Suite enregistrée : ${ent.nom} est fermée au registre.`);
+        else toast("Suite enregistrée.");
+        openTransmission(id);
       }, text: "Enregistrer la suite" }) : null].filter(Boolean)
   });
 }
