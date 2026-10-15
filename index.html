@@ -14648,6 +14648,8 @@ async function chargerEspace() {
   S.declarations = data.declarations || []; S.decisions = data.decisions || {}; S.echeanciers = data.echeanciers || {};
   S.penalites = data.penalites || []; S.relances = data.relances || []; S.prets = data.prets || []; S.depots = data.depots || [];
   S.clotures = Object.fromEntries((data.clotures || []).map(k => [k, {}]));
+  // Mise à jour 22 : convocations et attestations (absentes avant le script, l'espace marche quand même).
+  S.convocations = data.convocations || []; S.attestations = data.attestations || [];
   S.portail.e = e;
   document.title = `${e.nom} · Espace entreprise`;
   renderPortail();
@@ -14696,13 +14698,31 @@ function renderPortail() {
           ["validee", "payee"].includes(st) ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisDoc(d)), text: "Avis" }) : null,
           st === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittanceDeclDoc(d)), text: "Quittance" }) : null)); }))
       : h("p", { class: "muted", style: "margin:0", text: "Aucune déclaration enregistrée pour l’instant." }));
+  // Convocations : à venir, puis les 30 derniers jours.
+  const P_CONV = { convoquee: ["À venir", "accent"], honoree: ["Honorée", "ok"], absente: ["Absence constatée", "bad"], annulee: ["Annulée", "muted"] };
+  const cvs = (S.convocations || []).filter(c => c.statut !== "annulee" || new Date(c.date).getTime() > Date.now()).filter(c => new Date(c.date).getTime() > Date.now() - 30 * 864e5)
+    .sort((a, z) => { const fa = new Date(a.date).getTime() > Date.now(), fz = new Date(z.date).getTime() > Date.now(); return fa !== fz ? (fa ? -1 : 1) : fa ? String(a.date).localeCompare(String(z.date)) : String(z.date).localeCompare(String(a.date)); });
+  const cardConv = cvs.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Convocations" })),
+    h("ul", { class: "ent-list", id: "pt-conv" }, cvs.map(c => { const passe = c.statut === "convoquee" && new Date(c.date).getTime() < Date.now();
+      return h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${convMotif(c)} · ${convWhen(c)}` }),
+          h("span", { class: "meta", text: [c.lieu, c.motif === "collecte" ? (c.statut === "honoree" ? `${money(c.montant)} collectés` : `${money(c.montant)} à remettre au convoyeur`) : "", c.convoque ? "convoqué : " + c.convoque : ""].filter(Boolean).join(" · ") })),
+        chip(passe ? ["Passée", "muted"] : P_CONV[c.statut] || P_CONV.convoquee),
+        h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(convocationDoc(c)), text: "Voir" }))); })),
+    h("p", { class: "hint", style: "margin:8px 0 0", text: "Présentez-vous à l’heure et au lieu indiqués. Une absence sans motif légitime est sanctionnée." })) : null;
+  // Attestation de régularité : la dernière en cours de validité.
+  const att = (S.attestations || []).filter(attValid).sort((a, z) => String(z.at).localeCompare(String(a.at)))[0] || null;
+  const cardAtt = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Attestation de régularité" })),
+    att ? h("ul", { class: "ent-list", id: "pt-att" }, h("li", {},
+        h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: dossierNo("AT", att.id) }), h("span", { class: "meta", text: `délivrée le ${fmtDate(new Date(att.at))}, valable jusqu’au ${longDate(new Date(att.validUntil))}` })),
+        chip(["En règle", "ok"]), h("span", { class: "row-actions" }, h("button", { class: "btn small", type: "button", onclick: () => showDocImage(attestationDoc(att, e)), text: "Télécharger" }))))
+      : h("p", { class: "muted", style: "margin:0", text: "Pas d’attestation en cours de validité. Demandez-la à la Direction des impôts et cotisations : elle est délivrée quand toutes vos déclarations échues sont déposées et vos sommes échues payées." }));
   // Relances
   const rl = relancesOf(e);
   const cardRl = rl.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Rappels et relances reçus" })),
     h("ul", { class: "ent-list" }, rl.slice(0, 12).map(r => h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: rlLabel(r) }), h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)}` })),
       rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Voir" })))))) : null;
-  fill(box, head, cardTodo, cardPay, cardDecl, cardRl,
+  fill(box, head, cardTodo, cardPay, cardConv, cardDecl, cardAtt, cardRl,
     h("p", { class: "hint", style: "margin:0;text-align:center", text: "Ce lien est personnel : ne le partagez pas. En cas de perte, demandez-en un nouveau à la Préfecture ; l’ancien ne marchera plus." }));
 }
 function openDepotForm(k0) {
