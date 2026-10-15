@@ -489,6 +489,13 @@ tr.arb-off .arb-art{text-decoration:line-through;text-decoration-color:var(--ink
 .py-budget .warn{color:var(--warn);font-weight:600}
 .py-note{margin:10px 0 0;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--warn);border-radius:6px;font-size:13.5px;color:var(--ink-2);background:var(--sheet)}
 .py-note.info{border-left-color:var(--accent)}
+.py-note.ok{border-left-color:var(--ok)}
+.py-prev-kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 18px;margin:4px 0 0}
+.py-prev-kv div{display:grid;gap:2px}
+.py-prev-kv .l{font-size:12.5px;color:var(--ink-2)}
+.py-prev-kv .v{font-family:var(--f-mono);font-weight:650;font-size:17px}
+.py-prev-kv .s{font-size:12.5px;color:var(--ink-3)}
+.py-prev-kv .v.neg{color:var(--bad)}
 .py-note b{color:var(--ink)}
 table.py-tbl{min-width:820px}
 .py-tbl td{vertical-align:top}
@@ -1093,6 +1100,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <div id="py-rappels"></div>
       <div class="paste-row" id="py-actions"></div>
     </div>
+    <div class="card" id="py-prevision" style="margin-top:16px" hidden></div>
     <div class="dash-grid">
       <div class="card">
         <div class="card-head"><div><h3>Fonctionnaires</h3><p class="sub" id="py-fonc-sub">Les agents payés par la Préfecture, leur grade et leur compte de pointeuse.</p></div></div>
@@ -4216,6 +4224,56 @@ function repriseCandidats() {
   const done = payeRepris();
   return S.demandes.filter(dm => dm.nature === "salaires" && norm(dm.service) === norm(payeSvc()) && demAccorde(dm) > 0 && !done.has(dm.id));
 }
+// Prévision : une semaine au maximum (chaque agent à son plafond d'heures), le rythme de la semaine en
+// cours et le risque de prorata, face au budget de la semaine et au reste du mois.
+function payePrevision(k) {
+  const c = payeCfg(), mx = payeMaxOf(c), ph = Math.max(0, Number(c.plafondHeures) || 0);
+  const maxOf = f => Math.min(ph * gradeTaux(f.grade), mx);
+  const grades = new Map();
+  for (const f of foncs().filter(f => f.actif !== false)) {
+    const nom = f.grade || "Sans grade", m = maxOf(f), g = grades.get(nom) || { grade: nom, n: 0, max: m, total: 0 };
+    g.n++; g.total += m; grades.set(nom, g);
+  }
+  const maxSem = [...grades.values()].reduce((t, g) => t + g.total, 0), b = payeBudget(k, payeOf(k));
+  // Rythme : ce qui est dû à ce jour, prolongé jusqu'à la fin de la semaine, sans dépasser le plafond de chacun.
+  const bd = bounds(k), now = Date.now(), el = bd ? (now - bd.start.getTime()) / (bd.end.getTime() - bd.start.getTime()) : 1;
+  const enCours = bd && now >= bd.start.getTime() && now <= bd.end.getTime();
+  let proj = null, du = 0;
+  if (enCours) {
+    const lignes = payeLignesPrep(k, payeOf(k));
+    du = lignes.reduce((t, l) => t + l.brut, 0);
+    if (el >= 1 / 7) proj = Math.round(lignes.reduce((t, l) => { const f = (S.fonctionnaires || []).find(x => x.id === l.fid); return t + Math.min(l.brut / el, f ? maxOf(f) : l.brut / el); }, 0));
+  }
+  const coefMax = maxSem > b.dispo ? (maxSem ? b.dispo / maxSem : 1) : 1, coefProj = proj != null && proj > b.dispo ? (proj ? b.dispo / proj : 1) : 1;
+  return { k, grades: [...grades.values()].sort((a, z) => a.max - z.max || String(a.grade).localeCompare(String(z.grade), "fr")), agents: [...grades.values()].reduce((t, g) => t + g.n, 0),
+    maxSem, budget: b, enCours, du, proj, coefMax, coefProj, moisMax: b.deja + b.n * maxSem, plafondHeures: ph };
+}
+function renderPrevision(k0) {
+  const box = $("#py-prevision");
+  const k = !payeVersee(payeOf(k0)) ? k0 : semKey(new Date());
+  if (payeVersee(payeOf(k)) || !(S.fonctionnaires || []).some(f => f.actif !== false)) { box.hidden = true; fill(box); return; }
+  const x = payePrevision(k), b = x.budget, wk = (bounds(k) || {}).week, item = (l, v, sub, cls) => h("div", {}, h("span", { class: "l", text: l }), h("span", { class: "v" + (cls ? " " + cls : ""), text: v }), sub ? h("span", { class: "s", text: sub }) : null);
+  const note = x.coefProj < 1
+    ? h("div", { class: "py-note", style: "margin:12px 0 0" }, h("b", { text: "Prorata probable. " }), `Au rythme actuel, la semaine ${wk} coûterait environ ${money(x.proj)} pour ${money(b.dispo)} de budget : chaque agent toucherait environ ${pctC(x.coefProj)} de sa paye.`)
+    : x.coefMax < 1
+      ? h("div", { class: "py-note info", style: "margin:12px 0 0" }, h("b", { text: "Ça passe au rythme actuel. " }), `Mais si tous les agents faisaient leurs ${x.plafondHeures} h, la semaine ${wk} coûterait ${money(x.maxSem)} pour ${money(b.dispo)} de budget : prorata de ${pctC(x.coefMax)}.`)
+      : h("div", { class: "py-note ok", style: "margin:12px 0 0" }, h("b", { text: "Pas de prorata à craindre. " }), `Même si tous les agents faisaient leurs ${x.plafondHeures} h, le budget de la semaine ${wk} suffit.`);
+  const depasse = x.moisMax - b.budgetMois;
+  fill(box,
+    h("div", { class: "card-head" }, h("div", {}, h("h3", { text: `Prévision · semaine ${wk}` }), h("p", { class: "sub", text: `Ce que coûteraient les payes si chacun faisait le maximum, et ce qu’annonce le rythme de la semaine, face au budget ${deMois(b.mois)}.` }))),
+    h("div", { class: "py-prev-kv" },
+      item("Une semaine au maximum", money(x.maxSem), `${x.agents} agent${plural(x.agents)} × ${x.plafondHeures} h, ${money(payeCfg().payeMax)} au plus chacun`),
+      item("Budget de la semaine", money(b.dispo), b.limite === "lisse" ? `${money(b.reste)} restants sur ${b.n} semaine${plural(b.n)}` : b.limite === "enveloppe" ? "limité par l’enveloppe" : "fixé à la main"),
+      x.enCours ? item("Au rythme actuel", x.proj != null ? "≈ " + money(x.proj) : money(x.du), x.proj != null ? `${money(x.du)} dus à ce jour, prolongés jusqu’à dimanche` : "dus à ce jour (trop tôt pour prolonger)", x.coefProj < 1 ? "neg" : "") : null,
+      item(`${MoisNom(b.mois)} au maximum`, money(x.moisMax), depasse > 0 ? `${money(depasse)} au-delà des ${money(b.budgetMois)}` : `dans les ${money(b.budgetMois)} du budget`, depasse > 0 ? "neg" : "")),
+    note,
+    h("details", { style: "margin-top:10px" }, h("summary", { text: "Détail par grade" }),
+      h("div", { class: "tbl-wrap", style: "margin-top:6px" }, h("table", { class: "compact" },
+        h("thead", {}, h("tr", {}, ["Grade", "Agents", "Maximum par agent", "Total"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+        h("tbody", {}, x.grades.map(g => h("tr", {}, h("td", { text: g.grade }), h("td", { class: "num", text: String(g.n) }), h("td", { class: "num", text: money(g.max) }), h("td", { class: "num", text: money(g.total) })))),
+        h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), h("td", { class: "num", text: String(x.agents) }), h("td", {}), h("td", { class: "num", text: money(x.maxSem) })))))));
+  box.hidden = false;
+}
 function renderPayes(force) {
   if (S.tab !== "payes") return;
   const w = writer();
@@ -4256,6 +4314,7 @@ function renderPayes(force) {
     if (w) bl.push(h("button", { class: "linkbtn", type: "button", onclick: () => openPayeBudget(k), text: "Changer le budget de la semaine" }));
   }
   fill($("#py-budget"), h("div", { class: "py-budget" }, bl));
+  renderPrevision(k);
   // Tableau des agents
   const shown = x.lignes;
   if (!(S.fonctionnaires || []).length && !x.versee) {
