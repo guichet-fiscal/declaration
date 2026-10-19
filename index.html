@@ -5861,25 +5861,100 @@ function parseAmount(txt) {
   const m = /-?\d+(\.\d+)?/.exec(s);
   return m ? Math.round(parseFloat(m[0]) * mult) : null;
 }
-function parseTemplate(text, keymap, multi, lists) {
+// Lecture d'un modèle collé depuis Discord. lists : champs suivis d'une liste à puces (« - », « • », « * »).
+// loose : listes dont les lignes sans puce comptent aussi, jusqu'au champ suivant (« Edmond Velleroy 120000 »).
+// Une barre « | » sépare comme un tiret : « Renault Zoé | 100 000 € ».
+function parseTemplate(text, keymap, multi, lists, loose) {
   const out = {};
   let last = null;
+  const push = (f, item) => { if (item) (out[f + "List"] = out[f + "List"] || []).push(item); };
   for (const raw of String(text || "").split(/\r?\n/)) {
-    const line = raw.replace(/[*_`>~|]/g, "").trim();
+    const bullet = /^\s*(?:[-•·–—*]|\d+[.)])\s+/.test(raw);
+    const line = raw.replace(/^\s*>+\s?/, "").replace(/\s*\|\s*/g, " – ").replace(/[*_`~]/g, "").replace(/\s+/g, " ").trim().replace(/^–\s*/, "");
     if (!line) continue;
-    if (last && lists && lists.includes(last) && /^[-•·–—]/.test(line)) {
-      const item = line.replace(/^[-•·–—]\s*/, "");
-      if (item) (out[last + "List"] = out[last + "List"] || []).push(item);
-      continue;
-    }
-    const i = line.indexOf(":");
+    const inList = last && lists && lists.includes(last);
+    if (inList && (bullet || /^[-•·–—]/.test(line))) { push(last, line.replace(/^(?:[-•·–—]|\d+[.)])\s*/, "")); continue; }
+    const i = line.indexOf(":"), at = line.indexOf("@");
     if (i > 0) {
-      const field = keymap(norm(line.slice(0, i)));
-      if (field) { out[field] = line.slice(i + 1).trim(); last = field; continue; }
+      const key = line.slice(0, i), field = keymap(norm(key));
+      // « Déclarant @Lucas Delporte PDG : » : la valeur est avant les deux-points.
+      if (field) { let v = line.slice(i + 1).trim(); if (!v && at > 0 && at < i) v = key.slice(at).trim(); out[field] = v; last = field; continue; }
+    } else if (at > 0) {
+      const field = keymap(norm(line.slice(0, at)));
+      if (field && !(lists || []).includes(field)) { out[field] = line.slice(at).trim(); last = field; continue; }
     }
+    if (inList && loose && loose.includes(last)) { push(last, line); continue; }
     if (last && multi.includes(last)) out[last] = (out[last] ? out[last] + "\n" : "") + line;
   }
   return out;
+}
+// En-tête d'un message copié depuis Discord : « leclerc007 [Préfet] Maël Bergeron — Hier à 22:05 »
+// (l'heure seule pour aujourd'hui, ou la date). Rend l'auteur lisible et l'heure du message.
+const DISCORD_DATE = /^(.*?)\s*[—–]\s*(?:(hier|aujourd['’]hui|avant-hier)\s*(?:à\s*)?)?(?:(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*(?:à\s*)?)?(\d{1,2})[:h](\d{2})\s*$/i;
+function discordEntete(text) {
+  const lines = String(text || "").split(/\r?\n/).map(l => l.replace(/^\s*\d+\.\s+/, "").trim()).filter(Boolean);
+  for (let i = 0; i < Math.min(lines.length, 6); i++) {
+    const m = DISCORD_DATE.exec(lines[i]);
+    if (!m) continue;
+    const d = new Date();
+    if (m[3]) { const y = +m[5] < 100 ? 2000 + +m[5] : +m[5]; d.setFullYear(y, +m[4] - 1, +m[3]); }
+    else if (m[2]) d.setDate(d.getDate() - (/avant/i.test(m[2]) ? 2 : /hier/i.test(m[2]) ? 1 : 0));
+    d.setHours(+m[6], +m[7], 0, 0);
+    // L'auteur : sur la même ligne, ou la ligne d'avant (« identifiant Nom affiché »).
+    let a = (m[1] || "").trim() || (i > 0 && !lines[i - 1].includes(":") ? lines[i - 1] : "");
+    const mots = a.split(" ");
+    if (mots.length > 1 && !/[\s\[]/.test(mots[0]) && /[._\d]|^[a-z]/.test(mots[0])) a = mots.slice(1).join(" ");
+    a = a.replace(/\[[^\]]*\]/g, " ");
+    if (a.includes("|")) a = a.split("|").pop();
+    a = a.replace(/[^\p{L}\p{N}\s'’.-]/gu, " ").replace(/\s+/g, " ").replace(/^[\s.,-]+|[\s.,-]+$/g, "").trim();
+    return { auteur: /\p{L}{2}/u.test(a) ? a : "", date: Number.isFinite(d.getTime()) && d.getTime() <= Date.now() + 5 * 60e3 ? d : null };
+  }
+  return null;
+}
+// Nom lisible d'une personne à partir de « @[SLT] BOSNJAK Nikola @🚔 EM GENDARMERIE NATIONALE🚔 » ou de
+// mentions brutes « <@328947555771613184> » : le premier nom qui n'est pas un service, sinon l'auteur du message.
+const SVC_MOTS = /\b(direction|service|prefecture|gendarmerie|gendarmerie nationale|police|samu|aphp|pompiers|sdis|tribunal|presidence|justice|em|etat major|dir|dirif|brigade|commissariat|caserne|entreprise|societe)\b/;
+function personneLisible(raw, auteur) {
+  const src = String(raw || "").trim();
+  if (!src) return auteur || "";
+  if (!/@/.test(src) && !/[^\p{L}\p{N}\s'’.,()–—\-|]/u.test(src)) return src;
+  const uid = /<@!?(\d{15,21})>?/.exec(src);
+  const parts = src.replace(/<@[!&]?\d{15,21}>?/g, " ").split("@")
+    .map(x => x.replace(/\[[^\]]*\]/g, " ").replace(/[^\p{L}\p{N}\s'’.,()–—-]/gu, " ").replace(/\s+/g, " ").replace(/^[\s,.:–—-]+|[\s,.:–—-]+$/g, "").trim())
+    .filter(x => /\p{L}{2}/u.test(x));
+  return parts.find(x => !SVC_MOTS.test(norm(x))) || auteur || parts[0] || (uid ? `<@${uid[1]}>` : src);
+}
+// Service reconnu malgré son nom : « Tribunal » → Justice, « Direction des routes d'Île-de-France » → DIR.
+const SVC_ALIAS = { "justice": ["tribunal", "tj", "parquet", "procureur", "juge", "magistrat", "cour d appel"], "dir": ["dirif", "direction des routes", "routes", "d i r", "direction interdepartementale"],
+  "police nationale": ["police", "commissariat", "bac", "crs", "dgpn"], "gendarmerie": ["gendarmerie", "gendarme", "gendarmes", "psig", "brigade", "ggd"],
+  "samu": ["samu", "smur", "aphp", "ap hp", "hopital", "ems"], "sapeurs pompiers": ["pompier", "pompiers", "sapeurs", "sdis", "bspp", "caserne"], "prefecture": ["prefecture", "prefet"] };
+function svcFind(txt) {
+  const n = norm(txt);
+  if (!n) return null;
+  const list = cfg().services, has = (hay, w) => !!w && (" " + hay + " ").includes(" " + w + " ");
+  const ex = list.find(sv => norm(sv) === n);
+  if (ex) return ex;
+  const inc = list.filter(sv => has(n, norm(sv)) || has(norm(sv), n));
+  if (inc.length === 1) return inc[0];
+  return list.find(sv => (SVC_ALIAS[norm(sv)] || []).some(a => has(n, a))) || null;
+}
+// Date écrite en clair : « 12/10 », « 18 octobre », « du 12 au 18 octobre » (la dernière compte).
+function dateEnClair(txt) {
+  const t = norm(txt), mois = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"], now = new Date();
+  let last = null, m;
+  const re = /(\d{1,2})(?:\s+|\/|-)(\d{1,2}|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)(?:(?:\s+|\/|-)(\d{4}))?/g;
+  while ((m = re.exec(t))) last = m;
+  if (!last) {
+    const r2 = /(\d{1,2})(?:\s+au\s+\d{1,2})?\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)/.exec(t);
+    if (!r2) return null;
+    last = [r2[0], r2[1], r2[2]];
+  }
+  const mo = /^\d+$/.test(last[2]) ? +last[2] - 1 : mois.indexOf(last[2]);
+  if (mo < 0 || mo > 11 || +last[1] < 1 || +last[1] > 31) return null;
+  let y = last[3] ? +last[3] : now.getFullYear();
+  const d = new Date(y, mo, +last[1], 12);
+  if (!last[3] && d.getTime() > now.getTime() + 7 * 864e5) d.setFullYear(y - 1);
+  return d;
 }
 function parsePeriode(txt) {
   const t = norm(txt), now = new Date(), wk = isoWeek(now);
@@ -5902,7 +5977,7 @@ function parsePeriode(txt) {
 const declKeys = k =>
   /^(entreprise|societe|raison sociale|commerce)/.test(k) ? "entreprise" :
   /^(periode|semaine|mois)/.test(k) ? "periode" :
-  /^(chiffre|ca\b|recette)/.test(k) ? "ca" :
+  /^(chiffre|ca\b|recette|revenu|ventes?\b|encaissement)/.test(k) ? "ca" :
   /^(charge|depense|frais|achat)/.test(k) ? "charges" :
   /^(masse|salaires?\b)/.test(k) ? "masse" :
   /^(nombre|nb|effectif)/.test(k) ? "nb" :
@@ -5911,20 +5986,38 @@ const declKeys = k =>
   /^(solde|compte|coffre|tresorerie)/.test(k) ? "solde" :
   /^(declarant|patron|gerant|nom)/.test(k) ? "declarant" :
   /^(observation|note|remarque|commentaire)/.test(k) ? "note" : null;
+// Salariés « en pièce jointe » ou absents : pas une ligne de salarié.
+const SAL_VIDE = /^(pj|p j|piece jointe|pieces jointes|en pj|voir .*|cf .*|aucun|aucune|neant|rien|sans salarie.*)$/;
 function parseDecl() {
   S.depotSaisie = null;
-  const p = parseTemplate($("#d-paste").value, declKeys, ["note"], ["salaries"]);
+  const p = parseTemplate($("#d-paste").value, declKeys, ["note"], ["salaries"], ["salaries"]);
+  const fields = ["entreprise", "periode", "ca", "charges", "solde", "declarant", "salaries"].filter(f => p[f] != null).length;
+  // Un nouveau message remplace la saisie précédente : rien ne doit rester d'une autre entreprise
+  // (déclarant, observations, salariés, solde).
+  if (fields >= 3) {
+    for (const id of ["d-ca", "d-ch", "d-ms", "d-nb", "d-solde", "d-solde-lien", "d-decl", "d-note"]) $("#" + id).value = "";
+    if (salMode()) setSalaries([]);
+  }
+  const pj = (p.salariesList || []).some(x => SAL_VIDE.test(norm(x))) || (p.salaries != null && SAL_VIDE.test(norm(p.salaries)));
+  if (p.salariesList) p.salariesList = p.salariesList.filter(x => !SAL_VIDE.test(norm(x)));
   const rawCap = String($("#d-paste").value || "").split(/\r?\n/).find(l => /^[\s*_>]*(capture|preuve|justificatif|image)/i.test(norm(l)));
   if (rawCap) { const m = /https?:\/\/[^\s<>*`]+/i.exec(rawCap); if (m) p.capture = m[0]; }
   if (p.salaries && /^\s*\d+\s*$/.test(p.salaries) && p.nb == null) p.nb = p.salaries;
   let n = 0;
   if (p.entreprise) { const e = findEnt(p.entreprise); $("#d-ent").value = e ? e.nom : p.entreprise; n++; }
-  if (p.periode) { const k = parsePeriode(p.periode); if (k) { ensureOption($("#d-per"), k, periodLabel(k)); n++; } }
+  if (p.periode) {
+    let k = parsePeriode(p.periode);
+    // « du 12 au 18 octobre » : la semaine de la date, pas le mois.
+    if (cfg().periodicite !== "mois" && (!k || !/-S\d{2}$/.test(k))) { const d = dateEnClair(p.periode); if (d) k = keyOf(d); }
+    if (k) { ensureOption($("#d-per"), k, periodLabel(k)); n++; }
+  }
   for (const [f, id] of [["ca", "d-ca"], ["charges", "d-ch"], ["masse", "d-ms"], ["nb", "d-nb"]]) {
     if (p[f] != null) { const v = parseAmount(p[f]); if (v != null) { $("#" + id).value = String(Math.max(0, v)); n++; } }
   }
   const emps = (p.salariesList || []).map(parseEmployee).filter(Boolean);
-  let salHint = "";
+  let salHint = pj && !emps.length ? " Les salariés sont en pièce jointe : saisissez-les à la main." : "";
+  const sansSal = emps.filter(x => !Number.isFinite(x.salaire)).length;
+  if (sansSal) salHint += ` ${sansSal} salarié${plural(sansSal)} sans salaire dans le message : indiquez le montant (0 s’il n’a rien touché).`;
   if (emps.length) {
     if (salMode()) setSalaries(emps.map(x => ({ nom: x.nom, salaire: Number.isFinite(x.salaire) ? x.salaire : "" })));
     else { $("#d-ms").value = String(Math.round(emps.reduce((x, y) => x + (Number.isFinite(y.salaire) ? y.salaire : 0), 0))); $("#d-nb").value = String(emps.length); }
@@ -5935,10 +6028,14 @@ function parseDecl() {
   }
   if (p.solde != null) { const v = parseAmount(p.solde); if (v != null) { $("#d-solde").value = String(v); n++; } }
   if (p.capture) { const m = /https?:\/\/\S+/i.exec(p.capture); if (m) { $("#d-solde-lien").value = m[0]; n++; } }
-  if (p.declarant) { $("#d-decl").value = p.declarant; n++; }
+  const hd = discordEntete($("#d-paste").value);
+  // L'heure du message Discord est l'heure de dépôt.
+  if (hd && hd.date && fields >= 3) { $("#d-date").value = toLocalInput(hd.date); n++; }
+  const decl = personneLisible(p.declarant, hd && hd.auteur);
+  if (decl) { $("#d-decl").value = decl; n++; }
   if (p.note) { $("#d-note").value = p.note; n++; }
   $("#d-sal-hint").textContent = salHint.trim();
-  $("#d-parse-msg").textContent = (n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez l’heure de dépôt puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Déclaration fiscale ».") + salHint;
+  $("#d-parse-msg").textContent = (n ? `${n} case${plural(n)} remplie${plural(n)}.${hd && hd.date ? ` Heure de dépôt reprise du message : ${fmtDateTime(hd.date)}.` : " Vérifiez l’heure de dépôt."} Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Déclaration fiscale ».") + salHint;
   renderDeclPreview();
 }
 $("#d-parse").addEventListener("click", parseDecl);
@@ -6123,7 +6220,7 @@ function catGuess(t) {
   if (/\b(chargeur|cartouche|munition|balle|grenade)/.test(n)) return "Munitions";
   if (/\b(smg|pistolet|fusil|arme|carabine|taser|revolver|matraque|tonfa|gazeuse)/.test(n)) return "Armement";
   if (/\b(plaque|gilet|casque|bouclier|protection|genouillere)/.test(n)) return "Protection";
-  if (/\b(vehicule|voiture|passat|audi|q7|megane|x5|bmw|moto|ambulance|camion|remorque|helico|fourgon|vsav|bateau|smur)/.test(n)) return "Véhicules";
+  if (/\b(vehicule|voiture|passat|audi|q7|megane|x5|bmw|moto|ambulance|camion|remorque|helico|fourgon|vsav|bateau|smur|bus|autocar|minibus|zodiac|zodiak|semi rigide|jet ski|quad|renault|peugeot|citroen|toyota|yaris|zoe|clio|dacia|ford|mercedes|volkswagen|tesla|range rover|utilitaire|berline|suv|4x4|pick up|depanneuse|poids lourd|[1-5]008|[23]08)\b/.test(n)) return "Véhicules";
   if (/\b(moniteur|suture|anesth|morphine|pansement|sparadrap|adrenaline|stethoscope|prelevement|soin|defibrill|medic|perfusion|attelle|brancard|oxygene)/.test(n)) return "Médical";
   if (/\b(radio|tablette|ordinateur|gps|camera|telephone)/.test(n)) return "Radio et informatique";
   return "Équipement";
@@ -6153,14 +6250,23 @@ function catEcart(l) {
 // ou « Radio à 3 000 € l'unité » (prix à l'unité), « Kit de soins ( 200 ) » (quantité entre parenthèses).
 // Une phrase sans quantité ni prix n'est pas un article : null.
 function parseArticle(raw) {
-  const src = String(raw || "").replace(/[*_`~|>]/g, "").replace(/\s+/g, " ").trim();
+  const src = String(raw || "").replace(/\s*\|\s*/g, " – ").replace(/[*_`~>]/g, "").replace(/\s+/g, " ").trim();
   let t = src.replace(/^(?:[-•·–—*]|\d+[.)])\s+/, "").trim();
   if (!t || /^(total|sous[- ]total|tva|soit|montant)\b/i.test(t)) return null;
   t = t.replace(/\s*\b(?:ttc|ht)\.?\s*$/i, "").replace(/[;,]\s*$/, "").trim();
   let pu = null, q = null, m;
-  const pm = /(\s*[:=]\s*|\s+[–—-]\s+|\s+(?:à|@|pour)\s+)(\d[\d\s.,]*(?:\s?[kKmM]\b)?)\s*(?:€|euros?|eur|\$)?\s*(?:ttc|ht)?\s*(l['’]unit[eé]|l['’]une?|\/\s*u(?:nit[eé])?|pi[eè]ce|chacune?|par unit[eé]|unitaire|pu)?\.?\s*$/i.exec(t);
+  // Quantité après le prix : « Zodiac – 500 000 € x2 », « Radio : 3 000 € (x5) ».
+  const tq = /\s*(?:[x×]\s*(\d{1,6})|\(\s*[x×]?\s*(\d{1,6})\s*\))\s*$/i.exec(t);
+  if (tq && /(?:€|euros?|eur|\d\s?[kK])\s*$|[:=–—-]\s*\d[\d\s.,]*$/i.test(t.slice(0, tq.index).trim())) { q = +(tq[1] || tq[2]); t = t.slice(0, tq.index).trim(); }
+  let pm = /(\s*[:=]\s*|\s*[–—-]\s+|\s+(?:à|@|pour)\s+)(\d[\d\s.,]*(?:\s?[kKmM]\b)?)\s*(?:€|euros?|eur|\$)?\s*(?:ttc|ht)?\s*(l['’]unit[eé]|l['’]une?|\/\s*u(?:nit[eé])?|pi[eè]ce|chacune?|par unit[eé]|unitaire|pu)?\.?\s*$/i.exec(t);
+  // Prix sans séparateur, mais avec sa devise : « Renault Zoé 100 000 € » (prix à l'unité).
+  if (!pm) { const m2 = /(\s+)(\d{1,3}(?:[\s  .]\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s?(?:([kK])\s*(?:€|euros?|eur)?|([mM])\s*(?:€|euros?|eur)|(?:€|euros?|eur))\s*$/i.exec(t); if (m2) { pm = [m2[0], " – ", m2[2] + (m2[3] || m2[4] || ""), undefined]; pm.index = m2.index; } }
   if (pm) t = t.slice(0, pm.index).trim();
-  if ((m = /^(\d{1,3}(?:[\s  ]\d{3})+|\d+)\s*(?:x|×|\*)?\s+(.+)$/i.exec(t)) && !/^(?:mm|cm|m|km|kg|g|l|ml|cl|%|h|min)(?![\p{L}\d])/iu.test(m[2])) { q = parseInt(m[1].replace(/\D/g, ""), 10); t = m[2]; }
+  // Quantité en tête : « x1 Zodiac », « X 20 Dissolvant » (sauf un article du catalogue écrit ainsi, « X5 SMUR »).
+  const cx = catFind(t);
+  if (q == null && (m = /^[x×]\s*(\d{1,6})\s+(.+)$/i.exec(t)) && !(cx && catNorm(cx.designation) === catNorm(t))) { q = +m[1]; t = m[2]; }
+  if (q != null) { /* quantité déjà lue en tête */ }
+  else if ((m = /^(\d{1,3}(?:[\s  ]\d{3})+|\d+)\s*(?:x|×|\*)?\s+(.+)$/i.exec(t)) && !/^(?:mm|cm|m|km|kg|g|l|ml|cl|%|h|min)(?![\p{L}\d])/iu.test(m[2])) { q = parseInt(m[1].replace(/\D/g, ""), 10); t = m[2]; }
   else if ((m = /^(.+?)\s*[(\[]\s*[x×]?\s*(\d{1,6})\s*[)\]]$/i.exec(t))) { q = +m[2]; t = m[1]; }
   else if ((m = /^(.+?)\s+(?:x|×)\s*(\d{1,6})$/i.exec(t))) { q = +m[2]; t = m[1]; }
   t = t.replace(/[\s:–—-]+$/, "").trim();
@@ -6178,8 +6284,8 @@ function parseArticle(raw) {
 function parseArticles(text, strict) {
   const items = [], rest = [];
   for (const raw of String(text || "").split(/\r?\n/)) {
-    let line = raw.replace(/[*_`~|>]/g, "").trim();
-    if (!line) continue;
+    let line = raw.replace(/\s*\|\s*/g, " – ").replace(/[*_`~>]/g, "").trim();
+    if (!line || DISCORD_DATE.test(line.replace(/^\s*\d+\.\s+/, ""))) continue;
     line = line.replace(/^(?:quantit[eé]s?|articles?|mat[eé]riels?|[eé]quipements?|liste)\s*(?:\([^)]*\))?\s*:\s*/i, "");
     if (!line) continue;
     const bullet = /^(?:[-•·–—*]|\d+[.)])\s+/.test(line), it = parseArticle(line);
@@ -6300,19 +6406,27 @@ function parseDem() {
   const raw = $("#m-paste").value;
   const p = parseTemplate(raw, demKeys, ["justification", "articles"]);
   const tpl = Object.keys(p).length > 0;
+  // Un nouveau message remplace la saisie précédente : rien ne reste d'une autre demande.
+  if (Object.keys(p).filter(k => !k.endsWith("List")).length >= 3) { for (const id of ["m-objet", "m-unite", "m-ref", "m-just", "m-dem"]) $("#" + id).value = ""; $("#m-urg").value = "normale"; }
   let n = 0;
-  if (p.service) { const sv = cfg().services.find(s => norm(s) === norm(p.service) || norm(p.service).includes(norm(s))); $("#m-service").value = sv || p.service; n++; }
+  const hd = discordEntete(raw);
+  const sv = svcFind(p.service) || svcFind(p.demandeur) || svcFind(p.unite) || (hd && svcFind(hd.auteur));
+  if (sv || p.service) { $("#m-service").value = sv || p.service; n++; }
   if (p.nature) {
     const t = norm(p.nature);
     $("#m-nature").value = /vehic|voiture|moto|ambulance|camion|helico/.test(t) ? "vehicule" : /equip|moyen|materiel|arme|radio|gilet|medic/.test(t) ? "equipement" : /salair|paie|prime|remuner/.test(t) ? "salaires" : /fonction/.test(t) ? "fonctionnement" : "autre";
     n++;
   }
-  if (p.objet) { $("#m-objet").value = p.objet; n++; }
+  // Un objet vague (« achat ») laisse la place au résumé des articles, fait à l'enregistrement.
+  if (p.objet && !/^(achats?|commandes?|demandes?|materiels?|equipements?|vehicules?|besoins?|rien|neant|aucun)$/.test(norm(p.objet))) { $("#m-objet").value = p.objet; n++; }
+  else $("#m-objet").value = "";
   if (p.unite) { $("#m-unite").value = p.unite; n++; }
   const ref = p.reference || refDe(raw);
   if (ref) { $("#m-ref").value = ref; n++; }
   if (p.urgence) { const t = norm(p.urgence); $("#m-urg").value = /urgent/.test(t) ? "urgente" : /priorit|haute/.test(t) ? "prioritaire" : "normale"; n++; }
-  if (p.demandeur) { $("#m-dem").value = p.demandeur; n++; }
+  const dem = personneLisible(p.demandeur, hd && hd.auteur);
+  if (dem) { $("#m-dem").value = dem; n++; }
+  if (hd && hd.date && tpl) { $("#m-date").value = toLocalInput(hd.date); if (!p.periode) moisOptions($("#m-per"), moisKey(hd.date)); n++; }
   if (p.periode) { const k = moisDe(parsePeriode(p.periode)); if (k) { moisOptions($("#m-per"), k); $("#m-per").dataset.touched = "1"; n++; } }
   // Articles : la liste sous « Articles », sinon les lignes en liste du message (un bon de commande collé tel quel).
   let just = p.justification || "", items = [];
@@ -6324,7 +6438,11 @@ function parseDem() {
     const v = parseAmount(p.montant), qv = parseAmount(art && /^\d+$/.test(art) ? art : p.quantite) || 1;
     if (v != null && v > 0) items = [{ designation: p.objet || NATURES[$("#m-nature").value] || "Demande", quantite: qv, prixUnitaire: Math.round(v / qv) }];
   }
-  if (items.length) { setArticles(items); n++; }
+  if (items.length) {
+    setArticles(items); n++;
+    // Nature non précisée : d'après les articles (surtout des véhicules, ou du matériel).
+    if (!p.nature || !norm(p.nature)) { const veh = items.filter(i => catGuess(i.designation) === "Véhicules").length; $("#m-nature").value = veh * 2 >= items.length ? "vehicule" : "equipement"; }
+  }
   if (p.justification || just) { $("#m-just").value = just; if (p.justification) n++; }
   renderDemEnv();
   $("#m-parse-msg").textContent = n ? `${n} case${plural(n)} remplie${plural(n)}${items.length ? `, dont ${artLabel(items.length)}` : ""}. Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Demande de moyens » ou lister les articles un par ligne.";
@@ -7916,7 +8034,14 @@ function parseEmployee(t) {
   const txt = String(t || "").trim();
   if (!txt) return null;
   const m = /^(.*?)[\s:=–—-]*(\d[\d\s.,]*\s*[kK]?)\s*(?:€|\$|eur(?:os?)?)?\s*$/.exec(txt);
-  if (!m) return { nom: txt, salaire: NaN };
+  if (!m) {
+    // Le salaire suivi d'une précision : « Juan Durant 40 000 € (PDG) », « Ana 12000 recrue ».
+    const m2 = /(\d{1,3}(?:[\s  .]\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s?([kK])?\s*(?:€|\$|eur(?:os?)?)/.exec(txt) || /(?:^|\s)(\d{1,3}(?:[\s  .]\d{3})+|\d{3,})()(?=\s|$)/.exec(txt);
+    if (!m2) return { nom: txt, salaire: NaN };
+    const v = parseAmount(m2[1] + (m2[2] || ""));
+    const nom = (txt.slice(0, m2.index) + " " + txt.slice(m2.index + m2[0].length)).replace(/[()]/g, " ").replace(/\s+/g, " ").replace(/^[\s:=–—,-]+|[\s:=–—,-]+$/g, "").trim();
+    return { nom, salaire: v == null ? NaN : v };
+  }
   const v = parseAmount(m[2]);
   return { nom: m[1].trim().replace(/[\s:=–—-]+$/, "").trim(), salaire: v == null ? NaN : v };
 }
