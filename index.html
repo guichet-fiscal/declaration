@@ -10166,6 +10166,7 @@ const cpForfait = c => (c && c.mecenat ? Math.max(0, Math.round(Number(c.forfait
 const cpContrepartie = c => (cpForfait(c) ? `réduction d’impôt de ${money(cpForfait(c))} par ${perMot()}` : c.mecenat ? `réduction d’impôt de ${pct(Number(c.taux) || 0)} de la valeur offerte` : "aucune contrepartie fiscale");
 // Périodes couvertes, jusqu'à « upto » : celles où la convention a été en vigueur, depuis sa signature
 // (une convention ne rapporte rien pour une période close avant d'être signée) et jusqu'à sa résiliation.
+// Une convention d'essai signée par erreur se supprime (cpSupprimer) : elle ne compte alors plus.
 function cpPeriodes(c, upto) {
   if (!["signee", "resiliee"].includes(c.statut) || !c.signeLe || !bounds(upto)) return [];
   const t0 = Math.max(cpDebut(c), new Date(c.signeLe).getTime());
@@ -10437,6 +10438,7 @@ function openConvention(id) {
   if (dir && c.statut === "signee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => cpResilier(c), text: "Résilier" }));
   if (ag && (c.statut === "resiliee" || (c.statut === "signee" && c.fin))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openConventionForm(null, { from: c }), text: "Renouveler" }));
   if (dir && attente.length) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => psValiderTout(c), text: `Tout valider (${attente.length})` }));
+  if (dir) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => cpSupprimer(c), text: "Supprimer" }));
   openDialog({ eyebrow: `Convention ${cpNo(c)}`, title: `${c.entrepriseNom} · ${cpServicesLabel(c)}`, wide: true, stampEl: stamp(cpState(c)), body, foot });
 }
 function psItem(p, back) {
@@ -10456,6 +10458,39 @@ function cpAbandon(c) {
   openDialog({ eyebrow: `Projet ${cpNo(c)}`, title: "Abandonner le projet ?", body: [h("p", { style: "margin:0", text: "Le projet reste dans l’historique, marqué « abandonné »." })],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConvention(c.id), text: "Retour" }), h("span", { class: "spacer" }),
       h("button", { class: "btn danger small", type: "button", onclick: async ev => { const btn = ev.currentTarget; btn.disabled = true; if (await saveCp(c, { statut: "annulee" }, "Projet abandonné.")) openConvention(c.id); else btn.disabled = false; }, text: "Abandonner" })] });
+}
+// Suppression (Direction) : une convention faite par erreur ou pour un essai disparaît du registre et ne
+// compte plus pour la réduction d'impôt. Les avis déjà émis gardent leur montant ; les déclarations pas
+// encore validées de l'entreprise sont recalculées. Impossible tant que des prestations sont validées.
+function cpSupprimer(c) {
+  if (cpChanged(c.id)) return;
+  c = cpNow(c.id) || c;
+  const ps = psOf(c), valides = ps.filter(p => p.statut === "validee");
+  const f = S.entreprises.find(e => e.id === c.entrepriseId) || null;
+  const avec = f ? declsOf(f).filter(d => mecMontant(d) > 0) : [];
+  const emis = avec.filter(d => ["validee", "payee", "controle"].includes(dStatus(d))), aRecalc = avec.filter(d => !emis.includes(d));
+  const body = valides.length
+    ? [h("p", { style: "margin:0", text: `${valides.length} prestation${plural(valides.length)} validée${plural(valides.length)} : annulez-${valides.length > 1 ? "les" : "la"} d’abord. Une convention qui a servi ne se supprime pas ; résiliez-la.` })]
+    : [h("p", { style: "margin:0", text: `La convention ${cpNo(c)} avec ${c.entrepriseNom} disparaît du registre et ne compte plus pour la réduction d’impôt. La suppression reste inscrite au journal.` }),
+      cpForfait(c) || c.mecenat ? h("p", { style: "margin:8px 0 0", text: avec.length
+        ? `${avec.length} déclaration${plural(avec.length)} de ${c.entrepriseNom} ont reçu une réduction des partenaires.${aRecalc.length ? ` ${aRecalc.length} pas encore validée${plural(aRecalc.length)} : recalculée${plural(aRecalc.length)} sans cette convention.` : ""}${emis.length ? ` ${emis.length} avis déjà émis (${emis.map(d => periodPlain(d.periode)).join(", ")}) : ils gardent leur montant ; pour retirer la réduction, modifiez la déclaration.` : ""}`
+        : "Aucune déclaration n’a reçu de réduction grâce à elle." }) : null];
+  openDialog({ eyebrow: `Convention ${cpNo(c)}`, title: "Supprimer la convention ?", body,
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openConvention(c.id), text: "Retour" }), h("span", { class: "spacer" }),
+      valides.length ? null : h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+        const btn = ev.currentTarget; btn.disabled = true;
+        try { await S.db.doc("conventions/" + c.id).delete(); }
+        catch (e) {
+          btn.disabled = false;
+          toast(/ne se supprime pas/.test(String(e && e.message)) ? "Exécutez d’abord supabase/v23_conventions_suppression.sql dans Supabase." : "Suppression refusée : " + ((e && e.message) || "réessayez."), true);
+          return;
+        }
+        for (const p of ps) await write(() => S.db.doc("prestations/" + p.id).delete());
+        S.conventions = (S.conventions || []).filter(x => x.id !== c.id);
+        for (const d of aRecalc) await mecRecalc(d);
+        closeDialog();
+        toast(`Convention ${cpNo(c)} supprimée.`);
+      }, text: "Supprimer la convention" })] });
 }
 function cpResilier(c) {
   const motif = h("textarea", { rows: "2", placeholder: "Ex. : prestations refusées aux services, conditions non respectées" });
