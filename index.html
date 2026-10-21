@@ -1683,6 +1683,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <dt id="c-is-l">Impôt sur le résultat</dt><dd id="c-is">0 €</dd>
             <dt id="c-cot-l">Cotisations sociales</dt><dd id="c-cot">0 €</dd>
             <dt id="c-exo-l" hidden>Exonération</dt><dd id="c-exo" class="exo" hidden></dd>
+            <dt id="c-bon-l" hidden>Bonus de régularité</dt><dd id="c-bon" class="exo" hidden></dd>
             <dt id="c-mec-l" hidden>Réduction d’impôt des partenaires</dt><dd id="c-mec" class="exo" hidden></dd>
             <dt id="c-maj-l">Majoration de retard</dt><dd id="c-maj">0 €</dd>
             <dt class="tot-dt">Montant dû</dt><dd class="tot-dd" id="c-tot">0 €</dd>
@@ -2010,6 +2011,25 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <div class="paste-row">
                 <button class="btn" type="button" id="x-save">Enregistrer l’exonération</button>
                 <span id="x-msg" class="hint" aria-live="polite"></span>
+              </div>
+            </div>
+          </div>
+          <div class="card" id="card-rcp" style="margin-top:16px">
+            <h3>Récompenses</h3>
+            <p class="sub">Pour encourager la régularité et les signalements : un bonus sur l’impôt des entreprises en règle depuis plusieurs semaines, et une prime pour la personne qui signale une fraude, versée quand le redressement est encaissé.</p>
+            <div class="set-form">
+              <label class="switch" for="rc-bonus"><input type="checkbox" id="rc-bonus"> Bonus de régularité sur l’impôt</label>
+              <div class="row2" style="align-items:end">
+                <div class="field"><label for="rc-sem">En règle depuis (semaines)</label><input id="rc-sem" type="number" min="2" max="52" step="1"><span class="hint">Chaque semaine déclarée à temps et payée, sans redressement ni pénalité à payer. Pas pendant une exonération ni en cas de retard.</span></div>
+                <div class="field"><label for="rc-taux">Réduction de l’impôt</label><div class="money" data-cur="%"><input id="rc-taux" type="number" min="0" max="50" step="1"></div></div>
+              </div>
+              <div class="row2" style="align-items:end">
+                <div class="field"><label for="rc-av">Prime d’aviseur</label><div class="money" data-cur="%"><input id="rc-av" type="number" min="0" max="50" step="1"></div><span class="hint">Part du redressement encaissé, pour un contrôle ouvert sur signalement (0 : pas de prime).</span></div>
+                <div class="field"><label for="rc-avp">Plafond de la prime</label><div class="money" data-cur="€"><input id="rc-avp" type="number" min="0" step="1000"></div><span class="hint">0 : sans plafond.</span></div>
+              </div>
+              <div class="paste-row">
+                <button class="btn" type="button" id="rc-save">Enregistrer</button>
+                <span id="rc-msg" class="hint" aria-live="polite"></span>
               </div>
             </div>
           </div>
@@ -2498,7 +2518,9 @@ function treasury() {
   // Produit des amendes remis par les services (versements dont la réception est confirmée).
   let amendes = 0;
   for (const v of S.versements || []) amendes += vtRecu(v);
-  return { rec, dep, budget, achats, amendes, payes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, aDeduire: Math.max(0, deduits - compense), solde: budget + rec + amendes - dep - achats - payes - pv + pr };
+  // Primes versées aux aviseurs.
+  const primes = primesVersees().reduce((t, c) => t + (Number(c.prime.montant) || 0), 0);
+  return { rec, dep, budget, achats, amendes, payes, primes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, aDeduire: Math.max(0, deduits - compense), solde: budget + rec + amendes - dep - achats - payes - primes - pv + pr };
 }
 const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
 const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -3285,6 +3307,7 @@ function subscribe() {
   db.doc("config/main").onSnapshot(s => { S.config = s.exists ? (s.data() || {}) : {}; S.loaded.add("config"); schedule(); }, onDbError);
   db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
   db.doc("meta/bilan").onSnapshot(s => { S.bilanMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilan"); schedule(); }, onDbError);
+  db.doc("meta/communique").onSnapshot(s => { S.communiqueMeta = s.exists ? (s.data() || null) : null; S.loaded.add("communique"); schedule(); }, onDbError);
   const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
   col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("declarations", s => { S.declarations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3342,6 +3365,7 @@ function render() {
   renderRecouvrement();
   renderDiscordSettings();
   renderExoSettings();
+  renderRcpSettings();
   renderMecSettings();
   renderRecouvSettings();
   renderConvSettings();
@@ -3363,6 +3387,7 @@ function render() {
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
   bilanAuto();
+  communiqueAuto();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -3439,7 +3464,7 @@ function renderDashboard() {
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
-  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.payes ? ` − ${money(t.payes)} de payes` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}${t.aDeduire > 0 ? ` · ${money(t.aDeduire)} dus aux entreprises, à déduire de leurs impôts` : ""}`, t.solde < 0 ? "bad" : "");
+  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.payes ? ` − ${money(t.payes)} de payes` : ""}${t.primes ? ` − ${money(t.primes)} de primes d’aviseur` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}${t.aDeduire > 0 ? ` · ${money(t.aDeduire)} dus aux entreprises, à déduire de leurs impôts` : ""}`, t.solde < 0 ? "bad" : "");
 
   // Entreprises à surveiller
   const reg = $("#registry");
@@ -3599,6 +3624,7 @@ function treasurySeries(keys) {
   // Compensation : la somme déduite d'un avis est à la fois une recette et le paiement d'un contrat.
   for (const d of S.declarations) if (d.periode in dep && dStatus(d) !== "rejetee") dep[d.periode] += dComp(d);
   for (const v of S.versements || []) if (vtRecu(v)) { const k = keyOf(new Date(v.confirmeLe || v.date || v.at)); if (k in rec) rec[k] += vtRecu(v); }
+  for (const c of primesVersees()) { const k = keyOf(new Date(c.prime.at)); if (k in dep) dep[k] += Number(c.prime.montant) || 0; }
   return { rec: keys.map(k => rec[k]), dep: keys.map(k => dep[k]) };
 }
 function treasuryChart(box, legend, n, givenKeys) {
@@ -6009,9 +6035,11 @@ function renderDeclPreview() {
   const entP = findEnt($("#d-ent").value.trim()), editingP = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
   const exP = mecExclus(entP, key, editingP);
   const officeP = tax || exP.some(id => (S.declarations.find(x => x.id === id) || {}).taxationOffice);
-  const r1 = applyExo(r0, entP, key, c, late);
+  const r1 = applyBonus(applyExo(r0, entP, key, c, late), entP, key, c, late);
   const r = officeP ? r1 : applyMecenat(r1, entP, key, c, late, exP);
-  const xo = r.exoneration, mc = r.mecenat;
+  const xo = r.exoneration, mc = r.mecenat, bn = r.bonus;
+  $("#c-bon-l").hidden = $("#c-bon").hidden = !bn;
+  if (bn) { $("#c-bon-l").textContent = bonusLabel(bn); $("#c-bon").textContent = "− " + money(bn.montant); }
   $("#c-exo-l").hidden = $("#c-exo").hidden = !xo;
   if (xo) {
     $("#c-exo-l").textContent = `${exoLabel(xo)} : impôt −${pct(xo.tauxIS)}, cotisations −${pct(xo.tauxCot)}`;
@@ -6299,7 +6327,7 @@ async function submitDecl(e) {
   const ent = findEnt(name);
   const editing = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
   // Réduction d'impôt des partenaires : ni sur une imposition d'office, ni deux fois avec la déclaration remplacée.
-  const r1 = applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late);
+  const r1 = applyBonus(applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late), ent, key, c, late);
   const r = office ? r1 : applyMecenat(r1, ent, key, c, late, [editing && editing.id, repl && repl.id].filter(Boolean));
   const rcomp = applyCompensation(r, ent, [editing && editing.id, repl && repl.id].filter(Boolean));
   const lockedK = isClosed(key) ? key : editing && isClosed(editing.periode) ? editing.periode : null;
@@ -6310,7 +6338,7 @@ async function submitDecl(e) {
     ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
-    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, mecenat: r.mecenat || null, compensation: rcomp.compensation || null,
+    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, bonus: r.bonus || null, mecenat: r.mecenat || null, compensation: rcomp.compensation || null,
     taxationOffice: tax ? { relanceId: tax.relanceId, base: tax.base, majoration: Number(c.majoration) || 0 }
       : repl && repl.taxationOffice ? Object.assign({}, repl.taxationOffice, { rectifiee: true })
       : editing0 && editing0.taxationOffice ? editing0.taxationOffice : null,
@@ -8630,6 +8658,7 @@ const DISCORD_AUTO = [
   ["versements", "Amendes reçues au Trésor (reçu du versement)", "services"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
+  ["communiques", "Communiqué des redressements de la semaine, le lendemain de la date limite", "entreprises"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
   ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"],
   ["bilans", "Bilan de la semaine, le lendemain de la date limite (salon de la Direction)", "direction"]
@@ -11312,6 +11341,7 @@ function openCloture(key) {
   openDialog({
     eyebrow: "Clôture de période", title: periodLabel(key), stampEl: stamp(c ? ["Clôturée", "accent"] : ["Ouverte", "muted"]), body,
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: async () => showDocImage(bilanDoc(key, writer() ? await sensiblesSemaine(key) : null), () => openCloture(key)), text: "Bilan en image" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(communiqueDoc(key), () => openCloture(key)), text: "Communiqué" }),
       h("span", { class: "spacer" }),
       w && c ? h("button", { class: "btn ghost small", type: "button", onclick: reopen, text: "Rouvrir la semaine" }) : null,
       w && !c ? h("button", { class: "btn ink small", type: "button", onclick: close, disabled: !ended, text: `Clôturer ${periodPlain(key).toLowerCase()}` }) : null].filter(Boolean)
@@ -11333,6 +11363,49 @@ function renderClotures() {
 }
 $("#btn-cloture").addEventListener("click", () => openCloture(S.dashKey || defaultKey()));
 // Bilan de la semaine : publié une fois, par la première session de la Direction après la date limite.
+// Communiqué public des contrôles conclus pendant la semaine : redressements mis en recouvrement et
+// dossiers transmis à la justice, pour dissuader. Le nom de l'aviseur n'y figure jamais.
+function communiqueSemaine(key) {
+  const bb = bounds(key);
+  if (!bb) return { red: [], tj: [] };
+  const t0 = bb.start.getTime(), t1 = bb.end.getTime(), dans = iso => { const t = iso ? new Date(iso).getTime() : NaN; return t >= t0 && t <= t1; };
+  return {
+    red: S.controles.filter(c => (c.statut === "recouvre" && dans(c.recouvreLe)) || (c.statut === "justice" && dans(c.closLe))).sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0)),
+    tj: S.transmissions.filter(t => dans(t.at || t.createdAt))
+  };
+}
+const qualifCourt = c => ((QUALIF[c.qualification] || QUALIF.bonne_foi)[0].split(" :")[0]).toLowerCase();
+function communiqueDoc(key) {
+  const x = communiqueSemaine(key), tot = x.red.reduce((t, c) => t + (Number(c.total) || 0), 0), av = rcp().aviseurTaux > 0;
+  const rappel = "Toute dissimulation de recettes expose à une majoration de 40 à 100 % des droits éludés et à des poursuites.";
+  const appel = av ? " Une fraude à signaler ? Contactez la Préfecture : une prime peut être versée à la personne qui la signale, et son nom reste confidentiel." : "";
+  const lignes = x.red.map(c => [`${c.entrepriseNom} · ${c.statut === "justice" ? "transmis à la justice" : qualifCourt(c)}`, money(c.total)]);
+  return {
+    discord: { channel: "entreprises", text: [`**Communiqué de la Préfecture · ${periodPlain(key).toLowerCase()}**`,
+      x.red.length || x.tj.length ? `Contrôles fiscaux conclus : ${x.red.length} redressement${plural(x.red.length)} pour ${money(tot)} au total${x.tj.length ? `, ${x.tj.length} dossier${plural(x.tj.length)} transmis à la justice` : ""}.` : "Aucun contrôle fiscal conclu cette semaine."]
+      .concat(lignes.map(([l, v]) => `• ${l} : ${v}`)).concat([rappel + appel]).join("\n") },
+    kind: "COMMUNIQUÉ", no: periodPlain(key).replace("Semaine ", "S"), date: "Le " + longDate(new Date()),
+    meta: [["Période", periodLabel(key)], ["Émis par", "Direction des impôts et cotisations"]],
+    lines: (lignes.length ? lignes : [["Aucun redressement cette semaine", "—"]]).concat(x.tj.length ? [["Dossiers transmis à la justice", String(x.tj.length)]] : []),
+    total: ["Redressements de la semaine", money(tot)],
+    stamp: ["PUBLIC", "accent"],
+    note: rappel + appel,
+    footer: "Préfecture de police · Direction des impôts et cotisations."
+  };
+}
+async function communiqueAuto() {
+  if (S.communiqueEnCours || !writer() || !autoOn("communiques")) return;
+  if (!["config", "communique", "controles", "transmissions"].every(x => S.loaded.has(x))) return;
+  const k = lastClosedKey();
+  if (!bounds(k) || Date.now() <= deadline(k).getTime() || keyStart(k) < startTime()) return;
+  if (S.communiqueMeta && S.communiqueMeta.periode && String(S.communiqueMeta.periode) >= k) return;
+  S.communiqueEnCours = true;
+  try {
+    const x = communiqueSemaine(k);
+    if (!(await write(() => S.db.doc("meta/communique").set({ periode: k, at: nowISO(), publie: !!(x.red.length || x.tj.length), by: S.uid || null, byNom: S.agentName || "" })))) return;
+    if (x.red.length || x.tj.length) await publishDoc(communiqueDoc(k), `Communiqué de ${periodPlain(k).toLowerCase()} :`);
+  } finally { S.communiqueEnCours = false; }
+}
 // Actions sensibles de la semaine, lues dans le journal : ce qui allège ce qu'une entreprise doit ou ce
 // qu'on lui reproche, et tout dossier traité par un agent lié à l'entreprise.
 function actionsSensibles(rows) {
@@ -11633,7 +11706,7 @@ $("#btn-att-verify").addEventListener("click", openVerifyAttestation);
 // Sur le modèle de l'ACRE (cotisations réduites au début de l'activité) et du régime des entreprises
 // nouvelles (impôt réduit puis dégressif) : pendant ses premières périodes, une entreprise nouvelle
 // paie moins d'impôt et de cotisations. La réduction est calculée au dépôt et figure sur l'avis.
-const brutIS = d => (d.exoneration ? Number(d.exoneration.impotBrut) || 0 : (Number(d.impot) || 0) + mecMontant(d));
+const brutIS = d => (d.exoneration ? Number(d.exoneration.impotBrut) || 0 : (Number(d.impot) || 0) + mecMontant(d) + bonusMontant(d));
 const brutCot = d => (d.exoneration ? Number(d.exoneration.cotisationsBrutes) || 0 : Number(d.cotisations) || 0);
 const exoMontant = d => (d.exoneration ? (Number(d.exoneration.montantIS) || 0) + (Number(d.exoneration.montantCot) || 0) : 0);
 // Première période exonérée de l'entreprise, ou null si elle n'y a pas droit.
@@ -11678,11 +11751,78 @@ function applyExo(r, e, key, c, late) {
   });
 }
 const exoLabel = x => `Exonération de début d’activité (période ${x.rang} sur ${x.sur})`;
+/* Récompenses : bonus de régularité et prime d'aviseur */
+const rcp = () => Object.assign({ bonusActif: false, bonusSemaines: 8, bonusTaux: 5, aviseurTaux: 10, aviseurPlafond: 50000 }, cfg().recompenses || {});
+const bonusMontant = d => (d && d.bonus ? Number(d.bonus.montant) || 0 : 0);
+const bonusLabel = b => `Bonus de régularité (${b.semaines} semaines en règle) · impôt −${pct(b.taux)}`;
+// En règle sur les semaines qui précèdent : chacune déclarée à temps (ni retard, ni imposition d'office),
+// pas en contrôle, son avis payé ; aucun redressement depuis le début de ces semaines ; aucune pénalité à payer.
+function bonusInfo(e, key) {
+  const r = rcp(), taux = Math.min(50, Number(r.bonusTaux) || 0);
+  if (!r.bonusActif || taux <= 0 || !e || !e.id || !bounds(key)) return null;
+  const n = Math.max(2, Math.min(52, Math.round(Number(r.bonusSemaines) || 8))), keys = keysEnding(prevKey(key), n);
+  if (keys.length < n || keyStart(keys[0]) < debutDe(e) - 864e5) return null;
+  const ds = declsOf(e).filter(d => dStatus(d) !== "rejetee");
+  for (const k of keys) {
+    const d = ds.filter(x => x.periode === k).sort(byCreatedDesc)[0];
+    if (!d || d.enRetard || d.taxationOffice || dStatus(d) === "controle" || dReste(d) > 0.5) return null;
+  }
+  const t0 = bounds(keys[0]).start.getTime();
+  if (S.controles.some(c => sameEnt(c, e) && (c.statut === "recouvre" || c.statut === "justice") && new Date(c.recouvreLe || c.closLe || c.ouvertLe).getTime() >= t0)) return null;
+  if (S.penalites.some(p => sameEnt(p, e) && p.statut === "due")) return null;
+  return { taux, semaines: n };
+}
+// Appliqué après l'exonération (jamais avec elle) et avant la réduction des partenaires, sur l'impôt seulement.
+function applyBonus(r, e, key, c, late) {
+  const b = !late && !r.exoneration ? bonusInfo(e, key) : null;
+  const montant = b ? Math.round((Number(r.impot) || 0) * b.taux / 100) : 0;
+  if (montant <= 0) return Object.assign({}, r, { bonus: null });
+  const impot = r.impot - montant;
+  return Object.assign({}, r, { impot, total: impot + (Number(r.cotisations) || 0) + (Number(r.majoration) || 0), bonus: Object.assign({ montant }, b) });
+}
+function renderRcpSettings(force) {
+  const box = $("#card-rcp");
+  if (!box || (!force && (S.rcpDirty || box.contains(document.activeElement)))) return;
+  const r = rcp();
+  $("#rc-bonus").checked = !!r.bonusActif; $("#rc-sem").value = String(r.bonusSemaines); $("#rc-taux").value = String(r.bonusTaux);
+  $("#rc-av").value = String(r.aviseurTaux); $("#rc-avp").value = String(r.aviseurPlafond);
+}
+$("#card-rcp").addEventListener("input", () => { S.rcpDirty = true; $("#rc-msg").textContent = "Modifications non enregistrées."; });
+$("#rc-save").addEventListener("click", async () => {
+  if (!writer()) return;
+  const num = (id, lo, hi, def) => { const v = Number($(id).value); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : def; };
+  const v = { bonusActif: $("#rc-bonus").checked, bonusSemaines: num("#rc-sem", 2, 52, 8), bonusTaux: num("#rc-taux", 0, 50, 5), aviseurTaux: num("#rc-av", 0, 50, 10), aviseurPlafond: num("#rc-avp", 0, 1e9, 50000) };
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { recompenses: v, updatedAt: nowISO() })));
+  if (ok) { S.rcpDirty = false; $("#rc-msg").textContent = v.bonusActif ? `Bonus de ${v.bonusTaux} % après ${v.bonusSemaines} semaines en règle, pour les déclarations saisies à partir de maintenant.` : "Récompenses enregistrées (bonus de régularité désactivé)."; toast("Récompenses enregistrées."); renderRcpSettings(true); }
+});
+// Prime d'aviseur d'un contrôle ouvert sur signalement : due quand le redressement est encaissé.
+function primeAviseur(c) {
+  const r = rcp(), pen = ctrlPen(c), taux = Math.min(50, Number(r.aviseurTaux) || 0);
+  if (!c || !c.aviseur || !c.aviseur.nom || taux <= 0) return null;
+  const encaisse = c.statut === "recouvre" && pen && pen.statut === "payee" ? Number(pen.montant) || 0 : 0;
+  const plaf = Number(r.aviseurPlafond) || 0;
+  return { taux, plafond: plaf, encaisse, montant: encaisse ? Math.round(Math.min(plaf > 0 ? plaf : Infinity, encaisse * taux / 100)) : 0 };
+}
+function aviseurSection(c, c0, reopen) {
+  const a = c.aviseur || {}, pa = primeAviseur(c), vp = c.prime;
+  const etat = vp ? `Versée le ${fmtDate(new Date(vp.at))}${vp.byNom ? " par " + vp.byNom : ""} : ${money(vp.montant)}`
+    : !pa ? "Pas de prime (réglage à 0 %)"
+    : pa.montant ? `À verser : ${money(pa.montant)} (${pct(pa.taux)} des ${money(pa.encaisse)} encaissés${pa.plafond && pa.montant >= pa.plafond ? ", plafond atteint" : ""})`
+    : `${pct(pa.taux)} du redressement, versée quand il sera encaissé${pa.plafond ? ` (au plus ${money(pa.plafond)})` : ""}`;
+  return sec("Signalement", kv([["Aviseur", a.nom + (a.discord ? " · " + a.discord : "")], ["Prime d’aviseur", etat]]),
+    h("p", { class: "hint", style: "margin:4px 0 0", text: "Le nom de l’aviseur reste confidentiel : il n’apparaît ni dans les documents publiés ni sur Discord." }),
+    writer() && pa && pa.montant && !vp ? h("button", { class: "btn small", type: "button", style: "justify-self:start;margin-top:6px", onclick: async ev => {
+      ev.currentTarget.disabled = true;
+      if (await saveControle(S.controles.find(x => x.id === c0.id) || c0, { prime: { montant: pa.montant, at: nowISO(), by: S.uid || null, byNom: S.agentName || "" } }, `Prime d’aviseur versée : ${money(pa.montant)}.`)) reopen();
+    }, text: `Verser la prime (${money(pa.montant)})` }) : null);
+}
+const primesVersees = () => S.controles.filter(c => c.prime && c.prime.montant);
 // Lignes « brut, réduction, net » pour l'avis, le dossier et le texte Discord.
 function exoLines(d) {
   const x = d.exoneration, out = [];
   if (x && x.montantIS) out.push([`${exoLabel(x)} · impôt −${pct(x.tauxIS)}`, "− " + money(x.montantIS)]);
   if (x && x.montantCot) out.push([`${exoLabel(x)} · cotisations −${pct(x.tauxCot)}`, "− " + money(x.montantCot)]);
+  if (bonusMontant(d) > 0) out.push([bonusLabel(d.bonus), "− " + money(bonusMontant(d))]);
   // Réduction d'impôt des partenaires (conventions de partenariat), après l'exonération.
   if (mecMontant(d) > 0) out.push(["Réduction d’impôt des partenaires · convention de partenariat", "− " + money(mecMontant(d))]);
   if (mecMontant(d) < 0) out.push(["Reprise d’une réduction d’impôt des partenaires (prestation annulée)", "+ " + money(-mecMontant(d))]);
@@ -11917,6 +12057,10 @@ function newControle(e, declIds, opts) {
   // Avant la déclaration, ce sont les opérations observées sur le compte qui déclenchent le contrôle.
   orig.value = opts.origine || (al.length ? "alerte" : preAtt ? "blanchiment" : "aleatoire");
   const insp = h("input", { id: "nc-insp", autocomplete: "off" }); insp.value = S.agentName || "";
+  const avNom = h("input", { id: "nc-av", autocomplete: "off", placeholder: "Nom RP de la personne qui signale" }), avDisc = h("input", { id: "nc-avd", autocomplete: "off", inputmode: "numeric", placeholder: "Facultatif" });
+  const avBox = h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "nc-av", text: "Aviseur" }), avNom), h("div", { class: "field" }, h("label", { for: "nc-avd", text: "Son ID Discord" }), avDisc));
+  const avSync = () => { avBox.hidden = orig.value !== "signalement"; };
+  orig.addEventListener("change", avSync); avSync();
   const susp = h("input", { type: "checkbox", id: "nc-susp" }); susp.checked = true;
   // L'avis de vérification part sur Discord à l'ouverture ; avant la déclaration, l'inspecteur peut
   // préférer attendre qu'elle soit déposée sans prévenir l'entreprise.
@@ -11937,6 +12081,7 @@ function newControle(e, declIds, opts) {
     if (opts.rectifications) for (const id of ids) if (opts.rectifications[id]) c.rectifications[id] = opts.rectifications[id];
     if (opts.qualification) c.qualification = opts.qualification;
     if (opts.vehiculeId) c.vehiculeId = opts.vehiculeId;
+    if (c.origine === "signalement" && avNom.value.trim()) c.aviseur = { nom: avNom.value.trim(), discord: normMention(avDisc.value.trim()) || "" };
     if (opts.justif) c.justif = { ecarts: opts.justif.filter(x => ids.includes(x.declId)), delai: new Date(Date.now() + Math.max(1, Number(cfg().delaiReponseJours) || 2) * 864e5).toISOString() };
     if (susp.checked) for (const d of sel) { const st = dStatus(d); if (st === "soumise" || st === "validee") { c.suspendus.push(d.id); c.avant[d.id] = st; } }
     if (!(await write(() => ref.set(c)))) { btn.disabled = false; return; }
@@ -11950,6 +12095,7 @@ function newControle(e, declIds, opts) {
     body: [sec("Périodes à vérifier", h("div", { class: "checks-col" }, boxes, attBoxes),
         att.length ? h("p", { class: "hint", style: "margin:6px 0 0", text: "Une période pas encore déclarée peut être contrôlée sans attendre, quand des opérations suspectes sont constatées pendant la période (sur le modèle de la flagrance fiscale, art. L16-0 BA du LPF). Rangez les captures du compte dans les pièces du contrôle ; la déclaration rejoindra le contrôle dès sa saisie, et son avis attendra la fin du contrôle." }) : null),
       h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "nc-orig", text: "Origine" }), orig), h("div", { class: "field" }, h("label", { for: "nc-insp", text: "Inspecteur chargé du dossier" }), insp)),
+      avBox,
       h("div", { class: "field" }, h("label", { for: "nc-motif", text: "Motif" }), motif),
       h("label", { class: "switch", for: "nc-susp" }, susp, att.length ? "Suspendre les avis non payés de ces périodes pendant le contrôle (une déclaration attendue n’aura son avis qu’à la fin du contrôle)" : "Suspendre les avis non payés de ces périodes pendant le contrôle"),
       pub ? h("label", { class: "switch", for: "nc-pub" }, pub, "Prévenir l’entreprise maintenant : avis de vérification publié sur Discord") : null,
@@ -12172,6 +12318,7 @@ function openControle(id) {
   if (c.statut === "recouvre") body.push(sec("Mise en recouvrement", kv([
     ["Avis", pen ? dossierNo("AMR", pen.id) : "—"], ["Mis en recouvrement le", c.recouvreLe ? fmtDateTime(new Date(c.recouvreLe)) : "—"],
     ["Paiement", pen ? chip(pen.statut === "annulee" ? ["Dégrevé", "muted"] : PSTAT[pen.statut] || PSTAT.due) : "—"], pen && pen.paidAt && pen.statut === "payee" ? ["Payé le", fmtDateTime(new Date(pen.paidAt))] : null, ["Somme", money(c.total), "tot"]])));
+  if (c.aviseur && c.aviseur.nom) body.push(aviseurSection(c, c0, reopen));
   if (c.statut === "sans_suite") body.push(sec("Conclusion", h("p", { class: "prewrap", style: "margin:0", text: c.conclusion || "Classé sans suite." })));
   if (c.statut === "justice") { const tj = S.transmissions.filter(t => sameEnt(t, entOf(c0))).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
     body.push(sec("Conclusion", h("p", { class: "prewrap", style: "margin:0", text: `Clos le ${fmtDateTime(new Date(c.closLe))} et transmis à la justice. ${c.conclusion || ""}` }),
@@ -16205,9 +16352,10 @@ function openDepotForm(k0) {
   };
   const refresh = () => {
     const v = values(), k = per.value, late = Date.now() > deadline(k).getTime();
-    const r = applyExo(compute(v.ca, v.ch, v.ms, late, cfg(), v.nb, v.sal), e, k, cfg(), late);
+    const r = applyBonus(applyExo(compute(v.ca, v.ch, v.ms, late, cfg(), v.nb, v.sal), e, k, cfg(), late), e, k, cfg(), late);
     const rows = [["Résultat", money(r.resultat)], ["Impôt", money(r.impot)], ["Cotisations", money(r.cotisations)]];
     if (r.exoneration) rows.push([`Exonération de début d’activité (période ${r.exoneration.rang} sur ${r.exoneration.sur})`, "− " + money((r.exoneration.montantIS || 0) + (r.exoneration.montantCot || 0))]);
+    if (r.bonus) rows.push([bonusLabel(r.bonus), "− " + money(r.bonus.montant)]);
     if (late) rows.push([`Majoration de retard (${pct(cfg().majoration)})`, money(r.majoration)]);
     fill(prev, rows.flatMap(([a, b]) => [h("dt", { text: a }), h("dd", { class: "num", text: b })]), h("dt", { class: "tot-dt", text: "Montant estimé" }), h("dd", { class: "tot-dd num", text: money(r.total) }));
   };
