@@ -2187,6 +2187,10 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <button class="btn" type="button" id="b-save" disabled>Télécharger une sauvegarde</button>
               <span class="hint" id="b-last"></span>
             </div>
+            <div class="paste-row" style="margin-top:10px">
+              <button class="btn ghost" type="button" id="b-nuit">Sauvegardes de la nuit</button>
+              <span class="hint">La base copie tout le registre chaque nuit et garde un mois de copies (Direction).</span>
+            </div>
             <div class="restore">
               <label for="b-file">Restaurer depuis un fichier de sauvegarde</label>
               <input id="b-file" type="file" accept=".json,application/json">
@@ -2805,6 +2809,7 @@ function applyRole() {
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
+  $("#b-nuit").closest(".paste-row").hidden = !writer();
   $$("[data-writer-only]").forEach(b => { b.hidden = !w; });
   render();
 }
@@ -3129,6 +3134,7 @@ function subscribe() {
   const db = S.db;
   db.doc("config/main").onSnapshot(s => { S.config = s.exists ? (s.data() || {}) : {}; S.loaded.add("config"); schedule(); }, onDbError);
   db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
+  db.doc("meta/bilan").onSnapshot(s => { S.bilanMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilan"); schedule(); }, onDbError);
   const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
   col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("declarations", s => { S.declarations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3206,6 +3212,7 @@ function render() {
   renderPointeuse();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
+  bilanAuto();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -6841,6 +6848,46 @@ async function doBackup() {
 $("#btn-backup").addEventListener("click", doBackup);
 $("#b-save").addEventListener("click", doBackup);
 
+/* ---------- Sauvegardes de la nuit (supabase/v24_sauvegarde_nocturne.sql) ---------- */
+// Une copie de la base au format du bouton « Télécharger une sauvegarde » : elle se restaure de la même façon.
+function nocturneVersSauvegarde(r) {
+  const cols = {};
+  for (const x of (r && r.lignes) || []) { if (!cols[x.collection]) cols[x.collection] = {}; cols[x.collection][x.id] = x.data; }
+  const n = c => Object.keys(cols[c] || {}).length;
+  return { format: "guichet-fiscal-sauvegarde", version: 1, exportedAt: r.at, origine: "sauvegarde de la nuit",
+    totaux: { entreprises: n("entreprises"), declarations: n("declarations"), demandes: n("demandes") }, collections: cols };
+}
+async function openNocturnes() {
+  if (!writer() || !S.sb) return;
+  const box = h("div", {}, h("p", { class: "muted", text: "Chargement…" }));
+  openDialog({ eyebrow: "Sauvegardes", title: "Sauvegardes de la nuit", body: [h("p", { style: "margin:0", text: "Chaque nuit vers 4 h, la base copie tout le registre dans une table que le site ne peut ni modifier ni effacer. Les 30 dernières copies sont gardées. Une copie téléchargée se restaure avec « Restaurer depuis un fichier de sauvegarde »." }), box],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+  let res;
+  try { res = await S.sb.rpc("sauvegardes_nocturnes"); } catch (e) { res = { error: e }; }
+  if (res.error) {
+    const absent = /sauvegardes_nocturnes|function|fonction|schema cache|not find/i.test(res.error.message || "");
+    fill(box, h("p", { class: "err", text: absent ? "Exécutez d’abord supabase/v24_sauvegarde_nocturne.sql dans Supabase (SQL Editor) : il crée la copie de chaque nuit." : "Lecture refusée : " + (res.error.message || "erreur inconnue") }));
+    return;
+  }
+  const rows = res.data || [];
+  if (!rows.length) { fill(box, h("p", { class: "muted", text: "Aucune copie pour l’instant : la première est faite à l’exécution du script, puis chaque nuit." })); return; }
+  fill(box, h("ul", { class: "ent-list" }, rows.map(x => h("li", {},
+    h("div", { style: "min-width:0" }, h("strong", { text: fmtDateTime(new Date(x.at)) }), h("span", { class: "meta", text: `${x.lignes} dossiers · ${fmtSize(x.taille)}` })),
+    h("span", {}),
+    h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+      const b = ev.currentTarget; b.disabled = true;
+      let r;
+      try { r = await S.sb.rpc("sauvegarde_nocturne_lire", { p_id: x.id }); } catch (e) { r = { error: e }; }
+      b.disabled = false;
+      if (r.error || !r.data) { toast("Téléchargement refusé : " + ((r.error && r.error.message) || "copie introuvable"), true); return; }
+      const json = JSON.stringify(nocturneVersSauvegarde(r.data), null, 2), d = new Date(x.at);
+      const filename = `guichet-fiscal-nuit-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
+      if (!S.downloads) { copyText(json, "Sauvegarde copiée : collez-la dans un fichier texte nommé " + filename + "."); return; }
+      try { await S.downloads.save({ filename, data: new Blob([json], { type: "application/json" }) }); toast(`Sauvegarde de la nuit du ${fmtDate(d)} téléchargée.`); }
+      catch (e) { toast("Le téléchargement a échoué.", true); }
+    }, text: "Télécharger" })))));
+}
+$("#b-nuit").addEventListener("click", openNocturnes);
 function planRestore(b) {
   if (!b || b.format !== "guichet-fiscal-sauvegarde" || !b.collections || typeof b.collections !== "object") return null;
   const writes = [];
@@ -8120,10 +8167,10 @@ function parseEmployee(t) {
   return { nom: m[1].trim().replace(/[\s:=–—-]+$/, "").trim(), salaire: v == null ? NaN : v };
 }
 function renderSalMode() {
-  const on = salMode();
-  $("#d-sal").hidden = !on;
-  $("#d-ms").readOnly = on;
-  $("#d-nb").readOnly = on;
+  const on = salMode(), vide = $("#d-vide").checked;
+  $("#d-sal").hidden = !on || vide;
+  $("#d-ms").readOnly = on || vide;
+  $("#d-nb").readOnly = on || vide;
   $("#d-ms-hint").textContent = on ? "Calculés à partir de la liste : chaque salaire a sa propre cotisation selon le barème des salaires." : "Base des cotisations sociales.";
   if (on && !$$("#d-sal-rows .sal-row").length) setSalaries([]);
 }
@@ -8399,7 +8446,8 @@ const DISCORD_CHANNELS = [
   ["services", "Salon des services publics", "Décisions sur les demandes de moyens et reçus des amendes versées au Trésor. Le service est mentionné si vous lui avez donné un rôle."],
   ["relances", "Salon des relances", "Rappels, relances et mises en demeure. Laissez vide pour utiliser le salon des entreprises."],
   ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."],
-  ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."]
+  ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."],
+  ["direction", "Salon de la Direction", "Bilan de chaque semaine, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Laissez vide pour ne pas le publier."]
 ];
 const DISCORD_AUTO = [
   ["avis", "Avis d’imposition, dès qu’il est émis", "entreprises"],
@@ -8415,13 +8463,16 @@ const DISCORD_AUTO = [
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
-  ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"]
+  ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"],
+  ["bilans", "Bilan de la semaine, le lendemain de la date limite (salon de la Direction)", "direction"]
 ];
+// Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
+const AUTO_DEFAUT = new Set(["bilans"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
   return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : "");
 }
-const autoOn = k => { const a = (S.discord && S.discord.auto) || {}; const def = DISCORD_AUTO.find(x => x[0] === k); return !!a[k] && !!def && !!hookFor(def[2]); };
+const autoOn = k => { const a = (S.discord && S.discord.auto) || {}; const def = DISCORD_AUTO.find(x => x[0] === k); return (k in a ? !!a[k] : AUTO_DEFAUT.has(k)) && !!def && !!hookFor(def[2]); };
 
 // Les adresses des salons sont dans une table que seule la Direction lit (supabase/v3_discord.sql).
 async function loadPrivate() {
@@ -8513,7 +8564,7 @@ function renderDiscordSettings(force) {
   $("#dw-nom").value = d.nom || "";
   $("#dw-mjustice").value = d.mentionJustice || "";
   $("#dw-mpolice").value = d.mentionPolice || "";
-  DISCORD_AUTO.forEach(([k]) => { $("#da-" + k).checked = fresh ? true : !!a[k]; });
+  DISCORD_AUTO.forEach(([k]) => { $("#da-" + k).checked = fresh ? true : k in a ? !!a[k] : AUTO_DEFAUT.has(k); });
   S.discordDirty = false;
 }
 function buildDiscordForm() {
@@ -11027,16 +11078,36 @@ function bilanPeriode(key) {
     reste: all.reduce((s, d) => s + dReste(d), 0), retards: all.filter(d => d.enRetard).length
   };
 }
-function bilanDoc(key) {
-  const c = S.clotures[key], b = (c && c.bilan) || bilanPeriode(key);
+// Activité des agents pendant la semaine : relevés, contrôles, redressements, mouvements suspects.
+function activiteSemaine(key) {
+  const bb = bounds(key);
+  if (!bb) return { releves: 0, controles: 0, redressements: 0, suspects: 0 };
+  const t0 = bb.start.getTime(), t1 = bb.end.getTime(), dans = iso => { const t = iso ? new Date(iso).getTime() : NaN; return t >= t0 && t <= t1; };
   return {
+    releves: (S.releves || []).filter(r => dans(r.at)).length,
+    controles: S.controles.filter(c => dans(c.ouvertLe)).length,
+    redressements: S.controles.filter(c => c.statut === "recouvre" && dans(c.recouvreLe)).reduce((t, c) => t + (Number(c.total) || 0), 0),
+    suspects: blc().actif ? activeEnts().reduce((t, e) => t + mvtSignals(e).filter(x => x.t >= t0 && x.t <= t1).length, 0) : 0
+  };
+}
+function bilanDoc(key) {
+  const c = S.clotures[key], b = (c && c.bilan) || bilanPeriode(key), a = activiteSemaine(key);
+  const taux = b.attendues ? Math.round(b.deposees / b.attendues * 100) + " %" : "—";
+  const nd = b.nonDeclarants.length ? b.nonDeclarants.slice(0, 8).join(", ") + (b.nonDeclarants.length > 8 ? ` et ${b.nonDeclarants.length - 8} autres` : "") : "";
+  return {
+    discord: { channel: "direction", text: [`**Bilan de ${periodPlain(key).toLowerCase()}** · ${b.deposees} déclaration${plural(b.deposees)} sur ${b.attendues} (${taux})${b.retards ? `, dont ${b.retards} hors délai` : ""}`,
+      `${money(b.declare)} d’avis · ${money(b.encaisse)} encaissés · ${money(b.reste)} à recouvrer${b.aValider ? ` · ${b.aValider} à valider` : ""}${b.enControle ? ` · ${b.enControle} en contrôle` : ""}`,
+      nd ? `Pas déclarées : ${nd}` : "Toutes les entreprises attendues ont déclaré.",
+      `Pendant la semaine : ${a.releves} relevé${plural(a.releves)} de compte, ${a.controles} contrôle${plural(a.controles)} ouvert${plural(a.controles)}, ${a.suspects} mouvement${plural(a.suspects)} suspect${plural(a.suspects)}${a.redressements ? `, ${money(a.redressements)} de redressements mis en recouvrement` : ""}.`].join("\n") },
     kind: "BILAN DE PÉRIODE", no: periodPlain(key).replace("Semaine ", "S"), date: c ? "Clôturée le " + longDate(new Date(c.at)) : "Établi le " + longDate(new Date()),
     meta: [["Période", periodLabel(key)], ["Déclarations", `${b.deposees} sur ${b.attendues} entreprises`], ["Clôturée par", c ? c.byNom || "Direction" : "Pas encore clôturée"], ["Hors délai", String(b.retards)]],
     lines: [["Montant des avis", money(b.declare)], ["Encaissé", money(b.encaisse)], ["Reste à recouvrer", money(b.reste), true], ["Encore à valider", String(b.aValider)], ["En contrôle", String(b.enControle)]]
-      .concat(b.nonDeclarants.length ? [["Non déclarées", b.nonDeclarants.slice(0, 8).join(", ") + (b.nonDeclarants.length > 8 ? ` et ${b.nonDeclarants.length - 8} autres` : "")]] : []),
-    total: ["Taux de déclaration", b.attendues ? Math.round(b.deposees / b.attendues * 100) + " %" : "—"],
+      .concat(nd ? [["Non déclarées", nd]] : [])
+      .concat([["Relevés de compte pendant la semaine", String(a.releves)], ["Contrôles ouverts", String(a.controles)], ["Mouvements suspects repérés", String(a.suspects)]])
+      .concat(a.redressements ? [["Redressements mis en recouvrement", money(a.redressements)]] : []),
+    total: ["Taux de déclaration", taux],
     stamp: c ? ["CLÔTURÉE", "accent"] : ["PROVISOIRE", "muted"],
-    footer: "Chiffres arrêtés à la clôture. Préfecture de police · Direction des impôts et cotisations."
+    footer: (c ? "Chiffres arrêtés à la clôture, sauf l’activité de la semaine." : "Chiffres du jour : la semaine n’est pas encore clôturée.") + " Préfecture de police · Direction des impôts et cotisations."
   };
 }
 function openCloture(key) {
@@ -11090,6 +11161,19 @@ function renderClotures() {
   })));
 }
 $("#btn-cloture").addEventListener("click", () => openCloture(S.dashKey || defaultKey()));
+// Bilan de la semaine : publié une fois, par la première session de la Direction après la date limite.
+async function bilanAuto() {
+  if (S.bilanEnCours || !writer() || !autoOn("bilans")) return;
+  if (!["config", "bilan", "entreprises", "declarations", "decisions", "clotures", "releves", "controles", "echeanciers"].every(x => S.loaded.has(x))) return;
+  const k = lastClosedKey();
+  if (!bounds(k) || Date.now() <= deadline(k).getTime() || keyStart(k) < startTime()) return;
+  if (S.bilanMeta && S.bilanMeta.periode && String(S.bilanMeta.periode) >= k) return;
+  S.bilanEnCours = true;
+  try {
+    if (!(await write(() => S.db.doc("meta/bilan").set({ periode: k, at: nowISO(), by: S.uid || null, byNom: S.agentName || "" })))) return;
+    await publishDoc(bilanDoc(k), `Bilan de ${periodPlain(k).toLowerCase()} :`);
+  } finally { S.bilanEnCours = false; }
+}
 
 /* ---------- Restaurer depuis le journal ---------- */
 // Restaurable seulement si l’action a encore un effet : un ajout dont le dossier existe, une suppression pas encore réparée.
