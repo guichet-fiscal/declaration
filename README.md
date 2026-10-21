@@ -167,7 +167,7 @@ Une déclaration est signalée quand :
 - elle est déclarée par quelqu’un d’autre que le patron inscrit sur la fiche (un titre comme « PDG », les majuscules ou une faute d’une lettre ne comptent pas ; des co-gérants s’inscrivent dans le champ Patron, séparés par une virgule) ;
 - l’entreprise a été en retard au moins deux fois sur ses quatre dernières déclarations.
 
-S’y ajoutent les signaux de la surveillance des comptes (voir plus bas), dont : perte déclarée alors que le compte a grossi sur la période ; fonds de départ à justifier (dès la première déclaration, plus d’argent sur le compte que le bénéfice déclaré et le fonds de départ habituel, 50 000 € par défaut, au-delà de l’écart d’alerte) ; semaine déclarée sans activité alors que des mouvements ont été vus sur le compte.
+S’y ajoutent les signaux de la surveillance des comptes (voir plus bas), dont : perte déclarée alors que le compte a grossi sur la période ; fonds de départ à justifier (dès la première déclaration, plus d’argent sur le compte que le bénéfice déclaré et le fonds de départ habituel, 50 000 € par défaut, au-delà de l’écart d’alerte ; sur le serveur, ce fonds de départ est un prêt que l’entreprise rembourse ensuite) ; semaine déclarée sans activité alors que des mouvements ont été vus sur le compte.
 
 **Pas d’activité cette semaine** : une case du formulaire (et de l’espace entreprise) met tout à zéro. Un message Discord qui dit « pas d’activité » ou « aucune activité » la coche. Une déclaration à zéro partout compte aussi comme sans activité.
 
