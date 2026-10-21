@@ -2663,7 +2663,27 @@ function lienAlerts(d, pe) {
   for (const o of dettesPatron(pe)) out.push(`Patron débiteur : ${o.nom} doit encore ${money(o.du)} pour ${o.x.nom}${o.x.actif === false ? " (fermée)" : ""}`);
   return out;
 }
-const LIEN_ALERT_RE = /^(Salariés? aussi déclarés? par|Exonération à vérifier|Patron débiteur)/;
+const LIEN_ALERT_RE = /^(Salariés? aussi déclarés? par|Exonération à vérifier|Patron débiteur|Marge de|Même chiffre d’affaires trois)/;
+// Marge (bénéfice sur chiffre d'affaires) des autres entreprises du même secteur sur les quatre semaines
+// qui finissent à la période : médiane, s'il y en a au moins trois avec un chiffre d'affaires d'au moins 5 000 €.
+const secteurKey = x => norm(x || "").replace(/[es]+$/, "");
+function margeSecteur(e, key) {
+  const sk = secteurKey(e.secteur);
+  if (!sk || !bounds(key)) return null;
+  return lienMemo(`ms:${sk}:${key}:${e.id || norm(e.nom)}`, () => {
+    const keys = new Set(keysEnding(key, 4)), par = new Map();
+    for (const d of S.declarations) {
+      if (!keys.has(d.periode) || dStatus(d) === "rejetee" || sameEnt(d, e)) continue;
+      const x = entOf(d);
+      if (secteurKey(x.secteur) !== sk) continue;
+      const k = x.id || norm(x.nom), v = retenuDe(d), o = par.get(k) || { ca: 0, dep: 0 };
+      o.ca += v.ca; o.dep += v.ch + v.ms; par.set(k, o);
+    }
+    const m = [...par.values()].filter(o => o.ca >= 5000).map(o => (o.ca - o.dep) / o.ca).sort((a, b) => a - b);
+    if (m.length < 3) return null;
+    return { med: m.length % 2 ? m[(m.length - 1) / 2] : (m[m.length / 2 - 1] + m[m.length / 2]) / 2, n: m.length };
+  });
+}
 
 /* Alertes : signaux de fraude possible, à vérifier par un contrôle */
 function alertsFor(d) {
@@ -2680,6 +2700,10 @@ function alertsFor(d) {
   }
   const last = hist[hist.length - 1];
   if ((Number(d.resultat) || 0) < 0 && last && (Number(last.resultat) || 0) < 0) out.push("Résultat négatif deux périodes de suite");
+  // Copier-coller : les montants de la semaine précédente, recopiés au centime.
+  const pk = prevKey(d.periode), dp = hist.filter(x => x.periode === pk).pop(), dpp = dp ? hist.filter(x => x.periode === prevKey(pk)).pop() : null;
+  if (dp && ca >= 1000 && ca === (Number(dp.ca) || 0) && ch === (Number(dp.charges) || 0) && ms === (Number(dp.masse) || 0)) out.push(`Mêmes montants que ${periodPlain(pk).toLowerCase()} (chiffre d’affaires, charges et salaires recopiés)`);
+  else if (dpp && ca >= 1000 && ca === (Number(dp.ca) || 0) && ca === (Number(dpp.ca) || 0)) out.push(`Même chiffre d’affaires trois semaines de suite (${money(ca)})`);
   if (nb > 0 && ms === 0) out.push("Salariés déclarés sans salaires");
   if (ms > 0 && nb === 0) out.push("Salaires versés sans salarié");
   const smin = Number(c.salaireMin) || 0;
@@ -2694,6 +2718,11 @@ function alertsFor(d) {
   if (ca > 0 && ch + ms >= ca * 2) out.push(`Dépenses ${((ch + ms) / ca).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} fois le chiffre d’affaires (${money(ch + ms)} pour ${money(ca)})`);
   else if (ca === 0 && ch > 0) out.push(`Dépenses sans chiffre d’affaires (${money(ch)} de charges)`);
   const pe = entOf(d);
+  // Marge bien plus basse que celle des autres entreprises du secteur (médiane des quatre dernières semaines).
+  if (ca >= 5000 && pe.secteur && !out.some(t => /^(Charges supérieures|Dépenses)/.test(t))) {
+    const sm = margeSecteur(pe, d.periode), mg = (ca - ch - ms) / ca;
+    if (sm && sm.med >= 0.25 && mg < sm.med - 0.4) out.push(`Marge de ${Math.round(mg * 100)} % pour ${Math.round(sm.med * 100)} % dans son secteur (${pe.secteur}, ${sm.n} entreprises sur quatre semaines)`);
+  }
   // Plusieurs dirigeants (co-gérants) : séparés par une virgule sur la fiche.
   if (pe.id && pe.patron && d.declarant && !pe.patron.split(/\s*(?:[,/&;+]|\bet\b)\s*/i).some(x => x.trim() && memePersonne(d.declarant, x))) out.push(`Déclarée par ${d.declarant}, pas par le patron (${pe.patron})`);
   if (ca === 0 && nb > 0) out.push("Aucun chiffre d’affaires avec des salariés");
@@ -11229,21 +11258,24 @@ function activiteSemaine(key) {
     suspects: blc().actif ? activeEnts().reduce((t, e) => t + mvtSignals(e).filter(x => x.t >= t0 && x.t <= t1).length, 0) : 0
   };
 }
-function bilanDoc(key) {
+function bilanDoc(key, sens) {
   const c = S.clotures[key], b = (c && c.bilan) || bilanPeriode(key), a = activiteSemaine(key);
+  const pa = sens ? sensiblesParAgent(sens) : null;
   const taux = b.attendues ? Math.round(b.deposees / b.attendues * 100) + " %" : "—";
   const nd = b.nonDeclarants.length ? b.nonDeclarants.slice(0, 8).join(", ") + (b.nonDeclarants.length > 8 ? ` et ${b.nonDeclarants.length - 8} autres` : "") : "";
   return {
     discord: { channel: "direction", text: [`**Bilan de ${periodPlain(key).toLowerCase()}** · ${b.deposees} déclaration${plural(b.deposees)} sur ${b.attendues} (${taux})${b.retards ? `, dont ${b.retards} hors délai` : ""}`,
       `${money(b.declare)} d’avis · ${money(b.encaisse)} encaissés · ${money(b.reste)} à recouvrer${b.aValider ? ` · ${b.aValider} à valider` : ""}${b.enControle ? ` · ${b.enControle} en contrôle` : ""}`,
       nd ? `Pas déclarées : ${nd}` : "Toutes les entreprises attendues ont déclaré.",
-      `Pendant la semaine : ${a.releves} relevé${plural(a.releves)} de compte, ${a.controles} contrôle${plural(a.controles)} ouvert${plural(a.controles)}, ${a.suspects} mouvement${plural(a.suspects)} suspect${plural(a.suspects)}${a.redressements ? `, ${money(a.redressements)} de redressements mis en recouvrement` : ""}.`].join("\n") },
+      `Pendant la semaine : ${a.releves} relevé${plural(a.releves)} de compte, ${a.controles} contrôle${plural(a.controles)} ouvert${plural(a.controles)}, ${a.suspects} mouvement${plural(a.suspects)} suspect${plural(a.suspects)}${a.redressements ? `, ${money(a.redressements)} de redressements mis en recouvrement` : ""}.`]
+      .concat(pa && pa.length ? ["Actions sensibles : " + pa.slice(0, 6).map(x => `${x.qui} (${x.texte})`).join(" ; ") + "."] : []).join("\n") },
     kind: "BILAN DE PÉRIODE", no: periodPlain(key).replace("Semaine ", "S"), date: c ? "Clôturée le " + longDate(new Date(c.at)) : "Établi le " + longDate(new Date()),
     meta: [["Période", periodLabel(key)], ["Déclarations", `${b.deposees} sur ${b.attendues} entreprises`], ["Clôturée par", c ? c.byNom || "Direction" : "Pas encore clôturée"], ["Hors délai", String(b.retards)]],
     lines: [["Montant des avis", money(b.declare)], ["Encaissé", money(b.encaisse)], ["Reste à recouvrer", money(b.reste), true], ["Encore à valider", String(b.aValider)], ["En contrôle", String(b.enControle)]]
       .concat(nd ? [["Non déclarées", nd]] : [])
       .concat([["Relevés de compte pendant la semaine", String(a.releves)], ["Contrôles ouverts", String(a.controles)], ["Mouvements suspects repérés", String(a.suspects)]])
-      .concat(a.redressements ? [["Redressements mis en recouvrement", money(a.redressements)]] : []),
+      .concat(a.redressements ? [["Redressements mis en recouvrement", money(a.redressements)]] : [])
+      .concat(pa ? (pa.length ? pa.slice(0, 6).map(x => [`Actions sensibles · ${x.qui}`, x.texte]) : [["Actions sensibles", "Aucune"]]) : []),
     total: ["Taux de déclaration", taux],
     stamp: c ? ["CLÔTURÉE", "accent"] : ["PROVISOIRE", "muted"],
     footer: (c ? "Chiffres arrêtés à la clôture, sauf l’activité de la semaine." : "Chiffres du jour : la semaine n’est pas encore clôturée.") + " Préfecture de police · Direction des impôts et cotisations."
@@ -11279,7 +11311,7 @@ function openCloture(key) {
   };
   openDialog({
     eyebrow: "Clôture de période", title: periodLabel(key), stampEl: stamp(c ? ["Clôturée", "accent"] : ["Ouverte", "muted"]), body,
-    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(bilanDoc(key), () => openCloture(key)), text: "Bilan en image" }),
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: async () => showDocImage(bilanDoc(key, writer() ? await sensiblesSemaine(key) : null), () => openCloture(key)), text: "Bilan en image" }),
       h("span", { class: "spacer" }),
       w && c ? h("button", { class: "btn ghost small", type: "button", onclick: reopen, text: "Rouvrir la semaine" }) : null,
       w && !c ? h("button", { class: "btn ink small", type: "button", onclick: close, disabled: !ended, text: `Clôturer ${periodPlain(key).toLowerCase()}` }) : null].filter(Boolean)
@@ -11301,6 +11333,59 @@ function renderClotures() {
 }
 $("#btn-cloture").addEventListener("click", () => openCloture(S.dashKey || defaultKey()));
 // Bilan de la semaine : publié une fois, par la première session de la Direction après la date limite.
+// Actions sensibles de la semaine, lues dans le journal : ce qui allège ce qu'une entreprise doit ou ce
+// qu'on lui reproche, et tout dossier traité par un agent lié à l'entreprise.
+function actionsSensibles(rows) {
+  const out = [];
+  for (const e of rows || []) {
+    const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a, col = e.collection;
+    const baisse = k => x === "modification" && (Number(b[k]) || 0) > (Number(a[k]) || 0) + 0.5;
+    const passe = (k, val) => x !== "suppression" && a[k] === val && b[k] !== val;
+    let quoi = null;
+    if (col === "declarations") quoi = x === "suppression" ? "déclaration supprimée" : baisse("total") ? "déclaration revue à la baisse" : null;
+    else if (col === "decisions") quoi = x === "suppression" && b.statut === "validee" ? "avis annulé" : baisse("montant") ? "avis revu à la baisse" : null;
+    else if (col === "controles") quoi = x === "suppression" ? "contrôle supprimé" : passe("statut", "sans_suite") ? "contrôle classé sans suite" : null;
+    else if (col === "alertes") quoi = x === "ajout" ? "alerte classée" : null;
+    else if (col === "penalites") quoi = x === "suppression" ? "pénalité supprimée" : passe("statut", "annulee") ? "pénalité annulée" : b.statut === "payee" && a.statut === "due" ? "encaissement annulé" : baisse("montant") ? "pénalité réduite" : null;
+    else if (col === "saisies") quoi = passe("statut", "levee") ? "saisie levée" : null;
+    else if (col === "releves" || col === "soupcons") quoi = x === "suppression" ? (col === "releves" ? "relevé supprimé" : "déclaration de soupçon supprimée") : null;
+    else if (col === "entreprises") quoi = passe("exoneration", "accordee") ? "exonération accordée" : null;
+    const dd = ["decisions", "alertes", "echeanciers"].includes(col) ? S.declarations.find(y => y.id === e.doc_id) : null;
+    const src = col === "entreprises" ? Object.assign({}, v, { id: e.doc_id }) : dd || (v.entrepriseId || v.entrepriseNom ? v : null);
+    const ent = !src ? null : col === "entreprises" ? (S.entreprises.find(y => y.id === e.doc_id) || src) : entOf(src);
+    const qui = jWho(e);
+    const lie = ent && e.auteur ? agentsLies(ent).find(l => (e.discord_id && l.f.discordId === e.discord_id) || memeNom(e.auteur, l.f.nom)) : null;
+    if (!quoi && !lie) continue;
+    out.push({ qui, quoi, lie: lie ? ent.nom : null, at: e.at });
+  }
+  return out;
+}
+const SENSIBLES_PL = { "déclaration supprimée": "déclarations supprimées", "déclaration revue à la baisse": "déclarations revues à la baisse", "avis annulé": "avis annulés",
+  "avis revu à la baisse": "avis revus à la baisse", "contrôle supprimé": "contrôles supprimés", "contrôle classé sans suite": "contrôles classés sans suite", "alerte classée": "alertes classées",
+  "pénalité supprimée": "pénalités supprimées", "pénalité annulée": "pénalités annulées", "encaissement annulé": "encaissements annulés", "pénalité réduite": "pénalités réduites",
+  "saisie levée": "saisies levées", "relevé supprimé": "relevés supprimés", "déclaration de soupçon supprimée": "déclarations de soupçon supprimées", "exonération accordée": "exonérations accordées" };
+async function sensiblesSemaine(key) {
+  const bb = bounds(key);
+  if (!bb || !S.sb || !S.connected) return null;
+  try {
+    const { data, error } = await S.sb.from("journal").select("id,at,auteur,discord_id,action,collection,doc_id,avant,apres").gte("at", bb.start.toISOString()).lte("at", bb.end.toISOString()).order("at", { ascending: true }).limit(5000);
+    return error ? null : actionsSensibles(data);
+  } catch (_) { return null; }
+}
+// Résumé par agent : « 2 alertes classées, 1 contrôle classé sans suite ».
+function sensiblesParAgent(list) {
+  const par = new Map();
+  for (const x of list || []) {
+    if (!par.has(x.qui)) par.set(x.qui, { qui: x.qui, n: 0, quoi: new Map(), lies: new Map() });
+    const o = par.get(x.qui);
+    o.n++;
+    if (x.quoi) o.quoi.set(x.quoi, (o.quoi.get(x.quoi) || 0) + 1);
+    if (x.lie) o.lies.set(x.lie, (o.lies.get(x.lie) || 0) + 1);
+  }
+  const accord = (q, n) => n > 1 ? SENSIBLES_PL[q] || q : q;
+  return [...par.values()].sort((a, b) => b.lies.size - a.lies.size || b.n - a.n).map(o => ({ qui: o.qui, lies: [...o.lies.keys()],
+    texte: [...o.quoi].map(([q, n]) => `${n} ${accord(q, n)}`).concat([...o.lies].map(([nom, n]) => `${n} dossier${plural(n)} de ${nom}, entreprise liée à cet agent`)).join(", ") }));
+}
 async function bilanAuto() {
   if (S.bilanEnCours || !writer() || !autoOn("bilans")) return;
   if (!["config", "bilan", "entreprises", "declarations", "decisions", "clotures", "releves", "controles", "echeanciers"].every(x => S.loaded.has(x))) return;
@@ -11310,7 +11395,7 @@ async function bilanAuto() {
   S.bilanEnCours = true;
   try {
     if (!(await write(() => S.db.doc("meta/bilan").set({ periode: k, at: nowISO(), by: S.uid || null, byNom: S.agentName || "" })))) return;
-    await publishDoc(bilanDoc(k), `Bilan de ${periodPlain(k).toLowerCase()} :`);
+    await publishDoc(bilanDoc(k, await sensiblesSemaine(k)), `Bilan de ${periodPlain(k).toLowerCase()} :`);
   } finally { S.bilanEnCours = false; }
 }
 
