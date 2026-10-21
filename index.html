@@ -2087,6 +2087,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <label class="switch" for="bl-oblig"><input type="checkbox" id="bl-oblig"> Exiger le solde du compte dans chaque déclaration (sinon, alerte)</label>
               <div class="row2" style="align-items:end">
                 <div class="field"><label for="bl-fenetre">Relevé sans mouvements : écart maximal avec le dépôt</label><div class="money" data-cur="h"><input id="bl-fenetre" type="number" min="0" max="72" step="1"></div><span class="hint">Quand les mouvements du relevé ne remontent pas jusqu’au dépôt de la déclaration, son solde n’est comparé au solde déclaré que s’ils sont aussi proches. Les recettes arrivent surtout le soir.</span></div>
+                <div class="field"><label for="bl-tirage">Relevés surprises par semaine</label><input id="bl-tirage" type="number" min="0" max="20" step="1"><span class="hint">Entreprises tirées au sort chaque lundi, les plus à risque ayant plus de chances (0 : pas de tirage).</span></div>
                 <div class="field"><label for="bl-fonds">Fonds de départ habituel d’une entreprise</label><div class="money" data-cur="€"><input id="bl-fonds" type="number" min="0" step="1000"></div><span class="hint">Ce qu’une entreprise a normalement sur son compte en ouvrant. Au-delà (plus le bénéfice et l’écart d’alerte), sa première déclaration est signalée : fonds de départ à justifier.</span></div>
               </div>
               <div class="paste-row">
@@ -5440,6 +5441,11 @@ function openDecl(id) {
       mine && ex.attendu != null ? ["Solde attendu", money(ex.attendu)] : null,
       mine && ex.ecart != null ? ["Écart inexpliqué", (ex.ecart > 0 ? "+" : "") + money(ex.ecart), "tot"] : null])));
   }
+  // Modifications faites après l'avis : motif, auteur, montant avant et après.
+  if ((d.modifs || []).length) body.push(sec("Modifications après l’avis", h("ul", { class: "notes" }, d.modifs.map((m, i) => {
+    const apres = i + 1 < d.modifs.length ? d.modifs[i + 1].avant.total : d.total;
+    return h("li", {}, h("span", { class: "meta", text: `${fmtDateTime(new Date(m.at))} · ${m.par || "—"} · ${money(m.avant && m.avant.total)} → ${money(apres)}` }), h("p", { class: "prewrap", text: m.motif }));
+  }).reverse())));
   const echSec = echeancierSection(d, () => openDecl(id));
   if (echSec) body.push(echSec);
   // Retard : une seule pénalité par déclaration, et aucune en taxation d'office (sa majoration de 40 % la remplace).
@@ -6159,6 +6165,9 @@ async function submitDecl(e) {
     depotAt: depot.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
   };
   if (vide) body.sansActivite = true;
+  const motifModif = editing && S.editMotif && S.editMotif.texte ? S.editMotif : null;
+  if (editing && (editing.modifs || motifModif)) body.modifs = (editing.modifs || []).concat(motifModif ? [{ at: nowISO(), par: S.agentName || "", motif: motifModif.texte,
+    avant: { ca: editing.ca, charges: editing.charges, masse: editing.masse, nbSalaries: editing.nbSalaries, total: editing.total } }] : []);
   if (editing) Object.assign(body, { createdAt: editing.createdAt || nowISO(), saisiPar: editing.saisiPar || S.uid || null, rectificative: !!editing.rectificative || dup, modifieLe: nowISO(),
     remplace: editing.remplace || null, credit: dAvoir(editing) });
   const btn = $("#d-submit");
@@ -6169,12 +6178,19 @@ async function submitDecl(e) {
   const ok = await write(() => ref.set(body));
   btn.disabled = !canAgent();
   if (!ok) return null;
+  let rectifie = null;
   if (editing) {
     const dec = S.decisions[editing.id];
-    if (dec && Number(dec.montant) === Number(editing.total) && body.total !== editing.total) await write(() => S.db.doc("decisions/" + editing.id).set(Object.assign({}, dec, { montant: body.total })));
+    if (dec && Number(dec.montant) === Number(editing.total) && body.total !== editing.total) {
+      // Avis émis et montant changé : avis rectifié, à une nouvelle date (nouveau délai de paiement).
+      const rect = dec.statut === "validee" && motifModif ? { at: nowISO(), rectifie: { le: nowISO(), ancienMontant: Number(dec.montant), ancienAvis: dec.at || null, motif: motifModif.texte } } : {};
+      if (await write(() => S.db.doc("decisions/" + editing.id).set(Object.assign({}, dec, { montant: body.total }, rect))) && rect.rectifie) rectifie = motifModif;
+    }
     S.editDecl = null;
+    S.editMotif = null;
     editBanner("decl");
   }
+  if (rectifie && rectifie.publier) { const dd = S.declarations.find(x => x.id === ref.id); if (dd) await publishDoc(avisDoc(dd), "Avis rectifié publié."); }
   let replNote = "";
   if (repl) {
     const okR = await replaceDecl(repl, ref.id);
@@ -7125,13 +7141,15 @@ function avisDoc(d) {
   if (dComp(d)) lines.push(["Réglé par compensation · contrats payés par la Préfecture", "− " + money(dComp(d))]);
   if (dCredit(d)) lines.push([st === "payee" ? "Complément réglé" : "Reste à régler", money(Math.max(0, dMontant(d) - dCredit(d))), true]);
   const due = st === "validee" && !e ? payDue(d) : null;
+  const rc = dec && dec.rectifie && st !== "rejetee" ? dec.rectifie : null;
+  if (rc) lines.push([`Montant de l’avis initial${rc.ancienAvis ? " du " + longDate(new Date(rc.ancienAvis)) : ""}`, money(rc.ancienMontant)]);
   const doc = {
-    kind: "AVIS D’IMPOSITION", no: dossierNo("DF", d.id), date: "Émis le " + longDate(dec && dec.at ? new Date(dec.at) : new Date()),
+    kind: rc ? "AVIS D’IMPOSITION RECTIFIÉ" : "AVIS D’IMPOSITION", no: dossierNo("DF", d.id), date: (rc ? "Rectifié le " : "Émis le ") + longDate(dec && dec.at ? new Date(dec.at) : new Date()),
     meta: [["Entreprise", d.entrepriseNom || "—"], ["Période", periodLabel(d.periode)], ["Déclarant", d.declarant || "—"], ["Déposée le", d.depotAt ? longDate(new Date(d.depotAt)) : "—"]],
     lines, total: [st === "payee" ? "Montant réglé" : "Montant à régler", money(dMontant(d))],
-    note: dec && dec.note ? dec.note : "", stamp: STAMP_DECL[st] || STAMP_DECL.soumise,
+    note: [rc ? "Motif de la rectification : " + rc.motif : "", dec && dec.note ? dec.note : ""].filter(Boolean).join("\n"), stamp: STAMP_DECL[st] || STAMP_DECL.soumise,
     footer: st === "validee" ? `À régler auprès de la Préfecture de police, Direction des impôts et cotisations, ${due ? "avant le " + longDate(due) : e ? "selon l’échéancier ci-dessous" : "dès réception de cet avis"}. Un retard de paiement peut entraîner une pénalité.` : "Préfecture de police · Direction des impôts et cotisations.",
-    discord: { channel: "entreprises", mentions: [entMention(entOf(d))], text: `**Avis d’imposition ${dossierNo("DF", d.id)}** · ${d.entrepriseNom} · ${periodPlain(d.periode)} : ${money(dMontant(d))} ${st === "payee" ? "réglés" : st === "validee" ? "à régler" + (due ? " avant le " + longDate(due) : e ? " selon l’échéancier" : "") : "(" + (DSTAT[st] || DSTAT.soumise)[0].toLowerCase() + ")"}.` }
+    discord: { channel: "entreprises", mentions: [entMention(entOf(d))], text: `**Avis d’imposition ${rc ? "rectifié " : ""}${dossierNo("DF", d.id)}** · ${d.entrepriseNom} · ${periodPlain(d.periode)} : ${money(dMontant(d))} ${st === "payee" ? "réglés" : st === "validee" ? "à régler" + (due ? " avant le " + longDate(due) : e ? " selon l’échéancier" : "") : "(" + (DSTAT[st] || DSTAT.soumise)[0].toLowerCase() + ")"}${rc ? ` (au lieu de ${money(rc.ancienMontant)}). Motif : ${rc.motif}` : ""}.` }
   };
   if (e) doc.table = { title: "Échéancier de paiement", head: ["Échéance", "Date limite", "Montant", "État"], rows: e.echeances.map(x => [`${x.n} / ${e.echeances.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : (new Date(x.date).getTime() < Date.now() ? "En retard" : "À venir")]) };
   return doc;
@@ -7563,7 +7581,9 @@ function describe(e) {
       const who = `${v.entrepriseNom || "?"} · ${periodPlain(v.periode)}`;
       if (x === "ajout") return `a saisi la déclaration de ${who} (${money(v.total)})`;
       if (x === "suppression") return `a supprimé la déclaration de ${who}`;
-      return a.entrepriseId !== b.entrepriseId ? `a rattaché la déclaration de ${who} au registre` : `a modifié la déclaration de ${who}`;
+      if (a.entrepriseId !== b.entrepriseId) return `a rattaché la déclaration de ${who} au registre`;
+      const mo = (a.modifs || []).length > (b.modifs || []).length ? a.modifs[a.modifs.length - 1] : null;
+      return `a modifié la déclaration de ${who}${a.total !== b.total ? ` (${money(b.total)} → ${money(a.total)})` : ""}${mo ? ` · motif : ${mo.motif}` : ""}`;
     }
     case "decisions": {
       const d = S.declarations.find(y => y.id === e.doc_id);
@@ -8139,7 +8159,7 @@ function editBanner(kind) {
   fill(box,
     h("div", { style: "flex:1 1 auto;min-width:0" },
       h("strong", { text: `Modification de ${dossierNo(isD ? "DF" : "DM", id)}${item ? " · " + (isD ? item.entrepriseNom : item.service) : ""}. ` }),
-      isD ? "Le calcul sera refait avec le barème actuel. Un avis déjà émis est mis à jour, sauf s’il avait été rectifié à la main." : S.demDetail ? "Articles repérés dans la justification : vérifiez-les et chiffrez ceux qui n’ont pas de prix. La décision déjà prise est conservée." : arbLignes(item || {}) ? "La décision déjà prise est conservée. Si vous changez les articles, rouvrez la décision pour la mettre à jour." : "La décision déjà prise sur cette demande est conservée."),
+      isD ? `Le calcul sera refait avec le barème actuel. Un avis déjà émis est mis à jour, sauf s’il avait été rectifié à la main.${S.editMotif ? ` Motif : ${S.editMotif.texte}` : ""}` : S.demDetail ? "Articles repérés dans la justification : vérifiez-les et chiffrez ceux qui n’ont pas de prix. La décision déjà prise est conservée." : arbLignes(item || {}) ? "La décision déjà prise est conservée. Si vous changez les articles, rouvrez la décision pour la mettre à jour." : "La décision déjà prise sur cette demande est conservée."),
     h("button", { class: "btn ghost small", type: "button", onclick: () => cancelEdit(kind), text: "Annuler la modification" }));
   box.hidden = false;
   btn.textContent = "Enregistrer les modifications";
@@ -8147,6 +8167,7 @@ function editBanner(kind) {
 function cancelEdit(kind) {
   if (kind === "decl") {
     S.editDecl = null;
+    S.editMotif = null;
     S.taxOffice = null;
     S.depotSaisie = null;
     $("#form-decl").reset();
@@ -8160,10 +8181,27 @@ function cancelEdit(kind) {
   }
   editBanner(kind);
 }
-function startEditDecl(d) {
+// Modifier une déclaration dont l'avis est émis demande un motif, gardé dans la déclaration et le journal.
+// Si le montant change, l'avis est rectifié (nouvelle date, ancien montant gardé) et peut repartir sur Discord.
+function demanderMotifModif(d) {
+  const t = h("textarea", { id: "mm-motif", rows: "3", placeholder: "Erreur de saisie, nouveau barème, déclaration rectifiée par l’entreprise…" });
+  const st = dStatus(d), pub = st === "validee" && hookFor("entreprises") ? h("input", { type: "checkbox", id: "mm-pub" }) : null;
+  if (pub) pub.checked = true;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = () => { const m = t.value.trim(); if (m.length < 4) { err.textContent = "Indiquez pourquoi la déclaration est modifiée."; t.focus(); return; } startEditDecl(d, { texte: m, publier: !!(pub && pub.checked) }); };
+  openDialog({ eyebrow: `Déclaration ${dossierNo("DF", d.id)}`, title: "Modifier une déclaration dont l’avis est émis",
+    body: [h("p", { style: "margin:0", text: `Son avis est ${(DSTAT[st] || DSTAT.soumise)[0].toLowerCase()}. Le motif est gardé dans la déclaration et le journal. Si le montant change, l’avis est rectifié : nouvelle date, donc nouveau délai de paiement, et l’ancien montant reste indiqué.` }),
+      h("div", { class: "field" }, h("label", { for: "mm-motif", text: "Motif de la modification" }), t),
+      pub ? h("label", { class: "switch", for: "mm-pub" }, pub, "Publier l’avis rectifié sur Discord si le montant change (patron mentionné)") : null, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(d.id), text: "Retour" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: go, text: "Modifier" })] });
+  setTimeout(() => t.focus(), 30);
+}
+function startEditDecl(d, motif) {
   if (isClosed(d.periode)) { toast(closedNote(d.periode) + " : la Direction doit la rouvrir avant de modifier ce dossier.", true); return; }
   const ec = echOf(d);
   if (ec) { toast("Supprimez d’abord l’échéancier de ce dossier pour en modifier les montants.", true); return; }
+  if (dStatus(d) !== "soumise" && !motif) { demanderMotifModif(d); return; }
+  S.editMotif = motif || null;
   closeDialog();
   showTab("declaration");
   S.editDecl = d.id;
@@ -12989,7 +13027,7 @@ function pretsSection(e) {
 // Ce qui dépasse est un enrichissement inexpliqué. Comme dans la réalité, l'entreprise doit
 // en justifier l'origine ; à défaut, il est imposé d'office (art. L16 et L69 du LPF) et le
 // soupçon peut être signalé (sur le modèle de TRACFIN, art. L561-15 du CMF).
-function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8, fondsDepart: 50000 }, cfg().blanchiment || {}); }
+function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8, fondsDepart: 50000, tirage: 3 }, cfg().blanchiment || {}); }
 function relevesOf(e) { return (S.releves || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function soupconsOf(e) { return (S.soupcons || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function periodDays(k) { const b = bounds(k); return b ? Math.max(1, Math.round((b.end.getTime() - b.start.getTime()) / 864e5)) : 7; }
@@ -13836,6 +13874,7 @@ function compteSection(e, reopen) {
   const rl = relevesOf(e).slice(0, 4), ag = canAgent(), sig = mvtSignals(e), nb = mvtsOf(e).length, pv = paiementsVers(e);
   return sec("Compte de l’entreprise",
     h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Avec les mouvements relevés, le solde de fin de période est reconstitué exactement." }),
+    (() => { const r = risqueDe(e); return h("div", { class: "paste-row", style: "margin:0 0 6px" }, chip([`${r.niveau[0]} · ${r.score}`, r.niveau[1]]), h("span", { class: "hint", text: r.raisons.join(" · ") || "Rien à signaler." })); })(),
     compteTable(e, keysEnding(lastClosedKey(), 6)),
     sig.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: "Mouvements suspects" }), h("div", { class: "reasons" }, sig.slice(0, 6).map(s => h("span", { class: "reason", text: s.texte })))) : null,
     nb ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Derniers mouvements relevés · ${nb} connu${plural(nb)}` }), mvtTable(e, 12)) : null,
@@ -13851,6 +13890,55 @@ function compteSection(e, reopen) {
       h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e, reopen), text: "Relevé de compte" }),
       sig.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => controleMouvements(e, sig), text: "Contrôler ces mouvements" }) : null,
       writer() && comptesSynthese(e, 6).some(x => ecartSuspect(x) && x.ecart > blc().seuil) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSoupcon(e), text: "Déclaration de soupçon" }) : null) : null);
+}
+/* ---------- Risque et relevés surprises ---------- */
+// Score de risque d'une entreprise : ce qui doit faire passer son compte en priorité. Avec « avant »,
+// seul ce qui était connu à cet instant compte (le tirage de la semaine reste le même toute la semaine).
+function risqueDe(e, avant) {
+  const fige = avant != null, t0 = fige ? avant : Date.now(), out = [];
+  let s = 0;
+  const ds = declsOf(e).filter(d => dStatus(d) !== "rejetee" && (!fige || new Date(d.createdAt || d.depotAt || 0).getTime() < t0))
+    .sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 4);
+  const al = ds.flatMap(d => (fige ? alertsFor(d) : activeAlerts(d)));
+  if (al.length) { const bl = al.filter(isBlSignal).length; s += Math.min(12, bl * 2 + (al.length - bl)); out.push(`${al.length} alerte${plural(al.length)}${bl ? `, dont ${bl} sur le compte` : ""}`); }
+  const sig = mvtSignals(e).filter(x => x.t < t0 && x.t >= t0 - 14 * 864e5);
+  if (sig.length) { s += Math.min(9, sig.length * 3); out.push(`${sig.length} mouvement${plural(sig.length)} suspect${plural(sig.length)}`); }
+  if (!fige) { const ec = comptesSynthese(e, 4).filter(x => ecartOuvert(x) && Math.abs(x.ecart) > blc().seuil); if (ec.length) { s += 3 * ec.length; out.push(`écart inexpliqué de ${money(Math.abs(ec[ec.length - 1].ecart))}`); } }
+  const rl = relevesOf(e).find(x => new Date(x.at).getTime() < t0);
+  const j = rl ? Math.floor((t0 - new Date(rl.at).getTime()) / 864e5) : null;
+  if (!rl) { s += 3; out.push("jamais relevé"); } else if (j > 14) { s += 2; out.push(`dernier relevé il y a ${j} jours`); } else if (j > 7) { s += 1; out.push(`dernier relevé il y a ${j} jours`); }
+  const ca = ds.length ? ds.reduce((t, d) => t + (Number(d.ca) || 0), 0) / ds.length : 0;
+  if (ca >= 1e6) { s += 2; out.push("gros chiffre d’affaires"); } else if (ca >= 2e5) s += 1;
+  if (ds.some(d => d.enRetard)) { s += 1; out.push("déclaration en retard"); }
+  return { score: s, raisons: out, niveau: s >= 8 ? ["Risque élevé", "bad"] : s >= 4 ? ["Risque moyen", "warn"] : ["Risque faible", "muted"] };
+}
+// Hasard reproductible : la même graine donne le même tirage pour tous les agents.
+function graine(str) { let x = 2166136261; for (const ch of String(str)) { x ^= ch.charCodeAt(0); x = Math.imul(x, 16777619); } return x >>> 0; }
+function hasard01(str) { let a = graine(str); a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return (((t ^ t >>> 14) >>> 0) + 1) / 4294967297; }
+// Relevés surprises de la semaine : quelques entreprises tirées au sort, les plus à risque ayant plus de
+// chances (tirage pondéré sans remise : clé = hasard^(1/poids)). Le poids est figé au lundi 0 h.
+function tirageSemaine() {
+  const c = blc(), k = keyOf(new Date()), b = bounds(k), n = Math.max(0, Math.round(Number(c.tirage == null ? 3 : c.tirage)) || 0);
+  if (!b || !n) return { k, list: [] };
+  const lundi = b.start.getTime();
+  const list = activeEnts().map(e => { const r = risqueDe(e, lundi); return { e, r, cle: Math.log(hasard01(k + "|" + (c.tirageSel || "") + "|" + (e.id || e.nom))) / (1 + r.score) }; })
+    .sort((a, x) => x.cle - a.cle).slice(0, n)
+    .map(x => Object.assign(x, { fait: relevesOf(x.e).find(r => new Date(r.at).getTime() >= lundi) || null }));
+  return { k, list };
+}
+// Toutes les entreprises, de la plus à risque à la moins à risque.
+function openRisques() {
+  const l = activeEnts().map(e => ({ e, r: risqueDe(e) })).sort((a, b) => b.r.score - a.r.score || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
+  openDialog({ eyebrow: "Surveillance des comptes", title: "Risque par entreprise", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Alertes des quatre dernières déclarations (celles sur le compte comptent double), mouvements suspects des deux dernières semaines, écarts inexpliqués, ancienneté du dernier relevé, taille et retards. Les relevés surprises sont tirés au sort avec ce poids, figé au début de la semaine." }),
+      h("div", { class: "tbl-wrap" }, h("table", { class: "compact" },
+        h("thead", {}, h("tr", {}, ["Entreprise", "Score", "Pourquoi", ""].map((t, i) => h("th", { class: i === 1 ? "num" : null, text: t })))),
+        h("tbody", {}, l.map(({ e, r }) => h("tr", {},
+          h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(e), text: e.nom })),
+          h("td", { class: "num" }, chip([`${r.score}`, r.niveau[1]])),
+          h("td", { text: r.raisons.join(" · ") || "—" }),
+          h("td", {}, canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e, openRisques), text: "Relevé" }) : null))))))],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
 }
 // Contrôle ouvert sur des mouvements suspects : les périodes où ils ont eu lieu sont proposées.
 function controleMouvements(e, sig) {
@@ -13933,11 +14021,21 @@ function renderComptes() {
   if (ag) $("#rc-comptes-sub").textContent += " Pour un relevé, collez la capture du compte (Ctrl + V) n’importe où dans le guichet.";
   const rl = S.releves.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
   const ds = S.soupcons.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
+  const ts = tirageSemaine();
   // Mouvements suspects des deux dernières semaines, toutes entreprises confondues.
   const depuis = Date.now() - 14 * 864e5;
   const mvs = activeEnts().map(e => ({ e, sig: mvtSignals(e).filter(x => x.t >= depuis) })).filter(x => x.sig.length).sort((a, b) => b.sig[0].t - a.sig[0].t);
   const nbMvs = mvs.reduce((t, x) => t + x.sig.length, 0);
   fill(box,
+    ts.list.length ? h("div", { style: "margin-bottom:12px" },
+      h("div", { class: "paste-row" }, h("h4", { class: "mini-title", style: "margin:0", text: `Relevés surprises · ${periodPlain(ts.k).toLowerCase()} · ${ts.list.filter(x => x.fait).length} sur ${ts.list.length} faits` }), h("span", { class: "spacer" }),
+        h("button", { class: "linkbtn", type: "button", onclick: openRisques, text: "Risque par entreprise" })),
+      h("p", { class: "hint", style: "margin:2px 0 6px", text: "Tirées au sort pour la semaine, les plus à risque ayant plus de chances. Les mêmes pour tous les agents, sans prévenir les entreprises." }),
+      h("ul", { class: "rc-list" }, ts.list.map(x => h("li", {},
+        h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", chip([x.r.niveau[0], x.r.niveau[1]]),
+          h("div", { class: "hint", style: "margin-top:4px", text: x.r.raisons.join(" · ") || "Tirée au sort sans signal particulier." })),
+        h("div", { class: "rc-state" }, x.fait ? chip([`Relevé le ${fmtDate(new Date(x.fait.at))}`, "ok"]) : chip(["À relever", "warn"])),
+        ag && !x.fait ? h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(x.e), text: "Relevé de compte" })) : null)))) : null,
     list.length ? h("ul", { class: "rc-list" }, list.slice(0, S.rcAll.bl ? 200 : RC_LIMIT).map(x => h("li", {},
       h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
         h("div", { class: "reasons", style: "margin-top:4px" }, [...new Set(x.rows.flatMap(r => r.sig))].slice(0, 4).map(t => h("span", { class: "reason", text: t })))),
@@ -13989,13 +14087,15 @@ function renderBlSettings(force) {
   $("#bl-oblig").checked = !!c.soldeObligatoire;
   $("#bl-fenetre").value = String(c.fenetreH);
   $("#bl-fonds").value = String(c.fondsDepart);
+  $("#bl-tirage").value = String(c.tirage);
 }
 $("#card-bl").addEventListener("input", () => { S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; });
 $("#bl-save").addEventListener("click", async () => {
   if (!writer()) return;
   const v = { actif: $("#bl-actif").checked, seuil: Math.max(0, Math.round(Number($("#bl-seuil").value) || 0)), plafond: Math.max(0, Math.round(Number($("#bl-plafond").value) || 0)), soldeObligatoire: $("#bl-oblig").checked,
     fenetreH: $("#bl-fenetre").value === "" ? 8 : Math.max(0, Math.min(72, Math.round(Number($("#bl-fenetre").value) || 0))),
-    fondsDepart: $("#bl-fonds").value === "" ? 50000 : Math.max(0, Math.round(Number($("#bl-fonds").value) || 0)) };
+    fondsDepart: $("#bl-fonds").value === "" ? 50000 : Math.max(0, Math.round(Number($("#bl-fonds").value) || 0)),
+    tirage: $("#bl-tirage").value === "" ? 3 : Math.max(0, Math.min(20, Math.round(Number($("#bl-tirage").value) || 0))), tirageSel: blc().tirageSel || "" };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { blanchiment: v, updatedAt: nowISO() })));
   if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
 });
