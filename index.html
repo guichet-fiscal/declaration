@@ -2019,11 +2019,11 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <p class="sub">Pour encourager la régularité et les signalements : un bonus sur l’impôt des entreprises en règle depuis plusieurs semaines, et une prime pour la personne qui signale une fraude, versée quand le redressement est encaissé.</p>
             <div class="set-form">
               <label class="switch" for="rc-bonus"><input type="checkbox" id="rc-bonus"> Bonus de régularité sur l’impôt</label>
-              <div class="row2" style="align-items:end">
+              <div class="row2" style="align-items:start">
                 <div class="field"><label for="rc-sem">En règle depuis (semaines)</label><input id="rc-sem" type="number" min="2" max="52" step="1"><span class="hint">Chaque semaine déclarée à temps et payée, sans redressement ni pénalité à payer. Pas pendant une exonération ni en cas de retard.</span></div>
                 <div class="field"><label for="rc-taux">Réduction de l’impôt</label><div class="money" data-cur="%"><input id="rc-taux" type="number" min="0" max="50" step="1"></div></div>
               </div>
-              <div class="row2" style="align-items:end">
+              <div class="row2" style="align-items:start">
                 <div class="field"><label for="rc-av">Prime d’aviseur</label><div class="money" data-cur="%"><input id="rc-av" type="number" min="0" max="50" step="1"></div><span class="hint">Part du redressement encaissé, pour un contrôle ouvert sur signalement (0 : pas de prime).</span></div>
                 <div class="field"><label for="rc-avp">Plafond de la prime</label><div class="money" data-cur="€"><input id="rc-avp" type="number" min="0" step="1000"></div><span class="hint">0 : sans plafond.</span></div>
               </div>
