@@ -2658,8 +2658,11 @@ function repriseDe(e) {
 }
 // Salariés déclarés la même semaine par une autre entreprise.
 function salariesPartages(d) {
+  if (!d || !d.periode || !salariesDe(d).length) return [];
+  return lienMemo("spd:" + (d.id || entKey(d) + d.periode), () => salariesPartagesCalc(d));
+}
+function salariesPartagesCalc(d) {
   const noms = salariesDe(d);
-  if (!noms.length || !d.periode) return [];
   const idx = lienMemo("sp:" + d.periode, () => S.declarations.filter(x => x.periode === d.periode && dStatus(x) !== "rejetee").map(x => ({ d: x, noms: salariesDe(x) })).filter(x => x.noms.length));
   const k = entKey(d), par = new Map();
   for (const o of idx) {
