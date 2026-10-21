@@ -2545,6 +2545,126 @@ function memePersonne(a, b) {
   const dans = (X, Y) => X.every(t => Y.some(u => proche(t, u)));
   return dans(A, B) || dans(B, A);
 }
+/* Liens entre entreprises, patrons, salariés et agents de la Préfecture */
+// Même personne, plus strict que memePersonne : tous les mots du nom le plus court se retrouvent
+// dans l'autre (prénom et nom), un nom d'un seul mot devant être identique à un autre nom d'un seul mot.
+function memeNom(a, b) {
+  const mots = x => norm(x).split(" ").filter(t => t.length >= 2 && !TITRES_RE.test(t));
+  const A = mots(a), B = mots(b);
+  if (!A.length || !B.length) return false;
+  const proche = (t, u) => t === u || (Math.min(t.length, u.length) >= 5 && distance(t, u) <= 1);
+  const [P, G] = A.length <= B.length ? [A, B] : [B, A];
+  if (P.length === 1) return G.length === 1 && P[0].length >= 4 && proche(P[0], G[0]);
+  return P.every(t => G.some(u => proche(t, u)));
+}
+const patronsDe = e => String((e && e.patron) || "").split(/\s*(?:[,/&;+]|\bet\b)\s*/i).map(x => x.trim()).filter(Boolean);
+const salariesDe = d => (Array.isArray(d.salaries) ? d.salaries : (d.detail && d.detail.salaries) || []).map(x => String((x && x.nom) || "").trim()).filter(x => x && !/non déclarés/i.test(x));
+const debutDe = e => (e.debutActivite && bounds(e.debutActivite) ? keyStart(e.debutActivite) : Date.parse(e.createdAt) || 0);
+const declsVivantes = e => declsOf(e).filter(d => dStatus(d) !== "rejetee").sort((a, b) => String(b.periode).localeCompare(String(a.periode)));
+let lienCache = { deps: [], map: new Map() };
+function lienMemo(k, fn) {
+  const deps = [S.declarations, S.entreprises, S.fonctionnaires, S.decisions];
+  if (deps.some((d, i) => d !== lienCache.deps[i])) lienCache = { deps, map: new Map() };
+  if (!lienCache.map.has(k)) lienCache.map.set(k, fn());
+  return lienCache.map.get(k);
+}
+const ROLE_LIEN = { patron: "patron de l’entreprise", salarie: "déclaré salarié", declarant: "a déposé une de ses déclarations" };
+// Agents de la Préfecture qui sont patron, salarié déclaré (quatre dernières déclarations) ou déclarant de l'entreprise.
+function agentsLies(e) {
+  if (!e) return [];
+  return lienMemo("ag:" + (e.id || norm(e.nom)), () => {
+    const fs = (S.fonctionnaires || []).filter(f => f.actif !== false && f.nom);
+    if (!fs.length) return [];
+    const pats = patronsDe(e), ds = declsVivantes(e).slice(0, 4), out = [];
+    for (const f of fs) {
+      if (pats.some(p => memeNom(p, f.nom))) { out.push({ f, role: "patron" }); continue; }
+      const d = ds.find(d => salariesDe(d).some(n => memeNom(n, f.nom)));
+      if (d) { out.push({ f, role: "salarie", periode: d.periode }); continue; }
+      const dd = ds.find(d => d.declarant && memeNom(d.declarant, f.nom));
+      if (dd) out.push({ f, role: "declarant", periode: dd.periode });
+    }
+    return out;
+  });
+}
+const estMoi = f => !!f && ((S.discordId && f.discordId === S.discordId) || (!!S.agentName && memeNom(S.agentName, f.nom)));
+const lienAgentTexte = x => `${x.f.nom}${x.f.grade ? " (" + x.f.grade + ")" : ""}, ${ROLE_LIEN[x.role]}${x.periode ? " (" + periodPlain(x.periode).toLowerCase() + ")" : ""}`;
+// Bandeau dans les dossiers d'une entreprise liée à un agent : l'agent concerné doit se déporter.
+function lienAgentNotice(e) {
+  const l = e && canAgent() ? agentsLies(e) : [];
+  if (!l.length) return null;
+  const moi = l.some(x => estMoi(x.f));
+  return h("div", { class: "notice lien-agent", style: `margin:0;border-left-color:var(--${moi ? "bad" : "warn"})` }, h("div", {},
+    h("strong", { text: moi ? "Vous êtes lié à cette entreprise. " : "Entreprise liée à un agent de la Préfecture. " }),
+    l.map(lienAgentTexte).join(" ; ") + ". " + (moi ? "Confiez ce dossier à un autre agent : vous ne pouvez pas le traiter." : "Cet agent ne doit pas traiter les dossiers de l’entreprise.")));
+}
+// Autres entreprises du même patron (ou d'un même co-gérant), en activité ou fermées.
+function patronsCommuns(e) {
+  if (!e || !e.id) return [];
+  return lienMemo("pc:" + e.id, () => {
+    const P = patronsDe(e);
+    if (!P.length) return [];
+    // Le nom tel qu'il est écrit sur la fiche de l'autre entreprise.
+    return S.entreprises.filter(x => x.id !== e.id).map(x => ({ x, nom: patronsDe(x).find(q => P.some(p => memeNom(p, q))) })).filter(o => o.nom);
+  });
+}
+// Ce que doivent encore les entreprises plus anciennes (ou fermées) du même patron.
+function dettesPatron(e) {
+  const t0 = e && e.id ? debutDe(e) : 0;
+  return patronsCommuns(e).filter(o => o.x.actif === false || debutDe(o.x) < t0)
+    .map(o => Object.assign({ du: entSummary(o.x, lastClosedKey()).due }, o)).filter(o => o.du > 0.5);
+}
+// Nouvelle entreprise (huit semaines) dont au moins la moitié des salariés (deux au moins) étaient déclarés
+// par une autre entreprise dans les cinq semaines avant son ouverture : une reprise qui ne dit pas son nom.
+function repriseDe(e) {
+  if (!e || !e.id) return [];
+  return lienMemo("rp:" + e.id, () => {
+    const t0 = debutDe(e);
+    if (!t0 || Date.now() - t0 > 8 * 7 * 864e5) return [];
+    const noms = [...new Set(declsVivantes(e).slice(-2).flatMap(salariesDe))];
+    if (noms.length < 2) return [];
+    const par = new Map();
+    for (const d of S.declarations) {
+      const b = bounds(d.periode);
+      if (!b || sameEnt(d, e) || dStatus(d) === "rejetee" || b.start.getTime() >= t0 || b.start.getTime() < t0 - 5 * 7 * 864e5) continue;
+      const x = entOf(d), k = x.id || norm(x.nom), vus = noms.filter(n => salariesDe(d).some(m => memeNom(n, m)));
+      if (!vus.length) continue;
+      if (!par.has(k)) par.set(k, { x, noms: new Set() });
+      vus.forEach(n => par.get(k).noms.add(n));
+    }
+    return [...par.values()].filter(v => v.noms.size >= 2 && v.noms.size * 2 >= noms.length).map(v => ({ x: v.x, noms: [...v.noms] }));
+  });
+}
+// Salariés déclarés la même semaine par une autre entreprise.
+function salariesPartages(d) {
+  const noms = salariesDe(d);
+  if (!noms.length || !d.periode) return [];
+  const idx = lienMemo("sp:" + d.periode, () => S.declarations.filter(x => x.periode === d.periode && dStatus(x) !== "rejetee").map(x => ({ d: x, noms: salariesDe(x) })).filter(x => x.noms.length));
+  const k = entKey(d), par = new Map();
+  for (const o of idx) {
+    if (entKey(o.d) === k) continue;
+    const vus = noms.filter(n => o.noms.some(m => memeNom(n, m)));
+    if (!vus.length) continue;
+    const x = entOf(o.d), kk = x.id || norm(x.nom);
+    if (!par.has(kk)) par.set(kk, { x, noms: new Set() });
+    vus.forEach(n => par.get(kk).noms.add(n));
+  }
+  return [...par.values()].map(v => ({ x: v.x, noms: [...v.noms] }));
+}
+// Alertes de ces liens, sur une déclaration.
+function lienAlerts(d, pe) {
+  const out = [], liste = l => l.slice(0, 3).join(", ") + (l.length > 3 ? "…" : "");
+  for (const o of salariesPartages(d)) out.push(`Salarié${plural(o.noms.length)} aussi déclaré${plural(o.noms.length)} par ${o.x.nom} la même semaine : ${liste(o.noms)}`);
+  if (!pe || !pe.id) return out;
+  if (exoInfo(pe, d.periode)) {
+    const t0 = debutDe(pe), pc = patronsCommuns(pe).filter(o => debutDe(o.x) < t0), rp = repriseDe(pe);
+    if (pc.length) out.push(`Exonération à vérifier : même patron que ${pc.map(o => o.x.nom + (o.x.actif === false ? " (fermée)" : "")).join(", ")}`);
+    else if (rp.length) out.push(`Exonération à vérifier : reprend ${rp[0].noms.length} salariés de ${rp[0].x.nom} (${liste(rp[0].noms)})`);
+  }
+  for (const o of dettesPatron(pe)) out.push(`Patron débiteur : ${o.nom} doit encore ${money(o.du)} pour ${o.x.nom}${o.x.actif === false ? " (fermée)" : ""}`);
+  return out;
+}
+const LIEN_ALERT_RE = /^(Salariés? aussi déclarés? par|Exonération à vérifier|Patron débiteur)/;
+
 /* Alertes : signaux de fraude possible, à vérifier par un contrôle */
 function alertsFor(d) {
   if (!d || dStatus(d) === "rejetee") return [];
@@ -2581,6 +2701,7 @@ function alertsFor(d) {
   if (d.detail) for (const t of (d.detail.cot || []).concat(d.detail.is || [])) if (t.libelle && t.base > 0) out.push(`${t.libelle} : au-delà de ${money(t.de)}`);
   const pp = (S.contrats || []).length ? paiementsPrefecture(entOf(d), d.periode) : 0;
   if (pp > 0 && ca < pp) out.push(`Chiffre d’affaires inférieur aux paiements de la Préfecture (${money(pp)})`);
+  out.push(...lienAlerts(d, pe));
   out.push(...blanchimentSignals(d));
   return out;
 }
@@ -2596,7 +2717,7 @@ function alertState(d) {
   const c = ctrlCovering(d), k = alertClassee(d);
   if (c) return { list, active: [], how: "controle", ctrl: c };
   // Classée pour ces alertes-là : si la déclaration est corrigée et que d'autres apparaissent, elles reviennent.
-  const akey = a => (isBlSignal(a) ? a.split(/\s*:|\s\d/)[0] : a);
+  const akey = a => (isBlSignal(a) || LIEN_ALERT_RE.test(a) ? a.split(/\s*:|\s\d/)[0] : a);
   if (k && (!Array.isArray(k.alertes) || list.every(a => k.alertes.map(akey).includes(akey(a))))) return { list, active: [], how: "classee", classe: k };
   return { list, active: list, how: null };
 }
@@ -5535,6 +5656,7 @@ function openDecl(id) {
       go("validee");
     }, text: "Annuler l’encaissement" }));
   }
+  { const n = lienAgentNotice(registered ? entOf(d) : null); if (n) body.unshift(n); }
   openDialog({ eyebrow: `Déclaration ${dossierNo("DF", id)} · ${periodLabel(d.periode)}`, title: d.entrepriseNom || "Sans nom", stampEl: stamp(DSTAT[st] || DSTAT.soumise), body, foot });
 }
 // Remplacement d'une déclaration par sa rectificative : l'ancienne est rejetée en gardant sa décision
@@ -6787,7 +6909,8 @@ $("#form-ent").addEventListener("submit", async e => {
   for (const x of S.declarations.filter(x => !x.entrepriseId && norm(x.entrepriseNom) === n)) await write(() => S.db.doc("declarations/" + x.id).update({ entrepriseId: ref.id }));
   $("#form-ent").reset();
   $("#e-nom").focus();
-  toast(`« ${nom} » ajoutée au registre.`);
+  const ne = S.entreprises.find(x => x.id === ref.id), dt = ne ? dettesPatron(ne) : [], pc = ne ? patronsCommuns(ne) : [];
+  toast(`« ${nom} » ajoutée au registre.` + (dt.length ? ` Son patron doit encore ${money(dt.reduce((t, o) => t + o.du, 0))} pour ${dt.map(o => o.x.nom).join(", ")}.` : pc.length ? ` Même patron que ${pc.map(o => o.x.nom).join(", ")}.` : ""), !!dt.length);
 });
 
 /* ---------- Sauvegarde ---------- */
@@ -7370,6 +7493,21 @@ function echeancierSection(d, reopen) {
 
 /* ---------- Fiche entreprise ---------- */
 const PEN_MOTIFS = ["Retard de déclaration", "Défaut de déclaration", "Défaut de paiement", "Fausse déclaration", "Obstruction à un contrôle", "Travail non déclaré", "Autre"];
+// Fiche : agents de la Préfecture liés, autres entreprises du même patron, salariés repris ou partagés.
+function liensSection(e) {
+  if (!e || !e.id) return null;
+  const items = [];
+  for (const x of agentsLies(e)) items.push([`${x.f.nom}, agent de la Préfecture${x.f.grade ? " (" + x.f.grade + ")" : ""}`, ROLE_LIEN[x.role] + (x.periode ? " · " + periodPlain(x.periode).toLowerCase() : "") + " · ne doit pas traiter ses dossiers", ["Conflit d’intérêts", estMoi(x.f) ? "bad" : "warn"]]);
+  const du = new Map(dettesPatron(e).map(o => [o.x.id, o.du]));
+  for (const o of patronsCommuns(e)) items.push([`Même patron que ${o.x.nom}`, [o.nom, o.x.actif === false ? "fermée" : "en activité", du.get(o.x.id) ? "doit encore " + money(du.get(o.x.id)) : null].filter(Boolean).join(" · "), du.get(o.x.id) ? ["Dette", "bad"] : null, o.x]);
+  for (const o of repriseDe(e)) items.push([`Reprend des salariés de ${o.x.nom}`, o.noms.join(", "), ["Reprise", "warn"], o.x]);
+  const last = declsVivantes(e)[0];
+  if (last) for (const o of salariesPartages(last)) items.push([`Salariés aussi chez ${o.x.nom}`, `${o.noms.join(", ")} · ${periodPlain(last.periode).toLowerCase()}`, null, o.x]);
+  if (!items.length) return null;
+  return sec("Liens à vérifier", h("ul", { class: "ent-list" }, items.map(([t, m, c, x]) => h("li", {},
+    h("div", { style: "min-width:0" }, x && x.id ? h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x), text: t }) : h("span", { style: "font-weight:600", text: t }), h("span", { class: "meta", text: m })),
+    c ? chip(c) : h("span", {}), h("span", {})))));
+}
 function openFiche(e, opts) {
   opts = opts || {};
   const sm = entSummary(e, lastClosedKey());
@@ -7459,6 +7597,7 @@ function openFiche(e, opts) {
     })() : null,
     (() => { const x = exoSituation(e); return x ? h("div", { class: "exo-line" }, h("strong", { text: "Exonération :" }), chip([x.text, x.tone])) : null; })(),
     relancesSection(e, reopen),
+    liensSection(e),
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r }))),
       writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
@@ -12007,6 +12146,7 @@ function openControle(id) {
   const cvs = (S.convocations || []).filter(x => x.controleId === id).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   if (cvs.length) body.push(sec("Convocations", h("ul", { class: "ent-list" }, cvs.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(x.id), text: `${convNo(x)} · ${convWhen(x)}` }), h("span", { class: "meta", text: x.lieu || "" })), chip(convState(x)), h("span", {}))))));
   if (ag && (c.statut === "ouvert" || c.statut === "propose")) foot.splice(foot.findIndex(b => b.classList && b.classList.contains("spacer")), 0, h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(entOf(c0), { motif: "controle", controleId: id }), text: "Convoquer" }));
+  { const n = lienAgentNotice(entOf(c)); if (n) body.unshift(n); }
   openDialog({ eyebrow: `Contrôle fiscal ${dossierNo("CF", id)} · ouvert le ${fmtDate(new Date(c.ouvertLe))}${c.inspecteur ? " · " + c.inspecteur : ""}`, title: c.entrepriseNom, wide: true, stampEl: stamp(ctrlState(c)), body, foot });
 }
 // Clôture d'un contrôle qui part à la justice, avec, au besoin, la fermeture administrative de
@@ -13420,7 +13560,6 @@ function couvertures(e) {
 const couvert = (e, t0, t1) => couvertures(e).some(([a, b]) => a <= t0 && b >= t1);
 const semaineCouverte = (e, k) => { const b = bounds(k); return !!b && couvert(e, b.start.getTime(), b.end.getTime()); };
 // Argent versé au patron (ou à un co-gérant) depuis le compte de l'entreprise : abus de biens sociaux possible.
-const patronsDe = e => String(e.patron || "").split(/\s*(?:[,/&;+]|\bet\b)\s*/i).map(x => x.trim()).filter(Boolean);
 function signauxPatron(e) {
   const noms = patronsDe(e);
   if (!noms.length) return [];

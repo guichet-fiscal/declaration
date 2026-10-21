@@ -166,12 +166,17 @@ Une déclaration est signalée quand :
 - elle déclare des salariés à 0 € ;
 - elle est déclarée par quelqu’un d’autre que le patron inscrit sur la fiche (un titre comme « PDG », les majuscules ou une faute d’une lettre ne comptent pas ; des co-gérants s’inscrivent dans le champ Patron, séparés par une virgule) ;
 - l’entreprise a été en retard au moins deux fois sur ses quatre dernières déclarations.
+- un de ses salariés est aussi déclaré par une autre entreprise la même semaine (nom et prénom, une lettre près) ;
+- elle est exonérée alors que son patron dirigeait déjà une autre entreprise, ou qu’elle reprend au moins la moitié des salariés (deux au moins) d’une entreprise qui les déclarait dans les cinq semaines avant son ouverture (« Exonération à vérifier ») ;
+- son patron doit encore de l’argent pour une autre entreprise, plus ancienne ou fermée (« Patron débiteur »).
 
 S’y ajoutent les signaux de la surveillance des comptes (voir plus bas), dont : perte déclarée alors que le compte a grossi sur la période ; fonds de départ à justifier (dès la première déclaration, plus d’argent sur le compte que le bénéfice déclaré et le fonds de départ habituel, 50 000 € par défaut, au-delà de l’écart d’alerte ; sur le serveur, ce fonds de départ est un prêt que l’entreprise rembourse ensuite) ; semaine déclarée sans activité alors que des mouvements ont été vus sur le compte.
 
 **Pas d’activité cette semaine** : une case du formulaire (et de l’espace entreprise) met tout à zéro. Un message Discord qui dit « pas d’activité » ou « aucune activité » la coche. Une déclaration à zéro partout compte aussi comme sans activité.
 
 **Autres noms** : sur la fiche d’une entreprise (Modifier), les noms sous lesquels elle apparaît en jeu (« Bahama Mamas » pour Bahamas, par exemple), séparés par des virgules. Ils servent à la reconnaître dans les messages collés et dans les mouvements des comptes des autres entreprises, même mal lus sur une capture (une ou deux lettres près).
+
+**Liens à vérifier** : sur la fiche, les agents de la Préfecture liés à l’entreprise (patron, salarié déclaré ou déclarant, d’après le registre des fonctionnaires), les autres entreprises du même patron (en activité ou fermées, avec ce qu’elles doivent encore), les salariés repris d’une autre entreprise et ceux qu’une autre entreprise déclare aussi. Une entreprise liée à un agent affiche un bandeau dans ses déclarations et ses contrôles : l’agent concerné y lit « Vous êtes lié à cette entreprise », et doit confier le dossier à un autre agent. À l’inscription d’une entreprise au registre, le guichet prévient si son patron doit encore de l’argent pour une autre.
 
 **Rouvrir un contrôle** classé sans suite par erreur : bouton « Rouvrir le contrôle » sur le contrôle, avec un motif obligatoire, ajouté aux notes. Les avis non payés redeviennent suspendus jusqu’à la fin du contrôle.
 
