@@ -11440,9 +11440,16 @@ const SENSIBLES_PL = { "déclaration supprimée": "déclarations supprimées", "
 async function sensiblesSemaine(key) {
   const bb = bounds(key);
   if (!bb || !S.sb || !S.connected) return null;
+  // Par pages de 1 000 lignes (le plus que la base renvoie d'un coup), dix au plus.
   try {
-    const { data, error } = await S.sb.from("journal").select("id,at,auteur,discord_id,action,collection,doc_id,avant,apres").gte("at", bb.start.toISOString()).lte("at", bb.end.toISOString()).order("at", { ascending: true }).limit(5000);
-    return error ? null : actionsSensibles(data);
+    const rows = [];
+    for (let i = 0; i < 10; i++) {
+      const { data, error } = await S.sb.from("journal").select("id,at,auteur,discord_id,action,collection,doc_id,avant,apres").gte("at", bb.start.toISOString()).lte("at", bb.end.toISOString()).order("at", { ascending: true }).order("id", { ascending: true }).range(i * 1000, i * 1000 + 999);
+      if (error) return null;
+      rows.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    return actionsSensibles(rows);
   } catch (_) { return null; }
 }
 // Résumé par agent : « 2 alertes classées, 1 contrôle classé sans suite ».
