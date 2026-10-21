@@ -712,6 +712,26 @@ header.top{position:relative}
 .reasons.done .reason{opacity:.6;text-decoration:line-through;text-decoration-color:var(--ink-3)}
 /* surveillance des comptes */
 .proof-img{display:block;max-width:220px;max-height:140px;border:1px solid var(--rule);border-radius:6px;object-fit:contain;background:var(--field)}
+/* Relevé de compte : capture collée, mouvements lus */
+.rv-zone{display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap;border:1.5px dashed var(--rule);border-radius:10px;padding:14px 16px;background:var(--field);cursor:pointer}
+.rv-zone:focus-visible,.rv-zone.on{border-color:var(--accent);outline:none;background:var(--accent-soft)}
+.rv-zone strong{font-size:15px}
+.rv-zone .hint{margin:0;flex:1 1 260px}
+.rv-cap{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start}
+.rv-cap .proof-img{max-width:280px;max-height:300px}
+@media (max-width:680px){.rv-cap{grid-template-columns:minmax(0,1fr)}}
+.rv-etat{margin:0}
+.mv-head,.mv-row{display:grid;grid-template-columns:8.4em minmax(0,1fr) 9.5em 32px;gap:8px;align-items:center}
+.mv-head{font-size:12.5px;font-weight:650;color:var(--ink-2)}
+.mv-rows{display:grid;gap:6px}
+.mv-row input{padding:7px 9px;font-size:14px}
+.mv-row [data-k=t]{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.mv-row.a-verifier input,input.a-verifier{background:var(--warn-soft);border-color:var(--warn)}
+@media (max-width:560px){.mv-head{display:none}.mv-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 32px}.mv-row [data-k=lib]{grid-column:1/-1;order:-1}}
+.mv-amt{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mv-amt.out{color:var(--bad)}.mv-amt.in{color:var(--ok)}
+tr.mv-sus td{background:var(--bad-soft)}
+.conc-ok{color:var(--ok)}.conc-bad{color:var(--bad);font-weight:600}
 .mini-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px;font-weight:650}
 /* v10 : interface modernisée. Le bandeau bleu nuit porte l'identité ; le reste se tait. */
 header.top{background:var(--bar);border-bottom:0;color:var(--bar-ink)}
@@ -2064,6 +2084,9 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
                 <div class="field"><label for="bl-plafond">Dépôt d’argent sale possible par employé et par jour</label><div class="money" data-cur="€"><input id="bl-plafond" type="number" min="0" step="1000"></div><span class="hint">Règle du serveur : sert à repérer les écarts qui lui ressemblent.</span></div>
               </div>
               <label class="switch" for="bl-oblig"><input type="checkbox" id="bl-oblig"> Exiger le solde du compte dans chaque déclaration (sinon, alerte)</label>
+              <div class="row2" style="align-items:end">
+                <div class="field"><label for="bl-fenetre">Relevé sans mouvements : écart maximal avec le dépôt</label><div class="money" data-cur="h"><input id="bl-fenetre" type="number" min="0" max="72" step="1"></div><span class="hint">Quand les mouvements du relevé ne remontent pas jusqu’au dépôt de la déclaration, son solde n’est comparé au solde déclaré que s’ils sont aussi proches. Les recettes arrivent surtout le soir.</span></div>
+              </div>
               <div class="paste-row">
                 <button class="btn" type="button" id="bl-save">Enregistrer</button>
                 <span id="bl-msg" class="hint" aria-live="polite"></span>
@@ -5384,11 +5407,13 @@ function openDecl(id) {
       h("tbody", {}, d.detail.salaries.map((x, i) => h("tr", {}, h("td", { text: x.nom || "Salarié " + (i + 1) }), h("td", { class: "num", text: money(x.salaire) }), h("td", { class: "num", text: money(x.cotisation) }), h("td", { class: "num", text: pct(x.taux) }))))))));
   }
   if (blc().actif && (hasSolde(d) || d.soldePreuve || (registered && relevesOf(entOf(d)).length))) {
-    const ex = ecartDe(entOf(d), d.periode), mine = !ex.cur.d || ex.cur.d.id === d.id;
+    const ex = ecartDe(entOf(d), d.periode), mine = !ex.cur.d || ex.cur.d.id === d.id, vsol = verifSolde(d);
     body.push(sec("Compte de l’entreprise", kv([
       ["Solde déclaré", hasSolde(d) ? money(d.solde) : "non déclaré"],
       ["Capture", proofEl(d.soldePreuve)],
-      mine && ex.cur.rel ? ["Relevé par " + (ex.cur.rel.agent || "un agent"), `${money(ex.cur.rel.montant)} le ${fmtDateTime(new Date(ex.cur.rel.at))}`] : null,
+      mine && ex.cur.source === "mouvements" ? ["Solde en fin de période", `${money(ex.cur.pos)}, reconstitué avec les mouvements du relevé ${dossierNo("RC", ex.cur.rel.id)} (${ex.cur.rel.agent || "agent"})`]
+        : mine && ex.cur.rel ? ["Relevé par " + (ex.cur.rel.agent || "un agent"), `${money(ex.cur.rel.montant)} le ${fmtDateTime(new Date(ex.cur.rel.at))}${ex.cur.approche ? ` · ${money(ex.cur.pos)} une fois retirés les mouvements postérieurs à la période` : ""}`] : null,
+      vsol ? ["Solde au moment du dépôt", `${money(vsol.attendu)} ${vsol.exact ? `d’après les mouvements du relevé ${dossierNo("RC", vsol.rel.id)}` : `relevé le ${fmtDateTime(new Date(vsol.rel.at))}`} · ${vsol.ok ? "concorde avec le solde déclaré" : "ne concorde pas avec le solde déclaré"}`, vsol.ok ? null : "neg"] : null,
       mine && ex.attendu != null ? ["Solde attendu", money(ex.attendu)] : null,
       mine && ex.ecart != null ? ["Écart inexpliqué", (ex.ecart > 0 ? "+" : "") + money(ex.ecart), "tot"] : null])));
   }
@@ -12235,13 +12260,14 @@ async function buildJusticePdf(t, e) {
     const notes = (c.notes || []).slice().sort((a, b) => String(a.at).localeCompare(String(b.at)));
     if (notes.length) { pw.p("Instruction :", { bold: true, after: 4 }); pw.bullets(notes.map(n => `${fmtDate(new Date(n.at))} · ${n.auteur || "—"} : ${n.texte}`), { size: 20 }); }
   }
-  const syn = blc().actif ? comptesSynthese(e, 8).filter(x => x.cur.pos != null) : [];
-  if (syn.length || (t.qualifs || []).includes("blanchiment")) {
+  const syn = blc().actif ? comptesSynthese(e, 8).filter(x => x.cur.pos != null) : [], msig = blc().actif ? mvtSignals(e) : [];
+  if (syn.length || msig.length || (t.qualifs || []).includes("blanchiment")) {
     pw.h2(`${++sn}. Compte de l’entreprise`);
     pw.p("Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un relevé fait par un agent fait foi face au solde déclaré.", { size: 18, color: pw.ink2 });
-    if (!syn.length) pw.p("Aucun solde observé entre deux déclarations : les opérations en cause figurent dans les pièces des contrôles, en annexe.", { size: 19 });
+    if (!syn.length) pw.p(msig.length ? "Aucun solde observé entre deux déclarations." : "Aucun solde observé entre deux déclarations : les opérations en cause figurent dans les pièces des contrôles, en annexe.", { size: 19 });
     if (syn.length) pw.table([{ t: "Période", w: 1 }, { t: "Solde retenu", w: 1.2, num: true }, { t: "Source", w: 1.3 }, { t: "Attendu", w: 1.2, num: true }, { t: "Écart", w: 1.1, num: true }],
-      syn.map(x => [periodPlain(x.k), money(x.cur.pos), x.cur.source === "releve" ? `relevé (${x.cur.rel.agent || "agent"})` : "déclaré", x.attendu != null ? money(x.attendu) : "—", x.ecart != null ? (x.ecart > 0 ? "+" : "") + money(x.ecart) : "—"]));
+      syn.map(x => [periodPlain(x.k), money(x.cur.pos), x.cur.source === "mouvements" ? `mouvements du relevé ${dossierNo("RC", x.cur.rel.id)}` : x.cur.source === "releve" ? `relevé (${x.cur.rel.agent || "agent"})` : "déclaré", x.attendu != null ? money(x.attendu) : "—", x.ecart != null ? (x.ecart > 0 ? "+" : "") + money(x.ecart) : "—"]));
+    if (msig.length) { pw.p("Mouvements suspects relevés sur le compte par les agents :", { bold: true, after: 4 }); pw.bullets(msig.slice(0, 12).map(x => x.texte), { size: 19 }); }
     const sp = soupconsOf(e);
     if (sp.length) pw.p("Déclarations de soupçon : " + sp.map(x => `${dossierNo("DS", x.id)} du ${fmtDate(new Date(x.at))} (${money(x.montant)})`).join(", ") + ".", { bold: true });
   }
@@ -12880,13 +12906,13 @@ function pretsSection(e) {
 
 /* ---------- Surveillance des comptes (lutte contre le blanchiment) ---------- */
 // Sur le serveur, chaque employé peut déposer chaque jour de l'argent sale sur le compte de
-// l'entreprise. On ne voit pas les mouvements du compte, seulement son solde : la Direction
+// l'entreprise. On voit le solde du compte et ses 10 derniers mouvements : la Direction
 // rapproche donc le solde réel de ce que les déclarations expliquent. Solde de fin de période
 // = solde précédent + chiffre d'affaires − charges − salaires − impôts et pénalités payés.
 // Ce qui dépasse est un enrichissement inexpliqué. Comme dans la réalité, l'entreprise doit
 // en justifier l'origine ; à défaut, il est imposé d'office (art. L16 et L69 du LPF) et le
 // soupçon peut être signalé (sur le modèle de TRACFIN, art. L561-15 du CMF).
-function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false }, cfg().blanchiment || {}); }
+function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8 }, cfg().blanchiment || {}); }
 function relevesOf(e) { return (S.releves || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function soupconsOf(e) { return (S.soupcons || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function periodDays(k) { const b = bounds(k); return b ? Math.max(1, Math.round((b.end.getTime() - b.start.getTime()) / 864e5)) : 7; }
@@ -12912,15 +12938,23 @@ function releveFor(e, k) {
   return relevesOf(e).map(r => ({ r, t: new Date(r.at).getTime() })).filter(x => Number.isFinite(x.t) && x.t >= w.from && x.t <= w.to && near(x.t))
     .sort((a, b) => Math.abs(a.t - w.end) - Math.abs(b.t - w.end))[0] || null;
 }
+// Quand les mouvements d'un relevé remontent jusqu'à la fin de la période, le solde de fin de période
+// est reconstitué exactement (source « mouvements ») ; sinon, le relevé le plus proche sert, corrigé
+// des mouvements lus qui sont postérieurs à la fin de la période.
 function compteDe(e, k) {
   const d = periodDecl(e, k), w = releveWindow(k);
   if (!w) return { d, decl: null, rel: null, pos: null, t: null, source: null };
-  const rx = releveFor(e, k), rel = rx ? rx.r : null;
   const dep = d && d.depotAt ? new Date(d.depotAt).getTime() : null;
   const decl = hasSolde(d) ? Number(d.solde) : null;
   const declT = dep && Number.isFinite(dep) ? dep : w.end;
   const declOk = decl != null && declT <= w.to;
-  if (rel) return { d, decl, rel, pos: Number(rel.montant) || 0, t: rx.t, declT, source: "releve" };
+  const ex = soldeA(e, w.end);
+  if (ex) return { d, decl, rel: ex.r, pos: ex.v, t: w.end, declT, source: "mouvements" };
+  const rx = releveFor(e, k), rel = rx ? rx.r : null;
+  if (rel) {
+    const apres = mvtsRel(rel).filter(m => m.t > w.end).reduce((s, m) => s + m.montant, 0);
+    return { d, decl, rel, pos: (Number(rel.montant) || 0) - apres, t: apres ? w.end : rx.t, declT, source: "releve", approche: !!apres };
+  }
   return { d, decl, rel: null, pos: declOk ? decl : null, t: declOk ? declT : null, declT, source: declOk ? "declare" : null, late: decl != null && !declOk };
 }
 // Impôts, échéances et pénalités payés entre deux observations : ils sont sortis du compte.
@@ -12994,8 +13028,12 @@ function blanchimentSignals(d) {
   if (cur.d && cur.d.id !== d.id) return [];
   const out = [];
   if (c.soldeObligatoire && cur.decl == null && !cur.rel) out.push("Solde du compte non déclaré");
-  if (cur.rel && cur.decl != null && cur.declT != null && Math.abs(cur.declT - new Date(cur.rel.at).getTime()) <= 864e5 && Math.abs(cur.decl - Number(cur.rel.montant)) > Math.max(1000, Math.abs(Number(cur.rel.montant)) * 0.02))
-    out.push(`Solde déclaré inexact : ${money(cur.decl)} déclarés, ${money(cur.rel.montant)} relevés par ${cur.rel.agent || "un agent"}`);
+  const vs = verifSolde(d);
+  if (vs && !vs.ok) out.push(`Solde déclaré inexact : ${money(vs.decl)} déclarés, ${money(vs.attendu)} sur le compte ${vs.exact ? `au moment du dépôt (mouvements du relevé ${dossierNo("RC", vs.rel.id)})` : `d’après le relevé de ${vs.rel.agent || "un agent"} (${fmtDateTime(new Date(vs.rel.at))})`}`);
+  // Mouvements suspects de la période et recoupement avec ce qui est déclaré.
+  const pb = bounds(d.periode);
+  for (const s of mvtSignals(e)) if (s.t >= pb.start.getTime() && s.t <= pb.end.getTime()) out.push(s.texte);
+  out.push(...mvtsSemaine(e, d));
   const x = ecartDe(e, d.periode);
   if (x.ecart != null) {
     if (x.ecart > c.seuil) {
@@ -13033,7 +13071,151 @@ function suspects() {
     return { e, rows, ecarts, total: ecarts.filter(x => x.ecart > 0).reduce((t, x) => t + x.ecart, 0) };
   }).filter(x => x.rows.length).sort((a, b) => b.total - a.total || b.rows.length - a.rows.length);
 }
-function isBlSignal(s) { return /^(Solde du compte non déclaré|Solde déclaré inexact|Enrichissement inexpliqué|Écart proche|Écart égal|Sorties d’argent inexpliquées|Chiffre d’affaires par salarié|Chiffre d’affaires multiplié)/.test(s); }
+function isBlSignal(s) { return /^(Solde du compte non déclaré|Solde déclaré inexact|Enrichissement inexpliqué|Écart proche|Écart égal|Sorties d’argent inexpliquées|Chiffre d’affaires par salarié|Chiffre d’affaires multiplié|Gros encaissement en espèces|Aller-retour|Dépôts répétés|Salaires vus|Recettes vues)/.test(s); }
+
+/* ---------- Mouvements du compte ---------- */
+// Chaque relevé garde le solde et les derniers mouvements affichés par la tablette. Ensemble, ils
+// donnent l'historique du compte : le solde à un instant passé se reconstitue en retirant du solde
+// relevé les mouvements postérieurs, tant que le plus ancien mouvement lu remonte jusque-là.
+function mvtsRel(r) {
+  return (r && Array.isArray(r.mouvements) ? r.mouvements : []).map(m => ({ t: new Date(m.t).getTime(), montant: Number(m.montant), libelle: String(m.libelle || ""), r }))
+    .filter(m => Number.isFinite(m.t) && Number.isFinite(m.montant) && m.montant !== 0).sort((a, b) => b.t - a.t);
+}
+const mvtKey = m => Math.floor(m.t / 6e4) + "|" + Math.round(m.montant * 100);
+let mvtCache = { src: null, sig: "", map: new Map() };
+function mvtMemo(k, fn) {
+  const sig = JSON.stringify(blc());
+  if (mvtCache.src !== S.releves || mvtCache.sig !== sig) mvtCache = { src: S.releves, sig, map: new Map() };
+  if (!mvtCache.map.has(k)) mvtCache.map.set(k, fn());
+  return mvtCache.map.get(k);
+}
+// Historique du compte, tous relevés confondus : un mouvement vu sur plusieurs relevés ne compte qu'une fois.
+function mvtsOf(e) {
+  return mvtMemo("mv:" + (e.id || norm(e.nom)), () => {
+    const best = new Map();
+    for (const r of relevesOf(e)) {
+      const par = new Map();
+      for (const m of mvtsRel(r)) { const k = mvtKey(m); if (!par.has(k)) par.set(k, []); par.get(k).push(m); }
+      for (const [k, l] of par) if (!best.has(k) || best.get(k).length < l.length) best.set(k, l);
+    }
+    return [...best.values()].flat().sort((a, b) => b.t - a.t);
+  });
+}
+// Solde du compte à l'instant t, reconstitué avec le premier relevé postérieur qui le couvre.
+function soldeA(e, t) {
+  let best = null;
+  for (const r of relevesOf(e)) {
+    const T = new Date(r.at).getTime(), s0 = Number(r.montant);
+    if (!Number.isFinite(T) || !Number.isFinite(s0) || T < t - 6e4) continue;
+    const mv = mvtsRel(r);
+    let v;
+    if (T <= t + 6e4 && !mv.some(m => m.t > t)) v = s0;
+    else if (mv.length && mv[mv.length - 1].t <= t) v = s0 - mv.filter(m => m.t > t).reduce((s, m) => s + m.montant, 0);
+    else continue;
+    if (!best || T < best.T) best = { r, T, v: Math.round(v * 100) / 100 };
+  }
+  return best;
+}
+// Le solde déclaré avec la déclaration correspond-il au compte au moment du dépôt ?
+function verifSolde(d) {
+  if (!hasSolde(d) || !d.depotAt) return null;
+  const e = entOf(d), tD = new Date(d.depotAt).getTime();
+  if (!e.id || !Number.isFinite(tD)) return null;
+  const decl = Number(d.solde), ex = soldeA(e, tD);
+  if (ex) {
+    // Le message a pu être écrit un peu avant le dépôt : un solde affiché dans les trois heures précédentes convient.
+    const mv = mvtsRel(ex.r), s0 = Number(ex.r.montant), a = x => s0 - mv.filter(m => m.t > x).reduce((s, m) => s + m.montant, 0);
+    const vals = [ex.v].concat(mv.filter(m => m.t <= tD && m.t > tD - 3 * 36e5).map(m => a(m.t - 1)));
+    return { ok: vals.some(v => Math.abs(v - decl) <= Math.max(100, Math.abs(v) * 0.005)), attendu: ex.v, rel: ex.r, exact: true, decl, tD };
+  }
+  // Sans mouvements qui remontent jusqu'au dépôt : le relevé le plus proche, s'il est assez proche.
+  const fen = Math.max(0, Number(blc().fenetreH) || 0) * 36e5;
+  const near = relevesOf(e).map(r => ({ r, T: new Date(r.at).getTime(), mv: mvtsRel(r) }))
+    .filter(x => Number.isFinite(x.T) && Math.abs(x.T - tD) <= fen && !(x.T > tD && x.mv.length >= 10))
+    .sort((a, b) => Math.abs(a.T - tD) - Math.abs(b.T - tD))[0];
+  if (!near) return null;
+  const v = Number(near.r.montant) - (near.T > tD ? near.mv.filter(m => m.t > tD).reduce((s, m) => s + m.montant, 0) : 0);
+  return { ok: Math.abs(decl - v) <= Math.max(1000, Math.abs(v) * 0.02), attendu: v, rel: near.r, exact: false, decl, tD };
+}
+// Concordance d'un relevé avec le précédent : les mouvements lus doivent expliquer la différence de solde.
+function concordance(e, solde, T, mv, exclId) {
+  const q = relevesOf(e).find(x => x.id !== exclId && new Date(x.at).getTime() < T - 6e4);
+  if (!q || !Number.isFinite(Number(solde))) return null;
+  const Tq = new Date(q.at).getTime(), vus = mv.filter(m => m.t > Tq), net = Number(solde) - Number(q.montant) - vus.reduce((s, m) => s + m.montant, 0);
+  const complet = mv.length > 0 && Math.min(...mv.map(m => m.t)) <= Tq;
+  return { q, complet, ecart: Math.round(net * 100) / 100, vus: vus.length };
+}
+function concordanceTexte(c) {
+  if (!c) return null;
+  const q = `${dossierNo("RC", c.q.id)} du ${fmtDateTime(new Date(c.q.at))}`;
+  if (c.complet) return Math.abs(c.ecart) < 1 ? { ok: true, texte: `Concorde avec le relevé ${q} : aucun mouvement ne manque.` }
+    : { ok: false, texte: `Ne concorde pas avec le relevé ${q} : ${(c.ecart > 0 ? "+" : "") + money(c.ecart)} d’écart. Vérifiez le solde et les montants lus.` };
+  if (!c.vus) return { ok: null, texte: `Depuis le relevé ${q} : ${(c.ecart > 0 ? "+" : "") + money(c.ecart)} sur le compte, mouvements non relevés.` };
+  return Math.abs(c.ecart) < 1 ? { ok: true, texte: `Concorde avec le relevé ${q} : les mouvements lus expliquent toute la différence.` }
+    : { ok: null, texte: `Depuis le relevé ${q}, des mouvements plus anciens que ceux lus ici n’ont pas été vus (${(c.ecart > 0 ? "+" : "") + money(c.ecart)} au total). Relevez plus souvent pour tout voir.` };
+}
+const CASH_RE = /\bcash\b|esp[eè]ces/i, SALAIRE_RE = /salaire|\bprimes?\b|\bpaies?\b/i, NON_RECETTE_RE = /rembours|\bpr[eê]ts?\b|subvention|\baides?\b/i;
+const quandMvt = t => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} à ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const delaiMvt = ms => ms < 36e5 ? `${Math.max(1, Math.round(ms / 6e4))} min` : `${Math.floor(ms / 36e5)} h ${pad(Math.round(ms % 36e5 / 6e4))}`;
+// Libellé court : « Reçu de · Facture reçue (cash) — Bahama Mamas » → « Facture reçue (cash) — Bahama Mamas ».
+function libCourt(lib) {
+  const p = String(lib || "").split(" · ").map(x => x.trim()).filter(x => x && !/^(re[çc]u de|vers\b.*|virement)$/i.test(x));
+  const t = (p.length ? p : [String(lib || "")]).join(" · ");
+  return t.length > 48 ? t.slice(0, 46) + "…" : t;
+}
+// Mouvements suspects : gros encaissement en espèces, argent qui entre et ressort aussitôt,
+// dépôts répétés juste sous le plafond quotidien.
+function signauxMouvements(list) {
+  const c = blc(), seuil = Math.max(1, Number(c.seuil) || 10000), pl = Number(c.plafond) || 0;
+  const mv = list.slice().sort((a, b) => a.t - b.t), out = [];
+  for (const m of mv) if (m.montant >= seuil && CASH_RE.test(m.libelle)) out.push({ t: m.t, type: "especes", mvts: [m], texte: `Gros encaissement en espèces : ${money(m.montant)} le ${quandMvt(m.t)} (${libCourt(m.libelle)})` });
+  const pris = new Set(), min = Math.max(1000, seuil / 2);
+  for (let i = 0; i < mv.length; i++) {
+    const a = mv[i];
+    if (pris.has(a) || Math.abs(a.montant) < min || /rembours/i.test(a.libelle)) continue;
+    for (let j = i + 1; j < mv.length && mv[j].t - a.t <= 864e5; j++) {
+      const b = mv[j];
+      if (pris.has(b) || Math.sign(b.montant) === Math.sign(a.montant) || Math.abs(a.montant + b.montant) > Math.abs(a.montant) * 0.02 || /rembours/i.test(b.libelle)) continue;
+      pris.add(a); pris.add(b);
+      out.push({ t: b.t, type: "allerRetour", mvts: [a, b], texte: `Aller-retour : ${money(Math.abs(a.montant))} ${a.montant > 0 ? "entrés" : "sortis"} le ${quandMvt(a.t)} (${libCourt(a.libelle)}), ${a.montant > 0 ? "ressortis" : "revenus"} ${delaiMvt(b.t - a.t)} plus tard (${libCourt(b.libelle)})` });
+      break;
+    }
+  }
+  if (pl > 0) {
+    const pres = mv.filter(m => m.montant >= pl * 0.85 && m.montant <= pl);
+    for (let i = 0; i < pres.length;) {
+      const g = pres.filter(m => m.t >= pres[i].t && m.t - pres[i].t <= 864e5);
+      if (g.length >= 3) {
+        const vs = g.map(m => m.montant);
+        out.push({ t: g[g.length - 1].t, type: "plafond", mvts: g, texte: `Dépôts répétés proches du plafond : ${g.length} entrées de ${money(Math.min(...vs))} à ${money(Math.max(...vs))} en moins de 24 h, à partir du ${quandMvt(g[0].t)}` });
+        i += g.length;
+      } else i++;
+    }
+  }
+  return out.sort((a, b) => b.t - a.t);
+}
+const mvtSignals = e => mvtMemo("sig:" + (e.id || norm(e.nom)), () => signauxMouvements(mvtsOf(e)));
+// Ce que le compte montre pendant la période, face à la déclaration : les mouvements lus ne sont
+// qu'une partie de la période, ce qui dépasse le déclaré est donc certain.
+function mvtsSemaine(e, d) {
+  const b = bounds(d.periode);
+  if (!b) return [];
+  const mv = mvtsOf(e).filter(m => m.t >= b.start.getTime() && m.t <= b.end.getTime());
+  if (!mv.length) return [];
+  const out = [], marge = x => Math.max(1000, x * 0.05), v = retenuDe(d);
+  const sal = -mv.filter(m => m.montant < 0 && SALAIRE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
+  if (sal > v.ms + marge(v.ms)) out.push(`Salaires vus sur le compte : ${money(sal)} versés, plus que la masse salariale déclarée (${money(v.ms)})`);
+  const enc = mv.filter(m => m.montant > 0 && !NON_RECETTE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
+  if (enc > v.ca + marge(v.ca)) out.push(`Recettes vues sur le compte : ${money(enc)} encaissés, plus que le chiffre d’affaires déclaré (${money(v.ca)})`);
+  return out;
+}
+// Entreprise reconnue à son RIB, lu sur un relevé précédent.
+function entParRib(rib) {
+  if (!rib) return null;
+  const r = (S.releves || []).filter(x => x.rib === rib && x.entrepriseId).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
+  const e = r && S.entreprises.find(x => x.id === r.entrepriseId);
+  return e && e.actif !== false ? e : null;
+}
 
 // Pièce jointe (capture ou lien) : affichage dans une fenêtre.
 function proofEl(p) {
@@ -13056,39 +13238,413 @@ async function uploadProof(prefix, file) {
 }
 function linkProof(url) { const u = String(url || "").trim(); return /^https?:\/\/\S+$/i.test(u) ? { type: "lien", url: u } : null; }
 
-// Relevé de compte fait par un agent (il prend le job pour voir le compte de l'entreprise).
-function openReleve(e, back) {
+/* ---------- Lecture du compte bancaire (capture de la tablette ou texte collé) ---------- */
+// La tablette du jeu affiche le solde, le RIB et les 10 derniers mouvements : un titre, un détail
+// avec la date (« Virement · 13/10 03:54 ») et le montant dans une pastille rouge (sortie) ou verte
+// (entrée). Les pastilles donnent les lignes et le sens ; la reconnaissance de texte (Tesseract,
+// chargé à la première capture) lit chaque ligne. Tout reste modifiable avant l'enregistrement.
+const OCR_CDN = {
+  lib: "https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js",
+  sri: "sha384-r1ru3tcf6FhnCFR4B7pIFG+BhFF9LlFtz/P1y4pblWn3AGs9y3lBx5SKLNf4+rED",
+  worker: "https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/worker.min.js",
+  core: "https://cdn.jsdelivr.net/npm/tesseract.js-core@6.1.2",
+  lang: "https://cdn.jsdelivr.net/npm/@tesseract.js-data/fra@1.0.0/4.0.0_best_int"
+};
+function chargerScript(src, sri) {
+  return new Promise((ok, ko) => {
+    const s = document.createElement("script");
+    s.src = src; s.crossOrigin = "anonymous"; if (sri) s.integrity = sri;
+    s.onload = ok; s.onerror = () => ko(new Error("Le lecteur de captures ne s’est pas chargé : vérifiez la connexion, ou recopiez les mouvements."));
+    document.head.append(s);
+  });
+}
+let ocrPret = null, ocrSuivi = null;
+function ocrWorker(suivi) {
+  ocrSuivi = suivi || null;
+  if (!ocrPret) ocrPret = (async () => {
+    if (!window.Tesseract) await chargerScript(OCR_CDN.lib, OCR_CDN.sri);
+    return window.Tesseract.createWorker("fra", 1, { workerPath: OCR_CDN.worker, corePath: OCR_CDN.core, langPath: OCR_CDN.lang, logger: m => { if (ocrSuivi) ocrSuivi(m); } });
+  })().catch(e => { ocrPret = null; throw e; });
+  return ocrPret;
+}
+async function toileDe(blob) {
+  const bmp = await createImageBitmap(blob);
+  const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+  c.getContext("2d", { willReadFrequently: true }).drawImage(bmp, 0, 0);
+  if (bmp.close) bmp.close();
+  return c;
+}
+const estRouge = (r, g, b) => r >= 135 && r - g >= 40 && r - b >= 35;
+const estVert = (r, g, b) => g >= 125 && g - r >= 40 && g - b >= 15;
+const estBleu = (r, g, b) => b >= 120 && b - r >= 50 && b - g >= 15;
+// Découpe agrandie, en niveaux de gris inversés (texte foncé sur fond clair) : ce que l'OCR lit le mieux.
+// Les pixels bleus (l'icône de la banque) sont effacés.
+function decoupe(c, x, y, w, h, k, sansBleu) {
+  x = Math.max(0, Math.floor(x)); y = Math.max(0, Math.floor(y));
+  w = Math.max(1, Math.min(c.width - x, Math.ceil(w))); h = Math.max(1, Math.min(c.height - y, Math.ceil(h)));
+  const o = document.createElement("canvas"); o.width = Math.max(1, Math.round(w * k)); o.height = Math.max(1, Math.round(h * k));
+  const g = o.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(c, x, y, w, h, 0, 0, o.width, o.height);
+  const im = g.getImageData(0, 0, o.width, o.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (sansBleu && estBleu(d[i], d[i + 1], d[i + 2])) { d[i] = d[i + 1] = d[i + 2] = 255; continue; }
+    const v = 255 - (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+    const s = v > 175 ? 255 : v < 95 ? 0 : Math.round((v - 95) * 255 / 80);
+    d[i] = d[i + 1] = d[i + 2] = s;
+  }
+  g.putImageData(im, 0, 0);
+  return o;
+}
+// Les montants sont dans des pastilles rouges (sorties) ou vertes (entrées), alignées à droite.
+function pastilles(c) {
+  const W = c.width, H = c.height, d = c.getContext("2d").getImageData(0, 0, W, H).data, x0 = Math.floor(W * 0.45);
+  const lig = [];
+  for (let y = 0; y < H; y++) {
+    let r = 0, v = 0, mn = W, mx = -1;
+    for (let x = x0; x < W; x++) {
+      const i = (y * W + x) * 4, R = d[i], G = d[i + 1], B = d[i + 2];
+      if (estRouge(R, G, B)) r++; else if (estVert(R, G, B)) v++; else continue;
+      if (x < mn) mn = x; if (x > mx) mx = x;
+    }
+    lig.push({ r, v, mn, mx });
+  }
+  const out = []; let cur = null, trou = 0;
+  for (let y = 0; y < H; y++) {
+    const l = lig[y], on = l.r + l.v >= 2;
+    if (on) {
+      if (!cur) cur = { y0: y, y1: y, r: 0, v: 0, x0: W, x1: -1 };
+      cur.y1 = y; cur.r += l.r; cur.v += l.v; cur.x0 = Math.min(cur.x0, l.mn); cur.x1 = Math.max(cur.x1, l.mx); trou = 0;
+    } else if (cur && ++trou > Math.max(2, H * 0.004)) { out.push(cur); cur = null; trou = 0; }
+  }
+  if (cur) out.push(cur);
+  let ps = out.filter(p => p.y1 - p.y0 >= Math.max(5, H * 0.006) && p.y1 - p.y0 <= H * 0.08 && p.x1 - p.x0 >= W * 0.012 && p.x1 - p.x0 <= W * 0.25 && p.r + p.v >= 25)
+    .map(p => ({ y0: p.y0, y1: p.y1, x0: p.x0, x1: p.x1, signe: p.v > p.r ? 1 : -1 }));
+  // Le reste de l'écran (jeu, interface) peut avoir du rouge ou du vert : on garde les pastilles alignées.
+  if (ps.length > 2) {
+    let best = [];
+    for (const q of ps) { const g = ps.filter(p => Math.abs(p.x1 - q.x1) <= W * 0.012); if (g.length > best.length) best = g; }
+    ps = best;
+  }
+  return ps;
+}
+// Montant écrit « -65000 € », « + 1 250,50€ », « 3 170 € ».
+function lireMontant(t) {
+  const s = String(t || "").replace(/[Oo](?=\d)|(?<=\d)[Oo]/g, "0").replace(/[lI|](?=\d{2})/g, "1");
+  const m = /([+\-−–]?)\s?(\d{1,3}(?:[\s  .'’]\d{3})+|\d+)(?:,(\d{1,2}))?\s?€/.exec(s);
+  if (!m) return null;
+  const v = Number(m[2].replace(/[^\d]/g, "")) + (m[3] ? Number(m[3]) / 100 : 0);
+  return { v, signe: m[1] ? (m[1] === "+" ? 1 : -1) : 0, index: m.index, len: m[0].length };
+}
+// Date du mouvement « 13/10 03:54 » : l'année est celle du relevé, ou la précédente si la date serait à venir.
+function lireDate(t, ref) {
+  const s = String(t || "").replace(/(?<!\p{L})[\dOo]{1,2}(?!\p{L})/gu, x => x.replace(/[Oo]/g, "0"));
+  const m = /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(?:à\s*)?(\d{1,2})\s?[:h.;,\-]?\s?(\d{2})(?!\d)/.exec(s);
+  if (!m || +m[2] < 1 || +m[2] > 12 || +m[1] < 1 || +m[1] > 31 || +m[4] > 23 || +m[5] > 59) return null;
+  const r = ref instanceof Date && Number.isFinite(ref.getTime()) ? ref : new Date();
+  const y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : r.getFullYear();
+  const dt = new Date(y, +m[2] - 1, +m[1], +m[4], +m[5]);
+  if (!m[3] && dt.getTime() > r.getTime() + 864e5) dt.setFullYear(y - 1);
+  return Number.isFinite(dt.getTime()) ? { t: dt, index: m.index, len: m[0].length } : null;
+}
+const nettoyer = t => String(t || "")
+  .replace(/^[^\p{L}\d+#(]+/u, "").replace(/[^\p{L}\d)#%]+$/u, "")
+  .replace(/\s*[—–]\s*-?\s*|\s+-\s+(?=\p{Lu})/gu, " — ").replace(/\bRecu\b/g, "Reçu").replace(/\brecue\b/g, "reçue")
+  .replace(/\s+/g, " ").trim();
+// Sens d'un mouvement d'après son libellé, quand le signe manque.
+const signeLibelle = lib => /re[çc]u|rembours|vente|encaiss/i.test(lib) ? 1 : /salaire|prime|^vers\b|paiement|commande|achat|retrait/i.test(lib) ? -1 : 0;
+function lireRib(t) {
+  const m = /RIB\s*[:.]?\s*([A-Z]{2}\s?\d{2}(?:\s?\d{3,4}){3,6})/i.exec(String(t || "").replace(/[Oo](?=\d)|(?<=\d)[Oo]/g, "0"));
+  return m ? m[1].replace(/\s+/g, "").toUpperCase() : null;
+}
+// Texte collé ou recopié : un mouvement par date ; le solde est le premier montant avant le premier mouvement.
+function mouvementsTexte(texte, ref) {
+  const lignes = String(texte || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  let solde = null, rib = null, tampon = [];
+  const out = [];
+  for (const l of lignes) {
+    if (/^(mouvements?\s+r[ée]cents?|derniers\s+mouvements)\s*:?$/i.test(l)) continue;
+    const rb = lireRib(l);
+    if (rb) { rib = rb; const avant = l.split(/rib/i)[0], m0 = lireMontant(avant); if (m0 && solde == null && !out.length) solde = m0.v; continue; }
+    const dt = lireDate(l, ref), mt = lireMontant(l);
+    if (!dt) {
+      if (!out.length && solde == null && mt && !tampon.length) { solde = mt.v; continue; }
+      if (mt && out.length && out[out.length - 1].montant == null && !tampon.length) { const p = out[out.length - 1]; p.montant = mt.v * (mt.signe || signeLibelle(p.libelle) || 1); p.douteux = !mt.signe; continue; }
+      tampon.push(l);
+      continue;
+    }
+    let titre = tampon.join(" "), montant = null, signe = 0;
+    const tm = lireMontant(titre); if (tm) { montant = tm.v; signe = tm.signe; titre = titre.slice(0, tm.index) + " " + titre.slice(tm.index + tm.len); }
+    let det = l.slice(0, dt.index) + " " + l.slice(dt.index + dt.len);
+    const dm = lireMontant(det); if (dm && montant == null) { montant = dm.v; signe = dm.signe; det = det.slice(0, dm.index) + " " + det.slice(dm.index + dm.len); }
+    const lib = [nettoyer(titre), nettoyer(det)].filter(Boolean).join(" · ");
+    out.push({ t: dt.t.toISOString(), libelle: lib, montant: montant == null ? null : montant * (signe || signeLibelle(lib) || 1), douteux: montant == null || !signe });
+    tampon = [];
+  }
+  return { solde, rib, mouvements: out };
+}
+// Les mouvements sont du plus récent au plus ancien : une date hors de cet ordre, à venir ou trop
+// ancienne est probablement mal lue.
+function verifierOrdre(mv, ref) {
+  const r = (ref instanceof Date ? ref : new Date()).getTime(), ts = mv.map(m => (m.t ? new Date(m.t).getTime() : null));
+  mv.forEach((m, i) => {
+    const t = ts[i];
+    if (t == null) return;
+    const av = ts.slice(0, i).filter(x => x != null), ap = ts.slice(i + 1).filter(x => x != null);
+    const plusRecent = av.length ? av[av.length - 1] : null, plusAncien = ap.length ? ap[0] : null;
+    if (t > r + 6e4 * 10 || t < r - 60 * 864e5 || (plusRecent != null && t > plusRecent && (plusAncien == null || plusAncien <= plusRecent)) || (plusAncien != null && t < plusAncien && (plusRecent == null || plusAncien <= plusRecent))) m.douteux = true;
+  });
+}
+// Capture de la tablette : les pastilles donnent les lignes et le sens ; l'OCR lit chaque ligne.
+async function lireCapture(blob, ref, suivi) {
+  const c = await toileDe(blob), W = c.width, H = c.height;
+  const w = await ocrWorker(suivi);
+  let conf = 100;
+  const lire = async (cv, psm, liste) => { await w.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: liste || "" }); const r = (await w.recognize(cv)).data; conf = Number(r.confidence) || 0; return r.text || ""; };
+  const p = pastilles(c);
+  if (p.length < 2) {
+    const k = Math.max(1, Math.min(3, 2000 / W));
+    const t = await lire(decoupe(c, 0, 0, W, H, k, true), 6);
+    return Object.assign(mouvementsTexte(t, ref), { mode: "texte", brut: t });
+  }
+  const d = c.getContext("2d").getImageData(0, 0, W, H).data;
+  const centres = p.map(x => (x.y0 + x.y1) / 2), ecarts = centres.slice(1).map((v, i) => v - centres[i]).sort((a, b) => a - b);
+  const pas = ecarts[Math.floor(ecarts.length / 2)], hp = p.map(x => x.y1 - x.y0).sort((a, b) => a - b)[Math.floor(p.length / 2)];
+  // Agrandissement : le texte des lignes doit mesurer une quarantaine de pixels pour l'OCR.
+  const k = Math.max(1, Math.min(4, 40 / Math.max(8, hp * 0.75)));
+  // Icône colorée de la ligne, à gauche : le texte commence juste après.
+  const icone = (yc, xmax) => {
+    let fin = -1, deb = -1;
+    for (let x = 0; x < xmax; x++) {
+      let hit = false;
+      for (let y = Math.max(0, Math.round(yc - hp * 0.5)); y <= Math.min(H - 1, yc + hp * 0.5) && !hit; y++) { const j = (y * W + x) * 4; hit = estRouge(d[j], d[j + 1], d[j + 2]) || estVert(d[j], d[j + 1], d[j + 2]); }
+      if (hit) { if (deb < 0) deb = x; fin = x; } else if (fin >= 0 && x - fin > hp * 1.5) { if (fin - deb < pas) break; deb = fin = -1; }
+    }
+    return fin >= 0 && fin - deb < pas ? { deb, fin } : null;
+  };
+  const mouvements = [], ics = p.map((x, i) => icone(Math.round(centres[i]), x.x0 - hp * 0.8)), vus = ics.filter(Boolean);
+  const finIc = vus.length ? vus.map(v => v.fin).sort((a, b) => a - b)[Math.floor(vus.length / 2)] : null;
+  const gauche = vus.length ? Math.min(...vus.map(v => v.deb)) : W;
+  for (let i = 0; i < p.length; i++) {
+    if (suivi) suivi({ status: "lecture des mouvements", progress: i / p.length });
+    const x = p[i], yc = Math.round(centres[i]), ya = yc - pas / 2, yb = yc + pas / 2, pad = hp * 0.8;
+    const tx = ics[i] ? ics[i].fin + hp * 0.6 : finIc != null ? finIc + hp * 0.6 : 0;
+    const lireLigne = async kk => {
+      const txt = await lire(decoupe(c, tx, ya + 1, x.x0 - pad - tx, yb - ya - 2, kk), 6), c1 = conf;
+      const mt = await lire(decoupe(c, x.x0 - pad, x.y0 - pad / 2, x.x1 - x.x0 + 2 * pad, x.y1 - x.y0 + pad, kk * 1.2), 7, "0123456789+-€ .,");
+      return { txt, conf: Math.min(c1, conf), dt: lireDate(txt, ref), mm: lireMontant(mt) || lireMontant(mt.replace(/\s+$/, "") + " €") };
+    };
+    let r = await lireLigne(k);
+    if (!r.dt || !r.mm || r.conf < 70) { const r2 = await lireLigne(k * 1.6); if (r2.dt && r2.mm && (!r.dt || !r.mm || r2.conf > r.conf)) r = r2; else r = { txt: r.dt ? r.txt : r2.txt, conf: Math.max(r.conf, r2.conf), dt: r.dt || r2.dt, mm: r.mm || r2.mm }; }
+    const lib = r.txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+      .map(l => { const dd = lireDate(l, ref); return nettoyer(dd ? l.slice(0, dd.index) + " " + l.slice(dd.index + dd.len) : l); }).filter(Boolean).join(" · ");
+    mouvements.push({ t: r.dt ? r.dt.t.toISOString() : null, libelle: lib, montant: r.mm ? r.mm.v * x.signe : null, conf: Math.round(r.conf), douteux: !r.dt || !r.mm || r.conf < 60 });
+  }
+  verifierOrdre(mouvements, ref);
+  // En-tête : le solde à gauche, le RIB à droite, au-dessus de « Mouvements récents ».
+  const droite = Math.max(...p.map(x => x.x1)), y1 = centres[0] - pas / 2, y0 = Math.max(0, y1 - pas * 2.2);
+  const xg = gauche < W ? Math.max(0, gauche - hp) : Math.max(0, droite - W * 0.9);
+  const kh = Math.max(1, Math.min(4, k)), larg = droite - xg;
+  let solde = null, solde2 = null;
+  for (const l of (await lire(decoupe(c, xg, y0, larg * 0.55, y1 - y0, kh, true), 6)).split(/\r?\n/)) { const m = lireMontant(l); if (m) { solde = m.v; break; } }
+  for (const l of (await lire(decoupe(c, xg, y0, larg * 0.55, y1 - y0, kh, true), 6, "0123456789€ ")).split(/\r?\n/)) { const m = lireMontant(l); if (m) { solde2 = m.v; break; } }
+  if (solde == null) solde = solde2;
+  const rib = lireRib(await lire(decoupe(c, xg + larg * 0.45, y0, larg * 0.55 + hp, y1 - y0, kh * 1.3), 6));
+  return { solde, soldeDouteux: solde == null || solde2 !== solde, rib, mouvements, mode: "capture" };
+}
+
+// Relevé de compte fait par un agent : il prend le job pour afficher le compte de l'entreprise et
+// colle la capture de la tablette (ou son texte) ; le solde et les derniers mouvements sont lus, vérifiés
+// par l'agent puis enregistrés. Un relevé se fait à tout moment, aussi souvent qu'utile : chacun complète
+// l'historique du compte, et ses mouvements suspects ressortent aussitôt.
+function imageCollee(cd) {
+  if (!cd) return null;
+  const f = [...(cd.files || [])].find(x => /^image\//.test(x.type));
+  if (f) return f;
+  for (const it of [...(cd.items || [])]) if (it.kind === "file" && /^image\//.test(it.type)) { const g = it.getAsFile(); if (g) return g; }
+  return null;
+}
+const jjmm = t => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+// Heure de la capture : son nom (« Capture d'écran 2026-10-14 220220.png ») ou, pour un fichier choisi, sa date.
+function heureFichier(f) {
+  const now = Date.now(), ok = t => Number.isFinite(t) && t <= now + 6e4 && t >= now - 30 * 864e5;
+  const m = /(20\d{2})[-_.]?(\d{2})[-_.]?(\d{2})[\sT_-]*(\d{2})[h:._-]?(\d{2})[m:._-]?(\d{2})?/.exec((f && f.name) || "");
+  if (m) { const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime(); if (ok(t)) return new Date(t); }
+  const lm = Number(f && f.lastModified);
+  return ok(lm) && now - lm > 2 * 6e4 ? new Date(lm) : null;
+}
+const fusionMvts = (a, b) => { const vus = new Set(a.map(mvtKey)); return a.concat(b.filter(m => !vus.has(mvtKey(m)))); };
+function mvRow(x) {
+  const r = h("div", { class: "mv-row" + (x && x.douteux ? " a-verifier" : "") },
+    h("input", { "data-k": "t", autocomplete: "off", placeholder: "jj/mm hh:mm", "aria-label": "Date et heure du mouvement" }),
+    h("input", { "data-k": "lib", autocomplete: "off", placeholder: "Libellé", "aria-label": "Libellé du mouvement" }),
+    h("div", { class: "money", "data-cur": cur() }, h("input", { "data-k": "montant", type: "number", step: "any", inputmode: "decimal", placeholder: "-0", "aria-label": "Montant, négatif pour une sortie" })),
+    h("button", { class: "icon-btn", type: "button", "aria-label": "Retirer ce mouvement", "data-del": "1", text: "×" }));
+  if (x) {
+    r.querySelector("[data-k=t]").value = x.t ? jjmm(x.t) : "";
+    r.querySelector("[data-k=lib]").value = x.libelle || "";
+    r.querySelector("[data-k=montant]").value = x.montant == null ? "" : String(x.montant);
+  }
+  return r;
+}
+// La fenêtre de relevé ouverte reçoit ce qui est collé (capture ou texte des mouvements).
+let collageReleve = null;
+dlg.addEventListener("paste", ev => { if (collageReleve && collageReleve.zone.isConnected) collageReleve.fn(ev); });
+function openReleve(e, back, image) {
   if (!canAgent()) return;
+  let blob = null, lecture = "saisie", rib = null, url0 = null, seq = 0;
+  const ent = e || null;
+  const entIn = ent ? null : h("input", { id: "rv-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" });
   const m = h("input", { id: "rv-montant", type: "number", step: "1", inputmode: "numeric", placeholder: "0" });
   const at = h("input", { id: "rv-at", type: "datetime-local" }); at.value = toLocalInput(new Date());
-  const file = h("input", { id: "rv-file", type: "file", accept: "image/*" });
-  const url = h("input", { id: "rv-url", type: "url", autocomplete: "off", placeholder: "Ou un lien : message Discord, Imgur…" });
+  const file = h("input", { id: "rv-file", type: "file", accept: "image/*" }); file.hidden = true;
+  const url = h("input", { id: "rv-url", type: "url", autocomplete: "off", placeholder: "Message Discord, Imgur…" });
   const note = h("input", { id: "rv-note", autocomplete: "off", placeholder: "Facultatif : circonstances du relevé" });
+  const etat = h("p", { class: "hint rv-etat", "aria-live": "polite" });
+  const img = h("img", { class: "proof-img", alt: "Capture collée" });
+  const imgA = h("a", { target: "_blank", rel: "noopener", title: "Agrandir la capture" }, img); imgA.hidden = true;
+  const rows = h("div", { class: "mv-rows" }, mvRow());
+  const conc = h("p", { class: "hint", style: "margin:0", "aria-live": "polite" });
+  const sus = h("div", { class: "reasons" });
   const err = h("span", { class: "err", "aria-live": "polite" });
+  const choisir = h("button", { class: "btn ghost small", type: "button", text: "Choisir une image" });
+  const zone = h("div", { class: "rv-zone", tabindex: "0", role: "group", "aria-label": "Coller la capture du compte" },
+    h("strong", { text: "Collez la capture du compte" }),
+    h("span", { class: "hint", text: "Ctrl + V ici : le solde et les derniers mouvements sont lus automatiquement. Le texte des mouvements se colle aussi." }),
+    choisir);
+  const refDate = () => (at.value ? new Date(at.value) : new Date());
+  const entreprise = () => ent || (entIn ? findEnt(entIn.value) : null);
+  // Mouvements saisis : une ligne vide est ignorée, une ligne incomplète est signalée.
+  const lireLignes = () => {
+    const ref = refDate(), list = [], bad = [];
+    $$(".mv-row", rows).forEach((r, i) => {
+      const tv = r.querySelector("[data-k=t]").value.trim(), lib = r.querySelector("[data-k=lib]").value.trim(), mv = r.querySelector("[data-k=montant]").value.trim();
+      if (!tv && !lib && !mv) return;
+      const dt = lireDate(tv, ref), v = Number(mv);
+      if (!dt || mv === "" || !Number.isFinite(v) || v === 0) { bad.push(i + 1); return; }
+      list.push({ t: dt.t.getTime(), libelle: lib, montant: Math.round(v * 100) / 100 });
+    });
+    return { list: list.sort((a, b) => b.t - a.t), bad };
+  };
+  const nouveaux = (x, list) => list.length ? signauxMouvements(fusionMvts(mvtsOf(x), list.map(mm => Object.assign({ neuf: true }, mm)))).filter(s => s.mvts.some(mm => mm.neuf)) : [];
+  // Concordance avec le relevé précédent et mouvements suspects, à mesure que l'agent vérifie.
+  const maj = () => {
+    const x = entreprise(), v = Number(m.value), { list } = lireLignes();
+    const c = x && m.value !== "" && Number.isFinite(v) ? concordanceTexte(concordance(x, v, Math.max(refDate().getTime(), list.length ? list[0].t : 0), list, null)) : null;
+    conc.textContent = c ? c.texte : "";
+    conc.className = "hint" + (c ? (c.ok === true ? " conc-ok" : c.ok === false ? " conc-bad" : "") : "");
+    fill(sus, x ? nouveaux(x, list).map(s => h("span", { class: "reason", text: s.texte })) : []);
+  };
+  const appliquer = (r, texte) => {
+    if (r.solde != null) m.value = String(Math.round(r.solde));
+    m.classList.toggle("a-verifier", !!r.soldeDouteux && r.solde != null);
+    if (r.rib) { rib = r.rib; if (entIn && !entIn.value.trim()) { const x = entParRib(rib); if (x) entIn.value = x.nom; } }
+    fill(rows, (r.mouvements.length ? r.mouvements : [null]).map(mvRow));
+    const n = r.mouvements.length, dout = r.mouvements.filter(x => x.douteux).length;
+    etat.className = "hint rv-etat";
+    etat.textContent = n
+      ? `${n} mouvement${plural(n)} lu${plural(n)}${dout ? `, dont ${dout} à vérifier (surligné${plural(dout)})` : ""}${r.soldeDouteux && r.solde != null ? " · solde à vérifier" : ""}${rib && entIn && entParRib(rib) ? " · entreprise reconnue à son RIB" : ""}. Comparez avec la capture avant d’enregistrer.`
+      : `Aucun mouvement reconnu${r.solde != null ? " (solde lu)" : ""} : ${texte ? "vérifiez le texte collé" : "collez une capture plus nette, ou recopiez-les"}.`;
+    maj();
+  };
+  const lireImage = async f => {
+    const n = ++seq;
+    blob = f; lecture = "capture";
+    if (url0) URL.revokeObjectURL(url0);
+    url0 = URL.createObjectURL(f); img.src = url0; imgA.href = url0; imgA.hidden = false;
+    const tf = heureFichier(f);
+    if (tf) at.value = toLocalInput(tf);
+    etat.className = "hint rv-etat"; etat.textContent = "Lecture de la capture…";
+    try {
+      const r = await lireCapture(f, refDate(), p => {
+        if (n !== seq) return;
+        if (p.status === "lecture des mouvements") etat.textContent = `Lecture des mouvements… ${Math.round((p.progress || 0) * 100)} %`;
+        else if (/load|initiali/i.test(p.status || "")) etat.textContent = "Chargement du lecteur de captures (la première fois seulement)…";
+      });
+      if (n === seq && zone.isConnected) appliquer(r);
+    } catch (ex) {
+      if (n !== seq) return;
+      etat.className = "err rv-etat";
+      etat.textContent = (ex && ex.message) || "La capture n’a pas pu être lue : recopiez le solde et les mouvements.";
+    }
+  };
+  const lireTexte = t => { lecture = "texte"; appliquer(mouvementsTexte(t, refDate()), true); };
+  const surCollage = ev => {
+    const f = imageCollee(ev.clipboardData);
+    if (f) { ev.preventDefault(); lireImage(f); return; }
+    const t = (ev.clipboardData && ev.clipboardData.getData("text/plain")) || "", tg = ev.target;
+    const champ = tg && (tg.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName));
+    if (t.trim() && (!champ || (t.match(/\d{1,2}\/\d{1,2}\D{0,12}\d{1,2}\s?[:h]\s?\d{2}/g) || []).length >= 2)) { ev.preventDefault(); lireTexte(t); }
+  };
+  if (collageReleve && collageReleve.url) URL.revokeObjectURL(collageReleve.url());
+  collageReleve = { zone, fn: surCollage, url: () => url0 };
+  zone.addEventListener("dragover", ev => { ev.preventDefault(); zone.classList.add("on"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("on"));
+  zone.addEventListener("drop", ev => { ev.preventDefault(); zone.classList.remove("on"); const f = [...((ev.dataTransfer && ev.dataTransfer.files) || [])].find(x => /^image\//.test(x.type)); if (f) lireImage(f); });
+  zone.addEventListener("click", ev => { if (ev.target !== choisir) zone.focus(); });
+  choisir.addEventListener("click", () => file.click());
+  file.addEventListener("change", () => { if (file.files && file.files[0]) lireImage(file.files[0]); });
+  rows.addEventListener("click", ev => { const b = ev.target.closest("[data-del]"); if (!b) return; b.closest(".mv-row").remove(); if (!$$(".mv-row", rows).length) rows.append(mvRow()); maj(); });
+  rows.addEventListener("input", ev => { const r = ev.target.closest(".mv-row"); if (r) r.classList.remove("a-verifier"); maj(); });
+  m.addEventListener("input", () => { m.classList.remove("a-verifier"); maj(); });
+  at.addEventListener("change", maj);
+  if (entIn) entIn.addEventListener("change", maj);
+  const ajouter = h("button", { class: "btn ghost small", type: "button", text: "Ajouter un mouvement", onclick: () => { rows.append(mvRow()); $$(".mv-row [data-k=t]", rows).pop().focus(); } });
   const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le relevé" });
   go.addEventListener("click", async () => {
+    err.textContent = "";
+    const x = entreprise();
+    if (!x) { err.textContent = "Indiquez l’entreprise relevée."; if (entIn) entIn.focus(); return; }
     const v = Number(m.value);
     if (m.value === "" || !Number.isFinite(v)) { err.textContent = "Indiquez le solde affiché sur le compte."; m.focus(); return; }
+    const { list, bad } = lireLignes();
+    if (bad.length) { err.textContent = `Mouvement${plural(bad.length)} ${bad.join(", ")} : date (jj/mm hh:mm) ou montant illisible. Corrigez ou retirez la ligne.`; return; }
+    // L'heure du relevé ne peut pas précéder le dernier mouvement affiché.
+    let T = refDate().getTime(), corrige = false;
+    if (list.length && list[0].t > T) { T = list[0].t; corrige = true; }
     go.disabled = true;
+    const sig = nouveaux(x, list);
     const ref = S.db.collection("releves").doc();
-    const preuve = (file.files && file.files[0] ? await uploadProof(`releves/${ref.id}`, file.files[0]) : null) || linkProof(url.value);
-    const r = { entrepriseId: e.id || null, entrepriseNom: e.nom, montant: Math.round(v), at: at.value ? new Date(at.value).toISOString() : nowISO(), agent: S.agentName || "", by: S.uid || null, preuve, note: note.value.trim(), createdAt: nowISO() };
+    const fichier = blob ? (blob instanceof File && blob.name ? blob : new File([blob], "capture.png", { type: blob.type || "image/png" })) : null;
+    const preuve = (fichier ? await uploadProof(`releves/${ref.id}`, fichier) : null) || linkProof(url.value);
+    const r = { entrepriseId: x.id || null, entrepriseNom: x.nom, montant: Math.round(v), at: new Date(T).toISOString(), agent: S.agentName || "", by: S.uid || null, preuve, note: note.value.trim(), createdAt: nowISO(),
+      mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? lecture : "saisie" };
+    if (rib) r.rib = rib;
     if (!(await write(() => ref.set(r)))) { go.disabled = false; return; }
-    const t = new Date(r.at).getTime(), k0 = keyOf(new Date(r.at)), kk = [k0, prevKey(k0)].find(k => { const x = releveFor(e, k); return x && x.r.id === ref.id; });
-    const c = kk ? compteDe(e, kk) : null;
-    toast(`Relevé ${dossierNo("RC", ref.id)} enregistré${kk ? " pour " + periodPlain(kk).toLowerCase() : ""}${c && c.decl != null && c.declT != null && Math.abs(c.declT - t) <= 864e5 && Math.abs(c.decl - r.montant) > 1000 ? " : il ne correspond pas au solde déclaré" : ""}.`);
+    // Déclarations dont ce relevé montre que le solde déclaré était faux.
+    const faux = declsOf(x).filter(d => dStatus(d) !== "rejetee" && d.depotAt).map(d => ({ d, vs: verifSolde(d) })).filter(y => y.vs && !y.vs.ok && y.vs.rel.id === ref.id);
+    const n = list.length;
+    toast(`Relevé ${dossierNo("RC", ref.id)} enregistré${n ? ` avec ${n} mouvement${plural(n)}` : ""}${corrige ? " (heure portée à celle du dernier mouvement)" : ""}${sig.length ? ` · ${sig.length} mouvement${plural(sig.length)} suspect${plural(sig.length)} : ${sig[0].texte}${sig.length > 1 ? "…" : ""}` : ""}${faux.length ? ` · solde déclaré inexact pour ${faux.map(y => periodPlain(y.d.periode).toLowerCase()).join(", ")}` : ""}.`, sig.length > 0 || faux.length > 0);
     (back || closeDialog)();
   });
+  const champ = (id, label, el) => h("div", { class: "field" }, h("label", { for: id, text: label }), el);
   openDialog({
-    eyebrow: "Surveillance des comptes", title: "Relevé de compte · " + e.nom,
-    body: [h("p", { style: "margin:0", text: "Prenez le job pour afficher le compte de l’entreprise, notez le solde et joignez une capture. Le relevé d’un agent fait foi face au solde déclaré par l’entreprise." }),
-      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "rv-montant", text: "Solde relevé" }), h("div", { class: "money", "data-cur": cur() }, m)), h("div", { class: "field" }, h("label", { for: "rv-at", text: "Relevé le" }), at)),
-      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "rv-file", text: "Capture du compte" }), file), h("div", { class: "field" }, h("label", { for: "rv-url", text: "Ou lien de la capture" }), url)),
-      h("div", { class: "field" }, h("label", { for: "rv-note", text: "Observation" }), note), err],
+    eyebrow: "Surveillance des comptes", title: "Relevé de compte" + (ent ? " · " + ent.nom : ""), wide: true,
+    body: [h("p", { style: "margin:0", text: "Prenez le job pour afficher le compte de l’entreprise, faites une capture (Windows + Maj + S) et collez-la. Relevez quand vous voulez, plusieurs fois par semaine : chaque relevé complète l’historique du compte et fait foi face au solde déclaré." }),
+      entIn ? champ("rv-ent", "Entreprise", entIn) : null,
+      zone, file,
+      h("div", { class: "rv-cap" },
+        h("div", { style: "display:grid;gap:10px;min-width:0" }, etat,
+          h("div", { class: "row2" }, champ("rv-montant", "Solde affiché", h("div", { class: "money", "data-cur": cur() }, m)), champ("rv-at", "Relevé le", at)),
+          h("div", { class: "sal-box" }, h("span", { class: "sal-label", text: "Derniers mouvements" }),
+            h("div", { class: "mv-head", "aria-hidden": "true" }, h("span", { text: "Date" }), h("span", { text: "Libellé" }), h("span", { text: "Montant" }), h("span", {})),
+            rows, h("div", {}, ajouter)),
+          conc, sus),
+        imgA),
+      h("div", { class: "row2" }, champ("rv-url", "Ou lien de la capture", url), champ("rv-note", "Observation", note)), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
   });
-  setTimeout(() => m.focus(), 30);
+  setTimeout(() => (entIn && !image ? entIn : zone).focus(), 30);
+  if (image) lireImage(image);
 }
+// Une capture collée n'importe où dans le guichet ouvre un relevé de compte.
+document.addEventListener("paste", ev => {
+  if (!canAgent() || dlg.open || ev.defaultPrevented || !blc().actif) return;
+  const t = ev.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+  const f = imageCollee(ev.clipboardData);
+  if (!f) return;
+  ev.preventDefault();
+  openReleve(null, null, f);
+});
 
 // Section « Compte de l'entreprise » de la fiche et du dossier.
 function compteTable(e, keys) {
@@ -13100,22 +13656,48 @@ function compteTable(e, keys) {
     h("tbody", {}, rows.map(({ k, x }) => h("tr", {},
       h("td", { text: periodPlain(k) }),
       h("td", { class: "num", text: x.cur.decl != null ? money(x.cur.decl) : "—" }),
-      h("td", { class: "num", text: x.cur.rel ? money(x.cur.rel.montant) : "—" }),
+      h("td", { class: "num", title: x.cur.source === "mouvements" ? `Reconstitué au ${fmtDateTime(new Date(x.cur.t))} avec les mouvements du relevé ${dossierNo("RC", x.cur.rel.id)}` : x.cur.approche ? `Relevé ${dossierNo("RC", x.cur.rel.id)} corrigé des mouvements lus après la fin de la période` : null,
+        text: x.cur.source === "mouvements" || x.cur.approche ? money(x.cur.pos) + (x.cur.approche ? " ≈" : "") : x.cur.rel ? money(x.cur.rel.montant) : "—" }),
       h("td", { class: "num", text: x.attendu != null ? money(x.attendu) : "—" }),
       h("td", { class: "num" }, x.ecart == null ? "—" : h("span", { class: Math.abs(x.ecart) > s.seuil ? "neg" : null, style: Math.abs(x.ecart) > s.seuil ? "font-weight:700" : null, text: (x.ecart > 0 ? "+" : "") + money(x.ecart) })))))));
 }
+// Derniers mouvements connus du compte, les suspects surlignés.
+function mvtTable(e, n) {
+  const mv = mvtsOf(e);
+  if (!mv.length) return null;
+  const sus = new Set(mvtSignals(e).flatMap(s => s.mvts));
+  return h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+    h("thead", {}, h("tr", {}, ["Date", "Mouvement", "Montant"].map((t, i) => h("th", { class: i === 2 ? "num" : null, text: t })))),
+    h("tbody", {}, mv.slice(0, n || 12).map(m => h("tr", { class: sus.has(m) ? "mv-sus" : null, title: sus.has(m) ? "Mouvement suspect" : null },
+      h("td", { class: "mono", text: jjmm(m.t) }), h("td", { text: libCourt(m.libelle) || "—" }),
+      h("td", { class: "num" }, h("span", { class: "mv-amt " + (m.montant < 0 ? "out" : "in"), text: (m.montant > 0 ? "+" : "") + money(m.montant) })))))));
+}
+function concCourt(r) {
+  const c = concordance(entOf(r), Number(r.montant), new Date(r.at).getTime(), mvtsRel(r), r.id);
+  if (!c || (!c.vus && !c.complet)) return "";
+  if (Math.abs(c.ecart) < 1) return "concorde avec le précédent";
+  return c.complet ? `ne concorde pas avec le précédent (${(c.ecart > 0 ? "+" : "") + money(c.ecart)})` : "mouvements non vus depuis le précédent";
+}
 function compteSection(e, reopen) {
   if (!e.id || !blc().actif) return null;
-  const rl = relevesOf(e).slice(0, 4), ag = canAgent();
+  const rl = relevesOf(e).slice(0, 4), ag = canAgent(), sig = mvtSignals(e), nb = mvtsOf(e).length;
   return sec("Compte de l’entreprise",
-    h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas." }),
+    h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Avec les mouvements relevés, le solde de fin de période est reconstitué exactement." }),
     compteTable(e, keysEnding(lastClosedKey(), 6)),
-    rl.length ? h("ul", { class: "ent-list", style: "margin-top:8px" }, rl.map(r => h("li", {},
-      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("RC", r.id)} · ${money(r.montant)}` }), h("span", { class: "meta", text: `relevé le ${fmtDateTime(new Date(r.at))} par ${r.agent || "—"}${r.note ? " · " + r.note : ""}` })),
-      proofEl(r.preuve), writer() ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("releves/" + r.id).delete())) { toast("Relevé retiré."); if (reopen) reopen(); } }, text: "Retirer" }) : h("span", {})))) : null,
+    sig.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: "Mouvements suspects" }), h("div", { class: "reasons" }, sig.slice(0, 6).map(s => h("span", { class: "reason", text: s.texte })))) : null,
+    nb ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Derniers mouvements relevés · ${nb} connu${plural(nb)}` }), mvtTable(e, 12)) : null,
+    rl.length ? h("ul", { class: "ent-list", style: "margin-top:8px" }, rl.map(r => { const n = mvtsRel(r).length, cc = concCourt(r); return h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("RC", r.id)} · ${money(r.montant)}` }), h("span", { class: "meta", text: `relevé le ${fmtDateTime(new Date(r.at))} par ${r.agent || "—"}${n ? ` · ${n} mouvement${plural(n)}` : ""}${cc ? " · " + cc : ""}${r.note ? " · " + r.note : ""}` })),
+      proofEl(r.preuve), writer() ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("releves/" + r.id).delete())) { toast("Relevé retiré."); if (reopen) reopen(); } }, text: "Retirer" }) : h("span", {})); })) : null,
     ag ? h("div", { class: "paste-row", style: "margin-top:6px" },
       h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e, reopen), text: "Relevé de compte" }),
+      sig.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => controleMouvements(e, sig), text: "Contrôler ces mouvements" }) : null,
       writer() && comptesSynthese(e, 6).some(x => ecartSuspect(x) && x.ecart > blc().seuil) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSoupcon(e), text: "Déclaration de soupçon" }) : null) : null);
+}
+// Contrôle ouvert sur des mouvements suspects : les périodes où ils ont eu lieu sont proposées.
+function controleMouvements(e, sig) {
+  const ids = [...new Set(sig.map(s => periodDecl(e, keyOf(new Date(s.t)))).filter(Boolean).map(d => d.id))];
+  newControle(e, ids, { origine: "blanchiment", motif: "Mouvements suspects relevés sur le compte : " + sig.slice(0, 8).map(s => s.texte).join(" ; ") + "." });
 }
 
 // Demande de justifications : un contrôle dont la rectification retient l'écart en recettes,
@@ -13190,8 +13772,13 @@ function renderComptes() {
   $("#rc-comptes-sub").textContent = list.length
     ? `${list.length} entreprise${plural(list.length)} à examiner sur les quatre dernières périodes. Écart compté au-delà de ${money(s.seuil)} ; un relevé d’agent fait foi face au solde déclaré.`
     : `Aucun écart au-delà de ${money(s.seuil)} sur les quatre dernières périodes. Demandez le solde du compte avec chaque déclaration, et faites des relevés surprises.`;
+  if (ag) $("#rc-comptes-sub").textContent += " Pour un relevé, collez la capture du compte (Ctrl + V) n’importe où dans le guichet.";
   const rl = S.releves.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
   const ds = S.soupcons.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 5);
+  // Mouvements suspects des deux dernières semaines, toutes entreprises confondues.
+  const depuis = Date.now() - 14 * 864e5;
+  const mvs = activeEnts().map(e => ({ e, sig: mvtSignals(e).filter(x => x.t >= depuis) })).filter(x => x.sig.length).sort((a, b) => b.sig[0].t - a.sig[0].t);
+  const nbMvs = mvs.reduce((t, x) => t + x.sig.length, 0);
   fill(box,
     list.length ? h("ul", { class: "rc-list" }, list.slice(0, S.rcAll.bl ? 200 : RC_LIMIT).map(x => h("li", {},
       h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
@@ -13202,9 +13789,19 @@ function renderComptes() {
         x.total > 0 ? h("button", { class: "btn ghost small", type: "button", onclick: () => demanderJustif(x.e), text: "Demander des justifications" }) : null,
         dir && x.total > 0 ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSoupcon(x.e), text: "Déclaration de soupçon" }) : null) : null))) : h("div", { class: "empty", text: "Rien d’inexpliqué pour l’instant." }),
     rcMore("bl", list.length),
+    mvs.length ? h("div", { style: "margin-top:12px" }, h("h4", { class: "mini-title", text: `Mouvements suspects · ${nbMvs} sur les deux dernières semaines` }),
+      h("ul", { class: "rc-list" }, mvs.slice(0, S.rcAll.mv ? 200 : RC_LIMIT).map(({ e, sig }) => { const rs = [...new Set(sig.flatMap(x => x.mvts.map(m => m.r).filter(Boolean)))]; return h("li", {},
+        h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(e), text: e.nom }), " ", pingTag(e),
+          h("div", { class: "reasons", style: "margin-top:4px" }, sig.slice(0, 4).map(x => h("span", { class: "reason", text: x.texte }))),
+          h("div", { class: "hint", style: "margin-top:4px", text: `Vu${rs.length > 1 ? "s" : ""} sur ${rs.length > 1 ? "les relevés" : "le relevé"} ${rs.map(r => `${dossierNo("RC", r.id)}${r.agent ? " (" + r.agent + ")" : ""}`).join(", ")}` })),
+        h("div", { class: "rc-state" }),
+        ag ? h("div", { class: "row-actions" },
+          h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e), text: "Relevé de compte" }),
+          h("button", { class: "btn ghost small", type: "button", onclick: () => controleMouvements(e, sig), text: "Contrôler" })) : null); })),
+      rcMore("mv", mvs.length)) : null,
     rl.length || ds.length ? h("div", { class: "dash-grid", style: "margin-top:12px" },
       h("div", {}, h("h4", { class: "mini-title", text: "Derniers relevés" }), rl.length ? h("ul", { class: "ent-list" }, rl.map(r => h("li", {},
-        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(entOf(r)), text: `${dossierNo("RC", r.id)} · ${r.entrepriseNom}` }), h("span", { class: "meta", text: `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}` })), h("span", {}), h("span", {})))) : h("p", { class: "muted", text: "Aucun relevé." })),
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(entOf(r)), text: `${dossierNo("RC", r.id)} · ${r.entrepriseNom}` }), h("span", { class: "meta", text: `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}${mvtsRel(r).length ? ` · ${mvtsRel(r).length} mouvements` : ""}` })), h("span", {}), h("span", {})))) : h("p", { class: "muted", text: "Aucun relevé." })),
       h("div", {}, h("h4", { class: "mini-title", text: "Déclarations de soupçon" }), ds.length ? h("ul", { class: "ent-list" }, ds.map(x => h("li", {},
         h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => showDocImage(soupconDoc(x)), text: `${dossierNo("DS", x.id)} · ${x.entrepriseNom}` }), h("span", { class: "meta", text: `${money(x.montant)} · ${fmtDate(new Date(x.at))}${x.byNom ? " · " + x.byNom : ""}` })), chip(SOUPCON_STAT[x.statut] || SOUPCON_STAT.transmise), h("span", {})))) : h("p", { class: "muted", text: "Aucune déclaration de soupçon." }))) : null);
 }
@@ -13232,11 +13829,13 @@ function renderBlSettings(force) {
   $("#bl-seuil").value = String(c.seuil);
   $("#bl-plafond").value = String(c.plafond);
   $("#bl-oblig").checked = !!c.soldeObligatoire;
+  $("#bl-fenetre").value = String(c.fenetreH);
 }
 $("#card-bl").addEventListener("input", () => { S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; });
 $("#bl-save").addEventListener("click", async () => {
   if (!writer()) return;
-  const v = { actif: $("#bl-actif").checked, seuil: Math.max(0, Math.round(Number($("#bl-seuil").value) || 0)), plafond: Math.max(0, Math.round(Number($("#bl-plafond").value) || 0)), soldeObligatoire: $("#bl-oblig").checked };
+  const v = { actif: $("#bl-actif").checked, seuil: Math.max(0, Math.round(Number($("#bl-seuil").value) || 0)), plafond: Math.max(0, Math.round(Number($("#bl-plafond").value) || 0)), soldeObligatoire: $("#bl-oblig").checked,
+    fenetreH: $("#bl-fenetre").value === "" ? 8 : Math.max(0, Math.min(72, Math.round(Number($("#bl-fenetre").value) || 0))) };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { blanchiment: v, updatedAt: nowISO() })));
   if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
 });

@@ -271,8 +271,12 @@ function actualiser() {
   ecrire("Clôtures", ["Période", "Clôturée le", "Par", "Déclarations déposées", "Attendues", "Montant des avis", "Encaissé à la clôture", "Reste à recouvrer"],
     col("clotures").map(r => { const b = r.data.bilan || {}; return [r.id, date(r.data.at), r.data.byNom || "", b.deposees, b.attendues, b.declare, b.encaisse, b.reste]; }));
 
-  ecrire("Relevés de compte", ["N°", "Entreprise", "Solde relevé", "Relevé le", "Agent", "Capture", "Observation"],
-    col("releves").map(r => { const x = r.data; return [no("RC", r.id), x.entrepriseNom, x.montant, date(x.at), x.agent || "", x.preuve ? (x.preuve.type === "lien" ? x.preuve.url : "Capture dans le guichet") : "", x.note || ""]; }));
+  ecrire("Relevés de compte", ["N°", "Entreprise", "Solde relevé", "Relevé le", "Agent", "Mouvements lus", "RIB", "Capture", "Observation"],
+    col("releves").map(r => { const x = r.data; return [no("RC", r.id), x.entrepriseNom, x.montant, date(x.at), x.agent || "", (x.mouvements || []).length, x.rib || "", x.preuve ? (x.preuve.type === "lien" ? x.preuve.url : "Capture dans le guichet") : "", x.note || ""]; }));
+
+  // Mouvements lus sur les relevés (un mouvement vu sur deux relevés apparaît deux fois).
+  ecrire("Mouvements des comptes", ["Relevé", "Entreprise", "Date", "Libellé", "Montant"],
+    col("releves").reduce((t, r) => t.concat((r.data.mouvements || []).map(m => [no("RC", r.id), r.data.entrepriseNom, date(m.t), m.libelle || "", Number(m.montant) || 0])), []));
 
   ecrire("Soupçons", ["N°", "Entreprise", "Sommes en cause", "Transmise le", "Par", "Périodes", "Faits"],
     col("soupcons").map(r => { const x = r.data; return [no("DS", r.id), x.entrepriseNom, x.montant, date(x.at), x.byNom || "", (x.ecarts || []).map(e => e.periode + " : +" + e.ecart).join(", "), x.faits || ""]; }));
