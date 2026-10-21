@@ -1606,6 +1606,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
                 <span class="hint" id="d-per-hint"></span>
               </div>
             </div>
+            <label class="switch" for="d-vide" style="margin-top:8px"><input type="checkbox" id="d-vide"> Pas d’activité cette semaine : rien vendu, rien acheté, aucun salaire</label>
           </div></div>
           <div class="case"><div class="case-no">01</div><div class="case-body">
             <label for="d-ca">Chiffre d’affaires</label>
@@ -2086,6 +2087,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <label class="switch" for="bl-oblig"><input type="checkbox" id="bl-oblig"> Exiger le solde du compte dans chaque déclaration (sinon, alerte)</label>
               <div class="row2" style="align-items:end">
                 <div class="field"><label for="bl-fenetre">Relevé sans mouvements : écart maximal avec le dépôt</label><div class="money" data-cur="h"><input id="bl-fenetre" type="number" min="0" max="72" step="1"></div><span class="hint">Quand les mouvements du relevé ne remontent pas jusqu’au dépôt de la déclaration, son solde n’est comparé au solde déclaré que s’ils sont aussi proches. Les recettes arrivent surtout le soir.</span></div>
+                <div class="field"><label for="bl-fonds">Fonds de départ habituel d’une entreprise</label><div class="money" data-cur="€"><input id="bl-fonds" type="number" min="0" step="1000"></div><span class="hint">Ce qu’une entreprise a normalement sur son compte en ouvrant. Au-delà (plus le bénéfice et l’écart d’alerte), sa première déclaration est signalée : fonds de départ à justifier.</span></div>
               </div>
               <div class="paste-row">
                 <button class="btn" type="button" id="bl-save">Enregistrer</button>
@@ -2440,13 +2442,15 @@ const dStatus = d => (S.decisions[d.id] ? S.decisions[d.id].statut : "soumise");
 const dMontant = d => { const dec = S.decisions[d.id]; const m = dec && dec.montant != null ? Number(dec.montant) : Number(d.total); return Number.isFinite(m) ? m : 0; };
 const aStatus = dm => (S.arbitrages[dm.id] ? S.arbitrages[dm.id].statut : "attente");
 const activeEnts = () => S.entreprises.filter(e => e.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+// Noms d'une entreprise : celui du registre, puis ceux sous lesquels elle apparaît en jeu.
+const nomsDe = e => [e.nom].concat(Array.isArray(e.alias) ? e.alias : []).filter(Boolean);
 function findEnt(name) {
   const n = norm(name);
   if (!n) return null;
-  const exact = S.entreprises.find(e => norm(e.nom) === n);
+  const exact = S.entreprises.find(e => norm(e.nom) === n) || S.entreprises.find(e => nomsDe(e).some(x => norm(x) === n));
   if (exact) return exact;
   if (n.length < 4) return null;
-  const loose = S.entreprises.filter(e => { const en = norm(e.nom); return en.includes(n) || n.includes(en); });
+  const loose = S.entreprises.filter(e => nomsDe(e).some((x, i) => { const en = norm(x); return en && (i === 0 || en.length >= 4) && (en.includes(n) || n.includes(en)); }));
   return loose.length === 1 ? loose[0] : null;
 }
 function entStatus(e, key) {
@@ -2526,6 +2530,16 @@ const declsOf = e => S.declarations.filter(d => sameEnt(d, e));
 const pensOf = e => S.penalites.filter(p => sameEnt(p, e));
 const entOf = d => (d.entrepriseId && S.entreprises.find(x => x.id === d.entrepriseId)) || { id: null, nom: d.entrepriseNom || "Sans nom", secteur: "", patron: d.declarant || "" };
 
+// Même personne sous deux écritures : « Lucas Delporte PDG » et « Lucas DELPORTE », à une lettre près.
+const TITRES_RE = /^(pdg|dg|ceo|patron|patronne|gerant|gerante|directeur|directrice|president|presidente|co|responsable|fondateur|fondatrice|mr|mme|m)$/;
+function memePersonne(a, b) {
+  const mots = x => norm(x).split(" ").filter(t => t.length >= 2 && !TITRES_RE.test(t));
+  const A = mots(a), B = mots(b);
+  if (!A.length || !B.length) return true;
+  const proche = (t, u) => t === u || (Math.min(t.length, u.length) >= 5 && distance(t, u) <= 1);
+  const dans = (X, Y) => X.every(t => Y.some(u => proche(t, u)));
+  return dans(A, B) || dans(B, A);
+}
 /* Alertes : signaux de fraude possible, à vérifier par un contrôle */
 function alertsFor(d) {
   if (!d || dStatus(d) === "rejetee") return [];
@@ -2545,9 +2559,18 @@ function alertsFor(d) {
   if (ms > 0 && nb === 0) out.push("Salaires versés sans salarié");
   const smin = Number(c.salaireMin) || 0;
   const sals = d.detail && d.detail.salaries;
-  if (smin > 0 && sals) { const low = sals.filter(x => x.salaire < smin); if (low.length) out.push(`${low.length} salarié${plural(low.length)} sous le salaire minimum (${low.slice(0, 3).map(x => x.nom || "sans nom").join(", ")}${low.length > 3 ? "…" : ""})`); }
+  const liste = Array.isArray(d.salaries) ? d.salaries : sals || [];
+  const zero = liste.filter(x => Number(x.salaire) === 0);
+  if (zero.length) out.push(`${zero.length} salarié${plural(zero.length)} déclaré${plural(zero.length)} à 0 € (${zero.slice(0, 3).map(x => x.nom || "sans nom").join(", ")}${zero.length > 3 ? "…" : ""})`);
+  if (smin > 0 && sals) { const low = sals.filter(x => x.salaire > 0 && x.salaire < smin); if (low.length) out.push(`${low.length} salarié${plural(low.length)} sous le salaire minimum (${low.slice(0, 3).map(x => x.nom || "sans nom").join(", ")}${low.length > 3 ? "…" : ""})`); }
   else if (smin > 0 && nb > 0 && ms > 0 && ms / nb < smin) out.push(`Salaire moyen sous le minimum (${money(ms / nb)} par salarié)`);
   if (ca > 0 && ch >= ca * 0.9) out.push("Charges supérieures à 90 % du chiffre d’affaires");
+  // Des dépenses sans rapport avec les recettes : charges gonflées pour effacer le bénéfice.
+  if (ca > 0 && ch + ms >= ca * 2) out.push(`Dépenses ${((ch + ms) / ca).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} fois le chiffre d’affaires (${money(ch + ms)} pour ${money(ca)})`);
+  else if (ca === 0 && ch > 0) out.push(`Dépenses sans chiffre d’affaires (${money(ch)} de charges)`);
+  const pe = entOf(d);
+  // Plusieurs dirigeants (co-gérants) : séparés par une virgule sur la fiche.
+  if (pe.id && pe.patron && d.declarant && !pe.patron.split(/\s*(?:[,/&;+]|\bet\b)\s*/i).some(x => x.trim() && memePersonne(d.declarant, x))) out.push(`Déclarée par ${d.declarant}, pas par le patron (${pe.patron})`);
   if (ca === 0 && nb > 0) out.push("Aucun chiffre d’affaires avec des salariés");
   if (hist.slice(-3).concat([d]).filter(x => x.enRetard).length >= 2) out.push("Retards répétés");
   if (d.detail) for (const t of (d.detail.cot || []).concat(d.detail.is || [])) if (t.libelle && t.base > 0) out.push(`${t.libelle} : au-delà de ${money(t.de)}`);
@@ -6059,6 +6082,9 @@ function parseDecl() {
   const decl = personneLisible(p.declarant, hd && hd.auteur);
   if (decl) { $("#d-decl").value = decl; n++; }
   if (p.note) { $("#d-note").value = p.note; n++; }
+  // « Pas d'activité cette semaine » écrit dans le message : la case est cochée, tout passe à zéro.
+  const videTxt = /pas\s+d[’'e]\s?activit|aucune\s+activit|sans\s+activit|ferm[ée]e?\s+toute\s+la\s+semaine/i.test($("#d-paste").value);
+  if (fields >= 3 || videTxt) { $("#d-vide").checked = videTxt; syncVide(); if (videTxt) n++; }
   $("#d-sal-hint").textContent = salHint.trim();
   $("#d-parse-msg").textContent = (n ? `${n} case${plural(n)} remplie${plural(n)}.${hd && hd.date ? ` Heure de dépôt reprise du message : ${fmtDateTime(hd.date)}.` : " Vérifiez l’heure de dépôt."} Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Déclaration fiscale ».") + salHint;
   renderDeclPreview();
@@ -6080,7 +6106,9 @@ async function submitDecl(e) {
   if (salMode()) syncSalaries();
   const sal = salMode() ? readSalaries() : null;
   const ca = numIn($("#d-ca")), ch = numIn($("#d-ch")), ms = numIn($("#d-ms")), nb = numIn($("#d-nb"));
+  const vide = $("#d-vide").checked;
   const bad = [];
+  if (vide && (ca || ch || ms || nb)) bad.push(["d-ca", "une semaine sans activité à zéro partout (ou décochez la case)"]);
   if (sal && sal.some(x => !Number.isFinite(x.salaire) || x.salaire < 0)) bad.push(["d-sal-add", "le salaire de chaque salarié"]);
   if (!name) bad.push(["d-ent", "le nom de l’entreprise"]);
   if (!Number.isFinite(ca) || ca < 0) bad.push(["d-ca", "le chiffre d’affaires"]);
@@ -6130,6 +6158,7 @@ async function submitDecl(e) {
     resultat: Math.round(r.resultat), impot: r.impot, cotisations: r.cotisations, majoration: r.majoration, total: r.total,
     depotAt: depot.toISOString(), createdAt: nowISO(), saisiPar: S.uid || null
   };
+  if (vide) body.sansActivite = true;
   if (editing) Object.assign(body, { createdAt: editing.createdAt || nowISO(), saisiPar: editing.saisiPar || S.uid || null, rectificative: !!editing.rectificative || dup, modifieLe: nowISO(),
     remplace: editing.remplace || null, credit: dAvoir(editing) });
   const btn = $("#d-submit");
@@ -8078,6 +8107,17 @@ function renderSalMode() {
   $("#d-ms-hint").textContent = on ? "Calculés à partir de la liste : chaque salaire a sa propre cotisation selon le barème des salaires." : "Base des cotisations sociales.";
   if (on && !$$("#d-sal-rows .sal-row").length) setSalaries([]);
 }
+// Semaine sans activité : tout à zéro, cases verrouillées.
+function syncVide() {
+  const on = $("#d-vide").checked;
+  if (on) { for (const sel of ["#d-ca", "#d-ch", "#d-ms", "#d-nb"]) $(sel).value = "0"; if (salMode()) setSalaries([]); }
+  $("#d-ca").readOnly = $("#d-ch").readOnly = on;
+  renderSalMode();
+  if (on) { $("#d-sal").hidden = true; $("#d-ms").readOnly = $("#d-nb").readOnly = true; $("#d-ms").value = $("#d-nb").value = "0"; }
+  renderDeclPreview();
+}
+$("#d-vide").addEventListener("change", syncVide);
+$("#form-decl").addEventListener("reset", () => { $("#d-ca").readOnly = $("#d-ch").readOnly = false; $("#d-ms").readOnly = $("#d-nb").readOnly = salMode(); $("#d-sal").hidden = !salMode(); });
 $("#d-sal-add").addEventListener("click", () => { $("#d-sal-rows").append(salRow()); syncSalaries(); const ins = $$("#d-sal-rows [data-k=nom]"); ins[ins.length - 1].focus(); });
 $("#d-sal-rows").addEventListener("click", e => {
   if (!e.target.closest("[data-del]")) return;
@@ -8145,6 +8185,8 @@ function startEditDecl(d) {
   $("#d-decl").value = d.declarant || "";
   $("#d-note").value = d.note || "";
   $("#d-date").value = toLocalInput(d.depotAt ? new Date(d.depotAt) : new Date());
+  $("#d-vide").checked = !!d.sansActivite;
+  syncVide();
   $("#d-receipt").hidden = true;
   editBanner("decl");
   renderDeclPreview();
@@ -8182,6 +8224,8 @@ function field(id, label, input) { input.id = id; return h("div", { class: "fiel
 function editEntreprise(e, back) {
   const nom = h("input", { autocomplete: "off" }), sect = h("input", { autocomplete: "off" }), patron = h("input", { autocomplete: "off" });
   nom.value = e.nom || ""; sect.value = e.secteur || ""; patron.value = e.patron || "";
+  patron.placeholder = "Co-gérants : séparés par une virgule";
+  const alias = h("input", { id: "ee-alias", autocomplete: "off", placeholder: "Ex. : Bahama Mamas, Bahamas" }); alias.value = (e.alias || []).join(", ");
   const disc = h("input", { class: "mono", inputmode: "numeric", autocomplete: "off", placeholder: "17 à 20 chiffres" });
   disc.value = e.discord ? (parseMention(e.discord) || {}).id || "" : "";
   const debut = h("select", {});
@@ -8199,8 +8243,12 @@ function editEntreprise(e, back) {
     if (!n) { err.textContent = "Indiquez le nom de l’entreprise."; nom.focus(); return; }
     if (S.entreprises.some(x => x.id !== e.id && norm(x.nom) === norm(n))) { err.textContent = `« ${n} » existe déjà au registre.`; return; }
     if (disc.value.trim() && !parseMention(disc.value.trim())) { err.textContent = "ID Discord : 17 à 20 chiffres (clic droit sur le membre → Copier l’identifiant)."; disc.focus(); return; }
+    const als = [];
+    for (const x of alias.value.split(/[,;\n]/)) { const t = x.trim().slice(0, 60); if (t && norm(t) && norm(t) !== norm(n) && !als.some(y => norm(y) === norm(t)) && als.length < 8) als.push(t); }
+    const pris = als.map(a => [a, S.entreprises.find(x => x.id !== e.id && [x.nom].concat(x.alias || []).some(y => norm(y) === norm(a)))]).find(([, x]) => x);
+    if (pris) { err.textContent = `« ${pris[0]} » désigne déjà ${pris[1].nom}.`; alias.focus(); return; }
     save.disabled = true;
-    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || null, exoneration: exo.value }));
+    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || null, exoneration: exo.value, alias: als }));
     if (!ok) { save.disabled = false; return; }
     if (n !== e.nom) {
       const jobs = [];
@@ -8238,6 +8286,7 @@ function editEntreprise(e, back) {
         h("div", { class: "field" }, h("label", { for: "ee-debut", text: "Début d’activité" }), Object.assign(debut, { id: "ee-debut" }), h("span", { class: "hint", text: "Avant cette période, l’entreprise n’est pas attendue et n’est jamais relancée." }))),
       cfg().exoActive ? h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ee-exo", text: "Exonération de début d’activité" }), Object.assign(exo, { id: "ee-exo" }),
         h("span", { class: "hint", text: `${cfg().exoPeriodes} période${plural(cfg().exoPeriodes)} à partir du début d’activité (ou du début du suivi). S’applique aux déclarations saisies ensuite.` }))) : null,
+      h("div", { class: "field" }, h("label", { for: "ee-alias", text: "Autres noms" }), alias, h("span", { class: "hint", text: "Les noms sous lesquels l’entreprise apparaît en jeu, sur les factures et les comptes des autres entreprises, séparés par des virgules. Ils servent à la reconnaître dans les messages collés et les mouvements des comptes." })),
       h("p", { class: "hint", style: "margin:0", text: "Un changement de nom est reporté sur toutes ses déclarations, pénalités, échéanciers et relances." }), err, progress],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour à la fiche" : "Annuler" }), h("span", { class: "spacer" }), save]
   });
@@ -11832,6 +11881,7 @@ function openControle(id) {
     autoPublish("controles", doc, "Redressement mis en recouvrement.");
     showDocImage(doc, reopen);
   }, text: "Mettre en recouvrement" }));
+  if (ag && c.statut === "sans_suite") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => rouvrirControle(c0), text: "Rouvrir le contrôle" }));
   const cvs = (S.convocations || []).filter(x => x.controleId === id).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   if (cvs.length) body.push(sec("Convocations", h("ul", { class: "ent-list" }, cvs.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openConv(x.id), text: `${convNo(x)} · ${convWhen(x)}` }), h("span", { class: "meta", text: x.lieu || "" })), chip(convState(x)), h("span", {}))))));
   if (ag && (c.statut === "ouvert" || c.statut === "propose")) foot.splice(foot.findIndex(b => b.classList && b.classList.contains("spacer")), 0, h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(entOf(c0), { motif: "controle", controleId: id }), text: "Convoquer" }));
@@ -11879,6 +11929,33 @@ function closeJustice(c0, patch, restoreAvis) {
       e.id && e.actif !== false ? h("div", { class: "field" }, h("label", { for: "cj-duree", text: "Durée de la fermeture" }), duree, h("span", { class: "hint", text: "L’entreprise passe inactive : plus attendue aux déclarations, plus relancée, son espace en ligne est fermé. Pour la rouvrir : Réglages → Entreprises." })) : null,
       pub && e.actif !== false ? h("label", { class: "switch", for: "cj-pub" }, pub, "Publier l’arrêté de fermeture sur Discord (patron et police mentionnés)") : null, err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(c0.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
+// Contrôle classé sans suite par erreur : il reprend son instruction, avec le motif noté. Les avis
+// redevenus payables à son classement, s'ils ne sont pas payés, sont de nouveau suspendus.
+function rouvrirControle(c0) {
+  if (!canAgent()) return;
+  const t = h("textarea", { id: "ro-motif", rows: "3", placeholder: "Classé par erreur, nouveaux éléments, relevé de compte…" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const sus = (c0.suspendus || []).map(x => S.declarations.find(d => d.id === x)).filter(d => d && ["validee", "soumise"].includes(dStatus(d)));
+  const go = h("button", { class: "btn ink small", type: "button", text: "Rouvrir le contrôle" });
+  go.addEventListener("click", async () => {
+    const m = t.value.trim();
+    if (!m) { err.textContent = "Indiquez pourquoi le contrôle est rouvert."; t.focus(); return; }
+    go.disabled = true;
+    const c1 = S.controles.find(x => x.id === c0.id) || c0;
+    const note = { at: nowISO(), auteur: S.agentName || "", texte: `Contrôle rouvert${c1.closLe ? ` (classé sans suite le ${fmtDateTime(new Date(c1.closLe))}${c1.conclusion ? ` : « ${c1.conclusion} »` : ""})` : ""}. Motif : ${m}` };
+    const avant = Object.assign({}, c1.avant || {});
+    for (const d of sus) avant[d.id] = dStatus(d);
+    const patch = { statut: "ouvert", rouvertLe: nowISO(), closLe: null, conclusion: "", notes: (c1.notes || []).concat([note]), avant };
+    if (!(await saveControle(c1, patch, `Contrôle ${dossierNo("CF", c0.id)} rouvert.`))) { go.disabled = false; return; }
+    for (const d of sus) await decide(d, "controle", dMontant(d), `Contrôle fiscal ${dossierNo("CF", c0.id)} rouvert`, { quiet: true });
+    openControle(c0.id);
+  });
+  openDialog({ eyebrow: `Contrôle fiscal ${dossierNo("CF", c0.id)}`, title: "Rouvrir le contrôle",
+    body: [h("p", { style: "margin:0", text: `Le contrôle reprend son instruction là où il s’était arrêté : notes, pièces et rectifications sont gardées, le motif s’ajoute aux notes.${sus.length ? ` ${sus.length} avis non payé${plural(sus.length)} ${sus.length > 1 ? "sont" : "est"} de nouveau suspendu${plural(sus.length)} jusqu’à la fin du contrôle.` : ""}` }),
+      h("div", { class: "field" }, h("label", { for: "ro-motif", text: "Motif de la réouverture" }), t), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(c0.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+  setTimeout(() => t.focus(), 30);
 }
 function closeSansSuite(c0, patch, restoreAvis) {
   const t = h("textarea", { id: "ss-txt", rows: "3", placeholder: "Conclusion : rien d’anormal, justificatifs fournis…" });
@@ -12912,7 +12989,7 @@ function pretsSection(e) {
 // Ce qui dépasse est un enrichissement inexpliqué. Comme dans la réalité, l'entreprise doit
 // en justifier l'origine ; à défaut, il est imposé d'office (art. L16 et L69 du LPF) et le
 // soupçon peut être signalé (sur le modèle de TRACFIN, art. L561-15 du CMF).
-function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8 }, cfg().blanchiment || {}); }
+function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8, fondsDepart: 50000 }, cfg().blanchiment || {}); }
 function relevesOf(e) { return (S.releves || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function soupconsOf(e) { return (S.soupcons || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function periodDays(k) { const b = bounds(k); return b ? Math.max(1, Math.round((b.end.getTime() - b.start.getTime()) / 864e5)) : 7; }
@@ -13044,6 +13121,17 @@ function blanchimentSignals(d) {
       if (cap > 0 && x.ecart >= cap * 0.5) out.push(`Écart égal à ${Math.round(x.ecart / cap * 100)} % de ce que ${nb} employé${plural(nb)} peu${nb > 1 ? "vent" : "t"} déposer en ${periodDays(d.periode)} jours`);
     } else if (x.ecart < -c.seuil) out.push(`Sorties d’argent inexpliquées : ${money(-x.ecart)} manquent sur le compte`);
   }
+  // Une perte vide le compte : s'il grossit quand même, l'argent vient d'ailleurs.
+  const res = Number(d.resultat) || 0;
+  if (res < 0 && x.cur && x.prev && x.cur.pos != null && x.prev.pos != null && x.cur.t != null && x.prev.t != null && x.cur.t > x.prev.t) {
+    const gain = Math.round(x.cur.pos - x.prev.pos);
+    if (gain > 1000) out.push(`Perte déclarée (${money(res)}), mais le compte a gagné ${money(gain)} sur la période`);
+  }
+  // Première déclaration : l'argent déjà sur le compte doit avoir une origine.
+  const premiere = !declsOf(e).some(y => y.id !== d.id && dStatus(y) !== "rejetee" && String(y.periode) < String(d.periode));
+  const pos0 = cur.pos != null ? cur.pos : hasSolde(d) ? Number(d.solde) : null;
+  const fd = Math.max(0, Number(c.fondsDepart) || 0);
+  if (premiere && pos0 != null && pos0 > Math.max(0, res) + fd + c.seuil) out.push(`Fonds de départ à justifier : ${money(pos0)} sur le compte dès la première déclaration, pour ${money(Math.max(0, res))} de bénéfice${fd ? ` et ${money(fd)} de fonds de départ habituel` : ""}`);
   const nb = Number(d.nbSalaries) || 0, med = nb > 0 ? medianeSecteur(d) : null;
   if (med && med > 0 && (Number(d.ca) || 0) / nb > med * 3) out.push(`Chiffre d’affaires par salarié ${Math.round((Number(d.ca) || 0) / nb / med)} fois la médiane du secteur`);
   const hist = declsOf(e).filter(y => y.id !== d.id && dStatus(y) !== "rejetee" && String(y.periode) < String(d.periode)).sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 3);
@@ -13071,7 +13159,7 @@ function suspects() {
     return { e, rows, ecarts, total: ecarts.filter(x => x.ecart > 0).reduce((t, x) => t + x.ecart, 0) };
   }).filter(x => x.rows.length).sort((a, b) => b.total - a.total || b.rows.length - a.rows.length);
 }
-function isBlSignal(s) { return /^(Solde du compte non déclaré|Solde déclaré inexact|Enrichissement inexpliqué|Écart proche|Écart égal|Sorties d’argent inexpliquées|Chiffre d’affaires par salarié|Chiffre d’affaires multiplié|Gros encaissement en espèces|Aller-retour|Dépôts répétés|Salaires vus|Recettes vues)/.test(s); }
+function isBlSignal(s) { return /^(Solde du compte non déclaré|Solde déclaré inexact|Enrichissement inexpliqué|Écart proche|Écart égal|Sorties d’argent inexpliquées|Chiffre d’affaires par salarié|Chiffre d’affaires multiplié|Gros encaissement en espèces|Aller-retour|Dépôts répétés|Salaires vus|Recettes vues|Déclarée sans activité|Perte déclarée|Fonds de départ)/.test(s); }
 
 /* ---------- Mouvements du compte ---------- */
 // Chaque relevé garde le solde et les derniers mouvements affichés par la tablette. Ensemble, ils
@@ -13082,10 +13170,10 @@ function mvtsRel(r) {
     .filter(m => Number.isFinite(m.t) && Number.isFinite(m.montant) && m.montant !== 0).sort((a, b) => b.t - a.t);
 }
 const mvtKey = m => Math.floor(m.t / 6e4) + "|" + Math.round(m.montant * 100);
-let mvtCache = { src: null, sig: "", map: new Map() };
+let mvtCache = { src: null, ents: null, sig: "", map: new Map() };
 function mvtMemo(k, fn) {
   const sig = JSON.stringify(blc());
-  if (mvtCache.src !== S.releves || mvtCache.sig !== sig) mvtCache = { src: S.releves, sig, map: new Map() };
+  if (mvtCache.src !== S.releves || mvtCache.ents !== S.entreprises || mvtCache.sig !== sig) mvtCache = { src: S.releves, ents: S.entreprises, sig, map: new Map() };
   if (!mvtCache.map.has(k)) mvtCache.map.set(k, fn());
   return mvtCache.map.get(k);
 }
@@ -13195,18 +13283,83 @@ function signauxMouvements(list) {
   return out.sort((a, b) => b.t - a.t);
 }
 const mvtSignals = e => mvtMemo("sig:" + (e.id || norm(e.nom)), () => signauxMouvements(mvtsOf(e)));
+// Distance d'édition entre deux noms (fautes de frappe, lecture imparfaite d'une capture).
+function distance(a, b) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 4) return 99;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// Entreprise désignée dans un libellé (« Bahamo Mames » lu sur une capture → Bahama Mamas) : nom ou autre nom,
+// à une ou deux lettres près ; rien si deux entreprises sont aussi proches.
+function entParLibelle(txt) {
+  const n = norm(txt);
+  if (n.length < 3) return null;
+  return mvtMemo("lib:" + n, () => {
+    const ex = findEnt(txt);
+    if (ex) return ex;
+    let best = null, bd = Infinity, egal = false;
+    for (const e of S.entreprises) for (const x of nomsDe(e)) {
+      const en = norm(x);
+      if (en.length < 3) continue;
+      const d = distance(n, en);
+      if (d > Math.max(1, Math.floor(Math.max(n.length, en.length) * 0.2))) continue;
+      if (d < bd) { best = e; bd = d; egal = false; } else if (d === bd && best !== e) egal = true;
+    }
+    return egal ? null : best;
+  });
+}
+// Bénéficiaire d'une sortie d'argent : « Facture — Burger King » (facture payée), « Commande XPL (par …) ».
+function contrepartie(lib) {
+  const s = String(lib || "");
+  const f = /\bFacture\s*[—–-]+\s*([^·]+?)\s*(?:·|$)/i.exec(s);
+  if (f) return f[1];
+  const c = /\bCommande\s+(.+?)\s*(?:\(|#|·|$)/i.exec(s);
+  return c ? c[1] : null;
+}
+// Paiements vus sur les comptes des autres entreprises au profit de x : ce sont des recettes de x.
+function paiementsVers(x) {
+  const idx = mvtMemo("pv", () => {
+    const map = new Map();
+    for (const e of S.entreprises) for (const m of mvtsOf(e)) {
+      if (m.montant >= 0) continue;
+      const c = contrepartie(m.libelle), y = c ? entParLibelle(c) : null;
+      if (!y || y.id === e.id) continue;
+      if (!map.has(y.id)) map.set(y.id, []);
+      map.get(y.id).push({ t: m.t, montant: -m.montant, payeur: e, m });
+    }
+    return map;
+  });
+  return (x && x.id && idx.get(x.id)) || [];
+}
+// Déclaration « sans activité » : la case cochée, ou tout à zéro.
+const sansActivite = d => !!d.sansActivite || ((Number(d.ca) || 0) === 0 && (Number(d.charges) || 0) === 0 && (Number(d.masse) || 0) === 0);
 // Ce que le compte montre pendant la période, face à la déclaration : les mouvements lus ne sont
-// qu'une partie de la période, ce qui dépasse le déclaré est donc certain.
+// qu'une partie de la période, ce qui dépasse le déclaré est donc certain. Les paiements faits par
+// d'autres entreprises (lus sur leurs comptes) s'ajoutent aux recettes vues, sans compter deux fois
+// un paiement vu des deux côtés.
 function mvtsSemaine(e, d) {
   const b = bounds(d.periode);
   if (!b) return [];
-  const mv = mvtsOf(e).filter(m => m.t >= b.start.getTime() && m.t <= b.end.getTime());
-  if (!mv.length) return [];
+  const t0 = b.start.getTime(), t1 = b.end.getTime(), dans = m => m.t >= t0 && m.t <= t1;
+  const mv = mvtsOf(e).filter(dans), recus = mv.filter(m => m.montant > 0 && !NON_RECETTE_RE.test(m.libelle));
+  const autres = paiementsVers(e).filter(p => dans(p) && !recus.some(m => Math.abs(m.montant - p.montant) < 0.5 && Math.abs(m.t - p.t) <= 3 * 6e4));
+  if (!mv.length && !autres.length) return [];
   const out = [], marge = x => Math.max(1000, x * 0.05), v = retenuDe(d);
+  const enc = recus.reduce((s, m) => s + m.montant, 0), ext = autres.reduce((s, p) => s + p.montant, 0);
+  const payeurs = [...new Set(autres.map(p => p.payeur.nom))].join(", ");
+  if (sansActivite(d)) {
+    const act = mv.filter(m => !/pr[ée]fecture/i.test(m.libelle)).length + autres.length;
+    if (act) { out.push(`Déclarée sans activité, mais ${act} mouvement${plural(act)} vu${plural(act)} sur la période${enc + ext ? ` (${money(enc + ext)} reçus${ext ? `, dont ${money(ext)} payés par ${payeurs}` : ""})` : ""}`); return out; }
+  }
   const sal = -mv.filter(m => m.montant < 0 && SALAIRE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
   if (sal > v.ms + marge(v.ms)) out.push(`Salaires vus sur le compte : ${money(sal)} versés, plus que la masse salariale déclarée (${money(v.ms)})`);
-  const enc = mv.filter(m => m.montant > 0 && !NON_RECETTE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
-  if (enc > v.ca + marge(v.ca)) out.push(`Recettes vues sur le compte : ${money(enc)} encaissés, plus que le chiffre d’affaires déclaré (${money(v.ca)})`);
+  if (enc + ext > v.ca + marge(v.ca)) out.push(`Recettes vues : ${money(enc + ext)}${ext ? ` (dont ${money(ext)} payés par ${payeurs})` : " encaissés sur le compte"}, plus que le chiffre d’affaires déclaré (${money(v.ca)})`);
   return out;
 }
 // Entreprise reconnue à son RIB, lu sur un relevé précédent.
@@ -13680,12 +13833,17 @@ function concCourt(r) {
 }
 function compteSection(e, reopen) {
   if (!e.id || !blc().actif) return null;
-  const rl = relevesOf(e).slice(0, 4), ag = canAgent(), sig = mvtSignals(e), nb = mvtsOf(e).length;
+  const rl = relevesOf(e).slice(0, 4), ag = canAgent(), sig = mvtSignals(e), nb = mvtsOf(e).length, pv = paiementsVers(e);
   return sec("Compte de l’entreprise",
     h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Avec les mouvements relevés, le solde de fin de période est reconstitué exactement." }),
     compteTable(e, keysEnding(lastClosedKey(), 6)),
     sig.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: "Mouvements suspects" }), h("div", { class: "reasons" }, sig.slice(0, 6).map(s => h("span", { class: "reason", text: s.texte })))) : null,
     nb ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Derniers mouvements relevés · ${nb} connu${plural(nb)}` }), mvtTable(e, 12)) : null,
+    pv.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Payé par d’autres entreprises · vu sur leurs comptes` }),
+      h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
+        h("thead", {}, h("tr", {}, ["Date", "Payé par", "Mouvement", "Montant"].map((t, i) => h("th", { class: i === 3 ? "num" : null, text: t })))),
+        h("tbody", {}, pv.slice(0, 8).map(p => h("tr", {}, h("td", { class: "mono", text: jjmm(p.t) }), h("td", { text: p.payeur.nom }), h("td", { text: libCourt(p.m.libelle) }),
+          h("td", { class: "num" }, h("span", { class: "mv-amt in", text: "+" + money(p.montant) })))))))) : null,
     rl.length ? h("ul", { class: "ent-list", style: "margin-top:8px" }, rl.map(r => { const n = mvtsRel(r).length, cc = concCourt(r); return h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("RC", r.id)} · ${money(r.montant)}` }), h("span", { class: "meta", text: `relevé le ${fmtDateTime(new Date(r.at))} par ${r.agent || "—"}${n ? ` · ${n} mouvement${plural(n)}` : ""}${cc ? " · " + cc : ""}${r.note ? " · " + r.note : ""}` })),
       proofEl(r.preuve), writer() ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("releves/" + r.id).delete())) { toast("Relevé retiré."); if (reopen) reopen(); } }, text: "Retirer" }) : h("span", {})); })) : null,
@@ -13830,12 +13988,14 @@ function renderBlSettings(force) {
   $("#bl-plafond").value = String(c.plafond);
   $("#bl-oblig").checked = !!c.soldeObligatoire;
   $("#bl-fenetre").value = String(c.fenetreH);
+  $("#bl-fonds").value = String(c.fondsDepart);
 }
 $("#card-bl").addEventListener("input", () => { S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; });
 $("#bl-save").addEventListener("click", async () => {
   if (!writer()) return;
   const v = { actif: $("#bl-actif").checked, seuil: Math.max(0, Math.round(Number($("#bl-seuil").value) || 0)), plafond: Math.max(0, Math.round(Number($("#bl-plafond").value) || 0)), soldeObligatoire: $("#bl-oblig").checked,
-    fenetreH: $("#bl-fenetre").value === "" ? 8 : Math.max(0, Math.min(72, Math.round(Number($("#bl-fenetre").value) || 0))) };
+    fenetreH: $("#bl-fenetre").value === "" ? 8 : Math.max(0, Math.min(72, Math.round(Number($("#bl-fenetre").value) || 0))),
+    fondsDepart: $("#bl-fonds").value === "" ? 50000 : Math.max(0, Math.round(Number($("#bl-fonds").value) || 0)) };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { blanchiment: v, updatedAt: nowISO() })));
   if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
 });
@@ -15277,6 +15437,8 @@ function remplirDepuisDepot(d) {
   $("#d-decl").value = d.declarant || "";
   $("#d-note").value = d.note || "";
   $("#d-date").value = toLocalInput(new Date(d.recuLe));
+  $("#d-vide").checked = sansActivite(d) && !(Number(d.nbSalaries) || 0) && !(d.salaries || []).some(x => Number(x.salaire) > 0);
+  syncVide();
   $("#d-paste").value = "";
   $("#d-parse-msg").textContent = `Déclaration reçue en ligne de ${d.entrepriseNom} le ${fmtDateTime(new Date(d.recuLe))} : vérifiez puis enregistrez.`;
   S.depotSaisie = d.id;
@@ -15529,10 +15691,26 @@ function openDepotForm(k0) {
     return r; };
   const addSal = h("button", { class: "btn ghost small", type: "button", onclick: () => { salBox.append(salRowP(null)); refresh(); }, text: "Ajouter un salarié" });
   const prev = h("dl", { class: "kv", style: "margin:0" }), err = h("span", { class: "err", "aria-live": "polite" });
+  // Semaine sans activité : tout à zéro, en une case.
+  const vide = h("input", { type: "checkbox", id: "pd-vide" });
+  const VIDE_NOTE = "Pas d’activité cette semaine.";
+  const syncVideP = () => {
+    const on = vide.checked;
+    for (const i of [ca, ch, ms, nb]) { if (on) i.value = "0"; i.readOnly = on; }
+    if (on) fill(salBox, [salRowP(null)]);
+    salBox.hidden = addSal.hidden = on && sm;
+    if (on && !note.value.trim()) note.value = VIDE_NOTE;
+    if (!on && note.value.trim() === VIDE_NOTE) note.value = "";
+    refresh();
+  };
+  vide.addEventListener("change", syncVideP);
   const fillFrom = dp => {
     ca.value = dp ? String(dp.ca || 0) : ""; ch.value = dp ? String(dp.charges || 0) : ""; ms.value = dp ? String(dp.masse || 0) : ""; nb.value = dp ? String(dp.nbSalaries || 0) : "";
     solde.value = dp && dp.solde != null ? String(dp.solde) : ""; cap.value = (dp && dp.capture) || ""; decl.value = (dp && dp.declarant) || e.patron || ""; note.value = (dp && dp.note) || "";
     fill(salBox, (dp && Array.isArray(dp.salaries) && dp.salaries.length ? dp.salaries : [null]).map(salRowP));
+    vide.checked = !!dp && sansActivite(dp) && !(Number(dp.nbSalaries) || 0);
+    for (const i of [ca, ch, ms, nb]) i.readOnly = vide.checked;
+    salBox.hidden = addSal.hidden = vide.checked && sm;
   };
   const values = () => {
     const n = el => { const v = Number(el.value); return el.value === "" || !Number.isFinite(v) ? 0 : Math.max(0, Math.round(v)); };
@@ -15576,6 +15754,7 @@ function openDepotForm(k0) {
   salBox.addEventListener("input", refresh);
   openDialog({ eyebrow: "Espace entreprise", title: "Déclarer · " + e.nom, wide: true,
     body: [h("div", { class: "field" }, h("label", { for: "pd-per", text: "Période" }), per),
+      h("label", { class: "switch", for: "pd-vide" }, vide, "Pas d’activité cette semaine : rien vendu, rien acheté, aucun salaire"),
       h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pd-ca", text: "Chiffre d’affaires" }), h("div", { class: "money", "data-cur": cur() }, ca)),
         h("div", { class: "field" }, h("label", { for: "pd-ch", text: "Charges (hors salaires)" }), h("div", { class: "money", "data-cur": cur() }, ch))),
       sm ? sec("Salariés et salaires de la période", salBox, addSal)
