@@ -23,6 +23,9 @@ create table if not exists sauvegardes.nocturnes (
   donnees jsonb not null
 );
 revoke all on table sauvegardes.nocturnes from public, anon, authenticated;
+-- Verrou de plus : aucune ligne lisible par une règle d'accès. Les fonctions ci-dessous appartiennent au
+-- propriétaire de la table et ne sont pas concernées.
+alter table sauvegardes.nocturnes enable row level security;
 
 -- La copie elle-même : seulement par la tâche planifiée (aucun compte du site ne peut l'appeler).
 create or replace function public.sauvegarde_nocturne()
