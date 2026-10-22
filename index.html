@@ -5567,7 +5567,7 @@ function renderDeclTable(key) {
     if (w && st === "validee" && ec && nx >= 0) act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); payEcheance(d, nx); }, text: `Encaisser ${nx + 1}/${ec.echeances.length}` });
     else if (canAgent() && st === "soumise" && ["en contrôle", "rectificative à examiner", "remplacée"].includes(avisBloque(d))) act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); openDecl(d.id); }, text: "Ouvrir" });
     else if (canAgent() && st === "soumise") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "validee", d.total, ""); }, text: "Valider" });
-    else if (w && st === "validee") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); decide(d, "payee", dMontant(d), (S.decisions[d.id] || {}).note || ""); }, text: "Encaisser" });
+    else if (w && st === "validee") act = h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.stopPropagation(); encaisserAvis(d, dMontant(d), (S.decisions[d.id] || {}).note || ""); }, text: "Encaisser" });
     return h("tr", {},
       h("td", { class: "no c-hide", text: dossierNo("DF", d.id) }),
       h("td", { class: "c-main" },
@@ -5630,10 +5630,11 @@ async function decide(d, statut, montant, note, opts) {
   if (statut === "payee") { body.paidAt = nowISO(); body.paidByNom = S.agentName || ""; }
   if (statut === "rejetee" && prev.remplaceePar) Object.assign(body, { remplaceePar: prev.remplaceePar, avant: prev.avant, avantDecision: prev.avantDecision || null });
   const ok = await write(() => S.db.doc("decisions/" + d.id).set(body));
-  if (ok && !quiet) toast({ validee: "Avis émis : montant à payer.", payee: "Paiement encaissé.", controle: "Dossier placé en contrôle.", rejetee: "Déclaration rejetée.", soumise: "Décision annulée." }[statut] || "Enregistré.");
+  const label = opts && opts.label;
+  if (ok && !quiet) toast((statut === "payee" && label) || { validee: "Avis émis : montant à payer.", payee: "Paiement encaissé.", controle: "Dossier placé en contrôle.", rejetee: "Déclaration rejetée.", soumise: "Décision annulée." }[statut] || "Enregistré.");
   if (ok && !quiet && statut === "validee" && prev.statut !== "validee" && prev.statut !== "payee") autoPublish("avis", avisDoc(d), "Avis émis.");
   // Paiement en plusieurs fois : chaque échéance a déjà sa quittance.
-  if (ok && statut === "payee" && prev.statut !== "payee" && !echOf(d) && Math.round(Number(montant) || 0) > dCredit(d)) autoPublish("quittances", quittanceDeclDoc(d), "Paiement encaissé.");
+  if (ok && statut === "payee" && prev.statut !== "payee" && !echOf(d) && Math.round(Number(montant) || 0) > dCredit(d)) autoPublish("quittances", quittanceDeclDoc(d), label || "Paiement encaissé.");
   return ok;
 }
 function avisText(d) {
@@ -5644,7 +5645,9 @@ function avisText(d) {
     `${cotLabel(d)} : ${money(brutCot(d))}`].concat(exoLines(d).map(([l, v]) => `${l} : ${v}`));
   if (d.enRetard) L.push(`Majoration de retard (${pct(d.majPct)}) : ${money(d.majoration)}`);
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) L.push(`Montant rectifié après vérification : ${money(dec.montant)}`);
-  L.push(`**Montant à régler : ${money(m)}**`, `Statut : ${(DSTAT[st] || DSTAT.soumise)[0]}`);
+  const pa = pretsAvis(d);
+  if (pa.length) { L.push(`Impôt et cotisations : ${money(m)}`); pa.forEach(y => L.push(`Remboursement du prêt ${pretNo(y.p)} · ${echLabel(y)} du ${longDate(new Date(y.x.date))} : ${money(y.x.montant)}`)); }
+  L.push(`**Montant à régler : ${money(m + pa.reduce((t, y) => t + (Number(y.x.montant) || 0), 0))}**`, `Statut : ${(DSTAT[st] || DSTAT.soumise)[0]}`);
   if (dec && dec.note) L.push(`Observation : ${dec.note}`);
   L.push("— Préfecture de police · Direction des impôts et cotisations");
   return L.join("\n");
@@ -5719,6 +5722,15 @@ function openDecl(id) {
   }).reverse())));
   const echSec = echeancierSection(d, () => openDecl(id));
   if (echSec) body.push(echSec);
+  // Échéances de prêt réclamées avec l'avis : encaissées avec lui.
+  const pa = pretsAvis(d);
+  if (pa.length) {
+    const reste = pa.filter(y => !y.x.payee).reduce((t, y) => t + (Number(y.x.montant) || 0), 0);
+    body.push(sec("Remboursement de prêt avec l’avis", h("ul", { class: "ent-list" }, pa.map(y => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openPret(y.p.id), text: `${pretNo(y.p)} · ${echLabel(y)}` }), h("span", { class: "meta", text: `du ${longDate(new Date(y.x.date))}` })),
+      chip(y.x.payee ? ["Payée avec l’avis", "ok"] : new Date(y.x.date).getTime() < Date.now() ? ["En retard", "bad"] : ["À payer avec l’avis", "info"]), h("span", { class: "num", style: "font-weight:700", text: money(y.x.montant) })))),
+      reste ? h("p", { class: "hint", style: "margin:6px 0 0", text: `À encaisser : ${money(dReste(d))} d’impôt et de cotisations + ${money(reste)} de prêt = ${money(dReste(d) + reste)}. Le bouton Encaisser règle le tout.` }) : null));
+  }
   // Retard : une seule pénalité par déclaration, et aucune en taxation d'office (sa majoration de 40 % la remplace).
   const latePen = S.penalites.find(p => p.declId === d.id && !p.type && p.statut !== "annulee" && /^Retard de déclaration/.test(p.motif || ""));
   if (d.enRetard && w && st !== "rejetee") body.push(h("div", { class: "paste-row" },
@@ -5755,7 +5767,11 @@ function openDecl(id) {
   const go = async statut => {
     const m = mIn ? Number(mIn.value) : dMontant(d);
     if (!Number.isFinite(m) || m < 0) { mIn.setAttribute("aria-invalid", "true"); mIn.focus(); return; }
-    if (await decide(d, statut, m, nIn ? nIn.value.trim() : "")) closeDialog();
+    const note = nIn ? nIn.value.trim() : "";
+    const ok = statut === "payee" ? await encaisserAvis(d, m, note) : await decide(d, statut, m, note);
+    // Encaissement annulé : les échéances de prêt réglées avec l'avis redeviennent dues.
+    if (ok && statut === "validee" && st === "payee") await annulerPretsAvis(d);
+    if (ok) closeDialog();
   };
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisDoc(d), () => openDecl(id)), text: "Avis en image" }),
     h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(avisText(d), "Avis copié : collez-le en réponse sur Discord."), text: "Copier le texte" })];
@@ -7473,13 +7489,20 @@ function avisDoc(d) {
   const due = st === "validee" && !e ? payDue(d) : null;
   const rc = dec && dec.rectifie && st !== "rejetee" ? dec.rectifie : null;
   if (rc) lines.push([`Montant de l’avis initial${rc.ancienAvis ? " du " + longDate(new Date(rc.ancienAvis)) : ""}`, money(rc.ancienMontant)]);
+  // Échéances de prêt réclamées avec l'avis.
+  const pa = pretsAvis(d), paM = pa.reduce((t, y) => t + (Number(y.x.montant) || 0), 0), tot = dMontant(d) + paM;
+  if (pa.length) {
+    lines.push(["Impôt et cotisations", money(dMontant(d)), true]);
+    pa.forEach(y => lines.push([`Remboursement du prêt ${pretNo(y.p)} · ${echLabel(y)} du ${longDate(new Date(y.x.date))}`, money(y.x.montant)]));
+  }
+  const dontPret = pa.length ? ` (dont ${money(paM)} de remboursement du prêt ${[...new Set(pa.map(y => pretNo(y.p)))].join(", ")})` : "";
   const doc = {
     kind: rc ? "AVIS D’IMPOSITION RECTIFIÉ" : "AVIS D’IMPOSITION", no: dossierNo("DF", d.id), date: (rc ? "Rectifié le " : "Émis le ") + longDate(dec && dec.at ? new Date(dec.at) : new Date()),
     meta: [["Entreprise", d.entrepriseNom || "—"], ["Période", periodLabel(d.periode)], ["Déclarant", d.declarant || "—"], ["Déposée le", d.depotAt ? longDate(new Date(d.depotAt)) : "—"]],
-    lines, total: [st === "payee" ? "Montant réglé" : "Montant à régler", money(dMontant(d))],
+    lines, total: [st === "payee" ? "Montant réglé" : "Montant à régler", money(tot)],
     note: [rc ? "Motif de la rectification : " + rc.motif : "", dec && dec.note ? dec.note : ""].filter(Boolean).join("\n"), stamp: STAMP_DECL[st] || STAMP_DECL.soumise,
-    footer: st === "validee" ? `À régler auprès de la Préfecture de police, Direction des impôts et cotisations, ${due ? "avant le " + longDate(due) : e ? "selon l’échéancier ci-dessous" : "dès réception de cet avis"}. Un retard de paiement peut entraîner une pénalité.` : "Préfecture de police · Direction des impôts et cotisations.",
-    discord: { channel: "entreprises", mentions: [entMention(entOf(d))], text: `**Avis d’imposition ${rc ? "rectifié " : ""}${dossierNo("DF", d.id)}** · ${d.entrepriseNom} · ${periodPlain(d.periode)} : ${money(dMontant(d))} ${st === "payee" ? "réglés" : st === "validee" ? "à régler" + (due ? " avant le " + longDate(due) : e ? " selon l’échéancier" : "") : "(" + (DSTAT[st] || DSTAT.soumise)[0].toLowerCase() + ")"}${rc ? ` (au lieu de ${money(rc.ancienMontant)}). Motif : ${rc.motif}` : ""}.` }
+    footer: st === "validee" ? `À régler auprès de la Préfecture de police, Direction des impôts et cotisations, ${due ? "avant le " + longDate(due) : e ? "selon l’échéancier ci-dessous" : "dès réception de cet avis"}${pa.some(y => !y.x.payee) ? ", remboursement du prêt compris" : ""}. Un retard de paiement peut entraîner une pénalité.` : "Préfecture de police · Direction des impôts et cotisations.",
+    discord: { channel: "entreprises", mentions: [entMention(entOf(d))], text: `**Avis d’imposition ${rc ? "rectifié " : ""}${dossierNo("DF", d.id)}** · ${d.entrepriseNom} · ${periodPlain(d.periode)} : ${money(tot)} ${st === "payee" ? "réglés" : st === "validee" ? "à régler" + (due ? " avant le " + longDate(due) : e ? " selon l’échéancier" : "") : "(" + (DSTAT[st] || DSTAT.soumise)[0].toLowerCase() + ")"}${dontPret}${rc ? ` (au lieu de ${money(rc.ancienMontant)}). Motif : ${rc.motif}` : ""}.` }
   };
   if (e) doc.table = { title: "Échéancier de paiement", head: ["Échéance", "Date limite", "Montant", "État"], rows: e.echeances.map(x => [`${x.n} / ${e.echeances.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : (new Date(x.date).getTime() < Date.now() ? "En retard" : "À venir")]) };
   return doc;
@@ -9123,6 +9146,13 @@ function aEchoirItems(e) {
     const due = payDue(d);
     out.push({ kind: "decl", id: d.id, ref: dossierNo("DF", d.id), label: `Avis d’imposition · ${periodPlain(d.periode)}`, montant: dReste(d), plan: false, since: dec.at, exigible: due ? due.toISOString() : nowISO() });
   }
+  // Échéances de prêt réclamées avec un avis à payer, tant que leur date n'est pas passée (ensuite, le prêt est en retard).
+  for (const d of declsOf(e)) {
+    const dec = S.decisions[d.id];
+    if (!dec || dec.statut !== "validee") continue;
+    for (const y of pretsAvis(d)) if (!y.x.payee && new Date(y.x.date).getTime() >= Date.now())
+      out.push({ kind: "pret", id: y.p.id, idx: [y.i], avis: d.id, ref: pretNo(y.p), label: `Prêt · ${echLabel(y)}, avec l’avis ${dossierNo("DF", d.id)}`, montant: Number(y.x.montant) || 0, plan: false, since: dec.at, exigible: y.x.date });
+  }
   for (const p of pensOf(e)) if (p.statut === "due" && !penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), label: p.type === "redressement" ? `Redressement fiscal · ${p.motif || ""}` : `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt, exigible: new Date(new Date(p.createdAt || 0).getTime() + payDelayMs()).toISOString() });
   return out.sort((a, b) => String(a.exigible).localeCompare(String(b.exigible)));
 }
@@ -9143,6 +9173,8 @@ function itemSettled(x) {
     // « id:a » : la part à échoir d'un dossier de justice, réglée quand tout le prêt l'est.
     const [pid, part] = String(x.id).split(":"), p = (S.prets || []).find(y => y.id === pid);
     if (!p || p.statut !== "en_cours") return true;
+    // Échéance réclamée avec un avis : réglée quand elle est payée.
+    if (x.avis && Array.isArray(x.idx)) return x.idx.every(i => { const y = (p.echeances || [])[i]; return !y || y.payee; });
     return part === "a" ? pretReste(p) <= 0 : !pretDues(p).length;
   }
   // Anciennes fiches de justice : pas d'identifiant, seulement la référence.
@@ -9897,9 +9929,9 @@ async function encaisserItems(items, note, exact) {
     }
     else if (x.kind === "pret") {
       const p = (S.prets || []).find(y => y.id === x.id);
-      const dues = !p ? [] : exact && Array.isArray(x.idx) ? x.idx.map(i => Object.assign({ i }, (p.echeances || [])[i] || {})).filter(y => y.montant !== undefined && !y.payee) : pretDues(p);
+      const dues = !p ? [] : (exact || x.avis) && Array.isArray(x.idx) ? x.idx.map(i => Object.assign({ i }, (p.echeances || [])[i] || {})).filter(y => y.montant !== undefined && !y.payee) : pretDues(p);
       const due = dues.reduce((t, y) => t + (Number(y.montant) || 0), 0);
-      if (due > 0 && await payPret(p, dues.map(y => y.i), note)) rec += due;
+      if (due > 0 && await payPret(p, dues.map(y => y.i), note, x.avis || null)) rec += due;
     }
     else { const p = S.penalites.find(y => y.id === x.id); if (p && p.statut === "due" && await setPenaltyStatus(p, "payee")) rec += Number(p.montant) || 0; }
   }
@@ -9951,14 +9983,14 @@ function convState(c) {
 function convItems(e, exceptId) {
   const held = convPendingOf(e, exceptId).flatMap(c => c.items || []);
   const out = [];
-  for (const x of unpaidItems(e).concat(aEchoirItems(e))) if (!saisieOfItem(x) && !held.some(y => sameItem(y, x)) && !out.some(y => y.kind === x.kind && y.id === x.id)) out.push(x);
+  for (const x of unpaidItems(e).concat(aEchoirItems(e))) if (!saisieOfItem(x) && !held.some(y => sameItem(y, x) && (y.avis || null) === (x.avis || null)) && !out.some(y => y.kind === x.kind && y.id === x.id && (y.avis || null) === (x.avis || null))) out.push(x);
   return out;
 }
 // Ce qui est figé sur la convocation pour chaque somme : pour un prêt, les échéances échues ce jour-là ;
 // pour un paiement en plusieurs fois, la date jusqu'à laquelle les échéances sont collectées.
 function convItemSnap(x) {
   const o = { ref: x.ref, label: x.label, montant: x.montant, kind: x.kind, id: x.id, plan: !!x.plan };
-  if (x.kind === "pret") { const p = (S.prets || []).find(y => y.id === x.id); o.idx = p ? pretDues(p).map(y => y.i) : []; }
+  if (x.kind === "pret") { const p = (S.prets || []).find(y => y.id === x.id); o.idx = x.avis && Array.isArray(x.idx) ? x.idx.slice() : p ? pretDues(p).map(y => y.i) : []; if (x.avis) o.avis = x.avis; }
   if (x.kind === "decl" && x.plan) o.jusqua = nowISO();
   return o;
 }
@@ -13744,6 +13776,26 @@ function pretDues(p) {
   return (p.echeances || []).map((x, i) => Object.assign({ i }, x)).filter(x => !x.payee && (new Date(x.date).getTime() < now || (ex && ex <= now)));
 }
 const pretDuMontant = p => pretDues(p).reduce((t, x) => t + (Number(x.montant) || 0), 0);
+// Avis d'imposition et prêt : l'avis de chaque période réclame aussi les échéances de prêt qui tombent
+// pendant la période suivante, celle où il est à payer ; elles se règlent avec lui et en gardent la trace
+// (avisId). Un avis payé en plusieurs fois laisse les échéances du prêt à leur propre date.
+function pretsAvis(d) {
+  const e = d && d.entrepriseId ? S.entreprises.find(x => x.id === d.entrepriseId) : null;
+  if (!e) return [];
+  // Une seule déclaration de la période réclame l'échéance : celle dont l'avis est émis, sinon la plus récente.
+  const emis = x => (["validee", "payee"].includes(dStatus(x)) ? 1 : 0);
+  const princ = declsOf(e).filter(x => x.periode === d.periode && dStatus(x) !== "rejetee").sort((a, c) => emis(c) - emis(a) || String(c.createdAt || "").localeCompare(String(a.createdAt || "")))[0];
+  const st = dStatus(d), b = bounds(nextKeyOf(d.periode)), ouvert = st !== "payee" && st !== "rejetee" && !echOf(d) && !!princ && princ.id === d.id, out = [];
+  for (const p of pretsOf(e)) (p.echeances || []).forEach((x, i) => {
+    const t = new Date(x.date).getTime();
+    if (x.payee ? x.avisId === d.id : ouvert && b && p.statut === "en_cours" && !p.exigibleLe && t >= b.start.getTime() && t <= b.end.getTime()) out.push({ p, i, x });
+  });
+  return out.sort((a, c) => String(a.x.date).localeCompare(String(c.x.date)));
+}
+const pretsAvisMontant = (d, aPayer) => pretsAvis(d).filter(y => !aPayer || !y.x.payee).reduce((t, y) => t + (Number(y.x.montant) || 0), 0);
+const echLabel = y => `échéance ${y.x.n}/${(y.p.echeances || []).length}`;
+// Avis qui réclame une échéance pas encore payée.
+const avisDeEcheance = (p, i) => declsOf(entOf(p)).find(d => pretsAvis(d).some(y => y.p.id === p.id && y.i === i && !y.x.payee)) || null;
 const justifEchu = p => p.statut === "en_cours" && p.justifRequis && !p.justificatif && !pretVehJustif(p) && p.justifAvant && new Date(p.justifAvant).getTime() < Date.now();
 function pretState(p) {
   if (p.statut === "en_cours") {
@@ -13782,7 +13834,7 @@ function conventionDoc(p) {
     total: p.statut === "refuse" || p.statut === "annule" ? ["Capital demandé", money(p.montant)] : [p.statut === "rembourse" ? "Somme remboursée" : "Somme à rembourser", money(pretTotal(p))],
     table: plan.length ? { title: "Échéancier de remboursement", head: ["Échéance", "Date limite", "Montant", "État"], rows: plan.map(x => [`${x.n} / ${plan.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : "À payer"]) } : null,
     stamp: st,
-    footer: `Les fonds sont affectés à l’objet ci-dessus${p.justifRequis ? " : l’entreprise remet le justificatif de l’achat dans le délai indiqué" : ""}. En cas d’emploi des fonds à un autre usage ou d’échéance impayée, la Direction peut exiger le remboursement immédiat du capital restant dû, puis engager le recouvrement forcé.`,
+    footer: `Les fonds sont affectés à l’objet ci-dessus${p.justifRequis ? " : l’entreprise remet le justificatif de l’achat dans le délai indiqué" : ""}. Chaque échéance figure sur l’avis d’imposition à payer ${cfg().periodicite === "mois" ? "le mois" : "la semaine"} où elle tombe et se règle avec lui ; sans avis, elle se règle à sa date. En cas d’emploi des fonds à un autre usage ou d’échéance impayée, la Direction peut exiger le remboursement immédiat du capital restant dû, puis engager le recouvrement forcé.`,
     discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Convention de prêt ${pretNo(p)}** · ${e.nom || p.entrepriseNom} · ${money(p.montant)} prêtés${p.taux ? ` à ${pct(p.taux)}` : " sans intérêts"}, ${money(pretTotal(p))} à rembourser.` }
   };
 }
@@ -13791,7 +13843,7 @@ function quittancePretDoc(p, idx) {
   if (!x || !x.payee) return null;
   const n = (p.echeances || []).length;
   return quittanceDoc({ no: `${dossierNo("QT", p.id)}-${x.n}`, ent: entOf(p), objet: `Remboursement du prêt ${pretNo(p)} · échéance ${x.n}/${n}`, ref: pretNo(p), montant: x.montant, paidAt: x.paidAt, paidByNom: x.paidByNom,
-    detail: [["Dont capital", money(x.capital || 0), false], ["Dont intérêts", money(x.interets || 0), false], ["Reste à rembourser", money(pretReste(p)), true]] });
+    detail: [x.avisId ? ["Réglée avec l’avis d’imposition", dossierNo("DF", x.avisId), false] : null, ["Dont capital", money(x.capital || 0), false], ["Dont intérêts", money(x.interets || 0), false], ["Reste à rembourser", money(pretReste(p)), true]].filter(Boolean) });
 }
 
 // Écritures
@@ -13809,18 +13861,18 @@ async function pretOnce(id, fn) {
   pretBusy.add(id);
   try { return await fn(); } finally { pretBusy.delete(id); }
 }
-async function payPret(p, idxs, note) { return pretOnce(p.id, () => payPret1(p, idxs, note)); }
-async function payPret1(p, idxs, note) {
+async function payPret(p, idxs, note, avisId, label) { return pretOnce(p.id, () => payPret1(p, idxs, note, avisId, label)); }
+async function payPret1(p, idxs, note, avisId, label) {
   const latest = (S.prets || []).find(x => x.id === p.id) || p;
   if (latest.statut !== "en_cours") return false;
   const ech = JSON.parse(JSON.stringify(latest.echeances || []));
   const now = nowISO(), done = [];
-  for (const i of idxs) if (ech[i] && !ech[i].payee) { Object.assign(ech[i], { payee: true, paidAt: now, paidByNom: S.agentName || "", note: note || "" }); done.push(i); }
+  for (const i of idxs) if (ech[i] && !ech[i].payee) { Object.assign(ech[i], { payee: true, paidAt: now, paidByNom: S.agentName || "", note: note || "" }, avisId ? { avisId } : {}); done.push(i); }
   if (!done.length) return false;
   const fini = ech.every(x => x.payee);
   if (!(await savePret(latest, Object.assign({ echeances: ech }, fini ? { statut: "rembourse", rembourseLe: now } : {})))) return false;
   const p2 = (S.prets || []).find(x => x.id === p.id);
-  if (p2) for (const i of done) { const q = quittancePretDoc(p2, i); if (q) autoPublish("quittances", q, "Remboursement encaissé."); }
+  if (p2) for (const i of done) { const q = quittancePretDoc(p2, i); if (q) autoPublish("quittances", q, label || "Remboursement encaissé."); }
   return true;
 }
 // Remboursement anticipé : le capital restant dû, sans les intérêts des échéances à venir.
@@ -13843,6 +13895,30 @@ async function rembourserAnticipe1(p) {
   if (p2) autoPublish("quittances", quittanceDoc({ no: `${dossierNo("QT", p.id)}-S`, ent: entOf(p2), objet: `Remboursement anticipé du prêt ${pretNo(p2)}`, ref: pretNo(p2),
     montant: ech.filter(x => x.anticipe && x.paidAt === at).reduce((t, x) => t + (Number(x.montant) || 0), 0), paidAt: at, paidByNom: S.agentName || "" }), "Remboursement encaissé.");
   return true;
+}
+
+// Encaissement d'un avis d'imposition : les échéances de prêt qu'il réclame sont encaissées avec lui.
+async function encaisserAvis(d, montant, note) {
+  const l = pretsAvis(d).filter(y => !y.x.payee), m = l.reduce((t, y) => t + (Number(y.x.montant) || 0), 0);
+  // Un seul message pour l'avis et le prêt, quel que soit l'ordre d'arrivée des quittances sur Discord.
+  const label = l.length ? `Paiement encaissé : ${money(Math.max(0, Math.round(Number(montant) || 0) - dCredit(d)))} d’impôt et de cotisations, et ${money(m)} de remboursement de prêt (${l.length > 1 ? l.length + " échéances" : "une échéance"}).` : null;
+  if (!(await decide(d, "payee", montant, note, label ? { label } : undefined))) return false;
+  const par = new Map();
+  for (const y of l) { if (!par.has(y.p.id)) par.set(y.p.id, { p: y.p, idx: [] }); par.get(y.p.id).idx.push(y.i); }
+  for (const { p, idx } of par.values()) await payPret(p, idx, `Réglée avec l’avis d’imposition ${dossierNo("DF", d.id)}`, d.id, label);
+  return true;
+}
+// Encaissement de l'avis annulé : les échéances réglées avec lui redeviennent dues.
+async function annulerPretsAvis(d) {
+  for (const p of (S.prets || []).filter(q => !q.anticipe && (q.echeances || []).some(x => x.payee && x.avisId === d.id))) {
+    await pretOnce(p.id, async () => {
+      const cur = pretNow(p.id);
+      if (!cur || cur.anticipe) return false;
+      const ech = JSON.parse(JSON.stringify(cur.echeances || []));
+      ech.forEach(x => { if (x.payee && x.avisId === d.id) Object.assign(x, { payee: false, paidAt: null, paidByNom: "", note: "", avisId: null }); });
+      return savePret(cur, { echeances: ech, statut: "en_cours", rembourseLe: undefined });
+    });
+  }
 }
 
 // L'état du prêt au moment du clic : un autre agent a pu l'accorder, le refuser ou l'annuler entre-temps.
@@ -13904,7 +13980,7 @@ function openPret(id) {
     return h("tr", {},
       h("td", { class: "no", text: `${x.n}/${p.echeances.length}` }), h("td", { text: longDate(new Date(x.date)) }),
       h("td", { class: "num", text: money(x.montant) }), h("td", { class: "num", text: money(x.interets || 0) }),
-      h("td", {}, chip(x.payee ? [`Payée le ${fmtDate(new Date(x.paidAt))}${x.anticipe ? " (anticipé)" : ""}`, "ok"] : late ? ["En retard", "bad"] : ["À venir", "muted"])),
+      h("td", {}, chip(x.payee ? [`Payée le ${fmtDate(new Date(x.paidAt))}${x.anticipe ? " (anticipé)" : x.avisId ? ` avec l’avis ${dossierNo("DF", x.avisId)}` : ""}`, "ok"] : late ? ["En retard", "bad"] : (av => av ? [`Sur l’avis ${dossierNo("DF", av.id)}`, "info"] : ["À venir", "muted"])(avisDeEcheance(p, i)))),
       h("td", { class: "act" },
         x.payee ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const q = quittancePretDoc(p, i); if (q) showDocImage(q, reopen); }, text: "Quittance" }) : null,
         dir && p.statut === "en_cours" && i === next ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (await payPret(p, [i])) { toast(`Échéance ${x.n}/${p.echeances.length} encaissée.`); reopen(); } else b.disabled = false; }, text: "Encaisser" }) : null,
