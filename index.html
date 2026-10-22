@@ -703,6 +703,14 @@ header.top{position:relative}
 @media (prefers-reduced-motion:reduce){#foot-sync.is-live::before{animation:none}}
 /* réglages en rubriques */
 .set-tabs{margin:0 0 16px}
+.fiche-tabs{position:sticky;top:-16px;z-index:3;margin:0;padding:10px 0 8px;background:var(--sheet);border-bottom:1px solid var(--rule);flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+.fiche-tabs::-webkit-scrollbar{display:none}
+.fiche-tabs button{white-space:nowrap;flex:0 0 auto}
+.fiche-actions{gap:8px;flex-wrap:wrap}
+.fiche-pane{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;min-width:0}
+.fiche-pane[hidden]{display:none}
+.more-row{justify-content:center}
+.more-row .linkbtn{font-size:13px}
 .set-tabs button[aria-selected="true"]{background:var(--ink);color:var(--sheet);border-color:var(--ink)}
 .set-page{display:grid;gap:16px;align-items:start;max-width:1000px}
 .set-page.two{grid-template-columns:repeat(2,minmax(0,1fr));max-width:none}
@@ -7687,6 +7695,25 @@ async function retirerMiseEnCause(b, sd, back) {
   const cur = S.entreprises.find(x => x.id === b.id) || b;
   if (await write(() => S.db.doc("entreprises/" + b.id).update({ solidaire: solidairesDe(cur).filter(x => x.entrepriseId !== sd.entrepriseId) }))) { toast("Mise en cause retirée."); if (back) back(); }
 }
+// État de la fiche ouverte : onglet affiché et listes dépliées, gardés tant qu'on reste sur la même
+// entreprise (une action qui rouvre la fiche revient au même endroit).
+function ficheEtat(e, opts) {
+  const id = e.id || norm(e.nom);
+  if (!S.fiche || S.fiche.id !== id) S.fiche = { id, tab: "situation", tout: new Set() };
+  if (opts && opts.tab) S.fiche.tab = opts.tab;
+  if (opts && opts.motif) S.fiche.tab = "declarations";
+  return S.fiche;
+}
+const ficheDeplie = (key, reopen) => () => { if (S.fiche) S.fiche.tout.add(key); if (reopen) reopen(); };
+// Longues listes de la fiche : les premières lignes, puis un bouton pour tout afficher.
+function capList(key, items, n, reopen) {
+  if (items.length <= n || (S.fiche && S.fiche.tout.has(key))) return items;
+  return items.slice(0, n).concat([h("li", { class: "more-row" }, h("button", { class: "linkbtn", type: "button", onclick: ficheDeplie(key, reopen), text: `Afficher les ${items.length - n} autres` }))]);
+}
+function capRows(key, rows, n, cols, reopen) {
+  if (rows.length <= n || (S.fiche && S.fiche.tout.has(key))) return rows;
+  return rows.slice(0, n).concat([h("tr", { class: "more-row" }, h("td", { colspan: String(cols) }, h("button", { class: "linkbtn", type: "button", onclick: ficheDeplie(key, reopen), text: `Afficher les ${rows.length - n} autres` })))]);
+}
 // Fiche : agents de la Préfecture liés, autres entreprises du même patron, salariés repris ou partagés.
 function liensSection(e, back) {
   if (!e || !e.id) return null;
@@ -7746,7 +7773,7 @@ function openFiche(e, opts) {
   const hist = sm.ds.length
     ? h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
         h("thead", {}, h("tr", {}, ["Période", "Chiffre d’affaires", "Résultat", "Montant dû", "Encaissé", "Statut"].map((t, i) => h("th", { class: [1, 2, 3, 4].includes(i) ? "num" : null, text: t })))),
-        h("tbody", {}, histRows)))
+        h("tbody", {}, capRows("decl", histRows, 8, 6, reopen))))
     : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune déclaration pour l’instant." });
 
   const penRows = sm.pens.slice().sort(byCreatedDesc).map(p => h("tr", {},
@@ -7763,7 +7790,7 @@ function openFiche(e, opts) {
       w && p.statut === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "due")) reopen(); }, text: "Annuler l’encaissement" }) : null,
       w && p.statut === "annulee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "due")) reopen(); }, text: "Rétablir" }) : null)));
   const pens = sm.pens.length
-    ? h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact pen-table" }, h("tbody", {}, penRows)))
+    ? h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact pen-table" }, h("tbody", {}, capRows("pen", penRows, 8, 5, reopen))))
     : h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucune pénalité." });
 
   let penForm = null;
@@ -7790,6 +7817,63 @@ function openFiche(e, opts) {
     });
   }
 
+  // Fiche en onglets : la situation d'abord, puis les déclarations, le compte, les contrôles et le
+  // recouvrement, les autres dossiers. L'onglet ouvert reste le même tant qu'on reste sur cette entreprise.
+  const etat = ficheEtat(e, opts);
+  const ctrls = ctrlsOf(e);
+  // Actions du recouvrement et des sanctions : dans leur onglet, pour alléger le pied de la fiche.
+  const actions = [
+    w && unpaidItems(e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisie(e), text: "Saisie" }) : null,
+    w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }) : null,
+    w && e.id && e.patron ? h("button", { class: "btn ghost small", type: "button", onclick: () => openInterdiction(e, reopen), text: "Interdire de gérer" }) : null,
+    w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openRescrit(e, null, reopen), text: "Rescrit" }) : null].filter(Boolean);
+  const aVoir = [relancesSection(e, reopen),
+    sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r }))),
+      writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
+    liensSection(e, reopen),
+    interdictionSection(e, reopen)].filter(Boolean);
+  const panels = [
+    ["situation", "Situation", null, aVoir.length ? aVoir : [h("p", { class: "muted", style: "margin:0", text: "Rien à signaler : aucune somme due, aucune alerte sur la dernière déclaration, aucun lien à vérifier." })]],
+    ["declarations", "Déclarations", sm.ds.length, [
+    sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
+      sec("Historique des déclarations", hist),
+      sec("Pénalités et redressements", pens, penForm)]],
+    ["compte", "Compte", relevesOf(e).length, [compteSection(e, reopen)]],
+    ["controles", "Contrôles et recouvrement", ctrls.length, [
+      actions.length ? h("div", { class: "paste-row fiche-actions" }, actions) : null,
+      ctrls.length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, capList("ctrl", ctrls.map(ctrlListItem), 6, reopen))) : null,
+    (() => {
+      const rl = relancesOf(e), sa = saisiesOf(e), tj = S.transmissions.filter(t => sameEnt(t, e));
+      if (!rl.length && !sa.length && !tj.length) return null;
+      return sec("Relances, saisies et justice", h("ul", { class: "ent-list" },
+        capList("rl", rl.map(r => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${rlLabel(r)}` }), h("span", { class: "meta", text: `${fmtDate(new Date(r.at))} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · avant le ${fmtDate(new Date(r.echeance))}` })),
+          rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r), reopen), text: "Image" })))), 6, reopen),
+        capList("sa", sa.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSaisieDetail(x.id), text: `${dossierNo("SA", x.id)} · ${SAISIE_TYPES[x.type]}` }), h("span", { class: "meta", text: `${fmtDate(new Date(x.at))} · ${money(x.montant)}${x.tiers ? " · " + x.tiers : ""}` })), chip(saisieEtat(x)), h("span", {}))), 6, reopen),
+        capList("tj", tj.map(t => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTransmission(t.id), text: `${dossierNo("TJ", t.id)} · Dossier de justice` }), h("span", { class: "meta", text: `${fmtDate(new Date(t.at))} · ${money(t.montant)}` })), t.statut === "transmis" && !justiceEnCours(t) ? chip(["Dette réglée ?", "warn"]) : chip(TSTAT[t.statut] || TSTAT.transmis), h("span", {}))), 6, reopen)));
+    })(),
+      rescritsSection(e, reopen),
+      convocationsSection(e)]],
+    ["autres", "Autres dossiers", null, [espaceSection(e), contratsSection(e), conventionsSection(e), pretsSection(e), vehiculesSection(e)]]
+  ].map(([k, l, n, kids]) => [k, l, n, kids.filter(Boolean)]).filter(([k, , , kids]) => kids.length);
+  if (!panels.some(([k]) => k === etat.tab)) etat.tab = "situation";
+  const tabs = h("div", { class: "seg set-tabs fiche-tabs", role: "tablist", "aria-label": "Rubriques de la fiche" },
+    panels.map(([k, l, n]) => h("button", { type: "button", role: "tab", id: "ft-" + k, "data-ft": k, "aria-controls": "fp-" + k, "aria-selected": k === etat.tab ? "true" : "false", tabindex: k === etat.tab ? "0" : "-1" },
+      l, n ? h("span", { class: "count", text: String(n) }) : null)));
+  const panes = panels.map(([k, , , kids]) => h("div", { class: "fiche-pane", role: "tabpanel", id: "fp-" + k, "aria-labelledby": "ft-" + k, hidden: k !== etat.tab }, kids));
+  const montrer = k => {
+    etat.tab = k;
+    $$("button[data-ft]", tabs).forEach(b => { const on = b.dataset.ft === k; b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1; });
+    panes.forEach(p => { p.hidden = p.id !== "fp-" + k; });
+    if (k === "declarations") dessinerGraphique();
+  };
+  tabs.addEventListener("click", ev => { const b = ev.target.closest("button[data-ft]"); if (b) montrer(b.dataset.ft); });
+  tabs.addEventListener("keydown", ev => {
+    if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(ev.key)) return;
+    ev.preventDefault();
+    const ks = panels.map(x => x[0]), i = ks.indexOf(etat.tab);
+    const k = ev.key === "Home" ? ks[0] : ev.key === "End" ? ks[ks.length - 1] : ks[(i + (ev.key === "ArrowRight" ? 1 : ks.length - 1)) % ks.length];
+    montrer(k); const b = $(`button[data-ft="${k}"]`, tabs); if (b) b.focus();
+  });
   const body = [
     minis,
     e.id ? (() => {
@@ -7802,44 +7886,13 @@ function openFiche(e, opts) {
         h("button", { class: "linkbtn", type: "button", onclick: () => openAttestation(e, reopen), text: canAgent() ? "Vérifier et délivrer" : "Voir" }));
     })() : null,
     (() => { const x = exoSituation(e); return x ? h("div", { class: "exo-line" }, h("strong", { text: "Exonération :" }), chip([x.text, x.tone])) : null; })(),
-    relancesSection(e, reopen),
-    liensSection(e, reopen),
-    interdictionSection(e, reopen),
-    rescritsSection(e, reopen),
-    sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r }))),
-      writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
-    sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
-    sec("Historique des déclarations", hist),
-    sec("Pénalités et redressements", pens, penForm),
-    compteSection(e, reopen),
-    convocationsSection(e),
-    espaceSection(e),
-    contratsSection(e),
-    conventionsSection(e),
-    pretsSection(e),
-    vehiculesSection(e),
-    ctrlsOf(e).length ? sec("Contrôles fiscaux", h("ul", { class: "ent-list" }, ctrlsOf(e).map(ctrlListItem))) : null,
-    (() => {
-      const rl = relancesOf(e).slice(0, 6), sa = saisiesOf(e), tj = S.transmissions.filter(t => sameEnt(t, e));
-      if (!rl.length && !sa.length && !tj.length) return null;
-      return sec("Relances, saisies et justice", h("ul", { class: "ent-list" },
-        rl.map(r => h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${rlLabel(r)}` }), h("span", { class: "meta", text: `${fmtDate(new Date(r.at))} · ${r.type === "declaration" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · avant le ${fmtDate(new Date(r.echeance))}` })),
-          rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r), reopen), text: "Image" })))),
-        sa.map(x => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSaisieDetail(x.id), text: `${dossierNo("SA", x.id)} · ${SAISIE_TYPES[x.type]}` }), h("span", { class: "meta", text: `${fmtDate(new Date(x.at))} · ${money(x.montant)}${x.tiers ? " · " + x.tiers : ""}` })), x.statut === "notifiee" && !saisieOpen(x) ? chip(["Sommes réglées · à lever", "warn"]) : chip(SSTAT[x.statut] || SSTAT.notifiee), h("span", {}))),
-        tj.map(t => h("li", {}, h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTransmission(t.id), text: `${dossierNo("TJ", t.id)} · Dossier de justice` }), h("span", { class: "meta", text: `${fmtDate(new Date(t.at))} · ${money(t.montant)}` })), t.statut === "transmis" && !justiceEnCours(t) ? chip(["Dette réglée ?", "warn"]) : chip(TSTAT[t.statut] || TSTAT.transmis), h("span", {})))));
-    })()
-  ];
+    tabs].concat(panes);
   const foot = [
     w && !e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => { const d = sm.ds[0]; if (d) registerFromDecl(d); }, text: "Enregistrer au registre" }) : null,
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => editEntreprise(e, () => openFiche(S.entreprises.find(x => x.id === e.id) || e)), text: "Modifier l’entreprise" }) : null,
     e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openAttestation(e, reopen), text: "Attestation de régularité" }) : null,
     e.fermetureAdm && e.actif === false ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(fermetureDoc(e), reopen), text: "Arrêté de fermeture" }) : null,
     canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(e), text: "Contrôle fiscal" }) : null,
-    canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(e), text: "Convoquer" }) : null,
-    w && unpaidItems(e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisie(e), text: "Saisie" }) : null,
-    w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }) : null,
-    w && e.id && e.patron ? h("button", { class: "btn ghost small", type: "button", onclick: () => openInterdiction(e, reopen), text: "Interdire de gérer" }) : null,
-    w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openRescrit(e, null, reopen), text: "Rescrit" }) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -7848,6 +7901,10 @@ function openFiche(e, opts) {
     stampEl: e.id ? stamp(situation(sm)) : stamp(["Non enregistrée", "warn"]),
     body, foot
   });
+  if (etat.tab === "declarations") dessinerGraphique();
+  function dessinerGraphique() {
+  if (chartBox.dataset.fait) return;
+  chartBox.dataset.fait = "1";
   const keys = keysEnding(defaultKey(), 12);
   const byKey = {};
   for (const d of sm.ds) if (dStatus(d) !== "rejetee" && (!byKey[d.periode] || String(d.createdAt) > String(byKey[d.periode].createdAt))) byKey[d.periode] = d;
@@ -7857,6 +7914,7 @@ function openFiche(e, opts) {
              { name: "Montant dû", cls: "b2", values: keys.map(k => byKey[k] ? dMontant(byKey[k]) : 0) }],
     label: "Chiffre d’affaires et montant dû de l’entreprise", empty: "Aucune déclaration sur ces périodes."
   }));
+  }
   if (opts.motif && w) setTimeout(() => { const el = $("#pen-montant"); if (el) { el.scrollIntoView({ block: "center" }); el.focus(); } }, 80);
 }
 
