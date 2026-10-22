@@ -14589,11 +14589,44 @@ function nonRetrouves(e, d) {
   return out;
 }
 // Entreprise reconnue à son RIB, lu sur un relevé précédent.
+// Même compte : RIB lu en partie (« US76…8302 » pour « US76…8302027 ») ou à un ou deux chiffres près (6 lu 8).
+function ribProche(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [c, l] = a.length <= b.length ? [a, b] : [b, a];
+  return c.length >= 18 && (l.startsWith(c) || (l.length - c.length <= 2 && distance(a, b) <= 2));
+}
 function entParRib(rib) {
   if (!rib) return null;
-  const r = (S.releves || []).filter(x => x.rib === rib && x.entrepriseId).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
-  const e = r && S.entreprises.find(x => x.id === r.entrepriseId);
-  return e && e.actif !== false ? e : null;
+  const rels = (S.releves || []).filter(x => x.rib && x.entrepriseId), actif = id => { const e = S.entreprises.find(x => x.id === id); return e && e.actif !== false ? e : null; };
+  const r = rels.filter(x => x.rib === rib).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
+  if (r) return actif(r.entrepriseId);
+  const l = [...new Set(rels.filter(x => ribProche(x.rib, rib)).map(x => x.entrepriseId))].map(actif).filter(Boolean);
+  return l.length === 1 ? l[0] : null;
+}
+// Entreprise d'une capture collée sans l'avoir indiquée : son RIB ; sinon des mouvements déjà relevés sur
+// son compte (même minute, même montant) ; sinon des libellés propres à son compte et son nom dans les
+// entrées d'argent (« Livraison bûcheron », « Facture — XPL »). Rien quand deux entreprises restent aussi probables.
+function entDeReleve(rib, mouvements) {
+  const e0 = entParRib(rib);
+  if (e0) return { e: e0, par: "rib" };
+  const mv = (mouvements || []).map(m => ({ t: m && m.t ? new Date(m.t).getTime() : NaN, montant: Number(m && m.montant), libelle: (m && m.libelle) || "" }))
+    .filter(m => Number.isFinite(m.t) && Number.isFinite(m.montant) && m.montant);
+  if (!mv.length) return null;
+  const ents = activeEnts();
+  const premier = sc => { const l = [...sc].sort((a, b) => b[1] - a[1]); return l.length && (l.length === 1 || l[0][1] >= 2 * l[1][1]) ? l[0] : null; };
+  const cles = new Set(mv.map(mvtKey)), vus = new Map();
+  for (const e of ents) { const n = mvtsOf(e).filter(m => cles.has(mvtKey(m))).length; if (n) vus.set(e, n); }
+  const p1 = premier(vus);
+  if (p1 && p1[1] >= Math.min(2, mv.length)) return { e: p1[0], par: "mouvements" };
+  const sc = new Map(), add = (e, v) => sc.set(e, (sc.get(e) || 0) + v);
+  const libs = new Set(mv.map(m => norm(m.libelle)).filter(l => l.length >= 6)), deja = new Map();
+  for (const e of ents) for (const m of mvtsOf(e)) { const l = norm(m.libelle); if (libs.has(l)) { if (!deja.has(l)) deja.set(l, new Set()); deja.get(l).add(e); } }
+  for (const s of deja.values()) for (const e of s) add(e, 1 / s.size);
+  const entrees = [...new Set(mv.filter(m => m.montant > 0).map(m => ` ${norm(m.libelle)} `))];
+  for (const e of ents) if (nomsDe(e).map(norm).some(n => n.length >= 3 && entrees.some(l => l.includes(` ${n} `)))) add(e, 1);
+  const p2 = premier(sc);
+  return p2 && p2[1] >= 1 ? { e: p2[0], par: "libelles" } : null;
 }
 
 // Pièce jointe (capture ou lien) : affichage dans une fenêtre.
@@ -14731,9 +14764,18 @@ const nettoyer = t => String(t || "")
   .replace(/\s+/g, " ").trim();
 // Sens d'un mouvement d'après son libellé, quand le signe manque.
 const signeLibelle = lib => /re[çc]u|rembours|vente|encaiss/i.test(lib) ? 1 : /salaire|prime|^vers\b|paiement|commande|achat|retrait/i.test(lib) ? -1 : 0;
+// RIB « US76 4032 4306 2292 8302 027 » : deux lettres puis des groupes de chiffres. L'OCR prend parfois
+// un 0 pour O ou @, un 1 pour I, l ou | : corrigés dans les groupes qui contiennent déjà un chiffre.
 function lireRib(t) {
-  const m = /RIB\s*[:.]?\s*([A-Z]{2}\s?\d{2}(?:\s?\d{3,4}){3,6})/i.exec(String(t || "").replace(/[Oo](?=\d)|(?<=\d)[Oo]/g, "0"));
-  return m ? m[1].replace(/\s+/g, "").toUpperCase() : null;
+  const m = /RIB\s*[:.;]?\s*([A-Z]{2})\s?([^\r\n]*)/i.exec(String(t || ""));
+  if (!m) return null;
+  let ch = "";
+  for (const g of m[2].trim().split(/\s+/)) {
+    const v = /\d/.test(g) ? g.replace(/[OoQ@°]/g, "0").replace(/[Il|!]/g, "1") : g;
+    if (!/^\d{2,8}$/.test(v)) break;
+    ch += v;
+  }
+  return ch.length >= 11 ? m[1].toUpperCase() + ch : null;
 }
 // Texte collé ou recopié : un mouvement par date ; le solde est le premier montant avant le premier mouvement.
 function mouvementsTexte(texte, ref) {
@@ -14807,16 +14849,21 @@ async function lireCapture(blob, ref, suivi) {
     if (suivi) suivi({ status: "lecture des mouvements", progress: i / p.length });
     const x = p[i], yc = Math.round(centres[i]), ya = yc - pas / 2, yb = yc + pas / 2, pad = hp * 0.8;
     const tx = ics[i] ? ics[i].fin + hp * 0.6 : finIc != null ? finIc + hp * 0.6 : 0;
-    const lireLigne = async kk => {
-      const txt = await lire(decoupe(c, tx, ya + 1, x.x0 - pad - tx, yb - ya - 2, kk), 6), c1 = conf;
-      const mt = await lire(decoupe(c, x.x0 - pad, x.y0 - pad / 2, x.x1 - x.x0 + 2 * pad, x.y1 - x.y0 + pad, kk * 1.2), 7, "0123456789+-€ .,");
-      return { txt, conf: Math.min(c1, conf), dt: lireDate(txt, ref), mm: lireMontant(mt) || lireMontant(mt.replace(/\s+$/, "") + " €") };
-    };
-    let r = await lireLigne(k);
-    if (!r.dt || !r.mm || r.conf < 70) { const r2 = await lireLigne(k * 1.6); if (r2.dt && r2.mm && (!r.dt || !r.mm || r2.conf > r.conf)) r = r2; else r = { txt: r.dt ? r.txt : r2.txt, conf: Math.max(r.conf, r2.conf), dt: r.dt || r2.dt, mm: r.mm || r2.mm }; }
+    const lireTxt = async kk => { const txt = await lire(decoupe(c, tx, ya + 1, x.x0 - pad - tx, yb - ya - 2, kk), 6); return { txt, conf, dt: lireDate(txt, ref) }; };
+    const lireMt = async kk => { const t = await lire(decoupe(c, x.x0 - pad, x.y0 - pad / 2, x.x1 - x.x0 + 2 * pad, x.y1 - x.y0 + pad, kk), 7, "0123456789+-€ .,"); return lireMontant(t) || lireMontant(t.replace(/\s+$/, "") + " €"); };
+    let r = await lireTxt(k);
+    if (!r.dt || r.conf < 70) { const r2 = await lireTxt(k * 1.6); if ((r2.dt && !r.dt) || (!!r2.dt === !!r.dt && r2.conf > r.conf)) r = r2; }
+    // Montant lu à deux tailles : l'OCR se dit peu sûr de ces pastilles même quand il les lit bien, ce sont
+    // deux lectures identiques qui font foi ; sinon une troisième départage, et sans accord le montant est à vérifier.
+    const mts = [await lireMt(k * 1.2), await lireMt(k * 2)];
+    let mm = mts[0] && mts[1] && mts[0].v === mts[1].v ? mts[0] : null;
+    if (!mm) { mts.push(await lireMt(k * 1.6)); const vs = mts.filter(Boolean); mm = vs.find(a => vs.filter(b => b.v === a.v).length >= 2) || null; }
+    const sur = !!mm;
+    if (!mm) mm = mts.find(Boolean) || null;
     const lib = r.txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
       .map(l => { const dd = lireDate(l, ref); return nettoyer(dd ? l.slice(0, dd.index) + " " + l.slice(dd.index + dd.len) : l); }).filter(Boolean).join(" · ");
-    mouvements.push({ t: r.dt ? r.dt.t.toISOString() : null, libelle: lib, montant: r.mm ? r.mm.v * x.signe : null, conf: Math.round(r.conf), douteux: !r.dt || !r.mm || r.conf < 60 });
+    // Un signe écrit qui contredit la couleur de la pastille est aussi à vérifier.
+    mouvements.push({ t: r.dt ? r.dt.t.toISOString() : null, libelle: lib, montant: mm ? mm.v * x.signe : null, conf: Math.round(r.conf), douteux: !r.dt || !mm || !sur || r.conf < 60 || (!!mm.signe && mm.signe !== x.signe) });
   }
   verifierOrdre(mouvements, ref);
   // En-tête : le solde à gauche, le RIB à droite, au-dessus de « Mouvements récents ».
@@ -14880,6 +14927,7 @@ function openReleve(e, back, image) {
   const note = h("input", { id: "rv-note", autocomplete: "off", placeholder: "Facultatif : circonstances du relevé" });
   const etat = h("p", { class: "hint rv-etat", "aria-live": "polite" });
   const avance = h("p", { class: "hint conc-bad", "aria-live": "polite", hidden: true });
+  const autreRib = h("p", { class: "hint conc-bad", "aria-live": "polite", hidden: true });
   const img = h("img", { class: "proof-img", alt: "Capture collée" });
   const imgA = h("a", { target: "_blank", rel: "noopener", title: "Agrandir la capture" }, img); imgA.hidden = true;
   const rows = h("div", { class: "mv-rows" }, mvRow());
@@ -14917,18 +14965,26 @@ function openReleve(e, back, image) {
     const fut = list.length && list[0].t > refDate().getTime() + 5 * 6e4;
     avance.hidden = !fut;
     if (fut) avance.textContent = `Le dernier mouvement (${jjmm(list[0].t)}) est plus récent que l’heure du relevé : corrigez l’heure du relevé ou l’avance de la tablette (Réglages → Surveillance des comptes, ${blc().decalageTablette} h aujourd’hui).`;
+    // RIB déjà relevé sur le compte d'une autre entreprise : mauvaise entreprise, ou compte partagé.
+    const autre = x && rib ? entParRib(rib) : null;
+    autreRib.hidden = !(autre && autre.id !== x.id);
+    if (!autreRib.hidden) autreRib.textContent = `Ce RIB est celui de « ${autre.nom} » d’après ses relevés : vérifiez l’entreprise avant d’enregistrer.`;
   };
   const appliquer = (r, texte) => {
     const D = decalageTabletteMs();
     r = Object.assign({}, r, { mouvements: (r.mouvements || []).map(x => { const t = x && x.t ? new Date(x.t).getTime() : NaN; return Number.isFinite(t) && D ? Object.assign({}, x, { t: new Date(t - D).toISOString() }) : x; }) });
     if (r.solde != null) m.value = String(Math.round(r.solde));
     m.classList.toggle("a-verifier", !!r.soldeDouteux && r.solde != null);
-    if (r.rib) { rib = r.rib; if (entIn && !entIn.value.trim()) { const x = entParRib(rib); if (x) entIn.value = x.nom; } }
+    if (r.rib) rib = r.rib;
+    // Entreprise à indiquer : reconnue à son RIB, à ses mouvements déjà relevés ou à ses libellés.
+    let trouvee = null;
+    if (entIn && !entIn.value.trim()) { trouvee = entDeReleve(rib, r.mouvements); if (trouvee) entIn.value = trouvee.e.nom; entIn.classList.toggle("a-verifier", !!trouvee && trouvee.par !== "rib"); }
     fill(rows, (r.mouvements.length ? r.mouvements : [null]).map(mvRow));
     const n = r.mouvements.length, dout = r.mouvements.filter(x => x.douteux).length;
+    const parQuoi = trouvee ? { rib: "à son RIB", mouvements: "à des mouvements déjà relevés sur son compte", libelles: "à ses libellés, à confirmer" }[trouvee.par] : "";
     etat.className = "hint rv-etat";
     etat.textContent = n
-      ? `${n} mouvement${plural(n)} lu${plural(n)}${dout ? `, dont ${dout} à vérifier (surligné${plural(dout)})` : ""}${r.soldeDouteux && r.solde != null ? " · solde à vérifier" : ""}${rib && entIn && entParRib(rib) ? " · entreprise reconnue à son RIB" : ""}. Comparez avec la capture avant d’enregistrer.`
+      ? `${n} mouvement${plural(n)} lu${plural(n)}${dout ? `, dont ${dout} à vérifier (surligné${plural(dout)})` : ""}${r.soldeDouteux && r.solde != null ? " · solde à vérifier" : ""}${trouvee ? ` · entreprise « ${trouvee.e.nom} » reconnue ${parQuoi}` : entIn && !entIn.value.trim() ? " · entreprise non reconnue : indiquez-la" : ""}. Comparez avec la capture avant d’enregistrer.`
       : `Aucun mouvement reconnu${r.solde != null ? " (solde lu)" : ""} : ${texte ? "vérifiez le texte collé" : "collez une capture plus nette, ou recopiez-les"}.`;
     if (n && D) etat.textContent += ` Heures ramenées à l’heure de Paris (la tablette avance de ${D / 36e5} h).`;
     maj();
@@ -14974,7 +15030,7 @@ function openReleve(e, back, image) {
   rows.addEventListener("input", ev => { const r = ev.target.closest(".mv-row"); if (r) r.classList.remove("a-verifier"); maj(); });
   m.addEventListener("input", () => { m.classList.remove("a-verifier"); maj(); });
   at.addEventListener("change", maj);
-  if (entIn) entIn.addEventListener("change", maj);
+  if (entIn) { entIn.addEventListener("change", maj); entIn.addEventListener("input", () => entIn.classList.remove("a-verifier")); }
   const ajouter = h("button", { class: "btn ghost small", type: "button", text: "Ajouter un mouvement", onclick: () => { rows.append(mvRow()); $$(".mv-row [data-k=t]", rows).pop().focus(); } });
   const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le relevé" });
   go.addEventListener("click", async () => {
@@ -15015,7 +15071,7 @@ function openReleve(e, back, image) {
           h("div", { class: "sal-box" }, h("span", { class: "sal-label", text: "Derniers mouvements" }),
             h("div", { class: "mv-head", "aria-hidden": "true" }, h("span", { text: "Date" }), h("span", { text: "Libellé" }), h("span", { text: "Montant" }), h("span", {})),
             rows, h("div", {}, ajouter)),
-          conc, avance, sus),
+          conc, avance, autreRib, sus),
         imgA),
       h("div", { class: "row2" }, champ("rv-url", "Ou lien de la capture", url), champ("rv-note", "Observation", note)), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
