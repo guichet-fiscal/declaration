@@ -2108,6 +2108,8 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <div class="row2" style="align-items:end">
                 <div class="field"><label for="bl-fenetre">Relevé sans mouvements : écart maximal avec le dépôt</label><div class="money" data-cur="h"><input id="bl-fenetre" type="number" min="0" max="72" step="1"></div><span class="hint">Quand les mouvements du relevé ne remontent pas jusqu’au dépôt de la déclaration, son solde n’est comparé au solde déclaré que s’ils sont aussi proches. Les recettes arrivent surtout le soir.</span></div>
                 <div class="field"><label for="bl-tirage">Relevés surprises par semaine</label><input id="bl-tirage" type="number" min="0" max="20" step="1"><span class="hint">Entreprises tirées au sort chaque lundi, les plus à risque ayant plus de chances (0 : pas de tirage).</span></div>
+                <div class="field"><label for="bl-esp">Paiements en espèces autorisés jusqu’à</label><div class="money" data-cur="€"><input id="bl-esp" type="number" min="0" step="1000"></div><span class="hint">Au-delà, une amende est proposée sur le paiement vu sur le compte (art. 1840 J du CGI). 0 : pas de plafond.</span></div>
+                <div class="field"><label for="bl-espa">Amende sur un paiement en espèces au-delà</label><div class="money" data-cur="%"><input id="bl-espa" type="number" min="0" max="100" step="1"></div><span class="hint">En droit réel, 5 % de la somme payée.</span></div>
                 <div class="field"><label for="bl-fonds">Fonds de départ habituel d’une entreprise</label><div class="money" data-cur="€"><input id="bl-fonds" type="number" min="0" step="1000"></div><span class="hint">Ce qu’une entreprise a sur son compte en ouvrant : sur le serveur, 50 000 €, un prêt qu’elle rembourse ensuite. Au-delà (plus le bénéfice et l’écart d’alerte), sa première déclaration est signalée : fonds de départ à justifier.</span></div>
               </div>
               <div class="paste-row">
@@ -2306,7 +2308,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -2585,7 +2587,7 @@ const debutDe = e => (e.debutActivite && bounds(e.debutActivite) ? keyStart(e.de
 const declsVivantes = e => declsOf(e).filter(d => dStatus(d) !== "rejetee").sort((a, b) => String(b.periode).localeCompare(String(a.periode)));
 let lienCache = { deps: [], map: new Map() };
 function lienMemo(k, fn) {
-  const deps = [S.declarations, S.entreprises, S.fonctionnaires, S.decisions];
+  const deps = [S.declarations, S.entreprises, S.fonctionnaires, S.decisions, S.interdictions];
   if (deps.some((d, i) => d !== lienCache.deps[i])) lienCache = { deps, map: new Map() };
   if (!lienCache.map.has(k)) lienCache.map.set(k, fn());
   return lienCache.map.get(k);
@@ -2675,6 +2677,70 @@ function salariesPartagesCalc(d) {
   }
   return [...par.values()].map(v => ({ x: v.x, noms: [...v.noms] }));
 }
+/* Interdiction de gérer : sur le modèle de la peine complémentaire de la fraude fiscale
+   (interdiction d'exercer une profession commerciale, art. 1750 du CGI). */
+const interdictionActive = x => !x.levee && new Date(x.jusquau).getTime() > Date.now();
+const interdictionDe = nom => (nom ? (S.interdictions || []).filter(interdictionActive).find(x => memeNom(nom, x.nom)) || null : null);
+const interdictionsPatron = e => patronsDe(e).map(interdictionDe).filter(Boolean);
+// Le champ Patron d'une fiche (co-gérants séparés par une virgule) : la première personne interdite.
+const patronInterdit = champ => String(champ || "").split(/\s*(?:[,/&;+]|\bet\b)\s*/i).map(x => x.trim()).filter(Boolean).map(interdictionDe).find(Boolean) || null;
+function interdictionDoc(x) {
+  const lim = longDate(new Date(x.jusquau));
+  return {
+    kind: "ARRÊTÉ D’INTERDICTION DE GÉRER", no: dossierNo("IG", x.id), date: "Le " + longDate(new Date(x.at)),
+    meta: [["Personne visée", x.nom], ["Entreprise", x.entrepriseNom || "—"], ["Jusqu’au", lim], ["Prononcé par", x.byNom || "Direction des impôts et cotisations"]],
+    lines: [], note: x.motif || "", noteTitle: "Motif",
+    stamp: x.levee ? ["LEVÉE", "muted"] : ["INTERDICTION", "bad"],
+    footer: `${x.nom} ne peut diriger, gérer ni déclarer aucune entreprise inscrite au registre jusqu’au ${lim}, directement ou par personne interposée. Sur le modèle de l’interdiction d’exercer une profession commerciale prononcée contre les auteurs de fraude fiscale (art. 1750 du CGI).`,
+    discord: { channel: "entreprises", text: `**Interdiction de gérer ${dossierNo("IG", x.id)}** · ${x.nom}${x.entrepriseNom ? " (" + x.entrepriseNom + ")" : ""} · jusqu’au ${lim}.${x.motif ? " Motif : " + x.motif : ""}` }
+  };
+}
+function openInterdiction(e, back) {
+  if (!writer()) return;
+  const noms = patronsDe(e);
+  const qui = h("input", { id: "ig-nom", autocomplete: "off", placeholder: "Nom RP de la personne" }); qui.value = noms[0] || "";
+  const sem = h("input", { id: "ig-sem", type: "number", min: "1", max: "104", step: "1" }); sem.value = "8";
+  const cj = ctrlsOf(e).find(c => c.statut === "justice" || (c.statut === "recouvre" && ["fraude", "opposition"].includes(c.qualification)));
+  const motif = h("textarea", { id: "ig-motif", rows: "2", placeholder: "Fraude fiscale établie par un contrôle, dossier transmis à la justice…" });
+  motif.value = cj ? `Fraude fiscale établie par le contrôle ${dossierNo("CF", cj.id)}${cj.statut === "justice" ? ", dossier transmis à la justice" : ""}` : "";
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Prononcer l’interdiction" });
+  go.addEventListener("click", async () => {
+    const n = qui.value.trim(), w = Math.round(Number(sem.value) || 0);
+    if (!n) { err.textContent = "Indiquez la personne visée."; qui.focus(); return; }
+    if (w < 1) { err.textContent = "Indiquez une durée d’au moins une semaine."; sem.focus(); return; }
+    if (!motif.value.trim()) { err.textContent = "Indiquez le motif."; motif.focus(); return; }
+    if (interdictionDe(n)) { err.textContent = `${n} est déjà interdit de gérer.`; return; }
+    go.disabled = true;
+    const ref = S.db.collection("interdictions").doc();
+    const x = { nom: n, entrepriseId: e.id || null, entrepriseNom: e.nom, motif: motif.value.trim(), jusquau: new Date(Date.now() + w * 7 * 864e5).toISOString(), semaines: w, controleId: cj ? cj.id : null, at: nowISO(), by: S.uid || null, byNom: S.agentName || "", levee: null };
+    if (!(await write(() => ref.set(x)))) { go.disabled = false; return; }
+    toast(`Interdiction de gérer ${dossierNo("IG", ref.id)} prononcée.`);
+    showDocImage(interdictionDoc(Object.assign({ id: ref.id }, x)), back);
+  });
+  openDialog({
+    eyebrow: "Sanction · " + e.nom, title: "Interdiction de gérer",
+    body: [h("p", { style: "margin:0", text: "La personne ne pourra plus être inscrite comme patron ou co-gérant d’une entreprise au registre pendant la durée choisie ; ses entreprises actuelles sont signalées." }),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ig-nom", text: "Personne visée" }), qui), h("div", { class: "field" }, h("label", { for: "ig-sem", text: "Durée (semaines)" }), sem)),
+      h("div", { class: "field" }, h("label", { for: "ig-motif", text: "Motif" }), motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+}
+async function leverInterdiction(x, back) {
+  if (!writer()) return;
+  const body = Object.assign({}, x, { levee: { at: nowISO(), by: S.uid || null, byNom: S.agentName || "" } }); delete body.id;
+  if (await write(() => S.db.doc("interdictions/" + x.id).set(body))) { toast("Interdiction levée."); if (back) back(); }
+}
+function interdictionSection(e, back) {
+  const l = (S.interdictions || []).filter(x => (x.entrepriseId && x.entrepriseId === e.id) || patronsDe(e).some(n => memeNom(n, x.nom)))
+    .sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (!l.length) return null;
+  return sec("Interdictions de gérer", h("ul", { class: "ent-list" }, l.map(x => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => showDocImage(interdictionDoc(x), back), text: `${dossierNo("IG", x.id)} · ${x.nom}` }),
+      h("span", { class: "meta", text: `${x.levee ? "levée le " + fmtDate(new Date(x.levee.at)) : interdictionActive(x) ? "jusqu’au " + fmtDate(new Date(x.jusquau)) : "terminée le " + fmtDate(new Date(x.jusquau))}${x.motif ? " · " + x.motif : ""}` })),
+    chip(interdictionActive(x) ? ["En cours", "bad"] : ["Terminée", "muted"]),
+    writer() && interdictionActive(x) ? h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => leverInterdiction(x, back), text: "Lever" })) : h("span", {})))));
+}
 // Alertes de ces liens, sur une déclaration.
 function lienAlerts(d, pe) {
   const out = [], liste = l => l.slice(0, 3).join(", ") + (l.length > 3 ? "…" : "");
@@ -2686,9 +2752,12 @@ function lienAlerts(d, pe) {
     else if (rp.length) out.push(`Exonération à vérifier : reprend ${rp[0].noms.length} salariés de ${rp[0].x.nom} (${liste(rp[0].noms)})`);
   }
   for (const o of dettesPatron(pe)) out.push(`Patron débiteur : ${o.nom} doit encore ${money(o.du)} pour ${o.x.nom}${o.x.actif === false ? " (fermée)" : ""}`);
+  for (const x of interdictionsPatron(pe)) out.push(`Patron interdit de gérer : ${x.nom} jusqu’au ${fmtDate(new Date(x.jusquau))}`);
+  const di = d.declarant ? interdictionDe(d.declarant) : null;
+  if (di && !interdictionsPatron(pe).includes(di)) out.push(`Déclarant interdit de gérer : ${di.nom} jusqu’au ${fmtDate(new Date(di.jusquau))}`);
   return out;
 }
-const LIEN_ALERT_RE = /^(Salariés? aussi déclarés? par|Exonération à vérifier|Patron débiteur|Marge de|Même chiffre d’affaires trois)/;
+const LIEN_ALERT_RE = /^(Salariés? aussi déclarés? par|Exonération à vérifier|Patron débiteur|Marge de|Même chiffre d’affaires trois|Patron interdit|Déclarant interdit)/;
 // Marge (bénéfice sur chiffre d'affaires) des autres entreprises du même secteur sur les quatre semaines
 // qui finissent à la période : médiane, s'il y en a au moins trois avec un chiffre d'affaires d'au moins 5 000 €.
 const secteurKey = x => norm(x || "").replace(/[es]+$/, "");
@@ -3325,6 +3394,7 @@ function subscribe() {
   col("controles", s => { S.controles = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("saisies", s => { S.saisies = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("transmissions", s => { S.transmissions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("interdictions", s => { S.interdictions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
   col("releves", s => { S.releves = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -6959,6 +7029,7 @@ $("#form-ent").addEventListener("submit", async e => {
   if (!nom) { $("#e-nom").setAttribute("aria-invalid", "true"); $("#e-nom").focus(); msg.textContent = "Indiquez le nom de l’entreprise."; return; }
   $("#e-nom").removeAttribute("aria-invalid");
   if (S.entreprises.some(x => norm(x.nom) === norm(nom))) { msg.textContent = `« ${nom} » est déjà au registre.`; return; }
+  { const ig = patronInterdit($("#e-patron").value); if (ig) { msg.textContent = `${ig.nom} est interdit de gérer jusqu’au ${fmtDate(new Date(ig.jusquau))} (${dossierNo("IG", ig.id)}) : il ne peut pas être inscrit comme patron.`; $("#e-patron").focus(); return; } }
   const disc = $("#e-discord").value.trim();
   if (disc && !parseMention(disc)) { $("#e-discord").setAttribute("aria-invalid", "true"); $("#e-discord").focus(); msg.textContent = "ID Discord : 17 à 20 chiffres (clic droit sur le membre → Copier l’identifiant)."; return; }
   $("#e-discord").removeAttribute("aria-invalid");
@@ -6974,7 +7045,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -7446,9 +7517,9 @@ function penaltyDoc(p) {
 }
 
 /* ---------- Pénalités et échéanciers ---------- */
-async function addPenalty(e, motif, montant, declId) {
+async function addPenalty(e, motif, montant, declId, extra) {
   const ref = S.db.collection("penalites").doc();
-  const ok = await write(() => ref.set({ entrepriseId: e.id || null, entrepriseNom: e.nom, motif, montant: Math.round(montant), statut: "due", declId: declId || null, createdAt: nowISO(), by: S.uid || null }));
+  const ok = await write(() => ref.set(Object.assign({ entrepriseId: e.id || null, entrepriseNom: e.nom, motif, montant: Math.round(montant), statut: "due", declId: declId || null, createdAt: nowISO(), by: S.uid || null }, extra || {})));
   if (ok) { const p = S.penalites.find(x => x.id === ref.id); if (p) autoPublish("penalites", penaltyDoc(p), "Pénalité infligée."); }
   return ok ? ref.id : null;
 }
@@ -7552,7 +7623,7 @@ function echeancierSection(d, reopen) {
 }
 
 /* ---------- Fiche entreprise ---------- */
-const PEN_MOTIFS = ["Retard de déclaration", "Défaut de déclaration", "Défaut de paiement", "Fausse déclaration", "Obstruction à un contrôle", "Travail non déclaré", "Autre"];
+const PEN_MOTIFS = ["Retard de déclaration", "Défaut de déclaration", "Défaut de paiement", "Fausse déclaration", "Obstruction à un contrôle", "Travail non déclaré", "Paiement en espèces au-delà du plafond", "Autre"];
 // Fiche : agents de la Préfecture liés, autres entreprises du même patron, salariés repris ou partagés.
 function liensSection(e) {
   if (!e || !e.id) return null;
@@ -7658,6 +7729,7 @@ function openFiche(e, opts) {
     (() => { const x = exoSituation(e); return x ? h("div", { class: "exo-line" }, h("strong", { text: "Exonération :" }), chip([x.text, x.tone])) : null; })(),
     relancesSection(e, reopen),
     liensSection(e),
+    interdictionSection(e, reopen),
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r }))),
       writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
@@ -7690,6 +7762,7 @@ function openFiche(e, opts) {
     canAgent() && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openConvForm(e), text: "Convoquer" }) : null,
     w && unpaidItems(e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisie(e), text: "Saisie" }) : null,
     w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }) : null,
+    w && e.id && e.patron ? h("button", { class: "btn ghost small", type: "button", onclick: () => openInterdiction(e, reopen), text: "Interdire de gérer" }) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -7817,7 +7890,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
 // Auteur d'une ligne du journal : l'agent, ou l'envoi automatique de la base.
 const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : e.collection === "depots" ? "Espace entreprise" : "Sans nom");
 function describe(e) {
@@ -7898,6 +7971,11 @@ function describe(e) {
     case "alertes":
       if (x === "suppression") return `a rouvert les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})`;
       return `a classé les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})${v.motif ? " : " + v.motif : ""}`;
+    case "interdictions": {
+      if (x === "ajout") return `a interdit ${v.nom} de gérer jusqu’au ${fmtDate(new Date(v.jusquau))}${v.motif ? " · " + v.motif : ""}`;
+      if (a.levee && !b.levee) return `a levé l’interdiction de gérer de ${v.nom}`;
+      return x === "suppression" ? `a supprimé l’interdiction de gérer de ${v.nom}` : `a modifié l’interdiction de gérer de ${v.nom}`;
+    }
     case "transmissions":
       if (x === "ajout") return `a transmis le dossier de ${v.entrepriseNom} à la justice (${money(v.montant)})`;
       if (x === "suppression") return `a supprimé le dossier de justice de ${v.entrepriseNom}`;
@@ -8022,7 +8100,7 @@ function describe(e) {
       if (a.fin && !b.fin) return `a fini son service (${fmtH(ptDuree(a))})`;
       return `a modifié un pointage de ${nom}`;
     }
-    case "meta": return "a téléchargé une sauvegarde du registre";
+    case "meta": return e.doc_id === "bilan" ? `a publié le bilan de ${periodPlain(v.periode || "").toLowerCase()}` : e.doc_id === "communique" ? `a ${v.publie === false ? "noté" : "publié"} le communiqué de ${periodPlain(v.periode || "").toLowerCase()}` : "a téléchargé une sauvegarde du registre";
     case "agents": {
       const nom = v.nom || v.discord_id, role = ROLE_LABEL[v.role] || "Lecture seule";
       if (x === "ajout") return `a donné l’accès ${role} à ${nom}`;
@@ -8531,6 +8609,10 @@ function editEntreprise(e, back) {
     for (const x of alias.value.split(/[,;\n]/)) { const t = x.trim().slice(0, 60); if (t && norm(t) && norm(t) !== norm(n) && !als.some(y => norm(y) === norm(t)) && als.length < 8) als.push(t); }
     const pris = als.map(a => [a, S.entreprises.find(x => x.id !== e.id && [x.nom].concat(x.alias || []).some(y => norm(y) === norm(a)))]).find(([, x]) => x);
     if (pris) { err.textContent = `« ${pris[0]} » désigne déjà ${pris[1].nom}.`; alias.focus(); return; }
+    // Un nouveau patron ou co-gérant interdit de gérer ne peut pas être inscrit (l'ancien reste signalé).
+    { const nouveaux = patron.value.split(/\s*(?:[,/&;+]|\bet\b)\s*/i).map(x => x.trim()).filter(x => x && !patronsDe(e).some(y => memeNom(x, y)));
+      const ig = nouveaux.map(interdictionDe).find(Boolean);
+      if (ig) { err.textContent = `${ig.nom} est interdit de gérer jusqu’au ${fmtDate(new Date(ig.jusquau))} (${dossierNo("IG", ig.id)}).`; patron.focus(); return; } }
     save.disabled = true;
     const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || null, exoneration: exo.value, alias: als }));
     if (!ok) { save.disabled = false; return; }
@@ -13493,7 +13575,7 @@ function pretsSection(e) {
 // Ce qui dépasse est un enrichissement inexpliqué. Comme dans la réalité, l'entreprise doit
 // en justifier l'origine ; à défaut, il est imposé d'office (art. L16 et L69 du LPF) et le
 // soupçon peut être signalé (sur le modèle de TRACFIN, art. L561-15 du CMF).
-function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8, fondsDepart: 50000, tirage: 3 }, cfg().blanchiment || {}); }
+function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8, fondsDepart: 50000, tirage: 3, plafondEspeces: 10000, amendeEspeces: 5 }, cfg().blanchiment || {}); }
 function relevesOf(e) { return (S.releves || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function soupconsOf(e) { return (S.soupcons || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function periodDays(k) { const b = bounds(k); return b ? Math.max(1, Math.round((b.end.getTime() - b.start.getTime()) / 864e5)) : 7; }
@@ -13930,14 +14012,21 @@ function mvtsSemaine(e, d) {
   const sal = -mv.filter(m => m.montant < 0 && SALAIRE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
   if (sal > v.ms + marge(v.ms)) out.push(`Salaires vus sur le compte : ${money(sal)} versés, plus que la masse salariale déclarée (${money(v.ms)})`);
   if (enc + ext > v.ca + marge(v.ca)) out.push(`Recettes vues : ${money(enc + ext)}${ext ? ` (dont ${money(ext)} payés par ${payeurs})` : " encaissés sur le compte"}, plus que le chiffre d’affaires déclaré (${money(v.ca)})`);
-  // Semaine entièrement relevée : tout ce qui est sorti du compte est connu. Des charges ou des salaires
-  // déclarés qu'on ne retrouve pas réduisent le bénéfice sans avoir été payés.
-  if (couvert(e, t0, t1)) {
-    const dep = -mv.filter(m => m.montant < 0 && !SALAIRE_RE.test(m.libelle) && !/pr[ée]fecture/i.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
-    const marge2 = x => Math.max(5000, x * 0.1);
-    if (v.ch > dep + marge2(dep)) out.push(`Charges non retrouvées : ${money(v.ch)} déclarées, ${money(dep)} dépensées sur le compte (semaine entièrement relevée)`);
-    if (v.ms > sal + marge2(sal)) out.push(`Salaires non retrouvés : ${money(v.ms)} déclarés, ${money(sal)} versés depuis le compte (semaine entièrement relevée)`);
-  }
+  return out;
+}
+// Semaine entièrement relevée : charges ou salaires déclarés qu'on ne voit pas sortir du compte. Ce n'est
+// qu'une piste (paiement en liquide depuis le coffre, compte personnel du patron, ligne mal lue) : elle
+// s'affiche dans le tableau du compte, pas dans les alertes.
+function nonRetrouves(e, d) {
+  const b = d && bounds(d.periode);
+  if (!b || !e || !e.id) return [];
+  const t0 = b.start.getTime(), t1 = b.end.getTime();
+  if (!couvert(e, t0, t1)) return [];
+  const mv = mvtsOf(e).filter(m => m.t >= t0 && m.t <= t1), v = retenuDe(d), marge = x => Math.max(5000, x * 0.1), out = [];
+  const dep = -mv.filter(m => m.montant < 0 && !SALAIRE_RE.test(m.libelle) && !/pr[ée]fecture/i.test(m.libelle)).reduce((t, m) => t + m.montant, 0);
+  const sal = -mv.filter(m => m.montant < 0 && SALAIRE_RE.test(m.libelle)).reduce((t, m) => t + m.montant, 0);
+  if (v.ch > dep + marge(dep)) out.push(`charges : ${money(v.ch)} déclarées, ${money(dep)} vues sur le compte`);
+  if (v.ms > sal + marge(sal)) out.push(`salaires : ${money(v.ms)} déclarés, ${money(sal)} vus sur le compte`);
   return out;
 }
 // Entreprise reconnue à son RIB, lu sur un relevé précédent.
@@ -14377,6 +14466,32 @@ document.addEventListener("paste", ev => {
   openReleve(null, null, f);
 });
 
+// Paiements en espèces au-delà du plafond, vus sur le compte : amende proposée (art. 1840 J du CGI,
+// 5 % des sommes payées). Une seule amende par mouvement.
+function especesHorsPlafond(e) {
+  const c = blc(), pl = Number(c.plafondEspeces) || 0, taux = Number(c.amendeEspeces) || 0;
+  if (!pl || !e || !e.id) return [];
+  return mvtsOf(e).filter(m => CASH_RE.test(m.libelle) && Math.abs(m.montant) > pl && !NON_RECETTE_RE.test(m.libelle)).map(m => {
+    const k = mvtKey(m), pen = S.penalites.find(p => p.especes && p.especes.mvtKey === k && sameEnt(p, e) && p.statut !== "annulee") || null;
+    return { m, k, amende: Math.round(Math.abs(m.montant) * taux / 100), pen };
+  });
+}
+async function amendeEspeces(e, x, back) {
+  if (!writer() || x.pen || x.amende <= 0) return;
+  const motif = `Paiement en espèces au-delà du plafond · ${money(Math.abs(x.m.montant))} le ${quandMvt(x.m.t)} (${libCourt(x.m.libelle)})`;
+  const id = await addPenalty(e, motif, x.amende, null, { especes: { mvtKey: x.k, montant: Math.abs(x.m.montant), t: new Date(x.m.t).toISOString(), plafond: Number(blc().plafondEspeces) || 0 } });
+  if (id) { toast(`Amende de ${money(x.amende)} infligée.`); if (back) back(); }
+}
+function especesSection(e, back) {
+  const l = especesHorsPlafond(e);
+  if (!l.length) return null;
+  const c = blc();
+  return h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Paiements en espèces au-delà de ${money(c.plafondEspeces)}` }),
+    h("ul", { class: "ent-list" }, l.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${money(Math.abs(x.m.montant))} · ${quandMvt(x.m.t)}` }), h("span", { class: "meta", text: libCourt(x.m.libelle) })),
+      x.pen ? chip([`Amende ${dossierNo("PN", x.pen.id)} · ${money(x.pen.montant)}`, x.pen.statut === "payee" ? "ok" : "warn"]) : chip([`Amende possible : ${money(x.amende)}`, "muted"]),
+      !x.pen && writer() && x.amende > 0 ? h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => amendeEspeces(e, x, back), text: `Infliger ${pct(c.amendeEspeces)}` })) : h("span", {})))));
+}
 // Section « Compte de l'entreprise » de la fiche et du dossier.
 function compteTable(e, keys) {
   const rows = keys.map(k => { const x = ecartDe(e, k); return { k, x }; }).filter(r => r.x.cur.pos != null || r.x.cur.d);
@@ -14385,7 +14500,8 @@ function compteTable(e, keys) {
   return h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
     h("thead", {}, h("tr", {}, ["Période", "Déclaré", "Relevé", "Attendu", "Écart"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
     h("tbody", {}, rows.map(({ k, x }) => h("tr", {},
-      h("td", {}, periodPlain(k), semaineCouverte(e, k) ? h("span", { class: "hint", title: "Tous les mouvements de la semaine sont connus par les relevés", text: " · relevée en entier" }) : null),
+      h("td", {}, periodPlain(k), semaineCouverte(e, k) ? h("span", { class: "hint", title: "Tous les mouvements de la semaine sont connus par les relevés", text: " · relevée en entier" }) : null,
+        (() => { const l = x.cur.d ? nonRetrouves(e, x.cur.d) : []; return l.length ? h("div", { class: "hint", title: "Une piste à vérifier en contrôle : un paiement en liquide depuis le coffre ou depuis le compte du patron n’apparaît pas sur le compte.", text: "À vérifier, pas vu sortir du compte : " + l.join(" ; ") }) : null; })()),
       h("td", { class: "num", text: x.cur.decl != null ? money(x.cur.decl) : "—" }),
       h("td", { class: "num", title: x.cur.source === "mouvements" ? `Reconstitué au ${fmtDateTime(new Date(x.cur.t))} avec les mouvements du relevé ${dossierNo("RC", x.cur.rel.id)}` : x.cur.approche ? `Relevé ${dossierNo("RC", x.cur.rel.id)} corrigé des mouvements lus après la fin de la période` : null,
         text: x.cur.source === "mouvements" || x.cur.approche ? money(x.cur.pos) + (x.cur.approche ? " ≈" : "") : x.cur.rel ? money(x.cur.rel.montant) : "—" }),
@@ -14416,6 +14532,7 @@ function compteSection(e, reopen) {
     h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Avec les mouvements relevés, le solde de fin de période est reconstitué exactement." }),
     (() => { const r = risqueDe(e); return h("div", { class: "paste-row", style: "margin:0 0 6px" }, chip([`${r.niveau[0]} · ${r.score}`, r.niveau[1]]), h("span", { class: "hint", text: r.raisons.join(" · ") || "Rien à signaler." })); })(),
     compteTable(e, keysEnding(lastClosedKey(), 6)),
+    especesSection(e, reopen),
     sig.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: "Mouvements suspects" }), h("div", { class: "reasons" }, sig.slice(0, 6).map(s => h("span", { class: "reason", text: s.texte })))) : null,
     nb ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Derniers mouvements relevés · ${nb} connu${plural(nb)}` }), mvtTable(e, 12)) : null,
     pv.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Payé par d’autres entreprises · vu sur leurs comptes` }),
@@ -14628,6 +14745,8 @@ function renderBlSettings(force) {
   $("#bl-fenetre").value = String(c.fenetreH);
   $("#bl-fonds").value = String(c.fondsDepart);
   $("#bl-tirage").value = String(c.tirage);
+  $("#bl-esp").value = String(c.plafondEspeces);
+  $("#bl-espa").value = String(c.amendeEspeces);
 }
 $("#card-bl").addEventListener("input", () => { S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; });
 $("#bl-save").addEventListener("click", async () => {
@@ -14635,7 +14754,9 @@ $("#bl-save").addEventListener("click", async () => {
   const v = { actif: $("#bl-actif").checked, seuil: Math.max(0, Math.round(Number($("#bl-seuil").value) || 0)), plafond: Math.max(0, Math.round(Number($("#bl-plafond").value) || 0)), soldeObligatoire: $("#bl-oblig").checked,
     fenetreH: $("#bl-fenetre").value === "" ? 8 : Math.max(0, Math.min(72, Math.round(Number($("#bl-fenetre").value) || 0))),
     fondsDepart: $("#bl-fonds").value === "" ? 50000 : Math.max(0, Math.round(Number($("#bl-fonds").value) || 0)),
-    tirage: $("#bl-tirage").value === "" ? 3 : Math.max(0, Math.min(20, Math.round(Number($("#bl-tirage").value) || 0))), tirageSel: blc().tirageSel || "" };
+    tirage: $("#bl-tirage").value === "" ? 3 : Math.max(0, Math.min(20, Math.round(Number($("#bl-tirage").value) || 0))), tirageSel: blc().tirageSel || "",
+    plafondEspeces: $("#bl-esp").value === "" ? 10000 : Math.max(0, Math.round(Number($("#bl-esp").value) || 0)),
+    amendeEspeces: $("#bl-espa").value === "" ? 5 : Math.max(0, Math.min(100, Number($("#bl-espa").value) || 0)) };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { blanchiment: v, updatedAt: nowISO() })));
   if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
 });
