@@ -2308,7 +2308,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -2689,7 +2689,7 @@ function interdictionDoc(x) {
   return {
     kind: "ARRÊTÉ D’INTERDICTION DE GÉRER", no: dossierNo("IG", x.id), date: "Le " + longDate(new Date(x.at)),
     meta: [["Personne visée", x.nom], ["Entreprise", x.entrepriseNom || "—"], ["Jusqu’au", lim], ["Prononcé par", x.byNom || "Direction des impôts et cotisations"]],
-    lines: [], note: x.motif || "", noteTitle: "Motif",
+    lines: [], total: ["Interdiction jusqu’au", lim], note: x.motif || "", noteTitle: "Motif",
     stamp: x.levee ? ["LEVÉE", "muted"] : ["INTERDICTION", "bad"],
     footer: `${x.nom} ne peut diriger, gérer ni déclarer aucune entreprise inscrite au registre jusqu’au ${lim}, directement ou par personne interposée. Sur le modèle de l’interdiction d’exercer une profession commerciale prononcée contre les auteurs de fraude fiscale (art. 1750 du CGI).`,
     discord: { channel: "entreprises", text: `**Interdiction de gérer ${dossierNo("IG", x.id)}** · ${x.nom}${x.entrepriseNom ? " (" + x.entrepriseNom + ")" : ""} · jusqu’au ${lim}.${x.motif ? " Motif : " + x.motif : ""}` }
@@ -3395,6 +3395,7 @@ function subscribe() {
   col("saisies", s => { S.saisies = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("transmissions", s => { S.transmissions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("interdictions", s => { S.interdictions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("rescrits", s => { S.rescrits = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
   col("releves", s => { S.releves = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3788,6 +3789,8 @@ function todoItems() {
     const l = rappelCandidats(ep.k).filter(y => !y.deja);
     add(l.length, `Rappel avant la date limite · ${periodPlain(ep.k).toLowerCase()}`, `${l.length} entreprise${plural(l.length)} sans déclaration, à déposer avant le ${jourLimite(ep.lim)} à 23 h 59`, openRappelEcheance);
   }
+  const rfa = (S.rescrits || []).filter(r => r.statut === "attente");
+  if (w) add(rfa.length, `Rescrit${plural(rfa.length)} à répondre`, rfa.slice(0, 3).map(r => r.entrepriseNom).join(", "), () => { const r = rfa[0]; openRescrit(entOf(r), r); });
   const dr = depotsRecus();
   add(dr.length, `Déclaration${plural(dr.length)} reçue${plural(dr.length)} en ligne à enregistrer`, dr.slice(0, 3).map(d => d.entrepriseNom).join(", "), () => { allerA("declaration"); setTimeout(() => { const el = $("#d-online"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 120); }, "info");
   const av = S.declarations.filter(d => dStatus(d) === "soumise");
@@ -7045,7 +7048,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -7239,6 +7242,8 @@ function wrapLines(ctx, text, maxW) {
   return out.length ? out : [""];
 }
 async function renderDocImage(doc) {
+  // Un document sans total ni lignes reste dessinable.
+  doc = Object.assign({ lines: [], total: ["", ""], meta: [] }, doc);
   try { await Promise.all(['800 40px "Archivo"', '700 18px "Archivo"', '400 17px "Archivo"', '600 17px "IBM Plex Mono"'].map(f => document.fonts.load(f))); } catch (e) { /* polices de secours */ }
   const W = 1000, P = 64, inner = W - 2 * P, colW = (inner - 32) / 2;
   const F = { disp: '"Archivo", "Arial Narrow", Arial, sans-serif', body: '"Archivo", Arial, sans-serif', mono: '"IBM Plex Mono", Consolas, monospace' };
@@ -7785,6 +7790,7 @@ function openFiche(e, opts) {
     relancesSection(e, reopen),
     liensSection(e, reopen),
     interdictionSection(e, reopen),
+    rescritsSection(e, reopen),
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r }))),
       writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
@@ -7818,6 +7824,7 @@ function openFiche(e, opts) {
     w && unpaidItems(e).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSaisie(e), text: "Saisie" }) : null,
     w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }) : null,
     w && e.id && e.patron ? h("button", { class: "btn ghost small", type: "button", onclick: () => openInterdiction(e, reopen), text: "Interdire de gérer" }) : null,
+    w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openRescrit(e, null, reopen), text: "Rescrit" }) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -7945,7 +7952,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", rescrits: "RF", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
 // Auteur d'une ligne du journal : l'agent, ou l'envoi automatique de la base.
 const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : e.collection === "depots" ? "Espace entreprise" : "Sans nom");
 function describe(e) {
@@ -8026,6 +8033,12 @@ function describe(e) {
     case "alertes":
       if (x === "suppression") return `a rouvert les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})`;
       return `a classé les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})${v.motif ? " : " + v.motif : ""}`;
+    case "rescrits": {
+      if (x === "ajout") return `a enregistré la demande de rescrit de ${v.entrepriseNom}`;
+      if (a.statut === "repondu" && b.statut !== "repondu") return `a répondu au rescrit de ${v.entrepriseNom}`;
+      if (x === "suppression") return `a supprimé le rescrit de ${v.entrepriseNom}`;
+      return `a modifié le rescrit de ${v.entrepriseNom}`;
+    }
     case "interdictions": {
       if (x === "ajout") return `a interdit ${v.nom} de gérer jusqu’au ${fmtDate(new Date(v.jusquau))}${v.motif ? " · " + v.motif : ""}`;
       if (a.levee && !b.levee) return `a levé l’interdiction de gérer de ${v.nom}`;
@@ -12064,6 +12077,149 @@ $("#rc-save").addEventListener("click", async () => {
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { recompenses: v, updatedAt: nowISO() })));
   if (ok) { S.rcpDirty = false; $("#rc-msg").textContent = v.bonusActif ? `Bonus de ${v.bonusTaux} % après ${v.bonusSemaines} semaines en règle, pour les déclarations saisies à partir de maintenant.` : "Récompenses enregistrées (bonus de régularité désactivé)."; toast("Récompenses enregistrées."); renderRcpSettings(true); }
 });
+/* Droit de communication : pendant un contrôle, une autre entreprise (un client, un fournisseur) doit
+   communiquer ce qu'elle sait des opérations avec l'entreprise contrôlée (art. L81 du LPF). Un refus est
+   puni d'une amende (art. 1734 du CGI : 10 000 €, réglable au moment du constat). */
+const comNo = (c, x) => dossierNo("DC", c.id + x.id);
+const comEtat = x => x.statut === "repondue" ? ["Réponse reçue", "ok"] : x.statut === "refus" ? ["Refus · amende", "bad"] : new Date(x.delai).getTime() < Date.now() ? ["Délai dépassé", "warn"] : ["En attente", "muted"];
+function communicationDoc(c, x) {
+  const d = S.entreprises.find(y => y.id === x.destinataireId) || { nom: x.destinataireNom }, lim = longDate(new Date(x.delai));
+  return {
+    kind: "DEMANDE DE COMMUNICATION", no: comNo(c, x), date: "Le " + longDate(new Date(x.at)),
+    meta: [["Destinataire", d.nom], ["Opérations avec", c.entrepriseNom], ["Réponse attendue avant le", lim], ["Agent", x.byNom || "Direction des impôts et cotisations"]],
+    lines: [], total: ["Réponse attendue avant le", lim], note: x.objet, noteTitle: "Informations demandées",
+    stamp: x.statut === "repondue" ? ["RÉPONDU", "ok"] : x.statut === "refus" ? ["REFUS", "bad"] : ["DEMANDE", "accent"],
+    footer: `Le destinataire est tenu de communiquer ces informations à la Direction des impôts et cotisations avant le ${lim} (droit de communication, art. L81 du LPF). Un refus de communiquer est puni d’une amende (art. 1734 du CGI).`,
+    discord: { channel: "entreprises", mentions: [entMention(d)], text: `**Demande de communication ${comNo(c, x)}** · ${d.nom} · réponse attendue avant le ${lim}.` }
+  };
+}
+function openCommunication(c0, back) {
+  if (!canAgent()) return;
+  const dl = h("datalist", { id: "dc-ents" }, S.entreprises.filter(e => e.id !== c0.entrepriseId).map(e => h("option", { value: e.nom })));
+  const dest = h("input", { id: "dc-dest", autocomplete: "off", list: "dc-ents", placeholder: "Client, fournisseur…" });
+  const pv = paiementsVers(entOf(c0)).map(p => p.payeur).concat(S.entreprises.filter(y => paiementsVers(y).some(p => p.payeur.id === c0.entrepriseId)));
+  if (pv[0]) dest.value = pv[0].nom;
+  const per = (c0.periodes || []).map(periodPlain).join(", ").toLowerCase();
+  const objet = h("textarea", { id: "dc-objet", rows: "3" });
+  objet.value = `Les paiements reçus de ${c0.entrepriseNom} et ceux qui lui ont été faits${per ? " pendant " + per : ""} : date, montant et objet de chacun, avec les factures.`;
+  const delai = h("input", { id: "dc-delai", type: "number", min: "1", max: "14", step: "1" }); delai.value = String(Math.max(1, Number(cfg().delaiReponseJours) || 2));
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Envoyer la demande" });
+  go.addEventListener("click", async () => {
+    const d = findEnt(dest.value.trim());
+    if (!d || !d.id) { err.textContent = "Choisissez une entreprise du registre."; dest.focus(); return; }
+    if (d.id === c0.entrepriseId) { err.textContent = "Le droit de communication s’adresse à une autre entreprise que celle contrôlée."; return; }
+    if (!objet.value.trim()) { err.textContent = "Indiquez les informations demandées."; objet.focus(); return; }
+    go.disabled = true;
+    const x = { id: Math.random().toString(36).slice(2, 10), destinataireId: d.id, destinataireNom: d.nom, objet: objet.value.trim(), delai: new Date(Date.now() + Math.max(1, Number(delai.value) || 2) * 864e5).toISOString(), at: nowISO(), byNom: S.agentName || "", statut: "envoyee" };
+    if (!(await saveControleList(c0, "communications", l => l.concat([x]), "Demande de communication enregistrée."))) { go.disabled = false; return; }
+    const doc = communicationDoc(c0, x);
+    autoPublish("controles", doc, "Demande publiée.");
+    showDocImage(doc, back);
+  });
+  openDialog({
+    eyebrow: `Contrôle fiscal ${dossierNo("CF", c0.id)} · ${c0.entrepriseNom}`, title: "Droit de communication",
+    body: [h("p", { style: "margin:0", text: "Une autre entreprise doit vous communiquer ce qu’elle sait des opérations avec l’entreprise contrôlée : paiements, factures, commandes. Un refus est puni d’une amende." }),
+      dl, h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "dc-dest", text: "Entreprise destinataire" }), dest), h("div", { class: "field" }, h("label", { for: "dc-delai", text: "Délai de réponse (jours)" }), delai)),
+      h("div", { class: "field" }, h("label", { for: "dc-objet", text: "Informations demandées" }), objet), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
+  });
+}
+function openComReponse(c0, x, back) {
+  const t = h("textarea", { id: "dc-rep", rows: "4", placeholder: "Ce que l’entreprise a communiqué : paiements, montants, dates…" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: comNo(c0, x) + " · " + x.destinataireNom, title: "Réponse reçue",
+    body: [h("div", { class: "field" }, h("label", { for: "dc-rep", text: "Réponse" }), t), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: async () => {
+      if (!t.value.trim()) { err.textContent = "Notez la réponse."; t.focus(); return; }
+      if (await saveControleList(c0, "communications", l => l.map(y => y.id === x.id ? Object.assign({}, y, { statut: "repondue", reponse: t.value.trim(), reponduLe: nowISO(), reponseParNom: S.agentName || "" }) : y), "Réponse enregistrée.")) back();
+    }, text: "Enregistrer la réponse" })] });
+}
+function openComRefus(c0, x, back) {
+  if (!writer()) return;
+  const m = h("input", { id: "dc-amende", type: "number", min: "1", step: "100", inputmode: "numeric" }); m.value = String(Number(cfg().amendeCommunication) || 10000);
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: comNo(c0, x) + " · " + x.destinataireNom, title: "Constater le refus de communiquer",
+    body: [h("p", { style: "margin:0", text: `${x.destinataireNom} n’a pas répondu avant le ${fmtDateTime(new Date(x.delai))}. L’amende pour refus de communication lui est infligée (art. 1734 du CGI).` }),
+      h("div", { class: "field" }, h("label", { for: "dc-amende", text: "Amende" }), h("div", { class: "money", "data-cur": cur() }, m)), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+      const v = Math.round(Number(m.value) || 0);
+      if (v <= 0) { err.textContent = "Indiquez le montant de l’amende."; return; }
+      ev.currentTarget.disabled = true;
+      const d = S.entreprises.find(y => y.id === x.destinataireId) || { id: x.destinataireId, nom: x.destinataireNom };
+      const pid = await addPenalty(d, `Refus de communication · ${comNo(c0, x)} (contrôle ${dossierNo("CF", c0.id)})`, v, null, { communication: { controleId: c0.id, id: x.id } });
+      if (!pid) { ev.currentTarget.disabled = false; return; }
+      if (await saveControleList(c0, "communications", l => l.map(y => y.id === x.id ? Object.assign({}, y, { statut: "refus", refusLe: nowISO(), penaliteId: pid }) : y), `Amende de ${money(v)} infligée à ${d.nom}.`)) back();
+    }, text: "Infliger l’amende" })] });
+}
+function communicationSection(c, c0, reopen) {
+  const l = c.communications || [], open = c.statut === "ouvert" || c.statut === "propose";
+  if (!l.length && !(canAgent() && open)) return null;
+  return sec("Droit de communication", l.length ? h("ul", { class: "ent-list" }, l.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => showDocImage(communicationDoc(c, x), reopen), text: `${comNo(c, x)} · ${x.destinataireNom}` }),
+        h("span", { class: "meta", text: x.statut === "repondue" ? `répondu le ${fmtDate(new Date(x.reponduLe))} : ${x.reponse}` : `réponse attendue avant le ${fmtDateTime(new Date(x.delai))}` })),
+      chip(comEtat(x)),
+      x.statut === "envoyee" && canAgent() ? h("span", { class: "row-actions" },
+        h("button", { class: "btn ghost small", type: "button", onclick: () => openComReponse(c0, x, reopen), text: "Réponse reçue" }),
+        writer() && new Date(x.delai).getTime() < Date.now() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openComRefus(c0, x, reopen), text: "Constater le refus" }) : null) : h("span", {})))) : null,
+    canAgent() && open ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openCommunication(c0, reopen), text: "Demander à une autre entreprise" }) : null);
+}
+
+/* Rescrit : une entreprise demande à l'avance comment une opération sera imposée ; la réponse de la
+   Direction l'engage pour cette entreprise tant que sa situation reste celle décrite (art. L80 B du LPF). */
+const rescritsOf = e => (S.rescrits || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.recuLe).localeCompare(String(a.recuLe)));
+const RF_STAT = { attente: ["À répondre", "warn"], repondu: ["Répondu", "ok"], retire: ["Retiré", "muted"] };
+function rescritDoc(r) {
+  const e = entOf(r);
+  return {
+    kind: "RESCRIT FISCAL", no: dossierNo("RF", r.id), date: r.reponduLe ? "Répondu le " + longDate(new Date(r.reponduLe)) : "Reçu le " + longDate(new Date(r.recuLe)),
+    meta: [["Entreprise", e.nom || r.entrepriseNom], ["Demandé par", r.demandeur || e.patron || "—"], ["Reçu le", longDate(new Date(r.recuLe))], ["Répondu par", r.byNom || "Direction des impôts et cotisations"]],
+    lines: [], total: ["Réponse", r.statut === "repondu" ? "Donnée" : "À venir"], note: `Question : ${r.question}${r.reponse ? "\n\nRéponse : " + r.reponse : ""}`, noteTitle: "Question et réponse",
+    stamp: (RF_STAT[r.statut] || RF_STAT.attente).map((x, i) => i ? x : x.toUpperCase()),
+    footer: "Cette réponse engage la Direction des impôts et cotisations envers cette entreprise, tant que sa situation reste celle décrite dans la question : la Préfecture ne peut pas la remettre en cause pour le passé (sur le modèle du rescrit, art. L80 B du LPF).",
+    discord: { channel: "entreprises", mentions: [entMention(e)], text: `**Rescrit ${dossierNo("RF", r.id)}** · ${e.nom || r.entrepriseNom}\n**Question :** ${r.question}${r.reponse ? "\n**Réponse :** " + r.reponse : ""}` }
+  };
+}
+function openRescrit(e, r, back) {
+  if (!writer()) return;
+  const q = h("textarea", { id: "rf-q", rows: "3", placeholder: "Ce que l’entreprise demande, avec sa situation : opération, montants, dates…" });
+  const dem = h("input", { id: "rf-dem", autocomplete: "off" });
+  const rep = h("textarea", { id: "rf-rep", rows: "4", placeholder: "Comment l’opération sera imposée, et à quelles conditions." });
+  if (r) { q.value = r.question || ""; dem.value = r.demandeur || ""; rep.value = r.reponse || ""; } else dem.value = patronsDe(e)[0] || "";
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const save = async repondre => {
+    if (!q.value.trim()) { err.textContent = "Indiquez la question."; q.focus(); return; }
+    if (repondre && !rep.value.trim()) { err.textContent = "Indiquez la réponse."; rep.focus(); return; }
+    const ref = r ? S.db.doc("rescrits/" + r.id) : S.db.collection("rescrits").doc();
+    const body = Object.assign({}, r || {}, { entrepriseId: e.id || null, entrepriseNom: e.nom, question: q.value.trim(), demandeur: dem.value.trim(), reponse: rep.value.trim() || null,
+      recuLe: (r && r.recuLe) || nowISO(), statut: repondre ? "repondu" : "attente" }, repondre ? { reponduLe: (r && r.reponduLe) || nowISO(), by: S.uid || null, byNom: S.agentName || "" } : {});
+    delete body.id;
+    if (!(await write(() => ref.set(body)))) return;
+    const id = r ? r.id : ref.id;
+    if (repondre) { toast("Réponse au rescrit enregistrée."); showDocImage(rescritDoc(Object.assign({ id }, body)), back); }
+    else { toast("Demande de rescrit enregistrée."); (back || closeDialog)(); }
+  };
+  openDialog({
+    eyebrow: "Rescrit · " + e.nom, title: r ? `Rescrit ${dossierNo("RF", r.id)}` : "Nouvelle demande de rescrit",
+    body: [h("p", { style: "margin:0", text: "La réponse engage la Préfecture pour cette entreprise : elle ne pourra pas lui reprocher, pour le passé, d’avoir suivi cette réponse, tant que la situation décrite est exacte." }),
+      h("div", { class: "field" }, h("label", { for: "rf-dem", text: "Demandé par" }), dem),
+      h("div", { class: "field" }, h("label", { for: "rf-q", text: "Question" }), q),
+      h("div", { class: "field" }, h("label", { for: "rf-rep", text: "Réponse de la Direction" }), rep), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }),
+      !r || r.statut !== "repondu" ? h("button", { class: "btn ghost small", type: "button", onclick: () => save(false), text: "Enregistrer la demande" }) : null,
+      h("button", { class: "btn ink small", type: "button", onclick: () => save(true), text: r && r.statut === "repondu" ? "Corriger la réponse" : "Répondre" })].filter(Boolean)
+  });
+}
+function rescritsSection(e, back) {
+  const l = rescritsOf(e);
+  if (!l.length && !writer()) return null;
+  if (!l.length) return null;
+  return sec("Rescrits", h("ul", { class: "ent-list" }, l.map(r => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => (r.statut === "repondu" ? showDocImage(rescritDoc(r), back) : openRescrit(e, r, back)), text: `${dossierNo("RF", r.id)} · ${r.question.slice(0, 80)}${r.question.length > 80 ? "…" : ""}` }),
+      h("span", { class: "meta", text: r.statut === "repondu" ? `répondu le ${fmtDate(new Date(r.reponduLe))}` : `reçu le ${fmtDate(new Date(r.recuLe))}` })),
+    chip(RF_STAT[r.statut] || RF_STAT.attente),
+    writer() ? h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openRescrit(e, r, back), text: r.statut === "repondu" ? "Modifier" : "Répondre" })) : h("span", {})))));
+}
 // Prime d'aviseur d'un contrôle ouvert sur signalement : due quand le redressement est encaissé.
 function primeAviseur(c) {
   const r = rcp(), pen = ctrlPen(c), taux = Math.min(50, Number(r.aviseurTaux) || 0);
@@ -12589,6 +12745,8 @@ function openControle(id) {
     ["Paiement", pen ? chip(pen.statut === "annulee" ? ["Dégrevé", "muted"] : PSTAT[pen.statut] || PSTAT.due) : "—"], pen && pen.paidAt && pen.statut === "payee" ? ["Payé le", fmtDateTime(new Date(pen.paidAt))] : null, ["Somme", money(c.total), "tot"]])));
   if (c.aviseur && c.aviseur.nom) body.push(aviseurSection(c, c0, reopen));
   { const cs = conservatoireSection(c, c0, reopen); if (cs) body.push(cs); }
+  { const dc = communicationSection(c, c0, reopen); if (dc) body.push(dc); }
+  { const rf = rescritsOf(entOf(c)).filter(r => r.statut === "repondu"); if (rf.length) body.push(h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {}, h("strong", { text: `${rf.length} rescrit${plural(rf.length)} engage${rf.length > 1 ? "nt" : ""} la Préfecture envers cette entreprise. ` }), rf.map(r => `${dossierNo("RF", r.id)} : ${r.question.slice(0, 60)}${r.question.length > 60 ? "…" : ""}`).join(" ; ") + "."))); }
   if (c.statut === "sans_suite") body.push(sec("Conclusion", h("p", { class: "prewrap", style: "margin:0", text: c.conclusion || "Classé sans suite." })));
   if (c.statut === "justice") { const tj = S.transmissions.filter(t => sameEnt(t, entOf(c0))).sort((a, b) => String(b.at).localeCompare(String(a.at)))[0];
     body.push(sec("Conclusion", h("p", { class: "prewrap", style: "margin:0", text: `Clos le ${fmtDateTime(new Date(c.closLe))} et transmis à la justice. ${c.conclusion || ""}` }),
