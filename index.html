@@ -2116,6 +2116,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <div class="row2" style="align-items:end">
                 <div class="field"><label for="bl-fenetre">Relevé sans mouvements : écart maximal avec le dépôt</label><div class="money" data-cur="h"><input id="bl-fenetre" type="number" min="0" max="72" step="1"></div><span class="hint">Quand les mouvements du relevé ne remontent pas jusqu’au dépôt de la déclaration, son solde n’est comparé au solde déclaré que s’ils sont aussi proches. Les recettes arrivent surtout le soir.</span></div>
                 <div class="field"><label for="bl-tirage">Relevés surprises par semaine</label><input id="bl-tirage" type="number" min="0" max="20" step="1"><span class="hint">Entreprises tirées au sort chaque lundi, les plus à risque ayant plus de chances (0 : pas de tirage).</span></div>
+                <div class="field"><label for="bl-dec">Avance de l’horloge de la tablette</label><div class="money" data-cur="h"><input id="bl-dec" type="number" min="-12" max="12" step="1"></div><span class="hint">Les heures des mouvements lues sur une capture sont ramenées à l’heure de Paris. 2 h constatées en octobre 2026 ; à revoir si une heure lue paraît dans le futur.</span></div>
                 <div class="field"><label for="bl-esp">Paiements en espèces autorisés jusqu’à</label><div class="money" data-cur="€"><input id="bl-esp" type="number" min="0" step="1000"></div><span class="hint">Au-delà, une amende est proposée sur le paiement vu sur le compte (art. 1840 J du CGI). 0 : pas de plafond.</span></div>
                 <div class="field"><label for="bl-espa">Amende sur un paiement en espèces au-delà</label><div class="money" data-cur="%"><input id="bl-espa" type="number" min="0" max="100" step="1"></div><span class="hint">En droit réel, 5 % de la somme payée.</span></div>
                 <div class="field"><label for="bl-fonds">Fonds de départ habituel d’une entreprise</label><div class="money" data-cur="€"><input id="bl-fonds" type="number" min="0" step="1000"></div><span class="hint">Ce qu’une entreprise a sur son compte en ouvrant : sur le serveur, 50 000 €, un prêt qu’elle rembourse ensuite. Au-delà (plus le bénéfice et l’écart d’alerte), sa première déclaration est signalée : fonds de départ à justifier.</span></div>
@@ -3406,7 +3407,7 @@ function subscribe() {
   col("rescrits", s => { S.rescrits = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("signalements", s => { S.signalements = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
-  col("releves", s => { S.releves = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("releves", s => { S.releves = s.docs.map(d => normaliserReleve(Object.assign({ id: d.id }, d.data()))); });
   col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -14119,7 +14120,21 @@ function pretsSection(e) {
 // Ce qui dépasse est un enrichissement inexpliqué. Comme dans la réalité, l'entreprise doit
 // en justifier l'origine ; à défaut, il est imposé d'office (art. L16 et L69 du LPF) et le
 // soupçon peut être signalé (sur le modèle de TRACFIN, art. L561-15 du CMF).
-function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8, fondsDepart: 50000, tirage: 3, plafondEspeces: 10000, amendeEspeces: 5 }, cfg().blanchiment || {}); }
+function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 10000, soldeObligatoire: false, fenetreH: 8, fondsDepart: 50000, tirage: 3, plafondEspeces: 10000, amendeEspeces: 5, decalageTablette: 2 }, cfg().blanchiment || {}); }
+// La tablette du jeu affiche ses heures en avance sur Paris (2 h constatées sur les relevés du 21 et du
+// 22 octobre 2026) : chaque heure lue sur une capture ou un texte collé est ramenée à l'heure de Paris.
+const decalageTabletteMs = () => (Number(blc().decalageTablette) || 0) * 36e5;
+// Relevés enregistrés avant la correction : leurs heures sont celles de la tablette (2 h d'avance), et
+// leur heure était parfois portée à celle du dernier mouvement. Ils sont ramenés à l'heure de Paris au chargement.
+const DECALAGE_ANCIEN_H = 2;
+function normaliserReleve(r) {
+  if (!r || r.decalageH != null || (r.lecture !== "capture" && r.lecture !== "texte")) return r;
+  const D = DECALAGE_ANCIEN_H * 36e5, out = Object.assign({}, r, { decalageH: DECALAGE_ANCIEN_H, decalageAncien: true });
+  if (Array.isArray(r.mouvements)) out.mouvements = r.mouvements.map(m => { const t = new Date(m && m.t).getTime(); return Number.isFinite(t) ? Object.assign({}, m, { t: new Date(t - D).toISOString() }) : m; });
+  const at = new Date(r.at).getTime(), cr = new Date(r.createdAt).getTime();
+  if (Number.isFinite(at) && Number.isFinite(cr) && at > cr + 6e4) out.at = new Date(Math.max(cr, at - D)).toISOString();
+  return out;
+}
 function relevesOf(e) { return (S.releves || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function soupconsOf(e) { return (S.soupcons || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
 function periodDays(k) { const b = bounds(k); return b ? Math.max(1, Math.round((b.end.getTime() - b.start.getTime()) / 864e5)) : 7; }
@@ -14712,6 +14727,7 @@ function lireDate(t, ref) {
 const nettoyer = t => String(t || "")
   .replace(/^[^\p{L}\d+#(]+/u, "").replace(/[^\p{L}\d)#%]+$/u, "")
   .replace(/\s*[—–]\s*-?\s*|\s+-\s+(?=\p{Lu})/gu, " — ").replace(/\bRecu\b/g, "Reçu").replace(/\brecue\b/g, "reçue")
+  .replace(/(^|[\s(:·])[|!](?=\p{Ll}{2})/gu, "$1I")
   .replace(/\s+/g, " ").trim();
 // Sens d'un mouvement d'après son libellé, quand le signe manque.
 const signeLibelle = lib => /re[çc]u|rembours|vente|encaiss/i.test(lib) ? 1 : /salaire|prime|^vers\b|paiement|commande|achat|retrait/i.test(lib) ? -1 : 0;
@@ -14863,6 +14879,7 @@ function openReleve(e, back, image) {
   const url = h("input", { id: "rv-url", type: "url", autocomplete: "off", placeholder: "Message Discord, Imgur…" });
   const note = h("input", { id: "rv-note", autocomplete: "off", placeholder: "Facultatif : circonstances du relevé" });
   const etat = h("p", { class: "hint rv-etat", "aria-live": "polite" });
+  const avance = h("p", { class: "hint conc-bad", "aria-live": "polite", hidden: true });
   const img = h("img", { class: "proof-img", alt: "Capture collée" });
   const imgA = h("a", { target: "_blank", rel: "noopener", title: "Agrandir la capture" }, img); imgA.hidden = true;
   const rows = h("div", { class: "mv-rows" }, mvRow());
@@ -14896,8 +14913,14 @@ function openReleve(e, back, image) {
     conc.textContent = c ? c.texte : "";
     conc.className = "hint" + (c ? (c.ok === true ? " conc-ok" : c.ok === false ? " conc-bad" : "") : "");
     fill(sus, x ? nouveaux(x, list).map(s => h("span", { class: "reason", text: s.texte })) : []);
+    // Un mouvement plus récent que le relevé : heure de la capture ou avance de la tablette à revoir.
+    const fut = list.length && list[0].t > refDate().getTime() + 5 * 6e4;
+    avance.hidden = !fut;
+    if (fut) avance.textContent = `Le dernier mouvement (${jjmm(list[0].t)}) est plus récent que l’heure du relevé : corrigez l’heure du relevé ou l’avance de la tablette (Réglages → Surveillance des comptes, ${blc().decalageTablette} h aujourd’hui).`;
   };
   const appliquer = (r, texte) => {
+    const D = decalageTabletteMs();
+    r = Object.assign({}, r, { mouvements: (r.mouvements || []).map(x => { const t = x && x.t ? new Date(x.t).getTime() : NaN; return Number.isFinite(t) && D ? Object.assign({}, x, { t: new Date(t - D).toISOString() }) : x; }) });
     if (r.solde != null) m.value = String(Math.round(r.solde));
     m.classList.toggle("a-verifier", !!r.soldeDouteux && r.solde != null);
     if (r.rib) { rib = r.rib; if (entIn && !entIn.value.trim()) { const x = entParRib(rib); if (x) entIn.value = x.nom; } }
@@ -14907,6 +14930,7 @@ function openReleve(e, back, image) {
     etat.textContent = n
       ? `${n} mouvement${plural(n)} lu${plural(n)}${dout ? `, dont ${dout} à vérifier (surligné${plural(dout)})` : ""}${r.soldeDouteux && r.solde != null ? " · solde à vérifier" : ""}${rib && entIn && entParRib(rib) ? " · entreprise reconnue à son RIB" : ""}. Comparez avec la capture avant d’enregistrer.`
       : `Aucun mouvement reconnu${r.solde != null ? " (solde lu)" : ""} : ${texte ? "vérifiez le texte collé" : "collez une capture plus nette, ou recopiez-les"}.`;
+    if (n && D) etat.textContent += ` Heures ramenées à l’heure de Paris (la tablette avance de ${D / 36e5} h).`;
     maj();
   };
   const lireImage = async f => {
@@ -14970,7 +14994,7 @@ function openReleve(e, back, image) {
     const fichier = blob ? (blob instanceof File && blob.name ? blob : new File([blob], "capture.png", { type: blob.type || "image/png" })) : null;
     const preuve = (fichier ? await uploadProof(`releves/${ref.id}`, fichier) : null) || linkProof(url.value);
     const r = { entrepriseId: x.id || null, entrepriseNom: x.nom, montant: Math.round(v), at: new Date(T).toISOString(), agent: S.agentName || "", by: S.uid || null, preuve, note: note.value.trim(), createdAt: nowISO(),
-      mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? lecture : "saisie" };
+      mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? lecture : "saisie", decalageH: Number(blc().decalageTablette) || 0 };
     if (rib) r.rib = rib;
     if (!(await write(() => ref.set(r)))) { go.disabled = false; return; }
     // Déclarations dont ce relevé montre que le solde déclaré était faux.
@@ -14991,7 +15015,7 @@ function openReleve(e, back, image) {
           h("div", { class: "sal-box" }, h("span", { class: "sal-label", text: "Derniers mouvements" }),
             h("div", { class: "mv-head", "aria-hidden": "true" }, h("span", { text: "Date" }), h("span", { text: "Libellé" }), h("span", { text: "Montant" }), h("span", {})),
             rows, h("div", {}, ajouter)),
-          conc, sus),
+          conc, avance, sus),
         imgA),
       h("div", { class: "row2" }, champ("rv-url", "Ou lien de la capture", url), champ("rv-note", "Observation", note)), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
@@ -15290,6 +15314,7 @@ function renderBlSettings(force) {
   $("#bl-fonds").value = String(c.fondsDepart);
   $("#bl-tirage").value = String(c.tirage);
   $("#bl-esp").value = String(c.plafondEspeces);
+  $("#bl-dec").value = String(c.decalageTablette);
   $("#bl-espa").value = String(c.amendeEspeces);
 }
 $("#card-bl").addEventListener("input", () => { S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; });
@@ -15300,6 +15325,7 @@ $("#bl-save").addEventListener("click", async () => {
     fondsDepart: $("#bl-fonds").value === "" ? 50000 : Math.max(0, Math.round(Number($("#bl-fonds").value) || 0)),
     tirage: $("#bl-tirage").value === "" ? 3 : Math.max(0, Math.min(20, Math.round(Number($("#bl-tirage").value) || 0))), tirageSel: blc().tirageSel || "",
     plafondEspeces: $("#bl-esp").value === "" ? 10000 : Math.max(0, Math.round(Number($("#bl-esp").value) || 0)),
+    decalageTablette: $("#bl-dec").value === "" ? 2 : Math.max(-12, Math.min(12, Math.round(Number($("#bl-dec").value) || 0))),
     amendeEspeces: $("#bl-espa").value === "" ? 5 : Math.max(0, Math.min(100, Number($("#bl-espa").value) || 0)) };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { blanchiment: v, updatedAt: nowISO() })));
   if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
