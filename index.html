@@ -5844,12 +5844,24 @@ function openDefaut(e, keys) {
   const recent = declsOf(e).filter(d => dStatus(d) !== "rejetee").sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 3);
   const base = recent.length ? Math.round(recent.reduce((t, d) => t + (Number(d.impot) || 0) + (Number(d.cotisations) || 0), 0) / recent.length) : 0;
   const est = Math.max(1, Math.round(base * (1 + rate / 100)));
+  // Bases possibles, semaine par semaine : compte, dernière déclaration, secteur ; ou la moyenne des avis.
+  const parK = new Map(keys.map(k => [k, estimationsOffice(e, k)]));
+  const methodes = [["compte", "Hausse du compte"], ["declaration", "Dernière déclaration"], ["secteur", "Médiane du secteur"]].filter(([id]) => keys.some(k => parK.get(k).some(x => x.id === id)));
+  if (recent.length) methodes.push(["moyenne", `Moyenne de ses ${recent.length} derniers avis`]);
+  const choix = h("select", { id: "df-base" }, methodes.map(([v, l]) => h("option", { value: v, text: l })));
+  const montantDe = (k, m) => { if (m === "moyenne") return est; const x = parK.get(k).find(y => y.id === m); return x ? montantEstime(x, rate) : est; };
+  const texteDe = m => { if (m === "moyenne") return `la moyenne de ses ${recent.length} derniers avis`; const x = keys.map(k => parK.get(k).find(y => y.id === m)).find(Boolean); return x ? x.texte : ""; };
+  const baseHint = h("p", { class: "hint", style: "margin:0" });
   const rows = keys.map(k => { const cb = h("input", { type: "checkbox", id: "df-" + k }); cb.checked = true; const m = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric", id: "dfm-" + k, value: String(est), style: "max-width:140px" }); return [k, cb, m]; });
   const err = h("span", { class: "err", "aria-live": "polite" });
+  const syncBase = () => { const v = choix.value; for (const [k, , m] of rows) m.value = String(montantDe(k, v)); baseHint.textContent = `Base : ${texteDe(v)}, au barème en vigueur, majorée de ${pct(rate)}. Modifiable semaine par semaine.`; };
+  choix.addEventListener("change", syncBase);
+  if (methodes.length) syncBase();
   openDialog({ eyebrow: "Recouvrement · défaut de déclaration", title: e.nom,
-    body: [h("p", { style: "margin:0", text: `Ces semaines sont clôturées : l’entreprise ne peut plus y déposer de déclaration. Comme pour une taxation d’office, la Direction fixe une imposition estimée, ici la moyenne de ses ${recent.length || 0} dernières déclarations (${money(base)}) majorée de ${pct(rate)}. Elle est inscrite en pénalité et suit le recouvrement habituel.` }),
+    body: [h("p", { style: "margin:0", text: `Ces semaines sont clôturées : l’entreprise ne peut plus y déposer de déclaration. Comme pour une taxation d’office, la Direction fixe une imposition estimée, majorée de ${pct(rate)}, d’après le compte de l’entreprise, sa dernière déclaration, son secteur ou ses derniers avis. Elle est inscrite en pénalité et suit le recouvrement habituel.` }),
+      methodes.length ? h("div", { class: "field" }, h("label", { for: "df-base", text: "Base de l’estimation" }), choix) : null, baseHint,
       h("div", { class: "checks-col" }, rows.map(([k, cb, m]) => h("div", { class: "paste-row" }, h("label", { class: "switch", for: "df-" + k }, cb, periodLabel(k)), h("div", { class: "money", "data-cur": cur() }, m)))),
-      recent.length ? null : h("p", { class: "hint", style: "margin:0", text: "Aucune déclaration connue : indiquez le montant retenu." }),
+      methodes.length ? null : h("p", { class: "hint", style: "margin:0", text: "Aucune base connue (ni relevé, ni déclaration, ni secteur) : indiquez le montant retenu." }),
       h("p", { class: "hint", style: "margin:0", text: "Pour taxer d’office comme une déclaration ordinaire, rouvrez plutôt la semaine (Recouvrement → Clôture des semaines)." }), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }),
       h("button", { class: "btn ink small", type: "button", onclick: async ev => {
@@ -5860,7 +5872,7 @@ function openDefaut(e, keys) {
         let n = 0;
         for (const [k, , m] of chosen) {
           const ref = S.db.collection("penalites").doc();
-          const ok = await write(() => ref.set({ entrepriseId: e.id || null, entrepriseNom: e.nom, motif: `Défaut de déclaration · ${periodPlain(k)} (semaine clôturée, imposition estimée majorée de ${pct(rate)})`, montant: Math.round(Number(m.value)), statut: "due", type: "defaut", periode: k, createdAt: nowISO(), by: S.uid || null }));
+          const ok = await write(() => ref.set({ entrepriseId: e.id || null, entrepriseNom: e.nom, motif: `Défaut de déclaration · ${periodPlain(k)} (semaine clôturée, imposition estimée${methodes.length ? " sur " + (methodes.find(x => x[0] === choix.value) || ["", ""])[1].toLowerCase() : ""}, majorée de ${pct(rate)})`, montant: Math.round(Number(m.value)), statut: "due", type: "defaut", periode: k, createdAt: nowISO(), by: S.uid || null }));
           if (ok) { n++; const p = S.penalites.find(x => x.id === ref.id); if (p) autoPublish("penalites", penaltyDoc(p), "Pénalité infligée."); }
         }
         if (n) toast(`Défaut sanctionné pour ${n} semaine${plural(n)}.`);
@@ -9482,6 +9494,82 @@ async function majorerImpayes(x) {
 /* ---------- Taxation d'office (art. L66 du LPF) ---------- */
 // Après une mise en demeure de déclarer restée sans réponse, la Direction établit elle-même l'imposition,
 // sur la base de la dernière déclaration connue ou de ses constats, avec la majoration de taxation d'office.
+/* Bases d'une imposition d'office (semaine non déclarée), par ordre de préférence :
+   1. la hausse du compte de l'entreprise pendant les semaines non déclarées (relevés, ou fonds de départ
+      pour une entreprise qui vient d'ouvrir), les impôts payés entre-temps réintégrés ; répartie entre
+      ces semaines ; c'est son bénéfice, imposé comme un chiffre d'affaires sans charges ;
+   2. sa dernière déclaration ;
+   3. la médiane des entreprises de son secteur sur les quatre dernières semaines (trois au moins). */
+function semainesNonDeclarees(e, k) {
+  const miss = new Set(missingKeys(e).concat(closedMissing(e)).filter(x => bounds(x) && bounds(x).end.getTime() < Date.now()));
+  if (!miss.has(k)) return [k];
+  let a = k, b = k;
+  while (miss.has(prevKey(a))) a = prevKey(a);
+  while (miss.has(nextKeyOf(b))) b = nextKeyOf(b);
+  const out = [a];
+  while (out[out.length - 1] !== b && out.length < 60) out.push(nextKeyOf(out[out.length - 1]));
+  return out;
+}
+function baseCompte(e, keys) {
+  if (!e || !e.id || !keys.length) return null;
+  const first = keys[0], last = keys[keys.length - 1], fin = compteDe(e, last);
+  if (fin.pos == null || fin.t == null) return null;
+  const deb = compteDe(e, prevKey(first)), b = bounds(first);
+  let v0 = deb.pos, t0 = deb.t, src0 = deb.source, rel0 = deb.rel;
+  if (v0 == null || t0 == null) {
+    if (!(debutDe(e) >= b.start.getTime() - 864e5)) return null;
+    v0 = Number(blc().fondsDepart) || 0; t0 = b.start.getTime(); src0 = "fonds"; rel0 = null;
+  }
+  if (fin.t <= t0) return null;
+  const paye = paiementsEntre(e, t0, fin.t), hausse = Math.round(fin.pos - v0 + paye);
+  const texte = `hausse du compte de ${money(hausse)} entre ${src0 === "fonds" ? `l’ouverture (fonds de départ, ${money(v0)})` : `le ${fmtDate(new Date(t0))} (${money(v0)}${rel0 ? ", relevé " + dossierNo("RC", rel0.id) : ""})`} et le ${fmtDate(new Date(fin.t))} (${money(fin.pos)}${fin.rel ? ", relevé " + dossierNo("RC", fin.rel.id) : ""})${paye ? `, impôts payés entre-temps réintégrés (${money(paye)})` : ""}${keys.length > 1 ? `, répartie sur ${keys.length} semaines` : ""}`;
+  return { hausse, parSemaine: Math.max(0, Math.round(hausse / keys.length)), keys, texte };
+}
+function secteurEstimation(e, k) {
+  const sk = secteurKey(e && e.secteur);
+  if (!sk || !bounds(k)) return null;
+  return lienMemo(`se:${sk}:${k}:${e.id || norm(e.nom)}`, () => {
+    const keys = new Set(keysEnding(k, 4)), par = new Map();
+    for (const d of S.declarations) {
+      if (!keys.has(d.periode) || dStatus(d) === "rejetee" || sameEnt(d, e) || d.taxationOffice) continue;
+      const x = entOf(d);
+      if (secteurKey(x.secteur) !== sk) continue;
+      const kk = x.id || norm(x.nom), o = par.get(kk) || { n: 0, ca: 0, ch: 0, ms: 0, nb: 0 };
+      o.n++; o.ca += Number(d.ca) || 0; o.ch += Number(d.charges) || 0; o.ms += Number(d.masse) || 0; o.nb += Number(d.nbSalaries) || 0; par.set(kk, o);
+    }
+    const l = [...par.values()].filter(o => o.ca > 0).map(o => ({ ca: o.ca / o.n, ch: o.ch / o.n, ms: o.ms / o.n, nb: o.nb / o.n }));
+    if (l.length < 3) return null;
+    const med = f => { const v = l.map(f).sort((a, b) => a - b), m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+    return { ca: Math.round(med(o => o.ca)), ch: Math.round(med(o => o.ch)), ms: Math.round(med(o => o.ms)), nb: Math.round(med(o => o.nb)), n: l.length, secteur: e.secteur };
+  });
+}
+function estimationsOffice(e, k) {
+  const out = [], run = semainesNonDeclarees(e, k), ik = Math.max(0, run.indexOf(k));
+  // La plus longue suite de semaines non déclarées autour de k dont les soldes de début et de fin sont connus.
+  let bc = null;
+  for (let i = 0; i <= ik && !bc; i++) for (let j = run.length; j > ik && !bc; j--) bc = baseCompte(e, run.slice(i, j));
+  if (bc && bc.hausse > 0) out.push({ id: "compte", label: "Hausse du compte", ca: bc.parSemaine, ch: 0, ms: 0, nb: 0, sal: null, texte: bc.texte });
+  const prev = declsOf(e).filter(d => dStatus(d) !== "rejetee" && d.periode !== k && !d.taxationOffice).sort((a, b) => String(b.periode).localeCompare(String(a.periode)))[0];
+  if (prev) out.push({ id: "declaration", label: `Déclaration de ${periodPlain(prev.periode).toLowerCase()}`, ca: Number(prev.ca) || 0, ch: Number(prev.charges) || 0, ms: Number(prev.masse) || 0, nb: Number(prev.nbSalaries) || 0, sal: prev.salaries || null, texte: `la déclaration de ${periodPlain(prev.periode).toLowerCase()}`, declId: prev.id });
+  const se = secteurEstimation(e, k);
+  if (se) out.push({ id: "secteur", label: `Médiane du secteur`, ca: se.ca, ch: se.ch, ms: se.ms, nb: se.nb, sal: null, texte: `la médiane des ${se.n} entreprises du secteur ${se.secteur} sur quatre semaines` });
+  return out;
+}
+// Montant d'une imposition estimée pour une semaine non déclarée, avec la majoration d'office.
+function montantEstime(x, rate) {
+  const r = compute(x.ca, x.ch, x.ms, false, cfg(), x.nb, null);
+  return Math.max(1, Math.round(((Number(r.impot) || 0) + (Number(r.cotisations) || 0)) * (1 + (Number(rate) || 0) / 100)));
+}
+function appliquerEstimation(x) {
+  if (!S.taxOffice) return;
+  S.taxOffice.estimation = x.id;
+  $("#d-ca").value = String(x.ca); $("#d-ch").value = String(x.ch); $("#d-ms").value = String(x.ms); $("#d-nb").value = String(x.nb);
+  if (salMode()) setSalaries(x.sal || []);
+  const rl = S.taxOffice.relanceId ? S.relances.find(r => r.id === S.taxOffice.relanceId) : null;
+  $("#d-note").value = `Imposition établie d’office après la mise en demeure ${rl ? rlNo(rl) : ""} restée sans réponse, sur la base de ${x.texte}.`.replace("demeure  restée", "demeure restée");
+  taxBanner();
+  renderDeclPreview();
+}
 function startTaxOffice(e, key, relance) {
   if (!key) return;
   if (isClosed(key)) { toast(closedNote(key) + " : la Direction doit la rouvrir avant d’y établir une imposition.", true); return; }
@@ -9489,7 +9577,7 @@ function startTaxOffice(e, key, relance) {
   closeDialog();
   showTab("declaration");
   S.editDecl = null;
-  S.taxOffice = { entrepriseId: e.id, periode: key, relanceId: relance ? relance.id : null, base: prev ? prev.id : null };
+  S.taxOffice = { entrepriseId: e.id, periode: key, relanceId: relance ? relance.id : null, base: prev ? prev.id : null, estimations: estimationsOffice(e, key) };
   $("#form-decl").reset();
   $("#d-ent").value = e.nom;
   ensureOption($("#d-per"), key, periodLabel(key));
@@ -9502,8 +9590,9 @@ function startTaxOffice(e, key, relance) {
   $("#d-note").value = `Imposition établie d’office après la mise en demeure ${relance ? rlNo(relance) : ""} restée sans réponse${prev ? `, sur la base de la déclaration de ${periodPlain(prev.periode).toLowerCase()}` : ""}.`;
   $("#d-date").value = toLocalInput(new Date());
   $("#d-receipt").hidden = true;
-  taxBanner();
-  renderDeclPreview();
+  const est = S.taxOffice.estimations;
+  if (est.length) appliquerEstimation(est[0]);
+  else { taxBanner(); renderDeclPreview(); }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function taxBanner() {
@@ -9513,7 +9602,10 @@ function taxBanner() {
   fill(box,
     h("div", { style: "flex:1 1 auto;min-width:0" },
       h("strong", { text: `Taxation d’office · ${e ? e.nom : ""} · ${periodPlain(S.taxOffice.periode)}. ` }),
-      `Les montants reprennent la dernière déclaration connue : corrigez-les d’après vos constats. Majoration de ${pct(cfg().majorationOffice)} au lieu de la majoration de retard ; l’avis est émis aussitôt.`),
+      (() => { const est = S.taxOffice.estimations || [], cur = est.find(x => x.id === S.taxOffice.estimation);
+        return [cur ? `Base retenue : ${cur.texte}. ` : est.length ? "" : "Aucune base connue (ni relevé, ni déclaration, ni secteur) : indiquez les montants d’après vos constats. ",
+          `Corrigez les montants d’après vos constats. Majoration de ${pct(cfg().majorationOffice)} au lieu de la majoration de retard ; l’avis est émis aussitôt.`,
+          est.length > 1 ? h("span", { class: "paste-row", style: "margin-top:6px" }, "Autre base : ", est.filter(x => x.id !== S.taxOffice.estimation).map(x => h("button", { class: "btn ghost small", type: "button", onclick: () => appliquerEstimation(x), text: x.label }))) : null]; })()),
     h("button", { class: "btn ghost small", type: "button", onclick: () => cancelEdit("decl"), text: "Annuler" }));
   box.hidden = false;
   $("#d-submit").textContent = "Établir l’imposition d’office";
