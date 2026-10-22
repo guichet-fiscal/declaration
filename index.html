@@ -2308,7 +2308,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -3396,6 +3396,7 @@ function subscribe() {
   col("transmissions", s => { S.transmissions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("interdictions", s => { S.interdictions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("rescrits", s => { S.rescrits = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("signalements", s => { S.signalements = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
   col("releves", s => { S.releves = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3789,6 +3790,8 @@ function todoItems() {
     const l = rappelCandidats(ep.k).filter(y => !y.deja);
     add(l.length, `Rappel avant la date limite · ${periodPlain(ep.k).toLowerCase()}`, `${l.length} entreprise${plural(l.length)} sans déclaration, à déposer avant le ${jourLimite(ep.lim)} à 23 h 59`, openRappelEcheance);
   }
+  const sgr = sgRecus();
+  add(sgr.length, `Signalement${plural(sgr.length)} reçu${plural(sgr.length)} en ligne`, sgr.slice(0, 3).map(x => "visant " + x.visee).join(", "), openSignalements);
   const rfa = (S.rescrits || []).filter(r => r.statut === "attente");
   if (w) add(rfa.length, `Rescrit${plural(rfa.length)} à répondre`, rfa.slice(0, 3).map(r => r.entrepriseNom).join(", "), () => { const r = rfa[0]; openRescrit(entOf(r), r); });
   const dr = depotsRecus();
@@ -7048,7 +7051,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits"];
+const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -7952,9 +7955,9 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", rescrits: "RF", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", rescrits: "RF", signalements: "SG", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); return p ? dossierNo(p, e.doc_id) : ""; };
 // Auteur d'une ligne du journal : l'agent, ou l'envoi automatique de la base.
-const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : e.collection === "depots" ? "Espace entreprise" : "Sans nom");
+const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : e.collection === "depots" || e.collection === "signalements" ? "Espace entreprise" : "Sans nom");
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {
@@ -8033,6 +8036,12 @@ function describe(e) {
     case "alertes":
       if (x === "suppression") return `a rouvert les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})`;
       return `a classé les alertes de ${v.entrepriseNom || "?"} (${periodPlain(v.periode)})${v.motif ? " : " + v.motif : ""}`;
+    case "signalements": {
+      if (x === "ajout") return `signalement reçu en ligne de ${v.parNom || "?"}, visant ${v.visee || "?"}`;
+      if (a.statut === "controle" && b.statut !== "controle") return `a ouvert un contrôle sur le signalement visant ${v.visee}`;
+      if (a.statut === "classe" && b.statut !== "classe") return `a classé le signalement visant ${v.visee}${a.classeMotif ? " : " + a.classeMotif : ""}`;
+      return `a modifié le signalement visant ${v.visee}`;
+    }
     case "rescrits": {
       if (x === "ajout") return `a enregistré la demande de rescrit de ${v.entrepriseNom}`;
       if (a.statut === "repondu" && b.statut !== "repondu") return `a répondu au rescrit de ${v.entrepriseNom}`;
@@ -12165,6 +12174,53 @@ function communicationSection(c, c0, reopen) {
     canAgent() && open ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openCommunication(c0, reopen), text: "Demander à une autre entreprise" }) : null);
 }
 
+/* Signalements reçus en ligne (espace entreprise, supabase/v25_signalements.sql) : ouvrir un contrôle
+   sur signalement, l'aviseur prérempli, ou classer avec un motif. */
+const SG_STAT = { recu: ["À traiter", "warn"], controle: ["Contrôle ouvert", "accent"], classe: ["Classé", "muted"] };
+const sgRecus = () => (S.signalements || []).filter(x => x.statut === "recu").sort((a, b) => String(a.recuLe).localeCompare(String(b.recuLe)));
+async function saveSignalement(x, patch, msg) {
+  const body = Object.assign({}, (S.signalements || []).find(y => y.id === x.id) || x, patch, { traiteLe: nowISO(), traitePar: S.agentName || "" }); delete body.id;
+  const ok = await write(() => S.db.doc("signalements/" + x.id).set(body));
+  if (ok && msg) toast(msg);
+  return ok;
+}
+function controleSurSignalement(x) {
+  const go = e => newControle(e, null, { origine: "signalement",
+    motif: `Signalement reçu en ligne le ${fmtDateTime(new Date(x.recuLe))} : ${x.texte}${x.preuve ? " Preuve : " + x.preuve : ""}`,
+    aviseur: { nom: x.auteur || `Patron de ${x.parNom}`, discord: "" },
+    apres: id => saveSignalement(x, { statut: "controle", controleId: id }) });
+  const e = findEnt(x.visee);
+  if (e && e.id) go(e); else pickEntreprise(`Entreprise visée : « ${x.visee} »`, go, "Signalement " + dossierNo("SG", x.id));
+}
+function classerSignalement(x, back) {
+  const t = h("textarea", { id: "sg-motif", rows: "2", placeholder: "Sans fondement, déjà contrôlée, trop vague…" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  openDialog({ eyebrow: "Signalement " + dossierNo("SG", x.id), title: "Classer le signalement",
+    body: [h("div", { class: "field" }, h("label", { for: "sg-motif", text: "Motif" }), t), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: async () => {
+      if (!t.value.trim()) { err.textContent = "Indiquez le motif."; t.focus(); return; }
+      if (await saveSignalement(x, { statut: "classe", classeMotif: t.value.trim() }, "Signalement classé.")) back();
+    }, text: "Classer" })] });
+}
+function openSignalements() {
+  const l = (S.signalements || []).slice().sort((a, b) => (a.statut !== "recu") - (b.statut !== "recu") || String(b.recuLe).localeCompare(String(a.recuLe)));
+  const ag = canAgent();
+  openDialog({ eyebrow: "Espace entreprise", title: "Signalements reçus", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Envoyés par les entreprises depuis leur lien personnel. L’entreprise visée n’en sait rien ; le nom de l’aviseur reste confidentiel." }),
+      l.length ? h("ul", { class: "ent-list" }, l.map(x => { const c = x.controleId ? S.controles.find(y => y.id === x.controleId) : null; return h("li", {},
+        h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("SG", x.id)} · visant ${x.visee}` }),
+          h("span", { class: "meta", text: `reçu le ${fmtDateTime(new Date(x.recuLe))} de ${x.parNom}${x.auteur ? " (" + x.auteur + ")" : ""}` }),
+          h("p", { class: "prewrap", style: "margin:4px 0 0", text: x.texte }),
+          x.preuve ? h("a", { href: x.preuve, target: "_blank", rel: "noopener noreferrer", text: "Preuve" }) : null,
+          x.statut === "classe" && x.classeMotif ? h("span", { class: "meta", text: "Classé : " + x.classeMotif }) : null),
+        chip(SG_STAT[x.statut] || SG_STAT.recu),
+        h("span", { class: "row-actions" },
+          c ? h("button", { class: "btn ghost small", type: "button", onclick: () => openControle(c.id), text: dossierNo("CF", c.id) }) : null,
+          ag && x.statut === "recu" ? h("button", { class: "btn small", type: "button", onclick: () => controleSurSignalement(x), text: "Ouvrir un contrôle" }) : null,
+          ag && x.statut === "recu" ? h("button", { class: "btn ghost small", type: "button", onclick: () => classerSignalement(x, openSignalements), text: "Classer" }) : null)); }))
+        : h("p", { class: "muted", style: "margin:0", text: "Aucun signalement reçu." })],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
 /* Rescrit : une entreprise demande à l'avance comment une opération sera imposée ; la réponse de la
    Direction l'engage pour cette entreprise tant que sa situation reste celle décrite (art. L80 B du LPF). */
 const rescritsOf = e => (S.rescrits || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.recuLe).localeCompare(String(a.recuLe)));
@@ -12484,6 +12540,7 @@ function newControle(e, declIds, opts) {
   const insp = h("input", { id: "nc-insp", autocomplete: "off" }); insp.value = S.agentName || "";
   const avNom = h("input", { id: "nc-av", autocomplete: "off", placeholder: "Nom RP de la personne qui signale" }), avDisc = h("input", { id: "nc-avd", autocomplete: "off", inputmode: "numeric", placeholder: "Facultatif" });
   const avBox = h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "nc-av", text: "Aviseur" }), avNom), h("div", { class: "field" }, h("label", { for: "nc-avd", text: "Son ID Discord" }), avDisc));
+  if (opts.aviseur) { avNom.value = opts.aviseur.nom || ""; avDisc.value = opts.aviseur.discord || ""; }
   const avSync = () => { avBox.hidden = orig.value !== "signalement"; };
   orig.addEventListener("change", avSync); avSync();
   const susp = h("input", { type: "checkbox", id: "nc-susp" }); susp.checked = true;
@@ -12513,6 +12570,7 @@ function newControle(e, declIds, opts) {
     for (const id of c.suspendus) { const d = S.declarations.find(x => x.id === id); if (d) await decide(d, "controle", dMontant(d), (S.decisions[id] || {}).note || `Contrôle fiscal ${dossierNo("CF", ref.id)}`, { quiet: true }); }
     toast(`Contrôle ${dossierNo("CF", ref.id)} ouvert${attK.length ? " : la déclaration de " + attK.map(periodPlain).join(" et ").toLowerCase() + " le rejoindra dès sa saisie" : ""}.`);
     if (!pub || pub.checked) autoPublish("controles", avisVerifDoc(Object.assign({ id: ref.id }, c)), "Contrôle ouvert.");
+    if (opts.apres) await opts.apres(ref.id);
     openControle(ref.id);
   };
   openDialog({
@@ -16767,8 +16825,41 @@ function renderPortail() {
     h("ul", { class: "ent-list" }, rl.slice(0, 12).map(r => h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: rlLabel(r) }), h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)}` })),
       rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Voir" })))))) : null;
-  fill(box, head, cardTodo, cardPay, cardConv, cardDecl, cardAtt, cardRl,
+  const cardSig = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Signaler une fraude" })),
+    h("p", { class: "muted", style: "margin:0", text: "Une entreprise qui ne déclare pas tout, paie en liquide pour cacher ses ventes ou emploie sans déclarer ? Signalez-le : la Préfecture peut ouvrir un contrôle. L’entreprise visée n’en saura rien, et une prime peut vous être versée sur ce qui sera recouvré." }),
+    h("div", { class: "paste-row", style: "margin-top:8px" }, h("button", { class: "btn ghost small", type: "button", onclick: openSignalForm, text: "Faire un signalement" })));
+  fill(box, head, cardTodo, cardPay, cardConv, cardDecl, cardAtt, cardRl, cardSig,
     h("p", { class: "hint", style: "margin:0;text-align:center", text: "Ce lien est personnel : ne le partagez pas. En cas de perte, demandez-en un nouveau à la Préfecture ; l’ancien ne marchera plus." }));
+}
+function openSignalForm() {
+  const e = S.portail.e;
+  const vis = h("input", { id: "ps-visee", autocomplete: "off", maxlength: "120", placeholder: "Nom de l’entreprise ou de la personne" });
+  const txt = h("textarea", { id: "ps-texte", rows: "5", maxlength: "3000", placeholder: "Ce que vous avez vu : quoi, quand, combien. Plus c’est précis, plus le contrôle est utile." });
+  const aut = h("input", { id: "ps-auteur", autocomplete: "off", maxlength: "80", placeholder: "Facultatif" }); aut.value = patronsDe(e)[0] || "";
+  const prv = h("input", { id: "ps-preuve", type: "url", autocomplete: "off", placeholder: "https://… (capture, vidéo)" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn small", type: "button", text: "Envoyer le signalement" });
+  go.addEventListener("click", async () => {
+    if (!vis.value.trim()) { err.textContent = "Indiquez l’entreprise ou la personne visée."; vis.focus(); return; }
+    if (txt.value.trim().length < 20) { err.textContent = "Décrivez ce que vous avez constaté (20 caractères au moins)."; txt.focus(); return; }
+    if (prv.value.trim() && !/^https:\/\/\S+$/.test(prv.value.trim())) { err.textContent = "Le lien de la preuve doit commencer par https://"; prv.focus(); return; }
+    go.disabled = true; go.textContent = "Envoi…";
+    let res;
+    try { res = await S.sb.rpc("signaler_fraude", { p_jeton: S.portail.jeton, p_signalement: { visee: vis.value.trim(), texte: txt.value.trim(), auteur: aut.value.trim(), preuve: prv.value.trim() || null } }); } catch (x) { res = { error: x }; }
+    if (res.error) {
+      err.textContent = /signaler_fraude|PGRST202|schema cache/.test((res.error.message || "") + (res.error.code || "")) ? "Le signalement en ligne n’est pas encore ouvert : prévenez la Préfecture sur Discord." : (res.error.message || "Envoi refusé.").replace(/^.*?ERROR:\s*/, "");
+      go.disabled = false; go.textContent = "Envoyer le signalement"; return;
+    }
+    openDialog({ eyebrow: "Signalement envoyé", title: "Merci", stampEl: stamp(["Reçu", "ok"]),
+      body: [h("p", { style: "margin:0", text: `Reçu le ${fmtDateTime(new Date(res.data.recuLe))}. La Préfecture l’examine ; l’entreprise visée n’en sait rien.${aut.value.trim() ? " Si un redressement est recouvré grâce à lui, une prime peut vous être versée." : ""}` })],
+      foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+  });
+  openDialog({ eyebrow: "Espace entreprise · " + e.nom, title: "Signaler une fraude",
+    body: [h("div", { class: "field" }, h("label", { for: "ps-visee", text: "Qui est visé" }), vis),
+      h("div", { class: "field" }, h("label", { for: "ps-texte", text: "Ce que vous avez constaté" }), txt),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ps-auteur", text: "Votre nom RP (pour la prime)" }), aut), h("div", { class: "field" }, h("label", { for: "ps-preuve", text: "Lien d’une preuve" }), prv)),
+      h("p", { class: "hint", style: "margin:0", text: "Votre nom reste confidentiel. Un signalement mensonger peut être sanctionné." }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 function openDepotForm(k0) {
   const e = S.portail.e, pers = portailPeriodes(e);
