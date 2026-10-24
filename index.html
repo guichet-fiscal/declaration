@@ -623,6 +623,8 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
 .rc-keys{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
 .rc-keys .tag{margin-left:0}
 .rc-state{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.rl-state{display:grid;gap:3px;justify-items:end;text-align:right;max-width:340px}.rl-state .hint{font-size:12px;line-height:1.35}
+@media (max-width:620px){.rl-state{justify-items:start;text-align:left}}
 @media (max-width:620px){.rc-list li{grid-template-columns:minmax(0,1fr)}.rc-state{justify-content:flex-start}}
 .rl-pick{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:260px;overflow:auto;border:1px solid var(--rule);border-radius:var(--r);padding:10px 12px}
 .rl-pick li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
@@ -9451,11 +9453,35 @@ function relancesSection(e, reopen) {
 }
 
 /* ---------- Onglet Recouvrement ---------- */
+// État d'une relance : qui l'a envoyée et quand, la date limite et ce qui suit (taxation d'office,
+// saisie ou justice), les rappels déjà faits, et un bouton pour rappeler la relance à l'entreprise.
 const rlChip = r => {
   if (!r) return chip(["Pas encore relancée", "muted"]);
-  const late = new Date(r.echeance).getTime() < Date.now();
-  return chip([`${isMed(r) ? "Mise en demeure" : "Relancée"} le ${fmtDate(new Date(r.at))}${late ? (isMed(r) ? " · délai expiré" : " · sans réponse") : ""}`, isMed(r) ? (late ? "bad" : "warn") : late ? "warn" : "muted"]);
+  const late = new Date(r.echeance).getTime() < Date.now(), ok = rlSettled(r), decl = r.type === "declaration", med = isMed(r);
+  const suite = decl ? "taxation d’office" : "saisie ou justice";
+  const quand = ok ? "Régularisée" : med
+    ? (late ? `Délai expiré le ${fmtDateTime(new Date(r.echeance))} : ${suite} possible` : `À ${decl ? "déclarer" : "payer"} avant le ${fmtDateTime(new Date(r.echeance))}, sinon ${suite}`)
+    : (late ? `Sans réponse depuis le ${fmtDateTime(new Date(r.echeance))} : mise en demeure possible` : `Réponse attendue avant le ${fmtDateTime(new Date(r.echeance))}`);
+  const rp = r.rappels || [], dr = rp[rp.length - 1];
+  return h("span", { class: "rl-state" },
+    chip([`${med ? "Mise en demeure" : "Relancée"} le ${fmtDate(new Date(r.at))}${late && !ok ? (med ? " · délai expiré" : " · sans réponse") : ""}`, ok ? "ok" : med ? (late ? "bad" : "warn") : late ? "warn" : "muted"]),
+    h("span", { class: "hint", text: `${rlNo(r)} envoyée par ${r.byNom || "—"} · ${quand}${dr ? ` · rappelée ${rp.length > 1 ? rp.length + " fois, " : ""}le ${fmtDate(new Date(dr.at))} par ${dr.byNom || "—"}` : ""}` }),
+    canAgent() && !ok && r.type !== "echeance" ? h("button", { class: "linkbtn", type: "button", onclick: ev => { ev.stopPropagation(); rappelerRelance(r); }, text: `Rappeler ${med ? "la mise en demeure" : "la relance"}` }) : null);
 };
+// Rappel d'une relance ou d'une mise en demeure : même document, même date limite, republié avec la
+// mention du rappel ; le rappel est noté sur la relance (qui, quand).
+async function rappelerRelance(r) {
+  const cur = S.relances.find(x => x.id === r.id) || r;
+  const body = Object.assign({}, cur, { rappels: (cur.rappels || []).concat([{ at: nowISO(), byNom: S.agentName || "" }]) }); delete body.id;
+  if (!(await write(() => S.db.doc("relances/" + r.id).set(body)))) return;
+  const doc = relanceDoc(Object.assign({ id: r.id }, body)), lim = fmtDateTime(new Date(body.echeance));
+  doc.kind = "RAPPEL · " + doc.kind;
+  doc.date = `Rappel du ${longDate(new Date())} · envoyée le ${longDate(new Date(body.at))}`;
+  doc.discord = Object.assign({}, doc.discord, { text: `**Rappel** · ${doc.discord.text} Dernier délai : ${lim}.` });
+  const quoi = isMed(body) ? "Rappel de la mise en demeure" : "Rappel de la relance";
+  if (hookFor("relances")) await publishDoc(doc, `${quoi} enregistré.`);
+  else { toast(`${quoi} enregistré : postez l’image sur Discord.`); showDocImage(doc); }
+}
 const RC_LIMIT = 8;
 function rcMore(key, n) {
   if (n <= RC_LIMIT) return null;
