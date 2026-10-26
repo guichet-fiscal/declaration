@@ -2142,11 +2142,12 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
               <div class="row2" style="align-items:end">
                 <div class="field"><label for="bl-fenetre">Relevé sans mouvements : écart maximal avec le dépôt</label><div class="money" data-cur="h"><input id="bl-fenetre" type="number" min="0" max="72" step="1"></div><span class="hint">Quand les mouvements du relevé ne remontent pas jusqu’au dépôt de la déclaration, son solde n’est comparé au solde déclaré que s’ils sont aussi proches. Les recettes arrivent surtout le soir.</span></div>
                 <div class="field"><label for="bl-tirage">Relevés surprises par semaine</label><input id="bl-tirage" type="number" min="0" max="20" step="1"><span class="hint">Entreprises tirées au sort chaque lundi, les plus à risque ayant plus de chances (0 : pas de tirage).</span></div>
-                <div class="field"><label for="bl-dec">Avance de l’horloge de la tablette</label><div class="money" data-cur="h"><input id="bl-dec" type="number" min="-12" max="12" step="1"></div><span class="hint">Les heures des mouvements lues sur une capture sont ramenées à l’heure de Paris. 2 h constatées en octobre 2026 ; à revoir si une heure lue paraît dans le futur.</span></div>
+                <div class="field"><label for="bl-dec">Avance de l’horloge de la tablette</label><div class="money" data-cur="h"><input id="bl-dec" type="number" min="-12" max="12" step="1"></div><label for="bl-dec-dep" class="hint" style="margin-top:6px">À partir du (pour recaler les relevés déjà faits depuis cette date)</label><input id="bl-dec-dep" type="datetime-local"><span class="hint" id="bl-dec-hint">Les heures des mouvements lues sur une capture sont ramenées à l’heure de Paris, avec l’avance en vigueur au moment de la capture.</span></div>
                 <div class="field"><label for="bl-esp">Paiements en espèces autorisés jusqu’à</label><div class="money" data-cur="€"><input id="bl-esp" type="number" min="0" step="1000"></div><span class="hint">Au-delà, une amende est proposée sur le paiement vu sur le compte (art. 1840 J du CGI). 0 : pas de plafond.</span></div>
                 <div class="field"><label for="bl-espa">Amende sur un paiement en espèces au-delà</label><div class="money" data-cur="%"><input id="bl-espa" type="number" min="0" max="100" step="1"></div><span class="hint">En droit réel, 5 % de la somme payée.</span></div>
                 <div class="field"><label for="bl-fonds">Fonds de départ habituel d’une entreprise</label><div class="money" data-cur="€"><input id="bl-fonds" type="number" min="0" step="1000"></div><span class="hint">Ce qu’une entreprise a sur son compte en ouvrant : sur le serveur, 50 000 €, un prêt qu’elle rembourse ensuite. Au-delà (plus le bénéfice et l’écart d’alerte), sa première déclaration est signalée : fonds de départ à justifier.</span></div>
               </div>
+              <div id="bl-mesure" class="hint" style="margin:0 0 10px"></div>
               <div class="paste-row">
                 <button class="btn" type="button" id="bl-save">Enregistrer</button>
                 <span id="bl-msg" class="hint" aria-live="polite"></span>
@@ -3411,7 +3412,7 @@ function onDbError(e) {
 }
 function subscribe() {
   const db = S.db;
-  db.doc("config/main").onSnapshot(s => { S.config = s.exists ? (s.data() || {}) : {}; S.loaded.add("config"); schedule(); }, onDbError);
+  db.doc("config/main").onSnapshot(s => { S.config = s.exists ? (s.data() || {}) : {}; S.loaded.add("config"); renormaliserReleves(); schedule(); }, onDbError);
   db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
   db.doc("meta/bilan").onSnapshot(s => { S.bilanMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilan"); schedule(); }, onDbError);
   db.doc("meta/communique").onSnapshot(s => { S.communiqueMeta = s.exists ? (s.data() || null) : null; S.loaded.add("communique"); schedule(); }, onDbError);
@@ -3433,7 +3434,7 @@ function subscribe() {
   col("rescrits", s => { S.rescrits = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("signalements", s => { S.signalements = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("alertes", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.alertes = o; });
-  col("releves", s => { S.releves = s.docs.map(d => normaliserReleve(Object.assign({ id: d.id }, d.data()))); });
+  col("releves", s => { S.relevesBruts = s.docs.map(d => Object.assign({ id: d.id }, d.data())); S.releves = S.relevesBruts.map(normaliserReleve); });
   col("prets", s => { S.prets = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3831,6 +3832,7 @@ function todoItems() {
   if (w) add(rfa.length, `Rescrit${plural(rfa.length)} à répondre`, rfa.slice(0, 3).map(r => r.entrepriseNom).join(", "), () => { const r = rfa[0]; openRescrit(entOf(r), r); });
   const dr = depotsRecus();
   add(dr.length, `Déclaration${plural(dr.length)} reçue${plural(dr.length)} en ligne à enregistrer`, dr.slice(0, 3).map(d => d.entrepriseNom).join(", "), () => { allerA("declaration"); setTimeout(() => { const el = $("#d-online"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 120); }, "info");
+  if (w && blc().actif) { const ma = mesureAvance(); if (ma.suggestion != null) add(1, "Avance de la tablette à vérifier", `${ma.cur} h réglées, ${ma.suggestion} h d’après les ${ma.futurs >= 2 ? ma.futurs : ma.n} derniers relevés`, () => { showTab("reglages"); setSetTab("recouvrement"); setTimeout(() => { const el = $("#bl-mesure"); if (el) el.scrollIntoView({ behavior: "smooth", block: "center" }); }, 80); }); }
   const xo = S.declarations.filter(d => exoOubliee(d));
   add(xo.length, `Exonération${plural(xo.length)} à recalculer`, xo.slice(0, 3).map(d => `${d.entrepriseNom} (${periodPlain(d.periode).toLowerCase()})`).join(", "), () => openDecl(xo[0].id));
   const av = S.declarations.filter(d => dStatus(d) === "soumise");
@@ -8974,6 +8976,10 @@ function editEntreprise(e, back) {
   debut.value = e.debutActivite && keyStart(e.debutActivite) > startTime() ? e.debutActivite : "";
   const exo = h("select", {}, h("option", { value: "auto", text: "Automatique : si l’entreprise est nouvelle" }), h("option", { value: "accordee", text: "Accordée" }), h("option", { value: "refusee", text: "Refusée" }));
   exo.value = ["accordee", "refusee"].includes(e.exoneration) ? e.exoneration : "auto";
+  // Ce que donneront le début d'activité et l'exonération choisis, avant d'enregistrer.
+  const exoApercu = h("span", { class: "hint", "aria-live": "polite" });
+  const majApercu = () => { const deb = debut.value || (e.debutActivite && bounds(e.debutActivite) && keyStart(e.debutActivite) <= startTime() ? e.debutActivite : null); const x = exoSituation(Object.assign({}, e, { debutActivite: deb, exoneration: exo.value })); exoApercu.textContent = x ? "Résultat : " + x.text.charAt(0).toLowerCase() + x.text.slice(1) + "." : "Résultat : pas d’exonération."; };
+  debut.addEventListener("change", majApercu); exo.addEventListener("change", majApercu);
   const err = h("span", { class: "err", "aria-live": "polite" });
   const progress = h("span", { class: "hint" });
   const save = h("button", { class: "btn small", type: "button", text: "Enregistrer" });
@@ -8993,7 +8999,9 @@ function editEntreprise(e, back) {
     save.disabled = true;
     const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || (e.debutActivite && bounds(e.debutActivite) && keyStart(e.debutActivite) <= startTime() ? e.debutActivite : null), exoneration: exo.value, alias: als }));
     if (!ok) { save.disabled = false; return; }
-    if (n !== e.nom) {
+    // Le nom est reporté sur tous les dossiers liés qui portent encore un autre nom (y compris un nom
+    // plus ancien, resté sur des relevés ou des prêts d'avant un premier changement).
+    {
       const jobs = [];
       for (const d of S.declarations) if (d.entrepriseId === e.id && d.entrepriseNom !== n) jobs.push(["declarations", d.id]);
       for (const p of S.penalites) if (p.entrepriseId === e.id && p.entrepriseNom !== n) jobs.push(["penalites", p.id]);
@@ -9008,6 +9016,9 @@ function editEntreprise(e, back) {
       for (const cp of S.conventions || []) if (cp.entrepriseId === e.id && cp.entrepriseNom !== n) jobs.push(["conventions", cp.id]);
       for (const ps of S.prestations || []) if (ps.entrepriseId === e.id && ps.entrepriseNom !== n) jobs.push(["prestations", ps.id]);
       for (const vt of S.versements || []) if (vt.transporteurId === e.id && vt.transporteurNom !== n) jobs.push(["versements", vt.id, { transporteurNom: n }]);
+      for (const [colN, l] of [["releves", S.relevesBruts || S.releves], ["prets", S.prets], ["vehicules", S.vehicules], ["soupcons", S.soupcons], ["rescrits", S.rescrits], ["depots", S.depots]])
+        for (const x of l || []) if (x.entrepriseId === e.id && x.entrepriseNom && x.entrepriseNom !== n) jobs.push([colN, x.id]);
+      for (const [id, a] of Object.entries(S.alertes || {})) if (a && a.entrepriseId === e.id && a.entrepriseNom && a.entrepriseNom !== n) jobs.push(["alertes", id]);
       let done = 0;
       for (const [col, id, patch] of jobs) { await write(() => S.db.doc(col + "/" + id).update(patch || { entrepriseNom: n })); done++; progress.textContent = `Mise à jour des dossiers : ${done} / ${jobs.length}`; }
     }
@@ -9028,11 +9039,12 @@ function editEntreprise(e, back) {
         h("div", { class: "field" }, h("label", { for: "ee-discord", text: "ID Discord du patron" }), Object.assign(disc, { id: "ee-discord" }), h("span", { class: "hint", text: "Pour le mentionner dans les avis et relances publiés. Clic droit sur le membre → Copier l’identifiant." })),
         h("div", { class: "field" }, h("label", { for: "ee-debut", text: "Début d’activité" }), Object.assign(debut, { id: "ee-debut" }), h("span", { class: "hint", text: "Avant cette période, l’entreprise n’est pas attendue et n’est jamais relancée." }))),
       cfg().exoActive ? h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ee-exo", text: "Exonération de début d’activité" }), Object.assign(exo, { id: "ee-exo" }),
-        h("span", { class: "hint", text: `${cfg().exoPeriodes} période${plural(cfg().exoPeriodes)} à partir du début d’activité (ou du début du suivi). S’applique aux déclarations saisies ensuite.` }))) : null,
+        h("span", { class: "hint", text: `${cfg().exoPeriodes} période${plural(cfg().exoPeriodes)} à partir du début d’activité (ou du début du suivi). S’applique aux déclarations saisies ensuite ; une déclaration déjà saisie à laquelle elle manque est signalée pour être recalculée.` }), exoApercu)) : null,
       h("div", { class: "field" }, h("label", { for: "ee-alias", text: "Autres noms" }), alias, h("span", { class: "hint", text: "Les noms sous lesquels l’entreprise apparaît en jeu, sur les factures et les comptes des autres entreprises, séparés par des virgules. Ils servent à la reconnaître dans les messages collés et les mouvements des comptes." })),
-      h("p", { class: "hint", style: "margin:0", text: "Un changement de nom est reporté sur toutes ses déclarations, pénalités, échéanciers et relances." }), err, progress],
+      h("p", { class: "hint", style: "margin:0", text: "Le nom est reporté sur tous ses dossiers (déclarations, pénalités, relances, relevés, prêts, véhicules, contrôles…), y compris ceux qui portent encore un ancien nom." }), err, progress],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour à la fiche" : "Annuler" }), h("span", { class: "spacer" }), save]
   });
+  majApercu();
   setTimeout(() => nom.focus(), 30);
 }
 function editPenalty(p, back) {
@@ -14446,15 +14458,89 @@ function blc() { return Object.assign({ actif: true, seuil: 10000, plafond: 1000
 // La tablette du jeu affiche ses heures en avance sur Paris (2 h constatées sur les relevés du 21 et du
 // 22 octobre 2026) : chaque heure lue sur une capture ou un texte collé est ramenée à l'heure de Paris.
 const decalageTabletteMs = () => (Number(blc().decalageTablette) || 0) * 36e5;
+// L'avance change (changement d'heure, réglage du serveur) : la Direction note à partir de quand. Chaque
+// relevé est ramené à l'heure de Paris avec l'avance en vigueur au moment de sa capture.
+function decalagesTablette() {
+  const c = blc(), l = Array.isArray(c.decalages) && c.decalages.length ? c.decalages : [{ depuis: null, h: Number(c.decalageTablette) || 0 }];
+  return l.map(x => ({ depuis: x.depuis || null, h: Number(x.h) || 0 })).sort((a, b) => String(a.depuis || "").localeCompare(String(b.depuis || "")));
+}
+function decalageA(t) {
+  const l = decalagesTablette();
+  let h = l[0].h;
+  for (const x of l) if (!x.depuis || new Date(x.depuis).getTime() <= t) h = x.h;
+  return h;
+}
+// Avance notée avec une date de début qui couvre l'instant t (null sinon) : seule une correction datée
+// recale les relevés déjà enregistrés.
+function decalageDate(t) {
+  let h = null;
+  for (const x of decalagesTablette()) if (x.depuis && new Date(x.depuis).getTime() <= t) h = x.h;
+  return h;
+}
+function renormaliserReleves() {
+  if (!Array.isArray(S.relevesBruts)) return;
+  const avant = JSON.stringify(decalagesTablette());
+  if (S.relevesDecalages === avant) return;
+  S.relevesDecalages = avant;
+  S.releves = S.relevesBruts.map(normaliserReleve);
+}
 // Relevés enregistrés avant la correction : leurs heures sont celles de la tablette (2 h d'avance), et
 // leur heure était parfois portée à celle du dernier mouvement. Ils sont ramenés à l'heure de Paris au chargement.
 const DECALAGE_ANCIEN_H = 2;
+const decalerMvts = (l, ms) => (Array.isArray(l) ? l.map(m => { const t = new Date(m && m.t).getTime(); return Number.isFinite(t) ? Object.assign({}, m, { t: new Date(t + ms).toISOString() }) : m; }) : l);
 function normaliserReleve(r) {
-  if (!r || r.decalageH != null || (r.lecture !== "capture" && r.lecture !== "texte")) return r;
-  const D = DECALAGE_ANCIEN_H * 36e5, out = Object.assign({}, r, { decalageH: DECALAGE_ANCIEN_H, decalageAncien: true });
-  if (Array.isArray(r.mouvements)) out.mouvements = r.mouvements.map(m => { const t = new Date(m && m.t).getTime(); return Number.isFinite(t) ? Object.assign({}, m, { t: new Date(t - D).toISOString() }) : m; });
-  const at = new Date(r.at).getTime(), cr = new Date(r.createdAt).getTime();
-  if (Number.isFinite(at) && Number.isFinite(cr) && at > cr + 6e4) out.at = new Date(Math.max(cr, at - D)).toISOString();
+  if (!r || (r.lecture !== "capture" && r.lecture !== "texte")) return r;
+  let out = r;
+  if (r.decalageH == null) {
+    const D = DECALAGE_ANCIEN_H * 36e5;
+    out = Object.assign({}, r, { decalageH: DECALAGE_ANCIEN_H, decalageAncien: true, mouvements: decalerMvts(r.mouvements, -D) });
+    const at = new Date(r.at).getTime(), cr = new Date(r.createdAt).getTime();
+    if (Number.isFinite(at) && Number.isFinite(cr) && at > cr + 6e4) out.at = new Date(Math.max(cr, at - D)).toISOString();
+  }
+  // Avance corrigée depuis : le relevé est ramené avec celle qui était en vigueur à sa capture.
+  const T = new Date(out.at).getTime(), eff = Number.isFinite(T) ? decalageDate(T) : null, h0 = Number(out.decalageH) || 0;
+  if (eff == null || eff === h0) return out;
+  return Object.assign({}, out, { decalageH: eff, decalageInitialH: h0, mouvements: decalerMvts(out.mouvements, (h0 - eff) * 36e5) });
+}
+// Mesure de l'avance sur les relevés. Les paiements à la Préfecture lus sur un compte ont une heure
+// connue (l'encaissement) : ils donnent l'avance exacte. Sinon, l'écart entre la capture et le dernier
+// mouvement : s'il ne descend jamais sous 50 minutes sur une dizaine de relevés, l'avance réglée est
+// trop forte d'une heure ; un mouvement plus récent que la capture, elle est trop faible.
+function mesureAvance(jours) {
+  const depuis = Date.now() - (jours || 7) * 864e5, out = { ancres: [], ecarts: [] };
+  const enc = [];
+  for (const d of S.declarations) { const dec = S.decisions[d.id], ec = echOf(d); if (ec) ec.echeances.forEach(x => { if (x.payee && x.paidAt) enc.push({ e: d.entrepriseId, t: Date.parse(x.paidAt), m: Number(x.montant) || 0 }); }); else if (dec && dec.paidAt) enc.push({ e: d.entrepriseId, t: Date.parse(dec.paidAt), m: dMontant(d) - dCredit(d) }); }
+  for (const p of S.penalites || []) if (p.paidAt) enc.push({ e: p.entrepriseId, t: Date.parse(p.paidAt), m: Number(p.montant) || 0 });
+  for (const p of S.prets || []) for (const x of p.echeances || []) if (x.payee && x.paidAt) enc.push({ e: p.entrepriseId, t: Date.parse(x.paidAt), m: Number(x.montant) || 0 });
+  for (const r of S.releves || []) {
+    if ((r.lecture !== "capture" && r.lecture !== "texte") || !Array.isArray(r.mouvements) || !r.mouvements.length) continue;
+    const T = Date.parse(r.at);
+    if (!Number.isFinite(T)) continue;
+    for (const m of r.mouvements) {
+      const t = Date.parse(m.t), v = Number(m.montant);
+      if (!(v < 0) || !/pr[ée]fecture/i.test(m.libelle || "") || !Number.isFinite(t)) continue;
+      const a = enc.filter(x => x.e === r.entrepriseId && Math.abs(x.m + v) < 2 && Math.abs(x.t - t) <= 4 * 36e5).sort((x, y) => Math.abs(x.t - t) - Math.abs(y.t - t))[0];
+      if (a) out.ancres.push({ T, h: Math.round(((Number(r.decalageH) || 0) + (t - a.t) / 36e5) * 2) / 2, rel: r });
+    }
+    if (T >= depuis) out.ecarts.push({ T, min: (T - Math.max(...r.mouvements.map(m => Date.parse(m.t)).filter(Number.isFinite))) / 6e4, h: Number(r.decalageH) || 0 });
+  }
+  out.ecarts.sort((a, b) => a.T - b.T);
+  // Les derniers relevés d'affilée qui s'écartent : l'avance a changé avec eux.
+  const cur = decalageA(Date.now()), recents = out.ecarts.filter(x => x.h === cur);
+  const futurs = recents.slice(-10).filter(x => x.min < -5).length;
+  let k = recents.length; while (k > 0 && recents[k - 1].min >= 50) k--;
+  const serie = recents.slice(k), minGap = serie.length ? Math.min(...serie.map(x => x.min)) : null;
+  out.cur = cur; out.n = serie.length; out.minGap = minGap; out.futurs = futurs;
+  out.suggestion = futurs >= 2 ? cur + 1 : serie.length >= 10 ? cur - Math.max(1, Math.floor((minGap + 10) / 60)) : null;
+  // Depuis quand : le changement d'heure de Paris entre le dernier relevé normal et le premier anormal, s'il y en a un.
+  if (out.suggestion != null) {
+    const anorm = x => (out.suggestion < cur ? x.min >= 50 : x.min < -5);
+    let i = recents.length - 1; while (i > 0 && anorm(recents[i - 1])) i--;
+    const t1 = recents[i].T, t0 = i > 0 ? recents[i - 1].T : t1 - 7 * 864e5;
+    let dep = t1;
+    for (let t = t0; t < t1; t += 36e5) if (new Date(t).getTimezoneOffset() !== new Date(t + 36e5).getTimezoneOffset()) { dep = t + 36e5; break; }
+    out.depuis = dep;
+  }
   return out;
 }
 function relevesOf(e) { return (S.releves || []).filter(r => sameEnt(r, e)).sort((a, b) => String(b.at).localeCompare(String(a.at))); }
@@ -15301,7 +15387,7 @@ let collageReleve = null;
 dlg.addEventListener("paste", ev => { if (collageReleve && collageReleve.zone.isConnected) collageReleve.fn(ev); });
 function openReleve(e, back, image) {
   if (!canAgent()) return;
-  let blob = null, lecture = "saisie", rib = null, url0 = null, seq = 0;
+  let blob = null, lecture = "saisie", rib = null, url0 = null, seq = 0, decUsed = null;
   const ent = e || null;
   const entIn = ent ? null : h("input", { id: "rv-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" });
   const m = h("input", { id: "rv-montant", type: "number", step: "1", inputmode: "numeric", placeholder: "0" });
@@ -15348,14 +15434,15 @@ function openReleve(e, back, image) {
     // Un mouvement plus récent que le relevé : heure de la capture ou avance de la tablette à revoir.
     const fut = list.length && list[0].t > refDate().getTime() + 5 * 6e4;
     avance.hidden = !fut;
-    if (fut) avance.textContent = `Le dernier mouvement (${jjmm(list[0].t)}) est plus récent que l’heure du relevé : corrigez l’heure du relevé ou l’avance de la tablette (Réglages → Surveillance des comptes, ${blc().decalageTablette} h aujourd’hui).`;
+    if (fut) avance.textContent = `Le dernier mouvement (${jjmm(list[0].t)}) est plus récent que l’heure du relevé : corrigez l’heure du relevé ou l’avance de la tablette (Réglages → Surveillance des comptes, ${decalageA(refDate().getTime())} h à cette date).`;
     // RIB déjà relevé sur le compte d'une autre entreprise : mauvaise entreprise, ou compte partagé.
     const autre = x && rib ? entParRib(rib) : null;
     autreRib.hidden = !(autre && autre.id !== x.id);
     if (!autreRib.hidden) autreRib.textContent = `Ce RIB est celui de « ${autre.nom} » d’après ses relevés : vérifiez l’entreprise avant d’enregistrer.`;
   };
   const appliquer = (r, texte) => {
-    const D = decalageTabletteMs();
+    const D = decalageA(refDate().getTime()) * 36e5;
+    decUsed = D / 36e5;
     r = Object.assign({}, r, { mouvements: (r.mouvements || []).map(x => { const t = x && x.t ? new Date(x.t).getTime() : NaN; return Number.isFinite(t) && D ? Object.assign({}, x, { t: new Date(t - D).toISOString() }) : x; }) });
     if (r.solde != null) m.value = String(Math.round(r.solde));
     m.classList.toggle("a-verifier", !!r.soldeDouteux && r.solde != null);
@@ -15434,7 +15521,7 @@ function openReleve(e, back, image) {
     const fichier = blob ? (blob instanceof File && blob.name ? blob : new File([blob], "capture.png", { type: blob.type || "image/png" })) : null;
     const preuve = (fichier ? await uploadProof(`releves/${ref.id}`, fichier) : null) || linkProof(url.value);
     const r = { entrepriseId: x.id || null, entrepriseNom: x.nom, montant: Math.round(v), at: new Date(T).toISOString(), agent: S.agentName || "", by: S.uid || null, preuve, note: note.value.trim(), createdAt: nowISO(),
-      mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? lecture : "saisie", decalageH: Number(blc().decalageTablette) || 0 };
+      mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? lecture : "saisie", decalageH: decUsed != null ? decUsed : decalageA(T) };
     if (rib) r.rib = rib;
     if (!(await write(() => ref.set(r)))) { go.disabled = false; return; }
     // Déclarations dont ce relevé montre que le solde déclaré était faux.
@@ -15765,7 +15852,16 @@ function renderBlSettings(force) {
   $("#bl-fonds").value = String(c.fondsDepart);
   $("#bl-tirage").value = String(c.tirage);
   $("#bl-esp").value = String(c.plafondEspeces);
-  $("#bl-dec").value = String(c.decalageTablette);
+  const hist = decalagesTablette(), curH = decalageA(Date.now());
+  $("#bl-dec").value = String(curH);
+  $("#bl-dec-dep").value = ""; delete $("#bl-dec-dep").dataset.iso;
+  $("#bl-dec-hint").textContent = "Les heures des mouvements lues sur une capture sont ramenées à l’heure de Paris, avec l’avance en vigueur au moment de la capture."
+    + (hist.length > 1 ? " Historique : " + hist.map((x, i) => `${x.h} h${x.depuis ? " à partir du " + fmtDateTime(new Date(x.depuis)) : i === 0 ? " au départ" : ""}`).join(", puis ") + "." : "");
+  const ma = mesureAvance();
+  fill($("#bl-mesure"), ma.suggestion != null
+    ? [h("strong", { text: "Avance à vérifier. " }), `${ma.futurs >= 2 ? `${ma.futurs} relevés récents montrent un mouvement plus récent que leur capture` : `Sur les ${ma.n} derniers relevés, aucun mouvement n’est à moins de ${Math.floor(ma.minGap)} minutes de sa capture`} : la tablette semble avancer de ${ma.suggestion} h, et non de ${ma.cur} h${ma.depuis ? `, depuis le ${fmtDateTime(new Date(ma.depuis))}` : ""}. Regardez l’heure de la tablette en jeu, puis corrigez. Les relevés déjà faits depuis cette date seront recalés tout seuls. `,
+      h("button", { class: "btn ghost small", type: "button", onclick: () => { $("#bl-dec").value = String(ma.suggestion); if (ma.depuis) { $("#bl-dec-dep").value = toLocalInput(new Date(ma.depuis)); $("#bl-dec-dep").dataset.iso = new Date(ma.depuis).toISOString(); } S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; }, text: `Préparer ${ma.suggestion} h${ma.depuis ? " depuis le " + fmtDate(new Date(ma.depuis)) : ""}` })]
+    : ma.ancres.length ? `Avance mesurée sur les paiements à la Préfecture lus sur les comptes : ${[...new Set(ma.ancres.map(a => a.h))].join(" h, ")} h (${ma.ancres.length} paiement${plural(ma.ancres.length)}, dernier le ${fmtDate(new Date(Math.max(...ma.ancres.map(a => a.T))))}).` : "");
   $("#bl-espa").value = String(c.amendeEspeces);
 }
 $("#card-bl").addEventListener("input", () => { S.blDirty = true; $("#bl-msg").textContent = "Modifications non enregistrées."; });
@@ -15776,8 +15872,18 @@ $("#bl-save").addEventListener("click", async () => {
     fondsDepart: $("#bl-fonds").value === "" ? 50000 : Math.max(0, Math.round(Number($("#bl-fonds").value) || 0)),
     tirage: $("#bl-tirage").value === "" ? 3 : Math.max(0, Math.min(20, Math.round(Number($("#bl-tirage").value) || 0))), tirageSel: blc().tirageSel || "",
     plafondEspeces: $("#bl-esp").value === "" ? 10000 : Math.max(0, Math.round(Number($("#bl-esp").value) || 0)),
-    decalageTablette: $("#bl-dec").value === "" ? 2 : Math.max(-12, Math.min(12, Math.round(Number($("#bl-dec").value) || 0))),
+    decalageTablette: $("#bl-dec").value === "" ? decalageA(Date.now()) : Math.max(-12, Math.min(12, Math.round(Number($("#bl-dec").value) || 0))),
     amendeEspeces: $("#bl-espa").value === "" ? 5 : Math.max(0, Math.min(100, Number($("#bl-espa").value) || 0)) };
+  // Nouvelle avance : ajoutée à l'historique, à partir de la date donnée (les relevés d'avant gardent l'ancienne).
+  // Une heure locale peut exister deux fois (passage à l'heure d'hiver) : la date préparée par la mesure est gardée exacte.
+  const hist = decalagesTablette(), depEl = $("#bl-dec-dep"), depV = depEl.value, depIso = depEl.dataset.iso && toLocalInput(new Date(depEl.dataset.iso)) === depV ? depEl.dataset.iso : null;
+  const dep = depIso ? new Date(depIso) : depV ? new Date(depV) : null;
+  // Sans date et sans historique : la valeur est simplement remplacée (les relevés déjà faits gardent leur avance).
+  v.decalages = blc().decalages || null;
+  const date = hist.some(x => x.depuis);
+  if (dep && v.decalageTablette !== decalageA(dep.getTime())) v.decalages = hist.filter(x => !x.depuis || new Date(x.depuis).getTime() < dep.getTime()).concat([{ depuis: dep.toISOString(), h: v.decalageTablette }]);
+  else if (!dep && date && v.decalageTablette !== decalageA(Date.now())) v.decalages = hist.concat([{ depuis: nowISO(), h: v.decalageTablette }]);
+  else if (!dep && !date) v.decalages = null;
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { blanchiment: v, updatedAt: nowISO() })));
   if (ok) { S.blDirty = false; $("#bl-msg").textContent = "Réglages enregistrés."; toast("Surveillance des comptes enregistrée."); renderBlSettings(true); }
 });
