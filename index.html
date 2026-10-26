@@ -1895,7 +1895,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
         <h3>Achat d’un véhicule de société</h3>
         <p class="sub">Pour le salon des déclarations : le patron déclare chaque véhicule acheté en concession avec l’argent de l’entreprise.</p>
         <pre class="tpl" id="tpl-veh"></pre>
-        <div class="tpl-foot"><span>Un message par véhicule, facture jointe.</span><button class="btn ghost small" type="button" data-copy="tpl-veh">Copier</button></div>
+        <div class="tpl-foot"><span>Un message par véhicule.</span><button class="btn ghost small" type="button" data-copy="tpl-veh">Copier</button></div>
       </div>
       <div class="card">
         <h3>Annonce du barème</h3>
@@ -2177,7 +2177,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <div class="set-form">
               <label class="switch" for="vh-actif"><input type="checkbox" id="vh-actif"> Suivre les véhicules de société</label>
               <div class="row3" style="align-items:end">
-                <div class="field"><label for="vh-fact">Facture à fournir sous (jours)</label><input id="vh-fact" type="number" min="1" max="30" step="1"></div>
+                <div class="field"><label for="vh-fact">Facture à fournir sous (jours)</label><input id="vh-fact" type="number" min="0" max="30" step="1"><span class="hint">0 : facture non demandée.</span></div>
                 <div class="field"><label for="vh-part">Achat à examiner au-delà de</label><div class="money" data-cur="%"><input id="vh-part" type="number" min="0" step="5"></div><span class="hint">du chiffre d’affaires des quatre dernières périodes (0 : jamais).</span></div>
                 <div class="field"><label for="vh-marge">Voitures en plus de l’effectif</label><input id="vh-marge" type="number" min="0" max="20" step="1"><span class="hint">Au-delà, les derniers achats ressortent. Utilitaires et poids lourds non comptés.</span></div>
               </div>
@@ -7121,12 +7121,8 @@ function renderTemplates() {
     "Modèle : ",
     "Type (utilitaire / poids lourd / service / berline / SUV / moto / sportive / prestige / hélicoptère / bateau) : ",
     "Prix payé avec le compte de l’entreprise : ",
-    "Concession : ",
     "Date d’achat : ",
-    "Usage dans l’entreprise : ",
-    "Conducteurs autorisés (un par ligne) :", "- ", "- ",
-    "Facture de la concession (image jointe ou lien) : ",
-    "Déclarant (nom, fonction) : "].join("\n");
+    "Usage dans l’entreprise : "].join("\n");
   $("#tpl-bareme").textContent = [
     "**BARÈME FISCAL EN VIGUEUR**",
     ...(c.baremeMode !== "unique"
@@ -15909,7 +15905,8 @@ const VEH_CATS = {
 };
 const VEH_SOURCES = { entreprise: "l’entreprise", concession: "la concession", police: "un constat de police", agent: "un agent du guichet" };
 const CONSTATS = { conforme: ["Usage conforme", "ok"], perso: ["Usage personnel", "bad"], conducteur: ["Conducteur non autorisé", "bad"], autre: ["Autre irrégularité", "warn"] };
-function vcfg() { return Object.assign({ actif: true, delaiFacture: 3, partCA: 50, parcMarge: 1, secteursLoisir: "" }, cfg().vehicules || {}); }
+// La facture de la concession n'est plus demandée dans la déclaration d'achat : 0 jour = pas exigée.
+function vcfg() { return Object.assign({ actif: true, delaiFacture: 0, partCA: 50, parcMarge: 1, secteursLoisir: "" }, cfg().vehicules || {}); }
 function vehNo(v) { return dossierNo("VS", v.id); }
 function normPlaque(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
 function vehCat(v) { return VEH_CATS[v.categorie] || ["Véhicule", "tourisme"]; }
@@ -15947,7 +15944,7 @@ function vehSignals(v) {
     else if (x.ca <= 0) add("prix:" + prix, "Acheté sans chiffre d’affaires déclaré sur les quatre dernières périodes");
   }
   const age = (Date.now() - new Date(v.achatLe || v.createdAt || Date.now()).getTime()) / 864e5;
-  if (!v.facture && age > (Number(c.delaiFacture) || 3)) add("facture", "Facture de la concession non fournie");
+  if (!v.facture && Number(c.delaiFacture) > 0 && age > Number(c.delaiFacture)) add("facture", "Facture de la concession non fournie");
   if (Number(v.detteAchat) > 0) add("dette:" + v.detteAchat, `Acheté alors que l’entreprise devait ${money(v.detteAchat)} à la Préfecture`);
   for (const x of v.constats || []) if (x.type && x.type !== "conforme") add("constat:" + x.id, `Constat de police du ${fmtDate(new Date(x.at))} : ${(CONSTATS[x.type] || CONSTATS.autre)[0].toLowerCase()}${x.conducteur ? " (" + x.conducteur + ")" : ""}`, true);
   // Parc de tourisme plus grand que l'effectif : les derniers achats ressortent.
@@ -16066,7 +16063,7 @@ function openVeh(id) {
       v.statut === "vendu" && v.vente ? ["Vendu", `le ${fmtDate(new Date(v.vente.at))} à ${v.vente.acheteur || "—"} pour ${money(v.vente.prix)}${v.vente.dirigeant ? " (dirigeant ou proche)" : ""}`] : null,
       v.statut === "saisi" ? ["Saisi", `le ${fmtDate(new Date(v.saisiLe))}${v.saisiMotif ? " · " + v.saisiMotif : ""}`] : null]),
     sec("Facture de la concession", v.facture ? h("div", { class: "paste-row" }, proofEl(v.facture), h("span", { class: "muted", text: v.factureLe ? `ajoutée le ${fmtDate(new Date(v.factureLe))}` : "" }))
-      : h("div", {}, h("p", { class: "hint", style: "margin:0 0 6px", text: `Attendue dans les ${vcfg().delaiFacture} jours qui suivent l’achat.` }),
+      : h("div", {}, h("p", { class: "hint", style: "margin:0 0 6px", text: Number(vcfg().delaiFacture) > 0 ? `Attendue dans les ${vcfg().delaiFacture} jours qui suivent l’achat.` : "Facultative : à joindre si l’entreprise la fournit, ou si un contrôle la demande." }),
         ag && v.statut === "service" ? fac.el : null,
         ag && v.statut === "service" ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:6px", onclick: async ev => {
           const b = ev.currentTarget; b.disabled = true;
@@ -16250,11 +16247,11 @@ function openVehForm(e, v, pre) {
       h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "vf-ent", text: "Entreprise" }), ent), h("div", { class: "field" }, h("label", { for: "vf-plaque", text: "Plaque" }), pl)),
       h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "vf-modele", text: "Modèle" }), mod), h("div", { class: "field" }, h("label", { for: "vf-cat", text: "Catégorie" }), cat),
         h("div", { class: "field" }, h("label", { for: "vf-prix", text: "Prix payé" }), h("div", { class: "money", "data-cur": cur() }, prix))),
-      h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "vf-date", text: "Acheté le" }), date), h("div", { class: "field" }, h("label", { for: "vf-conc", text: "Concession" }), conc),
+      h("div", { class: "row3" }, h("div", { class: "field" }, h("label", { for: "vf-date", text: "Acheté le" }), date), h("div", { class: "field" }, h("label", { for: "vf-conc", text: "Concession (facultatif)" }), conc),
         h("div", { class: "field" }, h("label", { for: "vf-pret", text: "Financement" }), pretSel)),
       h("div", { class: "field" }, h("label", { for: "vf-usage", text: "Usage dans l’entreprise" }), usage),
-      h("div", { class: "field" }, h("label", { for: "vf-cond", text: "Conducteurs autorisés" }), cond),
-      !v || !v.facture ? sec("Facture de la concession", fac.el) : null,
+      h("div", { class: "field" }, h("label", { for: "vf-cond", text: "Conducteurs autorisés (facultatif)" }), cond),
+      !v || !v.facture ? sec("Facture de la concession (facultative)", fac.el) : null,
       h("div", { class: "row2", style: "align-items:end" }, h("label", { class: "switch", for: "vf-charges" }, charges, "Achat compté dans les charges déclarées"), h("div", { class: "field" }, h("label", { for: "vf-src", text: "Origine de l’information" }), src)),
       h("p", { class: "hint", style: "margin:0", text: "Un véhicule payé par l’entreprise doit servir à son activité. Le guichet signale les achats sans rapport avec le secteur, trop chers pour le chiffre d’affaires, sans facture, faits pendant un impayé, ou un parc plus grand que l’effectif." }),
       err],
@@ -16509,7 +16506,7 @@ function renderVehSettings(force) {
 $("#card-veh").addEventListener("input", () => { S.vehDirty = true; $("#vh-msg").textContent = "Modifications non enregistrées."; });
 $("#vh-save").addEventListener("click", async () => {
   if (!writer()) return;
-  const v = { actif: $("#vh-actif").checked, delaiFacture: Math.max(1, Math.min(30, Math.round(Number($("#vh-fact").value) || 3))), partCA: Math.max(0, Math.min(1000, Math.round(Number($("#vh-part").value) || 0))),
+  const v = { actif: $("#vh-actif").checked, delaiFacture: Math.max(0, Math.min(30, Math.round(Number($("#vh-fact").value) || 0))), partCA: Math.max(0, Math.min(1000, Math.round(Number($("#vh-part").value) || 0))),
     parcMarge: Math.max(0, Math.min(20, Math.round(Number($("#vh-marge").value) || 0))), secteursLoisir: $("#vh-loisir").value.trim() };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { vehicules: v, updatedAt: nowISO() })));
   if (ok) { S.vehDirty = false; $("#vh-msg").textContent = "Réglages enregistrés."; toast("Véhicules de société : réglages enregistrés."); renderVehSettings(true); }
