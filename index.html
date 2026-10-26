@@ -546,6 +546,29 @@ table.py-tbl{min-width:820px}
   .py-tbl td:empty{display:none}
   .py-h{width:100%}
 }
+.cls-team{margin:12px 0 4px;display:grid;gap:6px}.cls-team-t{display:flex;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;align-items:baseline;font-weight:650}
+.cls-bar{height:8px;border-radius:999px;background:var(--rule-2);overflow:hidden}.cls-bar span{display:block;height:100%;background:var(--accent);border-radius:inherit}.cls-bar.thin{height:4px;margin-top:5px;max-width:260px}
+.cls-me{margin:10px 0 0;font-weight:600}
+.cls-podium{list-style:none;margin:14px 0 4px;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:end}
+.cls-podium li{display:grid;justify-items:center;text-align:center;gap:2px;padding:14px 8px 12px;border:1px solid var(--rule);border-radius:12px;background:var(--field);min-width:0}
+.cls-podium .cls-p1{padding-top:26px;border-color:var(--accent);background:var(--accent-soft)}
+.cls-p-rang{font-family:var(--f-mono);font-weight:700;font-size:13px;color:var(--ink-2)}
+.cls-p1 .cls-p-rang{color:var(--accent)}
+.cls-p-nom{font-weight:700;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cls-p-h{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:600;font-size:clamp(20px,3.4vw,28px);line-height:1.15}
+.cls-p1 .cls-p-h{font-size:clamp(24px,4.4vw,36px)}
+.cls-podium .cls-moi,.cls-list .cls-moi{outline:2px solid var(--ok);outline-offset:-2px}
+.cls-list{list-style:none;margin:8px 0 0;padding:0}
+.cls-list li{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 6px;border-top:1px solid var(--rule-2)}
+.cls-rang{font-family:var(--f-mono);font-weight:700;color:var(--ink-2)}
+.cls-nom{font-weight:600}.cls-list .meta{display:block;color:var(--ink-3);font-size:12.5px}
+.cls-h{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:600}
+.cls-badges{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule-2)}
+.cls-badge-list{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.cls-badge-list li{display:grid;gap:2px;padding:9px 11px;border:1px dashed var(--rule);border-radius:10px;color:var(--ink-3)}
+.cls-badge-list li.ok{border-style:solid;border-color:var(--ok);background:var(--ok-soft);color:var(--ink)}
+.cls-badge-n{font-weight:650;font-size:14px}.cls-badge-list .meta{font-size:12.5px}
+@media (max-width:560px){.cls-podium{gap:6px}.cls-podium li{padding:10px 4px}.cls-badge-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .pt-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
 .pt-grid > .card{margin-top:0}
 @media (max-width:560px){#py-sem{min-width:0;flex:1 1 150px}}
@@ -1153,13 +1176,14 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <div class="panel-head">
       <div>
         <h2>Pointeuse</h2>
-        <p class="sub">Prenez votre service en arrivant et finissez-le en partant : l’heure retenue est celle du registre, pas celle de votre appareil. Vos heures de service servent au calcul de votre paye.</p>
+        <p class="sub">Prenez votre service en arrivant et finissez-le en partant : l’heure retenue est celle du registre, pas celle de votre appareil. Vos heures de service servent au calcul de votre paye et au classement de l’équipe.</p>
       </div>
     </div>
     <div class="pt-grid">
       <div class="card pt-main" id="pt-me"><div class="empty">Chargement…</div></div>
       <div class="card" id="pt-week"></div>
     </div>
+    <div class="card" id="pt-cls" style="margin-top:16px"></div>
     <div class="card" id="pt-now-card" style="margin-top:16px" hidden>
       <div class="card-head"><div><h3>En service maintenant</h3><p class="sub" id="pt-now-sub"></p></div></div>
       <div id="pt-now"></div>
@@ -5477,11 +5501,184 @@ function renderPointeuse() {
       h("span", { class: "mono", text: fmtH(ptDuree(p)) }),
       w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openPtForm(p), text: "Clore" }) : h("span", {})); })) : h("div", { class: "empty", text: "Personne n’est en service en ce moment." }));
   }
+  renderClassement();
 }
 // L'horloge, la durée du service et la paye avancent chaque seconde ; le reste de la page toutes les 30 secondes.
 setInterval(() => { if (document.visibilityState === "visible") ptLive(); }, 1000);
 setInterval(() => { if (document.visibilityState !== "visible" || !S.connected) return; if (S.tab === "pointeuse") renderPointeuse(); else if (S.tab === "payes" && ptActifs().some(p => !p.fin)) renderPayes(); }, 30e3);
 
+
+/* ---------- Classement des heures de service ---------- */
+// Pour donner envie de prendre son service en ville : classement de la semaine, de la semaine
+// dernière, du mois et depuis le début ; record de l'équipe à battre ; séries de jours ; badges.
+// Les agents qui n'ont que l'accès « pointeuse » ne lisent que leurs propres pointages : la base leur
+// donne les services de tous (fonction classement_service, mise à jour 26), avec les noms seulement.
+async function chargerClassement(force) {
+  if (!S.sb || !S.connected || S.clsBusy) return;
+  if (!force && S.clsData && Date.now() - S.clsData.at < 60e3) return;
+  S.clsBusy = true;
+  let res;
+  try { res = await S.sb.rpc("classement_service"); } catch (e) { res = { error: { message: "réseau" } }; }
+  S.clsBusy = false;
+  const { data, error } = res || {};
+  S.clsData = error ? { at: Date.now(), erreur: true, absente: error.code === "PGRST202" || /could not find the function|schema cache/i.test(String(error.message || "")) } : { at: Date.now(), list: Array.isArray(data) ? data : [] };
+  if (S.tab === "pointeuse") renderClassement();
+}
+function servicesClassement() {
+  const t = x => new Date(x).getTime();
+  if (S.role !== "pointeuse") return ptActifs().map(p => ({ a: p.discordId || p.nom, nom: ptNom(p), moi: !!S.discordId && p.discordId === S.discordId, debut: t(p.debut), fin: p.fin ? t(p.fin) : null }));
+  chargerClassement();
+  const c = S.clsData;
+  if (!c || c.erreur) return null;
+  return c.list.filter(x => x && x.debut).map(x => ({ a: x.a, nom: x.nom || "Agent", moi: !!x.moi, debut: t(x.debut), fin: x.fin ? t(x.fin) : null }));
+}
+const clsDuree = (x, t0, t1) => Math.max(0, Math.min(x.fin || Date.now(), t1) - Math.max(x.debut, t0)) / 36e5;
+function clsRang(svcs, t0, t1) {
+  const par = new Map();
+  for (const x of svcs) {
+    const hh = clsDuree(x, t0, t1);
+    if (hh <= 0) continue;
+    const a = par.get(x.a) || { a: x.a, nom: x.nom, moi: x.moi, h: 0, n: 0, enService: false };
+    a.h += hh; a.n++; if (!x.fin) a.enService = true;
+    par.set(x.a, a);
+  }
+  return [...par.values()].sort((a, b) => b.h - a.h || String(a.nom).localeCompare(String(b.nom), "fr")).map((x, i) => Object.assign(x, { rang: i + 1 }));
+}
+const jourCle = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// Jours où l'agent a été en service (un service à cheval sur minuit compte pour les deux jours).
+function clsJours(list) {
+  const out = new Set();
+  for (const x of list) {
+    const fin = x.fin || Date.now(), d = new Date(x.debut);
+    d.setHours(0, 0, 0, 0);
+    for (let g = 0; d.getTime() < fin && g < 40; g++) { out.add(jourCle(d)); d.setDate(d.getDate() + 1); }
+  }
+  return out;
+}
+// Série de jours d'affilée : en cours (jusqu'à aujourd'hui ou hier) et la meilleure.
+function clsSerie(jours) {
+  const l = [...jours].sort(), jour = c => { const [y, m, d] = c.split("-").map(Number); return Math.round(new Date(y, m - 1, d).getTime() / 864e5); };
+  let best = 0, run = 0, prev = null;
+  for (const c of l) { const n = jour(c); run = prev != null && n - prev === 1 ? run + 1 : 1; best = Math.max(best, run); prev = n; }
+  const auj = jour(jourCle(new Date())), cur = prev != null && auj - prev <= 1 ? run : 0;
+  return { cur, best };
+}
+// Heures de l'équipe par semaine : la semaine en cours, et le record des semaines finies.
+function clsSemaines(svcs) {
+  if (!svcs.length) return { record: null, tot: new Map() };
+  const tot = new Map(), kNow = semKey(new Date());
+  let k = semKey(new Date(Math.min(...svcs.map(x => x.debut))));
+  for (let g = 0; g < 60; g++) {
+    const b = bounds(k); if (!b) break;
+    tot.set(k, svcs.reduce((t, x) => t + clsDuree(x, b.start.getTime(), b.end.getTime() + 1), 0));
+    if (k === kNow) break;
+    k = semSuiv(k);
+  }
+  let record = null;
+  for (const [kk, v] of tot) if (kk !== kNow && v > 0 && (!record || v > record.h)) record = { k: kk, h: v };
+  return { record, tot };
+}
+// Badges : ce que chacun peut viser, avec où il en est.
+function clsBadges(mine, svcs, plafond) {
+  const jours = clsJours(mine), total = mine.reduce((t, x) => t + clsDuree(x, -Infinity, Infinity), 0), serie = clsSerie(jours);
+  const parSem = new Map(), joursSem = new Map();
+  for (const x of mine) for (const k of new Set([semKey(new Date(x.debut)), semKey(new Date(x.fin || Date.now()))])) {
+    const b = bounds(k); if (!b) continue;
+    parSem.set(k, (parSem.get(k) || 0) + clsDuree(x, b.start.getTime(), b.end.getTime() + 1));
+  }
+  for (const c of jours) { const [y, m, d] = c.split("-").map(Number), k = semKey(new Date(y, m - 1, d)); joursSem.set(k, (joursSem.get(k) || 0) + 1); }
+  const maxSem = Math.max(0, ...parSem.values()), maxJours = Math.max(0, ...joursSem.values());
+  const nuit = mine.some(x => { const d = new Date(x.debut), f = new Date(x.fin || Date.now()); for (let t = d.getTime(); t < f.getTime(); t += 30 * 6e4) { const hh = new Date(t).getHours(); if (hh >= 2 && hh < 5) return true; } return false; });
+  const weekend = [...jours].some(c => { const [y, m, d] = c.split("-").map(Number), dt = new Date(y, m - 1, d); if (dt.getDay() !== 6) return false; dt.setDate(dt.getDate() + 1); return jours.has(jourCle(dt)); });
+  // Premier d'une semaine finie.
+  const kNow = semKey(new Date()), moi = mine[0] && mine[0].a;
+  const premier = !!moi && [...new Set(svcs.map(x => semKey(new Date(x.debut))))].some(k => { if (k === kNow) return false; const b = bounds(k); const r = b ? clsRang(svcs, b.start.getTime(), b.end.getTime() + 1) : []; return r[0] && r[0].a === moi; });
+  const pl = Math.max(1, Number(plafond) || 20);
+  return [
+    { id: "premier", nom: "Premier service", desc: "Prendre son premier service", ok: mine.length > 0 },
+    { id: "assidu", nom: "Assidu", desc: "En service 5 jours dans la même semaine", ok: maxJours >= 5, prog: `${Math.min(5, maxJours)} / 5 jours` },
+    { id: "pleine", nom: "Semaine pleine", desc: `${pl} h dans une semaine`, ok: maxSem >= pl - 1e-6, prog: `${fmtH(Math.min(maxSem, pl))} / ${pl} h` },
+    { id: "serie", nom: "Série de 7 jours", desc: "En service 7 jours d’affilée", ok: serie.best >= 7, prog: `${Math.min(7, serie.best)} / 7 jours` },
+    { id: "weekend", nom: "Week-end", desc: "En service le samedi et le dimanche", ok: weekend },
+    { id: "nuit", nom: "Oiseau de nuit", desc: "En service entre 2 h et 5 h du matin", ok: nuit },
+    { id: "h50", nom: "50 heures", desc: "50 h de service au total", ok: total >= 50, prog: `${Math.floor(Math.min(total, 50))} / 50 h` },
+    { id: "h100", nom: "100 heures", desc: "100 h de service au total", ok: total >= 100, prog: `${Math.floor(Math.min(total, 100))} / 100 h` },
+    { id: "top", nom: "Meilleur de la semaine", desc: "Premier du classement d’une semaine finie", ok: premier }
+  ];
+}
+const CLS_VUES = [["semaine", "Cette semaine"], ["derniere", "Semaine dernière"], ["mois", "Ce mois"], ["tout", "Depuis le début"]];
+function clsFenetre(v) {
+  const now = new Date(), k = semKey(now);
+  if (v === "derniere") { const b = bounds(semPrec(k)); return { t0: b.start.getTime(), t1: b.end.getTime() + 1, label: periodLabel(semPrec(k)), k: semPrec(k) }; }
+  if (v === "mois") return { t0: new Date(now.getFullYear(), now.getMonth(), 1).getTime(), t1: Date.now() + 1, label: moisNom(moisKey(now)) };
+  if (v === "tout") return { t0: -Infinity, t1: Date.now() + 1, label: "depuis le début" };
+  const b = bounds(k); return { t0: b.start.getTime(), t1: b.end.getTime() + 1, label: periodLabel(k), k };
+}
+const rangTxt = n => (n === 1 ? "1er" : n + "e");
+function renderClassement() {
+  const box = $("#pt-cls");
+  if (!box || S.tab !== "pointeuse") return;
+  const svcs = servicesClassement();
+  if (!svcs) {
+    const c = S.clsData;
+    fill(box, h("h3", { text: "Classement des heures de service" }), h("p", { class: "muted", style: "margin:8px 0 0", text: !c ? "Chargement du classement…" : c.absente ? "Le classement s’affichera ici dès que la Direction aura exécuté supabase/v26_classement_service.sql." : "Classement momentanément indisponible : rechargez la page dans un instant." }));
+    return;
+  }
+  let vue = S.clsVue;
+  if (!vue) { try { vue = localStorage.getItem("clsVue") || ""; } catch (e) { vue = ""; } }
+  if (!CLS_VUES.some(x => x[0] === vue)) vue = "semaine";
+  S.clsVue = vue;
+  const f = clsFenetre(vue), rang = clsRang(svcs, f.t0, f.t1), moi = rang.find(x => x.moi);
+  const plafond = Number(payeCfg().plafondHeures) || 20;
+  const seg = h("div", { class: "seg", role: "group", "aria-label": "Période du classement" }, CLS_VUES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.clsVue = k; try { localStorage.setItem("clsVue", k); } catch (e) { /* préférence non gardée */ } renderClassement(); }, text: l })));
+  // Record de l'équipe : la meilleure semaine finie, à battre cette semaine.
+  const sem = clsSemaines(svcs), kNow = semKey(new Date()), totNow = sem.tot.get(kNow) || 0, rec = sem.record;
+  const equipe = vue === "semaine" && rec ? h("div", { class: "cls-team" },
+    h("div", { class: "cls-team-t" }, h("span", { text: `L’équipe cette semaine : ${fmtH(totNow)}` }), h("span", { class: "hint", text: totNow > rec.h ? `record battu (ancien record : ${fmtH(rec.h)})` : `record à battre : ${fmtH(rec.h)}, ${periodPlain(rec.k).toLowerCase()} · encore ${fmtH(rec.h - totNow)}` })),
+    h("div", { class: "cls-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(Math.round(rec.h)), "aria-valuenow": String(Math.round(totNow)), "aria-label": "Heures de l’équipe face au record" }, h("span", { style: `width:${Math.min(100, totNow / rec.h * 100).toFixed(1)}%` }))) : null;
+  // Ma place, et ce qu'il manque pour monter.
+  const devant = moi && moi.rang > 1 ? rang[moi.rang - 2] : null;
+  const maPlace = h("p", { class: "cls-me" }, !S.discordId ? "" : moi
+    ? `Vous êtes ${rangTxt(moi.rang)} sur ${rang.length} avec ${fmtH(moi.h)}${devant ? ` · encore ${fmtH(devant.h - moi.h + 1 / 60)} pour passer devant ${devant.nom}` : " · vous menez le classement"}.`
+    : vue === "derniere" ? "Vous n’avez pas été en service la semaine dernière." : "Pas encore de service sur cette période : prenez votre service pour entrer au classement.");
+  const ligne = x => h("li", { class: x.moi ? "cls-moi" : null },
+    h("span", { class: "cls-rang", text: rangTxt(x.rang) }),
+    h("div", { style: "min-width:0" }, h("span", { class: "cls-nom", text: x.nom + (x.moi ? " (vous)" : "") }), h("span", { class: "meta", text: `${x.n} service${plural(x.n)}${x.enService ? " · en service maintenant" : ""}` }),
+      h("div", { class: "cls-bar thin", "aria-hidden": "true" }, h("span", { style: `width:${(rang[0] ? x.h / rang[0].h * 100 : 0).toFixed(1)}%` }))),
+    h("span", { class: "cls-h", text: fmtH(x.h) }));
+  const podium = rang.slice(0, 3);
+  const pod = podium.length ? h("ol", { class: "cls-podium", "aria-label": "Podium" }, [1, 0, 2].map(i => podium[i]).filter(Boolean).map(x => h("li", { class: `cls-p${x.rang}${x.moi ? " cls-moi" : ""}` },
+    h("span", { class: "cls-p-rang", text: rangTxt(x.rang) }), h("span", { class: "cls-p-nom", text: x.nom }), h("span", { class: "cls-p-h", text: fmtH(x.h) }),
+    h("span", { class: "meta", text: `${x.n} service${plural(x.n)}${x.enService ? " · en service" : ""}` })))) : h("p", { class: "muted", style: "margin:10px 0 0", text: "Personne n’a encore pris son service sur cette période." });
+  const reste = rang.slice(3);
+  // Mes badges et ma série.
+  const mine = svcs.filter(x => x.moi), badges = S.discordId ? clsBadges(mine, svcs, plafond) : [], serie = clsSerie(clsJours(mine)), nb = badges.filter(b => b.ok).length;
+  const mesBadges = badges.length ? h("div", { class: "cls-badges" },
+    h("h4", { class: "mini-title", text: `Mes badges · ${nb} sur ${badges.length}${serie.cur ? ` · série en cours : ${serie.cur} jour${plural(serie.cur)}` : ""}${serie.best > 1 ? ` · meilleure série : ${serie.best} jours` : ""}` }),
+    h("ul", { class: "cls-badge-list" }, badges.map(b => h("li", { class: b.ok ? "ok" : null, title: b.desc },
+      h("span", { class: "cls-badge-n", text: (b.ok ? "✓ " : "") + b.nom }), h("span", { class: "meta", text: b.ok ? b.desc : b.prog ? `${b.desc} · ${b.prog}` : b.desc }))))) : null;
+  const pub = writer() && rang.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(classementDoc(vue, f, rang, sem)), text: "Classement en image" }) : null;
+  fill(box,
+    h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Classement des heures de service" }), h("p", { class: "sub", text: f.label.charAt(0).toUpperCase() + f.label.slice(1) })), pub),
+    seg, equipe, maPlace, pod,
+    reste.length ? h("ol", { class: "cls-list", start: "4" }, reste.slice(0, S.clsTout ? 100 : 7).map(ligne)) : null,
+    reste.length > 7 ? h("button", { class: "linkbtn", type: "button", onclick: () => { S.clsTout = !S.clsTout; renderClassement(); }, text: S.clsTout ? "Réduire" : `Afficher les ${reste.length - 7} autres` }) : null,
+    mesBadges);
+}
+// Classement en image, à poster dans le salon des agents.
+function classementDoc(vue, f, rang, sem) {
+  const tot = rang.reduce((t, x) => t + x.h, 0), rec = sem && sem.record;
+  const titre = vue === "tout" ? "depuis le début" : f.label;
+  return {
+    kind: "CLASSEMENT DES HEURES DE SERVICE", no: vue === "semaine" || vue === "derniere" ? periodPlain(f.k) : vue === "mois" ? f.label.charAt(0).toUpperCase() + f.label.slice(1) : "Général", date: "Arrêté le " + longDate(new Date()),
+    meta: [["Période", titre.charAt(0).toUpperCase() + titre.slice(1)], ["Agents en service", String(rang.length)], ["Premier", rang[0] ? `${rang[0].nom} · ${fmtH(rang[0].h)}` : "—"], ["Record de l’équipe", rec ? `${fmtH(rec.h)} · ${periodPlain(rec.k).toLowerCase()}` : "—"]],
+    lines: [], total: ["Heures de l’équipe", fmtH(tot)], stamp: ["BRAVO", "ok"],
+    table: { title: "Classement", head: ["Rang", "Agent", "Heures", "Services"], cols: [0, 0.12, 0.66, 0.86], align: ["left", "left", "right", "right"], mono: [2, 3], strong0: true,
+      rows: rang.slice(0, 15).map(x => ({ cells: [rangTxt(x.rang), x.nom, fmtH(x.h), String(x.n)] })) },
+    footer: "Merci à tous les agents en service. Prenez votre service à la pointeuse dès que vous arrivez en ville : chaque heure compte pour votre paye et pour le classement.",
+    discord: { channel: "agents", mentions: [], text: `**Classement des heures de service** · ${titre} : ${rang.slice(0, 3).map(x => `${rangTxt(x.rang)} ${x.nom} (${fmtH(x.h)})`).join(", ")} · ${fmtH(tot)} pour l’équipe.` }
+  };
+}
 
 /* Tableau des déclarations */
 function setSegCounts(seg, counts, active) {
@@ -5711,8 +5908,8 @@ function openDecl(id) {
     body.push(sec("Compte de l’entreprise", kv([
       ["Solde déclaré", hasSolde(d) ? money(d.solde) : "non déclaré"],
       ["Capture", proofEl(d.soldePreuve)],
-      mine && ex.cur.source === "mouvements" ? ["Solde en fin de période", `${money(ex.cur.pos)}, reconstitué avec les mouvements du relevé ${dossierNo("RC", ex.cur.rel.id)} (${ex.cur.rel.agent || "agent"})`]
-        : mine && ex.cur.rel ? ["Relevé par " + (ex.cur.rel.agent || "un agent"), `${money(ex.cur.rel.montant)} le ${fmtDateTime(new Date(ex.cur.rel.at))}${ex.cur.approche ? ` · ${money(ex.cur.pos)} une fois retirés les mouvements postérieurs à la période` : ""}`] : null,
+      mine && ex.cur.source === "mouvements" ? [ex.cur.coupe ? "Solde au dépôt" : "Solde en fin de période", `${money(ex.cur.pos)}, reconstitué avec les mouvements du relevé ${dossierNo("RC", ex.cur.rel.id)} (${ex.cur.rel.agent || "agent"})`]
+        : mine && ex.cur.rel ? ["Relevé par " + (ex.cur.rel.agent || "un agent"), `${money(ex.cur.rel.montant)} le ${fmtDateTime(new Date(ex.cur.rel.at))}${ex.cur.approche ? ` · ${money(ex.cur.pos)} ${ex.cur.coupe ? "estimés au moment du dépôt" : "une fois retirés les mouvements postérieurs à la période"}` : ""}`] : null,
       vsol ? ["Solde au moment du dépôt", `${money(vsol.attendu)} ${vsol.exact ? `d’après les mouvements du relevé ${dossierNo("RC", vsol.rel.id)}` : `relevé le ${fmtDateTime(new Date(vsol.rel.at))}`} · ${vsol.ok ? "concorde avec le solde déclaré" : "ne concorde pas avec le solde déclaré"}`, vsol.ok ? null : "neg"] : null,
       mine && ex.attendu != null ? ["Solde attendu", money(ex.attendu)] : null,
       mine && ex.ecart != null ? ["Écart inexpliqué", (ex.ecart > 0 ? "+" : "") + money(ex.ecart), "tot"] : null])));
@@ -8902,6 +9099,7 @@ const DISCORD_CHANNELS = [
   ["relances", "Salon des relances", "Rappels, relances et mises en demeure. Laissez vide pour utiliser le salon des entreprises."],
   ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."],
   ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."],
+  ["agents", "Salon des agents de la Préfecture", "Classement des heures de service, publié depuis la pointeuse. Laissez vide pour ne pas le publier."],
   ["direction", "Salon de la Direction", "Bilan de chaque semaine, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Laissez vide pour ne pas le publier."]
 ];
 const DISCORD_AUTO = [
@@ -14263,24 +14461,47 @@ function releveFor(e, k) {
   return relevesOf(e).map(r => ({ r, t: new Date(r.at).getTime() })).filter(x => Number.isFinite(x.t) && x.t >= w.from && x.t <= w.to && near(x.t))
     .sort((a, b) => Math.abs(a.t - w.end) - Math.abs(b.t - w.end))[0] || null;
 }
-// Quand les mouvements d'un relevé remontent jusqu'à la fin de la période, le solde de fin de période
-// est reconstitué exactement (source « mouvements ») ; sinon, le relevé le plus proche sert, corrigé
-// des mouvements lus qui sont postérieurs à la fin de la période.
+// La semaine comptable d'une entreprise va d'un dépôt de déclaration au suivant : elle paie salaires et
+// dépenses, puis déclare ; ce qui arrive après le dépôt (recettes du dimanche soir, salaires payés
+// d'avance) compte pour la déclaration suivante. Un dépôt hors de la période ou trop tardif (au-delà du
+// lendemain du délai) ne sert pas de coupure : la fin de la période le remplace.
+function coupure(e, k) {
+  const d = periodDecl(e, k), b = bounds(k), w = releveWindow(k);
+  const t = d && d.depotAt ? new Date(d.depotAt).getTime() : NaN;
+  return b && w && Number.isFinite(t) && t >= b.start.getTime() && t <= w.to ? t : null;
+}
+function fenetreDecl(e, k) {
+  const b = bounds(k);
+  if (!b) return null;
+  const t1 = coupure(e, k), t0 = coupure(e, prevKey(k));
+  const fin = t1 != null ? t1 : b.end.getTime(), deb = t0 != null ? t0 : b.start.getTime();
+  return { t0: Math.min(deb, fin), t1: fin };
+}
+const releveVers = (e, T) => relevesOf(e).map(r => ({ r, t: new Date(r.at).getTime() })).filter(x => Number.isFinite(x.t) && Math.abs(x.t - T) <= 864e5)
+  .sort((a, b) => Math.abs(a.t - T) - Math.abs(b.t - T))[0] || null;
+// Solde du compte à la coupure de la période : reconstitué exactement quand les mouvements d'un relevé
+// remontent jusque-là ; sinon le solde déclaré, qui est celui du moment du dépôt (un relevé qui le
+// contredit fait foi) ; sinon le relevé le plus proche, corrigé des mouvements lus après la coupure.
 function compteDe(e, k) {
   const d = periodDecl(e, k), w = releveWindow(k);
   if (!w) return { d, decl: null, rel: null, pos: null, t: null, source: null };
-  const dep = d && d.depotAt ? new Date(d.depotAt).getTime() : null;
+  const dep = coupure(e, k), T = dep != null ? dep : w.end;
   const decl = hasSolde(d) ? Number(d.solde) : null;
-  const declT = dep && Number.isFinite(dep) ? dep : w.end;
-  const declOk = decl != null && declT <= w.to;
-  const ex = soldeA(e, w.end);
-  if (ex) return { d, decl, rel: ex.r, pos: ex.v, t: w.end, declT, source: "mouvements" };
-  const rx = releveFor(e, k), rel = rx ? rx.r : null;
-  if (rel) {
-    const apres = mvtsRel(rel).filter(m => m.t > w.end).reduce((s, m) => s + m.montant, 0);
-    return { d, decl, rel, pos: (Number(rel.montant) || 0) - apres, t: apres ? w.end : rx.t, declT, source: "releve", approche: !!apres };
+  const ex = soldeA(e, T);
+  if (ex) return { d, decl, rel: ex.r, pos: ex.v, t: T, declT: dep, source: "mouvements", coupe: dep != null };
+  if (dep != null && decl != null) {
+    const vs = verifSolde(d);
+    if (vs && !vs.ok) return { d, decl, rel: vs.rel, pos: vs.attendu, t: T, declT: dep, source: "releve", approche: !vs.exact, coupe: true };
+    return { d, decl, rel: null, pos: decl, t: T, declT: dep, source: "declare", coupe: true };
   }
-  return { d, decl, rel: null, pos: declOk ? decl : null, t: declOk ? declT : null, declT, source: declOk ? "declare" : null, late: decl != null && !declOk };
+  const rx = dep != null ? releveVers(e, T) : releveFor(e, k), rel = rx ? rx.r : null;
+  if (rel) {
+    const apres = mvtsRel(rel).filter(m => m.t > T).reduce((s, m) => s + m.montant, 0);
+    return { d, decl, rel, pos: (Number(rel.montant) || 0) - apres, t: apres || dep != null ? T : rx.t, declT: dep, source: "releve", approche: !!apres || (dep != null && Math.abs(rx.t - T) > 6e4), coupe: dep != null };
+  }
+  // Solde déclaré sans heure de dépôt : celui de la fin de période. Déposé trop tard : il ne décrit plus la période.
+  const tardif = !!(d && d.depotAt) && dep == null, ok = decl != null && !tardif;
+  return { d, decl, rel: null, pos: ok ? decl : null, t: ok ? w.end : null, declT: dep, source: ok ? "declare" : null, late: decl != null && tardif };
 }
 // Impôts, échéances et pénalités payés entre deux observations : ils sont sortis du compte.
 function paiementsEntre(e, t0, t1) {
@@ -14356,8 +14577,8 @@ function blanchimentSignals(d) {
   const vs = verifSolde(d);
   if (vs && !vs.ok) out.push(`Solde déclaré inexact : ${money(vs.decl)} déclarés, ${money(vs.attendu)} sur le compte ${vs.exact ? `au moment du dépôt (mouvements du relevé ${dossierNo("RC", vs.rel.id)})` : `d’après le relevé de ${vs.rel.agent || "un agent"} (${fmtDateTime(new Date(vs.rel.at))})`}`);
   // Mouvements suspects de la période et recoupement avec ce qui est déclaré.
-  const pb = bounds(d.periode);
-  for (const s of mvtSignalsActifs(e)) if (s.t >= pb.start.getTime() && s.t <= pb.end.getTime()) out.push(s.texte);
+  const pf = fenetreDecl(e, d.periode);
+  for (const s of mvtSignalsActifs(e)) if (s.t > pf.t0 && s.t <= pf.t1) out.push(s.texte);
   out.push(...mvtsSemaine(e, d));
   const x = ecartDe(e, d.periode);
   if (x.ecart != null) {
@@ -14583,7 +14804,7 @@ function couvertures(e) {
   });
 }
 const couvert = (e, t0, t1) => couvertures(e).some(([a, b]) => a <= t0 && b >= t1);
-const semaineCouverte = (e, k) => { const b = bounds(k); return !!b && couvert(e, b.start.getTime(), b.end.getTime()); };
+const semaineCouverte = (e, k) => { const f = fenetreDecl(e, k); return !!f && couvert(e, f.t0, f.t1); };
 // Argent versé au patron (ou à un co-gérant) depuis le compte de l'entreprise : abus de biens sociaux possible.
 function signauxPatron(e) {
   const noms = patronsDe(e);
@@ -14697,9 +14918,9 @@ const sansActivite = d => !!d.sansActivite || ((Number(d.ca) || 0) === 0 && (Num
 // d'autres entreprises (lus sur leurs comptes) s'ajoutent aux recettes vues, sans compter deux fois
 // un paiement vu des deux côtés.
 function mvtsSemaine(e, d) {
-  const b = bounds(d.periode);
-  if (!b) return [];
-  const t0 = b.start.getTime(), t1 = b.end.getTime(), dans = m => m.t >= t0 && m.t <= t1;
+  const f = fenetreDecl(e, d.periode);
+  if (!f) return [];
+  const { t0, t1 } = f, dans = m => m.t > t0 && m.t <= t1;
   const mv = mvtsOf(e).filter(dans), recus = mv.filter(m => m.montant > 0 && !NON_RECETTE_RE.test(m.libelle));
   const autres = paiementsVers(e).filter(p => dans(p) && !recus.some(m => Math.abs(m.montant - p.montant) < 0.5 && Math.abs(m.t - p.t) <= 3 * 6e4));
   if (!mv.length && !autres.length) return [];
@@ -14719,11 +14940,11 @@ function mvtsSemaine(e, d) {
 // qu'une piste (paiement en liquide depuis le coffre, compte personnel du patron, ligne mal lue) : elle
 // s'affiche dans le tableau du compte, pas dans les alertes.
 function nonRetrouves(e, d) {
-  const b = d && bounds(d.periode);
-  if (!b || !e || !e.id) return [];
-  const t0 = b.start.getTime(), t1 = b.end.getTime();
+  const f = d && e && e.id ? fenetreDecl(e, d.periode) : null;
+  if (!f) return [];
+  const { t0, t1 } = f;
   if (!couvert(e, t0, t1)) return [];
-  const mv = mvtsOf(e).filter(m => m.t >= t0 && m.t <= t1), v = retenuDe(d), marge = x => Math.max(5000, x * 0.1), out = [];
+  const mv = mvtsOf(e).filter(m => m.t > t0 && m.t <= t1), v = retenuDe(d), marge = x => Math.max(5000, x * 0.1), out = [];
   const dep = -mv.filter(m => m.montant < 0 && !SALAIRE_RE.test(m.libelle) && !/pr[ée]fecture/i.test(m.libelle)).reduce((t, m) => t + m.montant, 0);
   const sal = -mv.filter(m => m.montant < 0 && SALAIRE_RE.test(m.libelle)).reduce((t, m) => t + m.montant, 0);
   if (v.ch > dep + marge(dep)) out.push(`charges : ${money(v.ch)} déclarées, ${money(dep)} vues sur le compte`);
@@ -15266,10 +15487,10 @@ function compteTable(e, keys) {
   return h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
     h("thead", {}, h("tr", {}, ["Période", "Déclaré", "Relevé", "Attendu", "Écart"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
     h("tbody", {}, rows.map(({ k, x }) => h("tr", {},
-      h("td", {}, periodPlain(k), semaineCouverte(e, k) ? h("span", { class: "hint", title: "Tous les mouvements de la semaine sont connus par les relevés", text: " · relevée en entier" }) : null,
+      h("td", {}, periodPlain(k), semaineCouverte(e, k) ? h("span", { class: "hint", title: "Tous les mouvements entre le dépôt précédent et celui-ci sont connus par les relevés", text: " · relevée en entier" }) : null,
         (() => { const l = x.cur.d ? nonRetrouves(e, x.cur.d) : []; return l.length ? h("div", { class: "hint", title: "Une piste à vérifier en contrôle : un paiement en liquide depuis le coffre ou depuis le compte du patron n’apparaît pas sur le compte.", text: "À vérifier, pas vu sortir du compte : " + l.join(" ; ") }) : null; })()),
       h("td", { class: "num", text: x.cur.decl != null ? money(x.cur.decl) : "—" }),
-      h("td", { class: "num", title: x.cur.source === "mouvements" ? `Reconstitué au ${fmtDateTime(new Date(x.cur.t))} avec les mouvements du relevé ${dossierNo("RC", x.cur.rel.id)}` : x.cur.approche ? `Relevé ${dossierNo("RC", x.cur.rel.id)} corrigé des mouvements lus après la fin de la période` : null,
+      h("td", { class: "num", title: x.cur.source === "mouvements" ? `Reconstitué au ${fmtDateTime(new Date(x.cur.t))} avec les mouvements du relevé ${dossierNo("RC", x.cur.rel.id)}` : x.cur.approche ? `Relevé ${dossierNo("RC", x.cur.rel.id)} ramené ${x.cur.coupe ? "au dépôt de la déclaration" : "à la fin de la période"}` : x.cur.source === "declare" && x.cur.coupe ? `Solde déclaré au dépôt, le ${fmtDateTime(new Date(x.cur.t))}` : null,
         text: x.cur.source === "mouvements" || x.cur.approche ? money(x.cur.pos) + (x.cur.approche ? " ≈" : "") : x.cur.rel ? money(x.cur.rel.montant) : "—" }),
       h("td", { class: "num", text: x.attendu != null ? money(x.attendu) : "—" }),
       h("td", { class: "num" }, x.ecart == null ? "—" : h("span", { class: Math.abs(x.ecart) > s.seuil ? "neg" : null, style: Math.abs(x.ecart) > s.seuil ? "font-weight:700" : null, text: (x.ecart > 0 ? "+" : "") + money(x.ecart) })))))));
@@ -15296,7 +15517,7 @@ function compteSection(e, reopen) {
   const rl = relevesOf(e).slice(0, 4), ag = canAgent(), dir = writer(), sig = mvtSignalsActifs(e), nb = mvtsOf(e).length, pv = paiementsVers(e);
   const classes = mvtSignals(e).map(s => ({ s, k: sigClasse(e, s) })).filter(x => x.k);
   return sec("Compte de l’entreprise",
-    h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Avec les mouvements relevés, le solde de fin de période est reconstitué exactement." }),
+    h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Chaque période va d’un dépôt de déclaration au suivant : l’entreprise paie salaires et dépenses, puis déclare, et ce qui arrive après le dépôt compte pour la période suivante. Avec les mouvements relevés, le solde au moment du dépôt est reconstitué exactement." }),
     (() => { const r = risqueDe(e); return h("div", { class: "paste-row", style: "margin:0 0 6px" }, chip([`${r.niveau[0]} · ${r.score}`, r.niveau[1]]), h("span", { class: "hint", text: r.raisons.join(" · ") || "Rien à signaler." })); })(),
     compteTable(e, keysEnding(lastClosedKey(), 6)),
     especesSection(e, reopen),
@@ -15502,7 +15723,7 @@ function soldeHint(key, ca, ch, ms) {
   const el = $("#d-solde-hint");
   if (!el) return;
   const v = $("#d-solde").value, e = findEnt($("#d-ent").value.trim());
-  const base = "Solde affiché sur le compte de l’entreprise à la fin de la période, avec une capture. Un relevé fait par un agent fait foi.";
+  const base = "Solde affiché sur le compte de l’entreprise au moment de déclarer (salaires et dépenses de la semaine payés), avec une capture. Un relevé fait par un agent fait foi.";
   if (!e || v === "" || !blc().actif) { el.textContent = base; return; }
   const prev = compteDe(e, prevKey(key));
   if (prev.pos == null) { el.textContent = "Aucun solde connu pour la période précédente : cet écart sera calculé à partir de la suivante."; return; }
