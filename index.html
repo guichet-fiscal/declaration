@@ -3831,6 +3831,8 @@ function todoItems() {
   if (w) add(rfa.length, `Rescrit${plural(rfa.length)} à répondre`, rfa.slice(0, 3).map(r => r.entrepriseNom).join(", "), () => { const r = rfa[0]; openRescrit(entOf(r), r); });
   const dr = depotsRecus();
   add(dr.length, `Déclaration${plural(dr.length)} reçue${plural(dr.length)} en ligne à enregistrer`, dr.slice(0, 3).map(d => d.entrepriseNom).join(", "), () => { allerA("declaration"); setTimeout(() => { const el = $("#d-online"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 120); }, "info");
+  const xo = S.declarations.filter(d => exoOubliee(d));
+  add(xo.length, `Exonération${plural(xo.length)} à recalculer`, xo.slice(0, 3).map(d => `${d.entrepriseNom} (${periodPlain(d.periode).toLowerCase()})`).join(", "), () => openDecl(xo[0].id));
   const av = S.declarations.filter(d => dStatus(d) === "soumise");
   add(av.length, `Déclaration${plural(av.length)} à valider`, `${money(sum(av, d => d.total))} calculés`, () => { S.declFilter = "atraiter"; render(); $("#decl-table").scrollIntoView({ behavior: "smooth", block: "start" }); }, "info");
   if (w) {
@@ -6015,6 +6017,10 @@ function openDecl(id) {
     }, text: "Annuler l’encaissement" }));
   }
   { const n = lienAgentNotice(registered ? entOf(d) : null); if (n) body.unshift(n); }
+  { const xo = exoOubliee(d);
+    if (xo) body.unshift(h("div", { class: "notice", style: "margin:0;border-left-color:var(--warn)" }, h("div", {}, h("strong", { text: "Exonération non appliquée. " }),
+      `${periodPlain(d.periode)} est la période ${xo.rang} sur ${xo.sur} d’exonération de ${d.entrepriseNom} (impôt −${pct(xo.tauxIS)}, cotisations −${pct(xo.tauxCot)}), mais la déclaration a été calculée sans. `,
+      ag && !locked ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => startEditDecl(d, `Exonération de début d’activité non appliquée au dépôt (période ${xo.rang} sur ${xo.sur})`), text: "Recalculer avec l’exonération" }) : null))); }
   openDialog({ eyebrow: `Déclaration ${dossierNo("DF", id)} · ${periodLabel(d.periode)}`, title: d.entrepriseNom || "Sans nom", stampEl: stamp(DSTAT[st] || DSTAT.soumise), body, foot });
 }
 // Remplacement d'une déclaration par sa rectificative : l'ancienne est rejetée en gardant sa décision
@@ -8985,7 +8991,7 @@ function editEntreprise(e, back) {
       const ig = nouveaux.map(interdictionDe).find(Boolean);
       if (ig) { err.textContent = `${ig.nom} est interdit de gérer jusqu’au ${fmtDate(new Date(ig.jusquau))} (${dossierNo("IG", ig.id)}).`; patron.focus(); return; } }
     save.disabled = true;
-    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || null, exoneration: exo.value, alias: als }));
+    const ok = await write(() => S.db.doc("entreprises/" + e.id).update({ nom: n, secteur: sect.value.trim(), patron: patron.value.trim(), discord: normMention(disc.value.trim()), debutActivite: debut.value || (e.debutActivite && bounds(e.debutActivite) && keyStart(e.debutActivite) <= startTime() ? e.debutActivite : null), exoneration: exo.value, alias: als }));
     if (!ok) { save.disabled = false; return; }
     if (n !== e.nom) {
       const jobs = [];
@@ -12416,7 +12422,15 @@ function exoStartKey(e, c) {
   if (e.exoneration === "accordee") return deb || c.debutSuivi;
   // Nouvelle : son activité commence avec le suivi ou après. Les entreprises présentes à l'ouverture
   // (début d'activité = première semaine suivie) sont donc exonérées, comme celles qui ouvrent ensuite.
-  return deb && keyStart(deb) >= startTime() ? deb : null;
+  // Sans début d'activité (« Depuis le début du suivi » sur sa fiche) : l'entreprise inscrite pour
+  // l'ouverture du suivi (au plus une semaine avant) ou après est nouvelle, à partir de la période de
+  // son inscription ; celle qui existait déjà bien avant ne l'est pas.
+  if (!deb) {
+    const t = Date.parse(e.createdAt || ""), t0 = startTime();
+    if (!Number.isFinite(t) || !Number.isFinite(t0) || t < t0 - 7 * 864e5) return null;
+    return t <= t0 ? c.debutSuivi : keyOf(new Date(t), c.periodicite);
+  }
+  return keyStart(deb) >= startTime() ? deb : null;
 }
 function exoInfo(e, key, c) {
   c = c || cfg();
@@ -12450,6 +12464,13 @@ function applyExo(r, e, key, c, late) {
   });
 }
 const exoLabel = x => `Exonération de début d’activité (période ${x.rang} sur ${x.sur})`;
+// Déclaration enregistrée sans l'exonération à laquelle la période donne droit (début d'activité
+// effacé entre-temps, exonération accordée après le dépôt) : à recalculer.
+function exoOubliee(d) {
+  if (!d || d.exoneration || !d.entrepriseId || ["rejetee", "payee"].includes(dStatus(d))) return null;
+  const e = S.entreprises.find(x => x.id === d.entrepriseId);
+  return e ? exoInfo(e, d.periode) : null;
+}
 /* Récompenses : bonus de régularité et prime d'aviseur */
 const rcp = () => Object.assign({ bonusActif: false, bonusSemaines: 8, bonusTaux: 5, aviseurTaux: 10, aviseurPlafond: 50000 }, cfg().recompenses || {});
 const bonusMontant = d => (d && d.bonus ? Number(d.bonus.montant) || 0 : 0);
