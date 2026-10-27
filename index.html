@@ -4555,6 +4555,30 @@ function bulletinDoc(k, fid) {
     discord: { channel: "services", mentions: [f.discordId ? `<@${f.discordId}>` : ""].filter(Boolean), text: `**Bulletin de paye** · ${nom} · semaine ${(bounds(k) || {}).week} : ${money(total)} ${x.versee ? "versés" : "prévus"}.` }
   };
 }
+// Notification de trop-perçu remise à l'agent : la somme touchée en trop, pourquoi, ce qui est déjà
+// régularisé, ses autres trop-perçus en cours, et comment la régularisation se fait.
+function tropPercuDoc(rid) {
+  const r = retenuesTous().find(z => z.id === rid); if (!r) return null;
+  const f = foncOf(r.fid) || {}, nom = r.nom || f.nom || "Agent", sem = k => "semaine " + ((bounds(k) || {}).week || "?"), no = dossierNo("TP", r.id);
+  const autres = retenuesDues().filter(z => z.fid === r.fid && z.id !== r.id);
+  const lines = [[`Versé en trop · ${sem(r.semaine)}`, money(r.montant), true]];
+  if (r.retenu) lines.push([`Déjà retenu sur vos payes (${r.retenuPar.map(sem).join(", ")})`, "− " + money(r.retenu)]);
+  if (r.rembourse) lines.push(["Déjà remboursé par vous", "− " + money(r.rembourse)]);
+  if (r.annule && r.montant - r.retenu - r.rembourse > 0) lines.push([`Abandonné par la Direction${r.annuleMotif ? " · " + r.annuleMotif : ""}`, "− " + money(r.montant - r.retenu - r.rembourse)]);
+  autres.forEach(z => lines.push([`Autre trop-perçu en cours · ${sem(z.semaine)}`, money(z.reste)]));
+  const total = r.reste + autres.reduce((t, z) => t + z.reste, 0);
+  return {
+    kind: "NOTIFICATION DE TROP-PERÇU", no, date: "Établie le " + longDate(new Date()),
+    meta: [["Agent", nom], ["Grade", r.grade || f.grade || "—"], ["Service", payeSvc()], ["Semaine concernée", periodLabel(r.semaine)]],
+    lines, total: [autres.length ? "Total à régulariser" : "Reste à régulariser", money(total)],
+    stamp: r.annule ? ["ANNULÉ", "muted"] : r.reste <= 0 ? ["RÉGULARISÉ", "ok"] : ["À RÉGULARISER", "warn"],
+    note: r.motif || "", noteTitle: "Motif",
+    footer: total > 0
+      ? `${autres.length ? "Ces sommes seront retenues" : "Cette somme sera retenue"} sur vos prochaines payes jusqu’à régularisation complète, du trop-perçu le plus ancien au plus récent. Vous pouvez aussi ${autres.length ? "les" : "la"} rembourser directement à la Direction des impôts et cotisations : la retenue s’arrête à hauteur du remboursement. Somme répétible dans un délai de deux ans (art. 37-1 de la loi n° 2000-321 du 12 avril 2000). Préfecture de police · Direction des impôts et cotisations.`
+      : "Aucune somme ne reste à régulariser. Préfecture de police · Direction des impôts et cotisations.",
+    discord: { channel: "services", mentions: [f.discordId ? `<@${f.discordId}>` : ""].filter(Boolean), text: `**Notification de trop-perçu ${no}** · ${nom} : ${money(r.montant)} versés en trop (${sem(r.semaine)})${total > 0 ? `, ${money(total)} à régulariser` : ", régularisé"}.` }
+  };
+}
 
 /* Page Payes */
 function payeSemOptions(sel, k) {
@@ -5177,7 +5201,8 @@ function openTropPercuForm(preset) {
 function openTropPercu(rid, back) {
   const r = retenuesTous().find(z => z.id === rid); if (!r) return;
   const w = writer(), reopen = () => openTropPercu(rid, back), doc = (S.rappels || []).find(z => z.id === rid) || {};
-  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Fermer" }), h("span", { class: "spacer" })];
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Fermer" }), h("span", { class: "spacer" }),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(tropPercuDoc(rid), reopen), text: "Notification à l’agent" })];
   if (w && !r.annule && r.reste > 0) foot.push(h("button", { class: "btn danger small", type: "button", onclick: () => tropPercuAnnulerDlg(r, reopen), text: r.retenu || r.rembourse ? "Annuler le reste" : "Annuler" }),
     h("button", { class: "btn ink small", type: "button", onclick: () => tropPercuRembDlg(r, reopen), text: "Noter un remboursement" }));
   if (w && r.annule) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, doc, { statut: "du", annuleLe: null, annuleMotif: null }); delete body.id; if (await write(() => S.db.doc("rappels/" + rid).set(body))) { toast("Trop-perçu rétabli."); reopen(); } }, text: "Rétablir" }));
