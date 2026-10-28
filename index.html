@@ -765,6 +765,18 @@ header.top{position:relative}
 .mv-amt.out{color:var(--bad)}.mv-amt.in{color:var(--ok)}
 tr.mv-sus td{background:var(--bad-soft)}
 .conc-ok{color:var(--ok)}.conc-bad{color:var(--bad);font-weight:600}
+button.reason{appearance:none;border:0;font-family:inherit;cursor:pointer;text-align:left;display:inline-flex;gap:7px;align-items:baseline}
+button.reason:hover{text-decoration:underline}
+.reason-go{font-weight:700;color:var(--ink-2);text-decoration:underline;text-decoration-color:currentColor}
+table.mv-tab td.mv-lib{overflow-wrap:anywhere}
+tr.mv-day td{background:var(--field);font-weight:650;color:var(--ink);padding-top:9px;padding-bottom:7px}
+tr.mv-rel td{border-top:1px solid var(--ink-3)}
+tr.mv-focus td{background:var(--warn-soft)}
+tr.mv-focus td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+tr.mv-gap td{color:var(--ink-2);font-size:13px;box-shadow:inset 3px 0 0 var(--rule)}
+tr.mv-gap.big td{color:var(--bad);background:var(--bad-soft);box-shadow:inset 3px 0 0 var(--bad)}
+.small-link{font-size:12.5px;font-weight:500;font-family:var(--f-mono)}
+.rv-mini .proof-img{max-width:92px;max-height:56px}
 .mini-title{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px;font-weight:650}
 /* v10 : interface modernisée. Le bandeau bleu nuit porte l'identité ; le reste se tait. */
 header.top{background:var(--bar);border-bottom:0;color:var(--bar-ink)}
@@ -5913,7 +5925,7 @@ function openDecl(id) {
   if (ast.list.length) body.splice(1, 0, sec(ast.how ? "Alertes traitées" : "Alertes",
     ast.how === "controle" ? h("p", { class: "hint", style: "margin:0 0 6px" }, "Vérifiées par le contrôle ", h("button", { class: "linkbtn", type: "button", onclick: () => openControle(ast.ctrl.id), text: dossierNo("CF", ast.ctrl.id) }), ` (${ctrlState(ast.ctrl)[0].toLowerCase()}).`) : null,
     ast.how === "classee" ? h("p", { class: "hint", style: "margin:0 0 6px", text: `Classées par ${ast.classe.byNom || "la Direction"} le ${fmtDate(new Date(ast.classe.at))}${ast.classe.motif ? " : " + ast.classe.motif : ""}.` }) : null,
-    h("div", { class: "reasons" + (ast.how ? " done" : "") }, ast.list.map(r => h("span", { class: "reason", text: r }))),
+    reasonsEl(ast.list, d, () => openDecl(id), !!ast.how),
     !ast.how && w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(d, () => openDecl(id)), text: "Classer l’alerte" }) : null,
     ast.how === "classee" && w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: async () => { if (await write(() => S.db.doc("alertes/" + d.id).delete())) { toast("Alerte rouverte."); openDecl(id); } }, text: "Rouvrir l’alerte" }) : null));
   if (dAvoir(d)) body.splice(1, 0, h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {},
@@ -8080,7 +8092,7 @@ function openFiche(e, opts) {
     w && e.id && e.patron ? h("button", { class: "btn ghost small", type: "button", onclick: () => openInterdiction(e, reopen), text: "Interdire de gérer" }) : null,
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openRescrit(e, null, reopen), text: "Rescrit" }) : null].filter(Boolean);
   const aVoir = [relancesSection(e, reopen),
-    sm.alerts.length ? sec("Alertes sur la dernière déclaration", h("div", { class: "reasons" }, sm.alerts.map(r => h("span", { class: "reason", text: r }))),
+    sm.alerts.length ? sec("Alertes sur la dernière déclaration", reasonsEl(sm.alerts, sm.last, reopen),
       writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
     liensSection(e, reopen),
     interdictionSection(e, reopen)].filter(Boolean);
@@ -14631,33 +14643,37 @@ function compteDe(e, k) {
   const tardif = !!(d && d.depotAt) && dep == null, ok = decl != null && !tardif;
   return { d, decl, rel: null, pos: ok ? decl : null, t: ok ? w.end : null, declT: dep, source: ok ? "declare" : null, late: decl != null && tardif };
 }
-// Impôts, échéances et pénalités payés entre deux observations : ils sont sortis du compte.
-function paiementsEntre(e, t0, t1) {
-  let t = 0;
-  const inR = at => { const x = at ? new Date(at).getTime() : NaN; return Number.isFinite(x) && x > t0 && x <= t1; };
+// Opérations connues du guichet entre deux observations du compte, une par ligne : impôts, échéances et
+// pénalités payés, prêts versés, véhicules achetés ou vendus. « v » est ce qui sort du compte (négatif :
+// ce qui y entre) ; paiementsEntre en fait la somme.
+function paiementsListe(e, t0, t1) {
+  const out = [], tm = at => (at ? new Date(at).getTime() : NaN), up = x => x.charAt(0).toUpperCase() + x.slice(1);
+  const inR = at => { const x = tm(at); return Number.isFinite(x) && x > t0 && x <= t1; };
+  const add = (at, lib, v) => out.push({ t: tm(at), lib, v });
   for (const x of declsOf(e)) {
-    const dec = S.decisions[x.id], ec = echOf(x);
-    if (ec) ec.echeances.forEach(y => { if (y.payee && inR(y.paidAt)) t += Number(y.montant) || 0; });
-    else if (dec && dec.statut === "payee" && inR(dec.paidAt)) t += Math.max(0, dMontant(x) - dCredit(x));
+    const dec = S.decisions[x.id], ec = echOf(x), no = () => `avis ${dossierNo("DF", x.id)} (${periodPlain(x.periode).toLowerCase()})`;
+    if (ec) ec.echeances.forEach((y, i) => { if (y.payee && inR(y.paidAt)) add(y.paidAt, `Échéance ${i + 1}/${ec.echeances.length} de l’${no()} payée`, Number(y.montant) || 0); });
+    else if (dec && dec.statut === "payee" && inR(dec.paidAt)) add(dec.paidAt, `${up(no())} payé`, Math.max(0, dMontant(x) - dCredit(x)));
     // Déclaration remplacée par une rectificative : son paiement a bien eu lieu.
     if (dec && dec.statut === "rejetee" && dec.avantDecision && dec.avantDecision.statut === "payee" && !ec && inR(dec.avantDecision.paidAt))
-      t += Math.max(0, (Number(dec.avantDecision.montant) || 0) - dCredit(x));
+      add(dec.avantDecision.paidAt, `${up(no())} payé avant d’être remplacé`, Math.max(0, (Number(dec.avantDecision.montant) || 0) - dCredit(x)));
   }
-  for (const p of pensOf(e)) if (p.statut === "payee" && inR(p.paidAt)) t += Number(p.montant) || 0;
+  for (const p of pensOf(e)) if (p.statut === "payee" && inR(p.paidAt)) add(p.paidAt, `${p.type === "redressement" ? "Redressement " + dossierNo("AMR", p.id) + " payé" : "Pénalité " + dossierNo("PN", p.id) + " payée"}`, Number(p.montant) || 0);
   for (const p of pretsOf(e)) {
-    if (pretVerse(p) && inR(p.verseLe)) t -= Number(p.montant) || 0;
-    (p.echeances || []).forEach(x => { if (x.payee && inR(x.paidAt)) t += Number(x.montant) || 0; });
+    if (pretVerse(p) && inR(p.verseLe)) add(p.verseLe, `Prêt ${pretNo(p)} versé par la Préfecture`, -(Number(p.montant) || 0));
+    (p.echeances || []).forEach((x, i) => { if (x.payee && inR(x.paidAt)) add(x.paidAt, `Échéance ${x.n || i + 1}/${p.echeances.length} du prêt ${pretNo(p)} remboursée`, Number(x.montant) || 0); });
   }
   // Véhicules : l'achat payé par le compte (s'il n'est pas déjà dans les charges déclarées), la vente
   // (si son prix n'est pas dans le chiffre d'affaires) et le remboursement du dirigeant après requalification.
   for (const v of vehsOf(e)) {
-    const reintegre = S.controles.some(c => c.vehiculeId === v.id && c.statut === "recouvre");
-    if ((!v.dansCharges || reintegre) && inR(v.achatLe)) t += Number(v.prix) || 0;
-    if (v.vente && !v.vente.dansCA && inR(v.vente.at)) t -= Number(v.vente.prix) || 0;
-    for (const rq of [v.requalification, v.requalifAnnulee]) if (rq && rq.rembourseLe && inR(rq.rembourseLe)) t -= Number(rq.montant) || 0;
+    const reintegre = S.controles.some(c => c.vehiculeId === v.id && c.statut === "recouvre"), nom = [v.modele, v.plaque].filter(Boolean).join(" ") || "sans plaque";
+    if ((!v.dansCharges || reintegre) && inR(v.achatLe)) add(v.achatLe, `Achat du véhicule ${nom}`, Number(v.prix) || 0);
+    if (v.vente && !v.vente.dansCA && inR(v.vente.at)) add(v.vente.at, `Vente du véhicule ${nom}`, -(Number(v.vente.prix) || 0));
+    for (const rq of [v.requalification, v.requalifAnnulee]) if (rq && rq.rembourseLe && inR(rq.rembourseLe)) add(rq.rembourseLe, `Remboursement du véhicule ${nom} par le dirigeant`, -(Number(rq.montant) || 0));
   }
-  return t;
+  return out.sort((a, b) => a.t - b.t);
 }
+function paiementsEntre(e, t0, t1) { return paiementsListe(e, t0, t1).reduce((t, x) => t + x.v, 0); }
 // Pour la période elle-même (saisie d'une déclaration) : depuis la dernière observation connue.
 function paiementsDe(e, k) {
   const prev = compteDe(e, prevKey(k)), w = releveWindow(k);
@@ -15609,14 +15625,16 @@ function especesSection(e, back) {
       !x.pen && writer() && x.amende > 0 ? h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => amendeEspeces(e, x, back), text: `Infliger ${pct(c.amendeEspeces)}` })) : h("span", {})))));
 }
 // Section « Compte de l'entreprise » de la fiche et du dossier.
-function compteTable(e, keys) {
+function compteTable(e, keys, back) {
   const rows = keys.map(k => { const x = ecartDe(e, k); return { k, x }; }).filter(r => r.x.cur.pos != null || r.x.cur.d);
   if (!rows.length) return h("p", { class: "muted", style: "margin:4px 0 0", text: "Aucun solde connu : demandez-le avec la déclaration ou faites un relevé de compte." });
-  const s = blc();
+  const s = blc(), ouvrir = relevesOf(e).length;
   return h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
-    h("thead", {}, h("tr", {}, ["Période", "Déclaré", "Relevé", "Attendu", "Écart"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+    h("thead", {}, h("tr", {}, ["Période", "Solde déclaré", "Solde relevé", "Attendu", "Écart"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
     h("tbody", {}, rows.map(({ k, x }) => h("tr", {},
-      h("td", {}, periodPlain(k), semaineCouverte(e, k) ? h("span", { class: "hint", title: "Tous les mouvements entre le dépôt précédent et celui-ci sont connus par les relevés", text: " · relevée en entier" }) : null,
+      h("td", {}, ouvrir ? h("button", { class: "linkbtn", type: "button", title: "Voir les relevés et les mouvements de la période", onclick: () => openMouvements(e, { k, back }), text: periodPlain(k) }) : periodPlain(k),
+        semaineCouverte(e, k) ? h("span", { class: "hint", title: "Tous les mouvements entre le dépôt précédent et celui-ci sont connus par les relevés", text: " · relevée en entier" }) : null,
+        x.attendu == null && x.cur.d ? h("span", { class: "small-meta", text: sansAttendu(e, k, x) }) : null,
         (() => { const l = x.cur.d ? nonRetrouves(e, x.cur.d) : []; return l.length ? h("div", { class: "hint", title: "Une piste à vérifier en contrôle : un paiement en liquide depuis le coffre ou depuis le compte du patron n’apparaît pas sur le compte.", text: "À vérifier, pas vu sortir du compte : " + l.join(" ; ") }) : null; })()),
       h("td", { class: "num", text: x.cur.decl != null ? money(x.cur.decl) : "—" }),
       h("td", { class: "num", title: x.cur.source === "mouvements" ? `Reconstitué au ${fmtDateTime(new Date(x.cur.t))} avec les mouvements du relevé ${dossierNo("RC", x.cur.rel.id)}` : x.cur.approche ? `Relevé ${dossierNo("RC", x.cur.rel.id)} ramené ${x.cur.coupe ? "au dépôt de la déclaration" : "à la fin de la période"}` : x.cur.source === "declare" && x.cur.coupe ? `Solde déclaré au dépôt, le ${fmtDateTime(new Date(x.cur.t))}` : null,
@@ -15643,36 +15661,242 @@ function concCourt(r) {
 }
 function compteSection(e, reopen) {
   if (!e.id || !blc().actif) return null;
-  const rl = relevesOf(e).slice(0, 4), ag = canAgent(), dir = writer(), sig = mvtSignalsActifs(e), nb = mvtsOf(e).length, pv = paiementsVers(e);
+  const rl = relevesOf(e), ag = canAgent(), dir = writer(), sig = mvtSignalsActifs(e), nb = mvtsOf(e).length, pv = paiementsVers(e);
+  const chaine = new Map(chaineReleves(e).map(c => [c.r.id, c]));
   const classes = mvtSignals(e).map(s => ({ s, k: sigClasse(e, s) })).filter(x => x.k);
   return sec("Compte de l’entreprise",
-    h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Chaque période va d’un dépôt de déclaration au suivant : l’entreprise paie salaires et dépenses, puis déclare, et ce qui arrive après le dépôt compte pour la période suivante. Avec les mouvements relevés, le solde au moment du dépôt est reconstitué exactement." }),
+    h("p", { class: "hint", style: "margin:0 0 4px", text: "Solde attendu = solde précédent + chiffre d’affaires − charges − salaires − impôts payés. Un écart positif est un enrichissement que les déclarations n’expliquent pas. Chaque période va d’un dépôt de déclaration au suivant. Cliquez sur une période pour voir ses relevés et ses mouvements." }),
     (() => { const r = risqueDe(e); return h("div", { class: "paste-row", style: "margin:0 0 6px" }, chip([`${r.niveau[0]} · ${r.score}`, r.niveau[1]]), h("span", { class: "hint", text: r.raisons.join(" · ") || "Rien à signaler." })); })(),
-    compteTable(e, keysEnding(lastClosedKey(), 6)),
+    compteTable(e, keysEnding(lastClosedKey(), 6), reopen),
     especesSection(e, reopen),
-    sig.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: "Mouvements suspects" }), dir
-      ? h("ul", { class: "ent-list" }, sig.slice(0, 8).map(s => h("li", {}, h("span", { class: "reason", style: "min-width:0", text: s.texte }), h("span", {}),
-          h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => classerMouvements(e, [s], reopen), text: "Classer" })))))
-      : h("div", { class: "reasons" }, sig.slice(0, 6).map(s => h("span", { class: "reason", text: s.texte })))) : null,
+    sig.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: "Mouvements suspects" }),
+      h("ul", { class: "ent-list" }, sig.slice(0, 8).map(s => h("li", {}, h("span", { class: "reason", style: "min-width:0", text: s.texte }), h("span", {}),
+        h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => voirSignal(e, s, reopen), text: "Voir" }),
+          dir ? h("button", { class: "btn ghost small", type: "button", onclick: () => classerMouvements(e, [s], reopen), text: "Classer" }) : null))))) : null,
     classes.length ? h("details", { style: "margin-top:8px" }, h("summary", { class: "hint", text: `${classes.length} mouvement${plural(classes.length)} suspect${plural(classes.length)} classé${plural(classes.length)}` }),
       h("ul", { class: "ent-list" }, classes.map(({ s, k }) => h("li", {},
         h("div", { style: "min-width:0" }, h("span", { text: s.texte }), h("span", { class: "meta", text: `Classé le ${fmtDate(new Date(k.at))}${k.byNom ? " par " + k.byNom : ""} : ${k.motif}` })),
         chip(["Classé", "muted"]),
         dir ? h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => rouvrirMouvement(e, s, reopen), text: "Rouvrir" })) : h("span", {}))))) : null,
+    rl.length ? h("div", { style: "margin-top:10px" }, h("div", { class: "paste-row" }, h("h4", { class: "mini-title", style: "margin:0", text: `Relevés de compte · ${relevesOf(e).length}` }), h("span", { class: "spacer" }),
+        h("button", { class: "btn small", type: "button", onclick: () => openMouvements(e, { back: reopen }), text: `Tous les relevés et mouvements${nb ? " · " + nb : ""}` })),
+      h("ul", { class: "ent-list", style: "margin-top:4px" }, capList("rv", rl.map(r => { const n = mvtsRel(r).length, c = chaine.get(r.id), gros = c && Math.abs(c.nonVu) > blc().seuil; return h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openReleveVue(r.id, reopen), text: `${dossierNo("RC", r.id)} · ${money(r.montant)}` }),
+          h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))} · ${r.agent || "—"} · ${n ? `${n} mouvement${plural(n)}` : "solde seul"}${r.note ? " · " + r.note : ""}` }),
+          c ? h("span", { class: "meta " + (gros || (c.complet && Math.abs(c.nonVu) >= 1) ? "conc-bad" : ""), text: Math.abs(c.nonVu) < 1 ? `concorde avec le précédent (${signe(c.delta)}, tout est lu)` : c.complet ? `${signe(c.nonVu)} d’écart avec le précédent : solde ou montant mal lu ?` : `${signe(c.delta)} depuis le précédent, dont ${signe(c.nonVu)} non vus` }) : null),
+        r.preuve ? h("span", { class: "rv-mini" }, proofEl(r.preuve)) : h("span", {}), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openReleveVue(r.id, reopen), text: "Ouvrir" }))); }), 5, reopen))) : null,
     nb ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Derniers mouvements relevés · ${nb} connu${plural(nb)}` }), mvtTable(e, 12)) : null,
     pv.length ? h("div", { style: "margin-top:10px" }, h("h4", { class: "mini-title", text: `Payé par d’autres entreprises · vu sur leurs comptes` }),
       h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact" },
         h("thead", {}, h("tr", {}, ["Date", "Payé par", "Mouvement", "Montant"].map((t, i) => h("th", { class: i === 3 ? "num" : null, text: t })))),
         h("tbody", {}, pv.slice(0, 8).map(p => h("tr", {}, h("td", { class: "mono", text: jjmm(p.t) }), h("td", { text: p.payeur.nom }), h("td", { text: libCourt(p.m.libelle) }),
           h("td", { class: "num" }, h("span", { class: "mv-amt in", text: "+" + money(p.montant) })))))))) : null,
-    rl.length ? h("ul", { class: "ent-list", style: "margin-top:8px" }, rl.map(r => { const n = mvtsRel(r).length, cc = concCourt(r); return h("li", {},
-      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${dossierNo("RC", r.id)} · ${money(r.montant)}` }), h("span", { class: "meta", text: `relevé le ${fmtDateTime(new Date(r.at))} par ${r.agent || "—"}${n ? ` · ${n} mouvement${plural(n)}` : ""}${cc ? " · " + cc : ""}${r.note ? " · " + r.note : ""}` })),
-      proofEl(r.preuve), writer() ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await write(() => S.db.doc("releves/" + r.id).delete())) { toast("Relevé retiré."); if (reopen) reopen(); } }, text: "Retirer" }) : h("span", {})); })) : null,
     ag ? h("div", { class: "paste-row", style: "margin-top:6px" },
       h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e, reopen), text: "Relevé de compte" }),
       sig.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => controleMouvements(e, sig), text: "Contrôler ces mouvements" }) : null,
       dir && sig.length > 1 ? h("button", { class: "btn ghost small", type: "button", onclick: () => classerMouvements(e, sig, reopen), text: "Classer des mouvements" }) : null,
       writer() && comptesSynthese(e, 6).some(x => ecartSuspect(x) && x.ecart > blc().seuil) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSoupcon(e), text: "Déclaration de soupçon" }) : null) : null);
+}
+/* ---------- Relevés et mouvements : vue d'ensemble ---------- */
+// Tous les relevés d'une entreprise mis bout à bout, jour par jour : chaque relevé (son solde), les
+// mouvements lus, et entre deux relevés la variation du solde que les mouvements lus n'expliquent pas.
+// Une alerte tirée du compte ouvre cette vue sur sa période, les mouvements en cause surlignés.
+const signe = v => (v > 0 ? "+" : v < 0 ? "−" : "") + money(Math.abs(v));
+const LECTURES = { capture: "Capture lue par le guichet", texte: "Texte collé", saisie: "Saisi à la main" };
+// Entre chaque relevé et le précédent : variation du solde, mouvements lus, part non vue.
+function chaineReleves(e) {
+  return mvtMemo("ch:" + (e.id || norm(e.nom)), () => {
+    const rl = relevesOf(e).slice().reverse(), out = [];
+    let q = null;
+    for (const r of rl) {
+      const T = new Date(r.at).getTime();
+      if (!Number.isFinite(T) || !Number.isFinite(Number(r.montant))) continue;
+      if (q && T - q.T >= 6e4) {
+        const mv = mvtsRel(r), vus = mv.filter(m => m.t > q.T), lus = vus.reduce((s, m) => s + m.montant, 0);
+        const delta = Number(r.montant) - Number(q.r.montant), complet = mv.length > 0 && mv[mv.length - 1].t <= q.T;
+        out.push({ q: q.r, r, Tq: q.T, T, delta, lus, nonVu: Math.round((delta - lus) * 100) / 100, complet, a: complet ? T : vus.length ? vus[vus.length - 1].t : T });
+      }
+      if (!q || T - q.T >= 6e4) q = { r, T };
+    }
+    return out;
+  });
+}
+function chaineTexte(c) {
+  if (!c) return "Premier relevé de cette entreprise : rien à comparer.";
+  const prec = `le relevé ${dossierNo("RC", c.q.id)} du ${fmtDateTime(new Date(c.Tq))}`;
+  if (Math.abs(c.nonVu) < 1) return `Concorde avec ${prec} : ${c.complet ? "tous les mouvements depuis sont lus" : "les mouvements lus expliquent toute la variation"} (${signe(c.delta)}).`;
+  if (c.complet) return `Ne concorde pas avec ${prec} : ${signe(c.nonVu)} d’écart alors que tous les mouvements depuis sont lus. Le solde ou un montant a sans doute été mal lu.`;
+  return `Depuis ${prec} : ${signe(c.delta)} sur le compte, dont ${signe(c.lus)} dans les mouvements lus et ${signe(c.nonVu)} non vus (avant le ${jjmm(c.a)}).`;
+}
+// Pourquoi le solde attendu d'une période ne se calcule pas.
+function sansAttendu(e, k, x) {
+  if (x.attendu != null) return "";
+  if (!x.cur.d) return "Pas de déclaration pour cette période.";
+  const pres = c => (c.declT != null ? "ni relevé à moins de 24 h du dépôt (" + fmtDateTime(new Date(c.declT)) + ")" : "ni relevé autour de la fin de période");
+  if (x.cur.pos == null) return x.cur.late ? "Pas de solde attendu : la déclaration est arrivée trop tard, son solde ne décrit plus la période." : `Pas de solde attendu : le solde au dépôt est inconnu (pas de solde déclaré, ${pres(x.cur)}).`;
+  if (x.prev.pos == null) return `Pas de solde attendu : il manque le solde de départ (${periodPlain(prevKey(k)).toLowerCase()} : pas de solde déclaré, ${pres(x.prev)}).`;
+  return "Pas de solde attendu : les deux soldes connus ne se suivent pas.";
+}
+// Alerte d'une déclaration tirée du compte : la vue des mouvements qui la fondent, ou null.
+function alerteMvtsFn(d, texte, back) {
+  const e = d && entOf(d);
+  if (!e || !e.id || !relevesOf(e).length || !isBlSignal(texte) || /^(Solde du compte non déclaré|Chiffre d’affaires par salarié)/.test(texte)) return null;
+  const s = mvtSignals(e).find(x => x.texte === texte);
+  if (s && !(s.mvts || []).length && s.rel) return () => openReleveVue(s.rel.id, back);
+  const filtre = /^(Recettes vues|Chiffre d’affaires multiplié|Gros encaissement|Dépôts répétés)/.test(texte) ? "entrees" : /^Salaires/.test(texte) ? "salaires" : /^Charges non retrouvées/.test(texte) ? "sorties" : "tous";
+  return () => openMouvements(e, { k: d.periode, filtre: s ? "tous" : filtre, focus: s ? s.mvts : null, depot: /^Solde déclaré inexact/.test(texte), titre: texte, back });
+}
+// Raisons d'alerte : celles tirées du compte s'ouvrent sur leurs mouvements.
+function reasonsEl(list, d, back, done) {
+  return h("div", { class: "reasons" + (done ? " done" : "") }, list.map(t => {
+    const fn = d ? alerteMvtsFn(d, t, back) : null;
+    return fn ? h("button", { class: "reason", type: "button", title: "Voir les mouvements du compte", onclick: fn }, t, h("span", { class: "reason-go", text: "Voir" })) : h("span", { class: "reason", text: t });
+  }));
+}
+// Signal de mouvement (fiche, recouvrement) : ses mouvements, ou le relevé qui le montre.
+function voirSignal(e, s, back) {
+  if (s.mvts && s.mvts.length) openMouvements(e, { focus: s.mvts, titre: s.texte, back });
+  else if (s.rel) openReleveVue(s.rel.id, back);
+  else openMouvements(e, { back });
+}
+function openMouvements(e, opts) {
+  opts = opts || {};
+  if (!e || !e.id) return;
+  const back = opts.back || null, self = o => openMouvements(e, Object.assign({}, opts, o));
+  const k = opts.k === undefined ? null : opts.k, filtre = opts.filtre || "tous";
+  const cles = new Set((opts.focus || []).map(mvtKey));
+  // Fenêtre : la période (d'un dépôt de déclaration au suivant), élargie aux mouvements visés.
+  let t0 = -Infinity, t1 = Infinity;
+  const f = k ? fenetreDecl(e, k) : null;
+  if (f) { t0 = f.t0; t1 = f.t1; }
+  if (cles.size) { const ts = opts.focus.map(m => m.t); t0 = Math.min(t0, Math.min(...ts) - 36e5); t1 = Math.max(t1, Math.max(...ts) + 36e5); }
+  const dans = t => t > t0 && t <= t1;
+  const sus = new Set(mvtSignalsActifs(e).flatMap(s => (s.mvts || []).map(mvtKey)));
+  const tous = mvtsOf(e).filter(m => dans(m.t)), ok = {
+    tous: () => true, entrees: m => m.montant > 0, sorties: m => m.montant < 0, salaires: m => m.montant < 0 && SALAIRE_RE.test(m.libelle),
+    especes: m => CASH_RE.test(m.libelle), suspects: m => sus.has(mvtKey(m)) || cles.has(mvtKey(m)) }[filtre] || (() => true);
+  const mvs = tous.filter(ok);
+  const rels = relevesOf(e).filter(r => dans(new Date(r.at).getTime()));
+  const trous = chaineReleves(e).filter(c => Math.abs(c.nonVu) >= 1 && c.a > t0 && c.Tq < t1);
+  // Dépôts des déclarations : le solde déclaré face au solde reconstitué à ce moment.
+  const deps = declsOf(e).filter(x => dStatus(x) !== "rejetee" && x.depotAt).map(x => ({ x, t: new Date(x.depotAt).getTime() })).filter(y => Number.isFinite(y.t) && y.t >= t0 && y.t <= t1);
+  // Lignes du tableau, de la plus récente à la plus ancienne : relevé (son solde), mouvements, part non vue.
+  const items = mvs.map(m => ({ t: m.t, o: 0, m }))
+    .concat(rels.map(r => ({ t: new Date(r.at).getTime(), o: 1, r })))
+    .concat(deps.map(y => ({ t: y.t, o: 3, dep: y.x })))
+    .concat(trous.map(c => ({ t: c.complet ? c.T : c.a, o: c.complet ? 2 : -1, c })))
+    .sort((a, b) => b.t - a.t || b.o - a.o);
+  const jour = t => new Date(t).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const rows = [];
+  let j = null, nAff = 0;
+  const lim = opts.tout ? Infinity : 250;
+  for (const it of items) {
+    if (nAff >= lim) break;
+    const jj = jour(it.t);
+    if (jj !== j) {
+      j = jj;
+      const duJour = mvs.filter(m => jour(m.t) === jj);
+      rows.push(h("tr", { class: "mv-day" }, h("td", { colspan: "4" }, h("span", { text: capFirst(jj) }), duJour.length ? h("span", { class: "small-meta", style: "display:inline;margin-left:8px", text: `${duJour.length} mouvement${plural(duJour.length)} · ${signe(duJour.reduce((s, m) => s + m.montant, 0))}` }) : null)));
+    }
+    if (it.m) {
+      const m = it.m, vise = cles.has(mvtKey(m)), s = sus.has(mvtKey(m));
+      nAff++;
+      rows.push(h("tr", { class: vise ? "mv-focus" : s ? "mv-sus" : null, title: vise ? "Mouvement en cause" : s ? "Mouvement suspect" : null },
+        h("td", { class: "mono", text: `${pad(new Date(m.t).getHours())}:${pad(new Date(m.t).getMinutes())}` }),
+        h("td", { class: "mv-lib", text: m.libelle || "—" }),
+        h("td", { class: "num" }, h("span", { class: "mv-amt " + (m.montant < 0 ? "out" : "in"), text: (m.montant > 0 ? "+" : "") + money(m.montant) })),
+        h("td", {}, m.r ? h("button", { class: "linkbtn small-link", type: "button", onclick: () => openReleveVue(m.r.id, () => self({})), text: dossierNo("RC", m.r.id) }) : null)));
+    } else if (it.dep) {
+      const x = it.dep, ex = soldeA(e, it.t), vise = opts.depot && x.periode === k;
+      rows.push(h("tr", { class: "mv-rel mv-dep" + (vise ? " mv-focus" : "") }, h("td", { class: "mono", text: `${pad(new Date(it.t).getHours())}:${pad(new Date(it.t).getMinutes())}` }),
+        h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(x.id), text: `Dépôt de la déclaration · ${periodPlain(x.periode).toLowerCase()}` }),
+          ex && hasSolde(x) ? h("span", { class: "small-meta", text: `Solde reconstitué à ce moment avec le relevé ${dossierNo("RC", ex.r.id)} : ${money(ex.v)}` }) : null),
+        h("td", { class: "num mono", style: "font-weight:700", text: hasSolde(x) ? money(x.solde) : "—" }), h("td", { class: "small-meta", text: hasSolde(x) ? "déclaré" : "solde non déclaré" })));
+    } else if (it.r) {
+      const r = it.r;
+      rows.push(h("tr", { class: "mv-rel" }, h("td", { class: "mono", text: `${pad(new Date(it.t).getHours())}:${pad(new Date(it.t).getMinutes())}` }),
+        h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openReleveVue(r.id, () => self({})), text: `Relevé ${dossierNo("RC", r.id)}` }), h("span", { class: "small-meta", style: "display:inline;margin-left:6px", text: `par ${r.agent || "—"}${mvtsRel(r).length ? "" : " · solde seul"}` })),
+        h("td", { class: "num mono", style: "font-weight:700", text: money(r.montant) }), h("td", { class: "small-meta", text: "solde" })));
+    } else {
+      const c = it.c, ops = paiementsListe(e, c.Tq - 30 * 6e4, c.a + 6e4);
+      rows.push(h("tr", { class: "mv-gap" + (Math.abs(c.nonVu) > blc().seuil ? " big" : "") }, h("td", { colspan: "4" },
+        h("strong", { text: c.complet ? `Ne concorde pas : ${signe(c.nonVu)}` : `Non relevé : ${signe(c.nonVu)}` }),
+        h("span", { text: c.complet ? " d’écart avec le relevé précédent alors que tous les mouvements sont lus (solde ou montant mal lu ?)." : ` entre le relevé du ${jjmm(c.Tq)} et le ${jjmm(c.a)} : mouvements que les relevés ne montrent pas.` }),
+        ops.length ? h("div", { class: "small-meta", text: "Connu du guichet à ce moment : " + ops.map(x => `${x.lib} (${signe(-x.v)}, ${jjmm(x.t)})`).join(" ; ") + "." }) : null)));
+    }
+  }
+  // Résumé : ce qui a été lu sur la fenêtre, face à la déclaration de la période.
+  const d = k ? periodDecl(e, k) : null, v = d ? retenuDe(d) : null;
+  const recus = tous.filter(m => m.montant > 0 && !NON_RECETTE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
+  const sal = -tous.filter(m => m.montant < 0 && SALAIRE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
+  const autres = -tous.filter(m => m.montant < 0 && !SALAIRE_RE.test(m.libelle)).reduce((s, m) => s + m.montant, 0);
+  const nonVu = trous.reduce((s, c) => s + c.nonVu, 0);
+  const connus = [...new Map(trous.flatMap(c => paiementsListe(e, c.Tq - 30 * 6e4, c.a + 6e4)).map(x => [x.lib + x.t, x])).values()], connuV = -connus.reduce((s, x) => s + x.v, 0);
+  const couv = Number.isFinite(t0) && Number.isFinite(t1) ? couvert(e, t0, Math.min(t1, Date.now())) : false;
+  const resume = h("div", {},
+    kv([d ? ["Déclaré", `chiffre d’affaires ${money(v.ca)} · charges ${money(v.ch)} · salaires ${money(v.ms)}`] : null,
+      ["Vu sur les relevés", `${tous.length} mouvement${plural(tous.length)} : recettes ${money(recus)} · salaires ${money(sal)} · autres sorties ${money(autres)}`],
+      trous.length ? ["Non vu entre deux relevés", h("span", { class: Math.abs(nonVu) > blc().seuil ? "neg" : null, style: Math.abs(nonVu) > blc().seuil ? "font-weight:700" : null, text: `${signe(nonVu)} (${trous.length} fois)${connus.length ? `, dont ${signe(connuV)} connus du guichet (${connus.map(x => x.lib.charAt(0).toLowerCase() + x.lib.slice(1)).join(", ")})` : ""}` })] : null]),
+    h("p", { class: "hint", style: "margin:6px 0 0", text: couv ? "Toute la période est relevée : aucun mouvement ne manque." : "La tablette ne montre que ses derniers mouvements : ce qui a bougé entre deux relevés sans être lu apparaît en « Non relevé », à sa place dans la liste. Relevez plus souvent pour tout voir." }));
+  // Choix de la période et du filtre.
+  const per = h("select", { id: "mv-per", "aria-label": "Période" }, h("option", { value: "", text: "Tout l’historique" }),
+    keysEnding(keyOf(new Date()), 8).reverse().map(x => h("option", { value: x, text: periodLabel(x) })));
+  per.value = k || "";
+  per.addEventListener("change", () => self({ k: per.value || null, focus: null, titre: null, tout: false }));
+  const chips = h("div", { class: "seg mv-filtres", role: "group", "aria-label": "Mouvements affichés" }, [["tous", "Tous"], ["entrees", "Entrées"], ["sorties", "Sorties"], ["salaires", "Salaires"], ["especes", "Espèces"], ["suspects", cles.size ? "En cause et suspects" : "Suspects"]].map(([id, lib]) => {
+    const n = tous.filter({ tous: () => true, entrees: m => m.montant > 0, sorties: m => m.montant < 0, salaires: m => m.montant < 0 && SALAIRE_RE.test(m.libelle), especes: m => CASH_RE.test(m.libelle), suspects: m => sus.has(mvtKey(m)) || cles.has(mvtKey(m)) }[id]).length;
+    return h("button", { type: "button", "aria-pressed": String(id === filtre), onclick: () => self({ filtre: id, tout: false }) }, lib, h("span", { class: "count", text: String(n) }));
+  }));
+  openDialog({
+    eyebrow: `Compte · ${e.nom}`, title: k ? `Relevés et mouvements · ${periodPlain(k).toLowerCase()}` : "Relevés et mouvements", wide: true,
+    body: [
+      opts.titre ? h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Alerte : " }), opts.titre, cles.size ? " Les mouvements en cause sont surlignés." : "")) : null,
+      h("div", { class: "paste-row" }, h("label", { for: "mv-per", class: "hint", text: "Période" }), per, f ? h("span", { class: "hint", text: `du ${fmtDateTime(new Date(f.t0))} au ${fmtDateTime(new Date(f.t1))}${periodDecl(e, k) ? " (d’un dépôt de déclaration au suivant)" : ""}` }) : null),
+      resume, chips,
+      rows.length ? h("div", { class: "tbl-wrap", style: "margin-top:0" }, h("table", { class: "compact mv-tab" },
+        h("thead", {}, h("tr", {}, ["Heure", "Mouvement", "Montant", "Relevé"].map((t, i) => h("th", { class: i === 2 ? "num" : null, text: t })))),
+        h("tbody", {}, rows))) : h("p", { class: "muted", style: "margin:0", text: relevesOf(e).length ? "Aucun mouvement relevé sur cette période." : "Aucun relevé de compte pour cette entreprise." }),
+      nAff >= lim && mvs.length > lim ? h("button", { class: "linkbtn", type: "button", onclick: () => self({ tout: true }), text: `Afficher les ${mvs.length - lim} mouvements plus anciens` }) : null],
+    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }) : null, h("span", { class: "spacer" }),
+      canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e, () => self({})), text: "Nouveau relevé" }) : null,
+      h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean)
+  });
+  setTimeout(() => { const x = $("#dlg tr.mv-focus"); if (x && x.scrollIntoView) x.scrollIntoView({ block: "center" }); }, 40);
+}
+// Un relevé enregistré : sa capture, son solde, ses mouvements avec le solde après chacun, et ce qu'il dit
+// face au relevé précédent.
+function openReleveVue(rid, back) {
+  const r = (S.releves || []).find(x => x.id === rid);
+  if (!r) { toast("Ce relevé n’existe plus.", true); if (back) back(); return; }
+  const e = entOf(r), mv = mvtsRel(r), self = () => openReleveVue(rid, back), c = chaineReleves(e).find(x => x.r.id === r.id) || null;
+  const sus = new Set(mvtSignalsActifs(e).flatMap(s => (s.mvts || []).map(mvtKey)));
+  let apres = Number(r.montant);
+  const rows = mv.map(m => { const sa = apres; apres -= m.montant; return h("tr", { class: sus.has(mvtKey(m)) ? "mv-sus" : null, title: sus.has(mvtKey(m)) ? "Mouvement suspect" : null },
+    h("td", { class: "mono", text: jjmm(m.t) }), h("td", { class: "mv-lib", text: m.libelle || "—" }),
+    h("td", { class: "num" }, h("span", { class: "mv-amt " + (m.montant < 0 ? "out" : "in"), text: (m.montant > 0 ? "+" : "") + money(m.montant) })),
+    h("td", { class: "num mono", text: money(Math.round(sa)) })); });
+  const del = writer() ? h("button", { class: "btn danger small", type: "button", text: "Retirer le relevé" }) : null;
+  if (del) del.addEventListener("click", async () => {
+    if (del.dataset.ok !== "1") { del.dataset.ok = "1"; del.textContent = "Confirmer le retrait"; return; }
+    del.disabled = true;
+    if (await write(() => S.db.doc("releves/" + r.id).delete())) { toast("Relevé retiré."); (back || closeDialog)(); } else del.disabled = false;
+  });
+  openDialog({
+    eyebrow: `Compte · ${e.nom || r.entrepriseNom}`, title: `Relevé ${dossierNo("RC", r.id)}`, wide: true,
+    body: [h("div", { class: "rv-cap" },
+      h("div", { style: "display:grid;gap:10px;min-width:0" },
+        kv([["Solde affiché", money(r.montant), "num"], ["Relevé le", fmtDateTime(new Date(r.at))], ["Par", r.agent || "—"], ["Lecture", LECTURES[r.lecture] || "—"],
+          r.decalageH ? ["Heure de la tablette", `avance de ${r.decalageH} h retirée`] : null, r.rib ? ["RIB", r.rib] : null, r.note ? ["Observation", r.note] : null]),
+        h("p", { class: "hint " + (c && Math.abs(c.nonVu) >= 1 ? (c.complet || Math.abs(c.nonVu) > blc().seuil ? "conc-bad" : "") : c ? "conc-ok" : ""), style: "margin:0", text: chaineTexte(c) })),
+      proofEl(r.preuve)),
+      mv.length ? sec(`${mv.length} mouvement${plural(mv.length)} lu${plural(mv.length)}`, h("div", { class: "tbl-wrap", style: "margin-top:4px" }, h("table", { class: "compact mv-tab" },
+        h("thead", {}, h("tr", {}, ["Date", "Mouvement", "Montant", "Solde après"].map((t, i) => h("th", { class: i >= 2 ? "num" : null, text: t })))),
+        h("tbody", {}, rows))),
+        h("p", { class: "hint", style: "margin:6px 0 0", text: `Solde avant le premier mouvement lu : ${money(Math.round(apres))}.` }))
+        : h("p", { class: "muted", style: "margin:0", text: "Solde seul : aucun mouvement relevé avec." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Fermer" }), h("span", { class: "spacer" }), del,
+      h("button", { class: "btn small", type: "button", onclick: () => openMouvements(e, { back: self }), text: "Tous les relevés et mouvements" })].filter(Boolean)
+  });
 }
 /* ---------- Risque et relevés surprises ---------- */
 // Score de risque d'une entreprise : ce qui doit faire passer son compte en priorité. Avec « avant »,
@@ -15821,7 +16045,8 @@ function renderComptes() {
         ag && !x.fait ? h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(x.e), text: "Relevé de compte" })) : null)))) : null,
     list.length ? h("ul", { class: "rc-list" }, list.slice(0, S.rcAll.bl ? 200 : RC_LIMIT).map(x => h("li", {},
       h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), " ", pingTag(x.e),
-        h("div", { class: "reasons", style: "margin-top:4px" }, [...new Set(x.rows.flatMap(r => r.sig))].slice(0, 4).map(t => h("span", { class: "reason", text: t })))),
+        (() => { const vu = new Set(), l = []; for (const r of x.rows) for (const t of r.sig) if (!vu.has(t) && l.length < 4) { vu.add(t); l.push([t, r.d]); }
+          return h("div", { class: "reasons", style: "margin-top:4px" }, l.map(([t, d]) => { const fn = alerteMvtsFn(d, t, null); return fn ? h("button", { class: "reason", type: "button", title: "Voir les mouvements du compte", onclick: fn }, t, h("span", { class: "reason-go", text: "Voir" })) : h("span", { class: "reason", text: t }); })); })()),
       h("div", { class: "rc-state" }, x.total > 0 ? h("strong", { class: "mono", text: "+" + money(x.total) }) : null, soupconsOf(x.e)[0] ? chip([`Soupçon ${dossierNo("DS", soupconsOf(x.e)[0].id)}`, "bad"]) : null),
       ag ? h("div", { class: "row-actions" },
         h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(x.e), text: "Relevé de compte" }),
@@ -15831,8 +16056,8 @@ function renderComptes() {
     mvs.length ? h("div", { style: "margin-top:12px" }, h("h4", { class: "mini-title", text: `Mouvements suspects · ${nbMvs} sur les deux dernières semaines` }),
       h("ul", { class: "rc-list" }, mvs.slice(0, S.rcAll.mv ? 200 : RC_LIMIT).map(({ e, sig }) => { const rs = [...new Set(sig.flatMap(x => x.mvts.map(m => m.r).concat(x.rel ? [x.rel] : []).filter(Boolean)))]; return h("li", {},
         h("div", { class: "rc-main" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(e), text: e.nom }), " ", pingTag(e),
-          h("div", { class: "reasons", style: "margin-top:4px" }, sig.slice(0, 4).map(x => h("span", { class: "reason", text: x.texte }))),
-          rs.length ? h("div", { class: "hint", style: "margin-top:4px", text: `Vu${rs.length > 1 ? "s" : ""} sur ${rs.length > 1 ? "les relevés" : "le relevé"} ${rs.map(r => `${dossierNo("RC", r.id)}${r.agent ? " (" + r.agent + ")" : ""}`).join(", ")}` }) : null),
+          h("div", { class: "reasons", style: "margin-top:4px" }, sig.slice(0, 4).map(x => h("button", { class: "reason", type: "button", title: "Voir les mouvements", onclick: () => voirSignal(e, x, null) }, x.texte, h("span", { class: "reason-go", text: "Voir" })))),
+          rs.length ? h("div", { class: "hint", style: "margin-top:4px" }, `Vu${rs.length > 1 ? "s" : ""} sur ${rs.length > 1 ? "les relevés" : "le relevé"} `, ...rs.flatMap((r, i) => [i ? ", " : "", h("button", { class: "linkbtn", type: "button", onclick: () => openReleveVue(r.id), text: dossierNo("RC", r.id) }), r.agent ? ` (${r.agent})` : ""])) : null),
         h("div", { class: "rc-state" }),
         ag ? h("div", { class: "row-actions" },
           h("button", { class: "btn ghost small", type: "button", onclick: () => openReleve(e), text: "Relevé de compte" }),
@@ -15841,7 +16066,7 @@ function renderComptes() {
       rcMore("mv", mvs.length)) : null,
     rl.length || ds.length ? h("div", { class: "dash-grid", style: "margin-top:12px" },
       h("div", {}, h("h4", { class: "mini-title", text: "Derniers relevés" }), rl.length ? h("ul", { class: "ent-list" }, rl.map(r => h("li", {},
-        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(entOf(r)), text: `${dossierNo("RC", r.id)} · ${r.entrepriseNom}` }), h("span", { class: "meta", text: `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}${mvtsRel(r).length ? ` · ${mvtsRel(r).length} mouvements` : ""}` })), h("span", {}), h("span", {})))) : h("p", { class: "muted", text: "Aucun relevé." })),
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openReleveVue(r.id), text: `${dossierNo("RC", r.id)} · ${r.entrepriseNom}` }), h("span", { class: "meta", text: `${money(r.montant)} · ${fmtDateTime(new Date(r.at))} · ${r.agent || "—"}${mvtsRel(r).length ? ` · ${mvtsRel(r).length} mouvements` : ""}` })), h("span", {}), h("span", {})))) : h("p", { class: "muted", text: "Aucun relevé." })),
       h("div", {}, h("h4", { class: "mini-title", text: "Déclarations de soupçon" }), ds.length ? h("ul", { class: "ent-list" }, ds.map(x => h("li", {},
         h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => showDocImage(soupconDoc(x)), text: `${dossierNo("DS", x.id)} · ${x.entrepriseNom}` }), h("span", { class: "meta", text: `${money(x.montant)} · ${fmtDate(new Date(x.at))}${x.byNom ? " · " + x.byNom : ""}` })), chip(SOUPCON_STAT[x.statut] || SOUPCON_STAT.transmise), h("span", {})))) : h("p", { class: "muted", text: "Aucune déclaration de soupçon." }))) : null);
 }
