@@ -13884,12 +13884,22 @@ function openJustice(e) {
   const dest = h("input", { id: "j-dest", autocomplete: "off" });
   dest.value = c.justiceDestinataire || "";
   const force = h("input", { type: "checkbox", id: "j-force" });
+  // Un signalement de délit ne prévient pas l'entreprise : c'est à la justice de décider quand l'informer.
+  // Pour le seul recouvrement forcé, la mention reste cochée d'office : l'entreprise doit savoir qu'elle va être saisie.
+  const pingOk = !!(entMention(e) && hookFor("justice"));
+  const qInputs = qBoxes.map(l => l.querySelector("input"));
+  const delitsCoches = () => Object.keys(QUALIFS_J).some((k, i) => k !== "impaye" && qInputs[i].checked);
+  const ping = h("input", { type: "checkbox", id: "j-ping" }); ping.checked = !delitsCoches();
+  ping.addEventListener("change", () => { ping._touche = true; });
+  qInputs.forEach(x => x.addEventListener("change", () => { if (!ping._touche) ping.checked = !delitsCoches(); }));
+  const pingBox = pingOk ? h("div", { class: "field" }, h("label", { class: "switch", for: "j-ping" }, ping, "Mentionner le patron sur Discord"),
+    h("span", { class: "hint", text: "Il est prévenu et voit le dossier avec ses pièces. Décoché d’office pour un signalement de délit : c’est à la justice de décider quand l’informer." })) : null;
   const err = h("span", { class: "err", "aria-live": "polite" });
   const gather = () => ({
     entrepriseId: e.id || null, entrepriseNom: e.nom, patron: e.patron || "", at: nowISO(), by: S.uid || null, byNom: S.agentName || "",
     montant: f.total, items: f.debts, qualifs: Object.keys(QUALIFS_J).filter(k => $("#jq-" + k).checked), mesures: Object.keys(MESURES_J).filter(k => $("#jm-" + k).checked),
     expose: exp.value.trim(), destinataire: dest.value.trim() || c.justiceDestinataire, statut: "transmis", suites: [], denonciation: denon,
-    sommesEnCause: Math.max(0, Math.round(Number(cause.value) || 0))
+    sommesEnCause: Math.max(0, Math.round(Number(cause.value) || 0)), mentionEntreprise: pingOk && ping.checked
   });
   const valid = t => {
     if (!t.qualifs.length) { err.textContent = "Cochez au moins une qualification."; return false; }
@@ -13916,10 +13926,10 @@ function openJustice(e) {
     let pdf = null;
     try { pdf = await buildJusticePdf(full, e); } catch (x) { pdf = null; }
     const name = pdfName(full, e);
-    const mjs = justiceMentions();
-    const text = `${mjs.length ? mjs.join(" ") + " " : ""}**Dossier transmis à la justice ${dossierNo("TJ", ref.id)}** · ${e.nom}${entMention(e) ? " (" + entMention(e) + ")" : ""}\n${!(t.montant > 0) && t.sommesEnCause > 0 ? `Sommes en cause : **${money(t.sommesEnCause)}** (aucune créance fiscale à ce jour)` : `Somme à recouvrer : **${money(t.montant)}**${t.sommesEnCause > 0 ? `\nSommes en cause : **${money(t.sommesEnCause)}**` : ""}`}\nQualification : ${t.qualifs.map(q => QUALIFS_J[q].split(" :")[0].split(" (")[0].toLowerCase()).join(", ")}\nMesures sollicitées : ${t.mesures.map(m => MESURES_J[m].split(",")[0].toLowerCase()).join(" ; ")}\nLe dossier complet est joint en PDF.\n— Préfecture de police · Direction des impôts et cotisations`;
+    const mjs = justiceMentions(), em = t.mentionEntreprise ? entMention(e) : "";
+    const text = `${mjs.length ? mjs.join(" ") + " " : ""}**Dossier transmis à la justice ${dossierNo("TJ", ref.id)}** · ${e.nom}${em ? " (" + em + ")" : ""}\n${!(t.montant > 0) && t.sommesEnCause > 0 ? `Sommes en cause : **${money(t.sommesEnCause)}** (aucune créance fiscale à ce jour)` : `Somme à recouvrer : **${money(t.montant)}**${t.sommesEnCause > 0 ? `\nSommes en cause : **${money(t.sommesEnCause)}**` : ""}`}\nQualification : ${t.qualifs.map(q => QUALIFS_J[q].split(" :")[0].split(" (")[0].toLowerCase()).join(", ")}\nMesures sollicitées : ${t.mesures.map(m => MESURES_J[m].split(",")[0].toLowerCase()).join(" ; ")}\nLe dossier complet est joint en PDF.\n— Préfecture de police · Direction des impôts et cotisations`;
     if (hookFor("justice") && pdf) {
-      const r = await postDiscord("justice", { content: text, mentions: [...mjs, entMention(e)].filter(Boolean), files: [{ blob: pdf, name }] });
+      const r = await postDiscord("justice", { content: text, mentions: [...mjs, em].filter(Boolean), files: [{ blob: pdf, name }] });
       toast(r.ok ? "Dossier transmis à la justice sur Discord." : "Dossier enregistré, mais Discord a refusé l’envoi : " + r.error, !r.ok);
     } else toast("Dossier enregistré : le PDF est téléchargé, transmettez-le à la justice.");
     if (pdf) { try { await S.downloads.save({ filename: name, data: pdf }); } catch (x) { /* téléchargement refusé */ } }
@@ -13933,7 +13943,7 @@ function openJustice(e) {
       h("div", { class: "dlg-cols" }, sec("Qualification", h("div", { class: "checks-col" }, qBoxes)), sec("Mesures sollicitées", h("div", { class: "checks-col" }, mBoxes))),
       h("div", { class: "field" }, h("label", { for: "j-cause", text: "Sommes d’origine suspecte en cause" }), h("div", { class: "money", "data-cur": cur() }, cause),
         h("span", { class: "hint", text: "Montant des opérations constatées, par exemple les sommes blanchies. Il figure en tête du dossier ; il ne s’ajoute pas à la somme à recouvrer." })),
-      h("div", { class: "field" }, h("label", { for: "j-dest", text: "Destinataire" }), dest),
+      h("div", { class: "field" }, h("label", { for: "j-dest", text: "Destinataire" }), dest), pingBox,
       h("div", { class: "field" }, h("label", { for: "j-expose", text: "Exposé des faits" }), exp),
       h("p", { class: "hint", style: "margin:0", text: "Le PDF reprend l’identité de l’entreprise, les créances, chaque relance, mise en demeure et saisie, les contrôles fiscaux avec leurs pièces, l’historique des déclarations, l’exposé, les mesures et les références juridiques." }), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }),
