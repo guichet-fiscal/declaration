@@ -723,6 +723,7 @@ header.top{position:relative}
 .dlg-peers{font-size:12px;color:var(--accent);margin-top:3px;font-weight:600}
 .dlg-peers::before{content:"● ";color:var(--ok)}
 .live-stale{border-left-color:var(--accent);align-items:center;flex-wrap:wrap}
+.notice.reprise,.notice.brouillons{border-left-color:var(--accent);align-items:center;flex-wrap:wrap}
 #foot-sync.is-live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px;animation:pulse 2.4s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){#foot-sync.is-live::before{animation:none}}
@@ -1619,6 +1620,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <div id="d-receipt" hidden></div>
     <div class="card" id="d-online" hidden></div>
     <div class="notice edit-banner" id="d-editing" hidden></div>
+    <div class="notice brouillons" id="d-brouillons" hidden></div>
     <div class="form-grid">
       <div>
         <details class="paste" id="d-paste-box" open>
@@ -3025,7 +3027,7 @@ function envCap(service, key) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function write(fn) {
   for (let attempt = 0; attempt < 2; attempt++) {
-    try { await fn(); return true; }
+    try { await fn(); if (S.apresEcriture) S.apresEcriture(); return true; }
     catch (e) {
       const code = e && e.code;
       if (code === "unavailable" && attempt === 0) { await sleep(400 + Math.random() * 600); continue; }
@@ -5839,13 +5841,13 @@ function openDialog({ eyebrow, title, stampEl, body, foot, wide }) {
   dlg.replaceChildren(...[
     h("div", { class: "dlg-head" },
       h("div", { class: "dlg-titles" }, eyebrow ? h("div", { class: "eyebrow", text: eyebrow }) : null, h("h3", { class: "dlg-title", id: "dlg-title", text: title })),
-      h("div", { class: "dlg-side" }, stampEl || null, h("button", { class: "icon-btn", type: "button", "aria-label": "Fermer", onclick: closeDialog, text: "×" }))),
+      h("div", { class: "dlg-side" }, stampEl || null, h("button", { class: "icon-btn", type: "button", "aria-label": "Fermer", onclick: () => fermerFenetre(), text: "×" }))),
     h("div", { class: "dlg-body" }, body),
     foot && foot.length ? h("div", { class: "dlg-foot" }, foot) : null].filter(Boolean));
   if (!dlg.open) { try { dlg.showModal(); } catch (e) { dlg.setAttribute("open", ""); } }
 }
 function closeDialog() { try { dlg.close(); } catch (e) { dlg.removeAttribute("open"); } }
-dlg.addEventListener("click", e => { if (e.target === dlg) closeDialog(); });
+dlg.addEventListener("click", e => { if (e.target === dlg) fermerFenetre(); });
 const kv = pairs => h("dl", { class: "kv" }, pairs.filter(Boolean).flatMap(([k, v, cls]) => [h("dt", { class: cls === "tot" ? "tot-dt" : null, text: k }), h("dd", { class: cls === "tot" ? "tot-dd num" : (cls || null) }, v)]));
 const sec = (title, ...kids) => h("div", { class: "dlg-sec" }, h("h4", { text: title }), kids);
 
@@ -6763,6 +6765,7 @@ async function submitDecl(e) {
       h("div", { class: "muted", text: `${periodLabel(key)} · montant calculé ${money(body.total)}${late ? " (majoré)" : ""}${body.exoneration ? ` · ${money(exoMontant(body))} d’exonération` : ""}${mecMontant(body) > 0 ? ` · ${money(mecMontant(body))} de réduction des partenaires` : mecMontant(body) < 0 ? ` · ${money(-mecMontant(body))} de réduction reprise` : ""}${dup ? " · rectificative" : ""}${replNote}` })),
     h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(ref.id), text: "Ouvrir le dossier" }));
   rc.hidden = false;
+  if (S.declBrouillonId) { retirerBrouillon(S.declBrouillonId); S.declBrouillonId = null; }
   $("#form-decl").reset();
   if (salMode()) setSalaries([]);
   $("#d-paste").value = "";
@@ -8938,6 +8941,7 @@ function startEditDecl(d, motif) {
   if (ec) { toast("Supprimez d’abord l’échéancier de ce dossier pour en modifier les montants.", true); return; }
   if (dStatus(d) !== "soumise" && !motif) { demanderMotifModif(d); return; }
   S.editMotif = motif || null;
+  mettreDeCoteDecl();
   closeDialog();
   showTab("declaration");
   S.editDecl = d.id;
@@ -9941,6 +9945,7 @@ function startTaxOffice(e, key, relance) {
   if (!key) return;
   if (isClosed(key)) { toast(closedNote(key) + " : la Direction doit la rouvrir avant d’y établir une imposition.", true); return; }
   const prev = declsOf(e).filter(d => dStatus(d) !== "rejetee" && d.periode !== key).sort((a, b) => String(b.periode).localeCompare(String(a.periode)))[0];
+  mettreDeCoteDecl();
   closeDialog();
   showTab("declaration");
   S.editDecl = null;
@@ -15526,7 +15531,8 @@ function openReleve(e, back, image) {
     const champ = tg && (tg.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName));
     if (t.trim() && (!champ || (t.match(/\d{1,2}\/\d{1,2}\D{0,12}\d{1,2}\s?[:h]\s?\d{2}/g) || []).length >= 2)) { ev.preventDefault(); lireTexte(t); }
   };
-  if (collageReleve && collageReleve.url) URL.revokeObjectURL(collageReleve.url());
+  // La capture d'un relevé gardé (fenêtre fermée sans enregistrer) reste affichable à sa reprise.
+  if (collageReleve && collageReleve.url && !capteGardee(collageReleve)) URL.revokeObjectURL(collageReleve.url());
   collageReleve = { zone, fn: surCollage, url: () => url0 };
   zone.addEventListener("dragover", ev => { ev.preventDefault(); zone.classList.add("on"); });
   zone.addEventListener("dragleave", () => zone.classList.remove("on"));
@@ -15839,7 +15845,7 @@ function openMouvements(e, opts) {
       trous.length ? ["Non vu entre deux relevés", h("span", { class: Math.abs(nonVu) > blc().seuil ? "neg" : null, style: Math.abs(nonVu) > blc().seuil ? "font-weight:700" : null, text: `${signe(nonVu)} (${trous.length} fois)${connus.length ? `, dont ${signe(connuV)} connus du guichet (${connus.map(x => x.lib.charAt(0).toLowerCase() + x.lib.slice(1)).join(", ")})` : ""}` })] : null]),
     h("p", { class: "hint", style: "margin:6px 0 0", text: couv ? "Toute la période est relevée : aucun mouvement ne manque." : "La tablette ne montre que ses derniers mouvements : ce qui a bougé entre deux relevés sans être lu apparaît en « Non relevé », à sa place dans la liste. Relevez plus souvent pour tout voir." }));
   // Choix de la période et du filtre.
-  const per = h("select", { id: "mv-per", "aria-label": "Période" }, h("option", { value: "", text: "Tout l’historique" }),
+  const per = h("select", { id: "mv-per", "aria-label": "Période", "data-vue": "1" }, h("option", { value: "", text: "Tout l’historique" }),
     keysEnding(keyOf(new Date()), 8).reverse().map(x => h("option", { value: x, text: periodLabel(x) })));
   per.value = k || "";
   per.addEventListener("change", () => self({ k: per.value || null, focus: null, titre: null, tout: false }));
@@ -16960,15 +16966,145 @@ async function whoChanged(path, by) {
 }
 const joinNames = list => { const u = [...new Set(list.filter(Boolean))]; return u.length <= 1 ? (u[0] || "") : u.slice(0, -1).join(", ") + " et " + u[u.length - 1]; };
 
+/* ---------- Saisie gardée quand une fenêtre se ferme ---------- */
+// Une fenêtre fermée en cliquant à côté, avec Échap ou la croix, ou remplacée par une autre (un dossier
+// lié, « Retour »), garde ce qui y a été saisi : rouverte, elle propose de reprendre la saisie telle
+// quelle (cases, lignes ajoutées, capture collée). Gardé dans la page, le temps de la session.
+const dlgStash = new Map(), STASH_MAX = 8, STASH_TTL = 3 * 36e5;
+const dlgKey = o => `${o.eyebrow || ""}|${o.title || ""}`;
+const ilYa = at => { const m = Math.round((Date.now() - at) / 6e4); return m < 1 ? "à l’instant" : m < 60 ? `il y a ${m} min` : `il y a ${Math.floor(m / 60)} h ${pad(m % 60)}`; };
+function stashDialog() {
+  if (!dlg.open || !dlg._dirty || !dlg._key) return false;
+  const collage = collageReleve && collageReleve.zone && dlg.contains(collageReleve.zone) ? collageReleve : null;
+  dlgStash.delete(dlg._key);
+  dlgStash.set(dlg._key, { nodes: [...dlg.childNodes], wide: dlg.classList.contains("wide"), live: dlg._live, openedAt: dlg._openedAt, at: Date.now(), collage });
+  while (dlgStash.size > STASH_MAX) dlgStash.delete(dlgStash.keys().next().value);
+  return true;
+}
+const capteGardee = c => [...dlgStash.values()].some(x => x.collage === c);
+function fermerFenetre() {
+  const garde = stashDialog();
+  closeDialog();
+  if (garde) toast("Fenêtre fermée sans enregistrer : rouvrez-la pour reprendre votre saisie.");
+}
+dlg.addEventListener("cancel", () => { if (stashDialog()) toast("Fenêtre fermée sans enregistrer : rouvrez-la pour reprendre votre saisie."); });
+function proposerReprise(key) {
+  const s = dlgStash.get(key), body = $(".dlg-body", dlg);
+  if (!s || !body) return;
+  if (Date.now() - s.at > STASH_TTL) { dlgStash.delete(key); return; }
+  const n = h("div", { class: "notice reprise", role: "status", style: "margin:0" },
+    h("div", { style: "flex:1;min-width:0" }, h("strong", { text: "Saisie non enregistrée. " }), `Vous aviez commencé à remplir cette fenêtre ${ilYa(s.at)}.`),
+    h("div", { class: "row-actions" },
+      h("button", { class: "btn ink small", type: "button", onclick: () => reprendreFenetre(key), text: "Reprendre la saisie" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => { dlgStash.delete(key); n.remove(); }, text: "Repartir de zéro" })));
+  body.prepend(n);
+}
+// La fenêtre reprend telle qu'elle était. Elle garde son heure d'ouverture : si un autre agent a changé le
+// dossier entre-temps, l'enregistrement le signale au lieu d'écraser son travail.
+function reprendreFenetre(key) {
+  const s = dlgStash.get(key);
+  if (!s) return;
+  dlgStash.delete(key);
+  dlg.replaceChildren(...s.nodes);
+  $$(".reprise", dlg).forEach(x => x.remove());
+  dlg.classList.toggle("wide", s.wide);
+  dlg._live = s.live; dlg._openedAt = s.openedAt; dlg._dirty = true; dlg._key = key;
+  if (s.collage) collageReleve = s.collage;
+  if (dlg._live) drawDlgPeers();
+  setView();
+  toast("Saisie reprise là où vous l’aviez laissée.");
+}
+// Une écriture lancée depuis la fenêtre (un clic ou Entrée juste avant) : la saisie est enregistrée.
+["click", "keydown"].forEach(t => dlg.addEventListener(t, () => { dlg._actionAt = Date.now(); }, true));
+S.apresEcriture = () => { if (dlg.open && Date.now() - (dlg._actionAt || 0) < 15000) { dlg._dirty = false; if (dlg._key) dlgStash.delete(dlg._key); } };
+render = (base => function (...a) { const r = base.apply(this, a); bandeauBrouillons(); return r; })(render);
+
+/* ---------- Déclaration en cours de saisie ---------- */
+// Une déclaration commencée (à la main ou collée) et pas encore enregistrée est gardée dans ce
+// navigateur : elle survit au rechargement de la page et aux gestes qui remplacent le formulaire
+// (modifier une autre déclaration, remplir depuis un dépôt en ligne, imposition d'office). Un bandeau
+// au-dessus du formulaire propose de la reprendre. Une modification, une imposition d'office ou un
+// dépôt en ligne ne sont pas gardés : ils se rouvrent d'où ils viennent.
+const DECL_BROUILLONS = "gf-decl-brouillons", DECL_CHAMPS = ["d-ent", "d-per", "d-ca", "d-ch", "d-ms", "d-nb", "d-solde", "d-solde-lien", "d-decl", "d-date", "d-note"];
+const declLibre = () => !S.editDecl && !S.taxOffice && !S.depotSaisie;
+function declEtat() {
+  const v = { vide: $("#d-vide").checked, paste: $("#d-paste").value };
+  for (const id of DECL_CHAMPS) v[id] = $("#" + id).value;
+  v.sal = salMode() ? $$("#d-sal-rows .sal-row").map(r => ({ nom: r.querySelector("[data-k=nom]").value, salaire: r.querySelector("[data-k=salaire]").value })).filter(x => x.nom.trim() || x.salaire !== "") : [];
+  return v;
+}
+const declRemplie = v => !!(v.paste.trim() || v.sal.length || ["d-ent", "d-ca", "d-ch", "d-ms", "d-solde", "d-solde-lien", "d-note"].some(id => String(v[id] || "").trim()));
+function brouillons() { try { const l = JSON.parse(localStorage.getItem(DECL_BROUILLONS) || "[]"); return Array.isArray(l) ? l.filter(x => x && x.id && x.v && Date.now() - x.at < 7 * 864e5) : []; } catch (e) { return []; } }
+function brouillonsEcrire(l) { try { if (l.length) localStorage.setItem(DECL_BROUILLONS, JSON.stringify(l)); else localStorage.removeItem(DECL_BROUILLONS); } catch (e) { /* navigateur sans stockage : rien de gardé */ } }
+function retirerBrouillon(id) { brouillonsEcrire(brouillons().filter(x => x.id !== id)); }
+function garderDecl() {
+  if (!declLibre()) return;
+  const v = declEtat();
+  if (!declRemplie(v)) return;
+  if (!S.declBrouillonId) S.declBrouillonId = shortId();
+  const l = brouillons().filter(x => x.id !== S.declBrouillonId);
+  l.unshift({ id: S.declBrouillonId, v, at: Date.now() });
+  brouillonsEcrire(l.slice(0, 4));
+  bandeauBrouillons();
+}
+// Avant un geste qui remplace le formulaire : la saisie en cours est gardée telle quelle, à part.
+function mettreDeCoteDecl() { garderDecl(); S.declBrouillonId = null; bandeauBrouillons(); }
+let declGardeTimer = 0;
+const declGardeBientot = () => { clearTimeout(declGardeTimer); declGardeTimer = setTimeout(garderDecl, 400); };
+["input", "change"].forEach(t => { $("#form-decl").addEventListener(t, declGardeBientot); $("#d-paste").addEventListener(t, declGardeBientot); });
+$("#d-parse").addEventListener("click", () => setTimeout(garderDecl, 0));
+function bandeauBrouillons() {
+  const box = $("#d-brouillons");
+  if (!box) return;
+  const l = canAgent() ? brouillons().filter(x => x.id !== S.declBrouillonId) : [];
+  box.hidden = !l.length;
+  if (!l.length) { box.replaceChildren(); return; }
+  fill(box, h("div", { style: "flex:1;min-width:0;display:grid;gap:6px" },
+    h("strong", { text: l.length > 1 ? `${l.length} déclarations commencées et pas encore enregistrées` : "Une déclaration commencée et pas encore enregistrée" }),
+    l.map(x => h("div", { class: "paste-row" },
+      h("span", { style: "flex:1;min-width:0", text: `${x.v["d-ent"] || "Entreprise non indiquée"}${x.v["d-per"] && bounds(x.v["d-per"]) ? " · " + periodLabel(x.v["d-per"]) : ""}${x.v["d-ca"] ? " · " + money(Number(x.v["d-ca"]) || 0) + " de chiffre d’affaires" : ""} · ${ilYa(x.at)}` }),
+      h("button", { class: "btn ink small", type: "button", onclick: () => reprendreDecl(x.id), text: "Reprendre" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => { retirerBrouillon(x.id); bandeauBrouillons(); }, text: "Supprimer" })))));
+}
+function reprendreDecl(id) {
+  const x = brouillons().find(y => y.id === id);
+  if (!x) { bandeauBrouillons(); return; }
+  if (S.editDecl) { toast("Terminez ou annulez d’abord la modification en cours.", true); return; }
+  mettreDeCoteDecl();
+  S.taxOffice = null; S.depotSaisie = null;
+  $("#form-decl").reset();
+  for (const k of DECL_CHAMPS) {
+    const el = $("#" + k), val = x.v[k];
+    if (!el || val == null) continue;
+    if (el.tagName === "SELECT" && val && ![...el.options].some(o => o.value === val) && bounds(val)) ensureOption(el, val, periodLabel(val));
+    el.value = val;
+  }
+  $("#d-vide").checked = !!x.v.vide; syncVide();
+  $("#d-paste").value = x.v.paste || "";
+  if (salMode()) setSalaries((x.v.sal || []).map(y => ({ nom: y.nom, salaire: y.salaire === "" ? "" : Number(y.salaire) })));
+  S.declBrouillonId = id;
+  $("#d-receipt").hidden = true;
+  renderDeclPreview();
+  bandeauBrouillons();
+  $("#form-decl").scrollIntoView({ behavior: "smooth", block: "start" });
+  toast("Déclaration reprise : vérifiez puis enregistrez.");
+}
+
 // Fenêtres « en direct » : la fiche, un dossier, un contrôle, une saisie, un dossier de justice, une semaine.
 let dlgSeq = 0;
 const baseOpenDialog = openDialog;
 openDialog = function (o) {
   dlgSeq++;
-  dlg._live = null; dlg._dirty = false; dlg._openedAt = Date.now(); S.forceWrite = null;
-  return baseOpenDialog(o);
+  const key = dlgKey(o);
+  // Une fenêtre en cours de saisie remplacée par une autre (un dossier lié, « Retour ») garde sa saisie.
+  if (dlg.open && dlg._dirty && dlg._key && dlg._key !== key) stashDialog();
+  dlg._live = null; dlg._dirty = false; dlg._openedAt = Date.now(); S.forceWrite = null; dlg._key = key;
+  const r = baseOpenDialog(o);
+  proposerReprise(key);
+  return r;
 };
-const markDirty = e => { if (e.target && e.target.id !== "q-in" && !(e.target.closest && e.target.closest(".live-stale"))) dlg._dirty = true; };
+// Ce qui ne fait que changer la vue (période affichée, filtre) n'est pas une saisie : marqué data-vue.
+const markDirty = e => { if (e.target && e.target.id !== "q-in" && !(e.target.closest && (e.target.closest(".live-stale") || e.target.closest("[data-vue]")))) dlg._dirty = true; };
 dlg.addEventListener("input", markDirty);
 dlg.addEventListener("change", markDirty);
 // L'événement « close » arrive après coup : une fenêtre rouverte entre-temps garde son suivi.
@@ -17554,6 +17690,7 @@ function renderDepots() {
     })));
 }
 function remplirDepuisDepot(d) {
+  mettreDeCoteDecl();
   if (S.editDecl) cancelEdit("decl");
   showTab("declaration");
   $("#form-decl").reset();
