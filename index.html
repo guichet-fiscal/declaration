@@ -272,6 +272,7 @@ details.paste textarea{background:var(--sheet);font-family:var(--f-mono);font-si
 .tpl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px;align-items:start}
 pre.tpl{margin:12px 0 0;background:var(--field);border:1px solid var(--rule);border-radius:5px;padding:12px 14px;font-family:var(--f-mono);font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--ink)}
 .tpl-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--ink-3)}
+.tpl-btns{display:flex;flex-wrap:wrap;gap:8px}
 
 /* Réglages */
 .set-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
@@ -1939,10 +1940,11 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
         <div class="tpl-foot"><span>Un article par ligne, autant que nécessaire.</span><button class="btn ghost small" type="button" data-copy="tpl-dem">Copier</button></div>
       </div>
       <div class="card">
-        <h3>Achat d’un véhicule de société</h3>
-        <p class="sub">Pour le salon des déclarations : le patron déclare chaque véhicule acheté en concession avec l’argent de l’entreprise.</p>
+        <h3>Achat de véhicule</h3>
+        <p class="sub">Pour le salon des déclarations. Postez une fois l’annonce : elle dit quoi remplir et contient le modèle. Le patron copie le modèle, le colle, le complète et l’envoie, un message par véhicule.</p>
         <pre class="tpl" id="tpl-veh"></pre>
-        <div class="tpl-foot"><span>Un message par véhicule.</span><button class="btn ghost small" type="button" data-copy="tpl-veh">Copier</button></div>
+        <pre id="tpl-veh-annonce" hidden></pre>
+        <div class="tpl-foot"><span>Un message par véhicule.</span><span class="tpl-btns"><button class="btn ghost small" type="button" data-copy="tpl-veh">Copier le modèle</button><button class="btn ink small" type="button" data-copy="tpl-veh-annonce">Copier l’annonce pour Discord</button></span></div>
       </div>
       <div class="card">
         <h3>Annonce du barème</h3>
@@ -7460,15 +7462,19 @@ function renderTemplates() {
     "Urgence (normale / prioritaire / urgente) : ",
     "Justification : ",
     "Demandeur (nom, grade) : "].join("\n");
-  $("#tpl-veh").textContent = [
-    "**ACHAT D’UN VÉHICULE DE SOCIÉTÉ**",
-    "Entreprise : ",
-    "Plaque : ",
-    "Modèle : ",
-    "Type (utilitaire / poids lourd / service / berline / SUV / moto / sportive / prestige / hélicoptère / bateau) : ",
-    "Prix payé avec le compte de l’entreprise : ",
-    "Date d’achat : ",
-    "Usage dans l’entreprise : "].join("\n");
+  // Achat de véhicule : un modèle court à recopier tel quel, et une annonce prête à poster qui explique quoi
+  // remplir et donne le modèle dans un bloc de code (copié sans mise en forme parasite).
+  const vehTpl = ["ACHAT DE VÉHICULE", "Entreprise : ", "Plaque : ", "Modèle : ", "Type : ", "Prix : ", "Date : ", "Usage : "].join("\n");
+  $("#tpl-veh").textContent = vehTpl;
+  $("#tpl-veh-annonce").textContent = [
+    "**Déclaration d’achat de véhicule de société**",
+    "Tout véhicule acheté avec l’argent de l’entreprise se déclare dans ce salon, un message par véhicule : copiez le modèle ci-dessous, collez-le et complétez après chaque « : ».",
+    "- **Type** : voiture, utilitaire, camion, moto, hélico ou bateau",
+    "- **Prix** : le prix payé avec le compte de l’entreprise",
+    "- **Date** : le jour de l’achat, par exemple 06/11",
+    "- **Usage** : à quoi il sert (livraisons, dépannages, transport des salariés…)",
+    "```", vehTpl, "```",
+    "— Préfecture de police · Direction des impôts et cotisations"].join("\n");
   $("#tpl-bareme").textContent = [
     "**BARÈME FISCAL EN VIGUEUR**",
     ...(c.baremeMode !== "unique"
@@ -16719,7 +16725,7 @@ function openVehForm(e, v, pre) {
   const src = h("select", { id: "vf-src" }, Object.entries(VEH_SOURCES).map(([k, l]) => h("option", { value: k, text: "Déclaré par " + l })));
   const pretSel = h("select", { id: "vf-pret" });
   const fac = proofFields("vf-fac", "Ou un lien vers la facture");
-  const paste = h("textarea", { id: "vf-paste", rows: "3", placeholder: "Collez ici le message « Achat d’un véhicule de société » posté sur Discord" });
+  const paste = h("textarea", { id: "vf-paste", rows: "3", placeholder: "Collez ici le message « Achat de véhicule » posté sur Discord" });
   const pmsg = h("span", { class: "hint", "aria-live": "polite" });
   const err = h("span", { class: "err", "aria-live": "polite" });
   const fillPrets = () => {
@@ -16770,7 +16776,7 @@ function openVehForm(e, v, pre) {
     if (cl.length) { cond.value = cl.join("\n"); n++; }
     if (p.facture) { const m = /https?:\/\/\S+/i.exec(p.facture); if (m) { fac.l.value = m[0]; n++; } }
     if (n && !edit) src.value = "entreprise";
-    pmsg.textContent = n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Achat d’un véhicule de société ».";
+    pmsg.textContent = n ? `${n} case${plural(n)} remplie${plural(n)}. Vérifiez puis enregistrez.` : "Aucun champ reconnu. Le message doit suivre le modèle « Achat de véhicule » (Modèles Discord).";
   };
   paste.addEventListener("paste", () => setTimeout(parse, 0));
   const save = async ev => {
