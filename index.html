@@ -3136,6 +3136,8 @@ function applyRole() {
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
   // Rôle « pointeuse » : la pointeuse et rien d'autre.
   if (S.role === "pointeuse") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "pointeuse"; }); if (S.tab !== "pointeuse") showTab("pointeuse"); }
+  // Pointeuse fermée : l'onglet disparaît pour tous ; les heures se saisissent dans la paye.
+  else if (ptFerme()) { $("#tab-btn-pointeuse").hidden = true; if (S.tab === "pointeuse") showTab("payes"); }
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
@@ -3349,6 +3351,10 @@ function showGate(state, detail) {
     a.append(h("span", { class: "idbox", text: id }),
       h("button", { class: "btn ghost", type: "button", onclick: () => copyText(id, "Identifiant copié."), text: "Copier" }),
       h("button", { class: "btn ghost", type: "button", onclick: logout, text: "Se déconnecter" }));
+  } else if (state === "pointeuse-fermee") {
+    t.textContent = "Pointeuse fermée";
+    p.textContent = `Depuis le ${PT_FERMETURE_TXT}, les heures de service se relèvent sur la tablette en jeu. La pointeuse du guichet n’est plus utilisée et votre accès est fermé. Pour une question sur vos heures ou votre paye, adressez-vous à la Direction.`;
+    a.append(h("button", { class: "btn ghost", type: "button", onclick: logout, text: "Se déconnecter" }));
   } else {
     t.textContent = "Connexion impossible";
     p.textContent = "Le registre ne répond pas" + (detail ? ` (${detail})` : "") + ". Vérifiez votre connexion puis réessayez.";
@@ -3387,6 +3393,7 @@ async function init() {
   S.agentName = (acces && acces.nom) || (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || "";
   if (!acces || !acces.role) { showGate("refuse"); return; }
   S.role = acces.role;
+  if (S.role === "pointeuse" && ptFerme()) { showGate("pointeuse-fermee"); return; }
   S.admin = acces.role === "direction";
   S.canWrite = S.admin;
   const store = makeStore(sb);
@@ -3911,7 +3918,7 @@ function todoItems() {
       add(n ? 1 : 0, `Paye de la semaine ${(bounds(kp) || {}).week} à verser`, `${n} agent${plural(n)} · ${money(x.total)}`, () => { S.payeSem = kp; allerA("payes"); });
     }
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
-    add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA("pointeuse"));
+    add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA(ptFerme() ? "payes" : "pointeuse"));
   }
   const vh = (S.vehicules || []).filter(v => vehActive(v).length);
   add(vh.length, `Véhicule${plural(vh.length)} à examiner`, vh.slice(0, 3).map(v => v.entrepriseNom).join(", "), () => { S.vehFilter = "exam"; allerA("vehicules"); });
@@ -4309,8 +4316,16 @@ const semPrec = k => { const b = bounds(k); return b ? semKey(new Date(b.start.g
 const semSuiv = k => { const b = bounds(k); return b ? semKey(new Date(b.start.getFullYear(), b.start.getMonth(), b.start.getDate() + 10)) : k; };
 
 /* Pointages */
+// Fermeture de la pointeuse : le lundi 9 novembre 2026 à 0 h (heure de Paris), les heures de service passent
+// sur la tablette en jeu et se saisissent à la main dans la paye. Les agents qui n'ont que l'accès
+// « Pointeuse » perdent l'accès au guichet ; plus personne ne prend ni ne finit son service ici. Un service
+// encore ouvert à cette heure compte jusqu'à la fermeture. À partir de la semaine 46, la paye ne lit plus
+// les pointages. Côté base : supabase/v27_fermeture_pointeuse.sql.
+const PT_FERMETURE = Date.parse("2026-11-08T23:00:00Z"), PT_SEM_SAISIE = "2026-S46", PT_FERMETURE_TXT = "lundi 9 novembre à 0 h";
+const ptFerme = () => Date.now() >= PT_FERMETURE;
+const semSaisie = k => String(k || "") >= PT_SEM_SAISIE;
 const ptActifs = () => (S.pointages || []).filter(p => p && !p.annule && p.debut);
-const ptFinT = p => (p.fin ? new Date(p.fin).getTime() : Date.now());
+const ptFinT = p => (p.fin ? new Date(p.fin).getTime() : Math.min(Date.now(), PT_FERMETURE));
 const ptDuree = p => Math.max(0, (ptFinT(p) - new Date(p.debut).getTime()) / 3600e3);
 const ptLong = p => ptDuree(p) > 12 && !p.verifie;
 function ptDans(p, k) {
@@ -4321,7 +4336,7 @@ function ptDans(p, k) {
 // Heures pointées par un compte Discord pendant une semaine (un service à cheval sur deux semaines est partagé).
 function ptSemaine(discordId, k) {
   const out = { h: 0, open: null, verif: 0, list: [] };
-  if (!discordId) return out;
+  if (!discordId || semSaisie(k)) return out;
   for (const p of ptActifs()) {
     if (p.discordId !== discordId) continue;
     const x = ptDans(p, k); if (x <= 0) continue;
@@ -4333,7 +4348,7 @@ function ptSemaine(discordId, k) {
   out.list.sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
   return out;
 }
-const ptOuvert = discordId => (discordId ? ptActifs().find(p => p.discordId === discordId && !p.fin) || null : null);
+const ptOuvert = discordId => (discordId && !ptFerme() ? ptActifs().find(p => p.discordId === discordId && !p.fin) || null : null);
 
 /* Fonctionnaires */
 const foncOf = id => (S.fonctionnaires || []).find(f => f.id === id) || null;
@@ -4425,7 +4440,7 @@ function droitsSemaine(fid, k) {
 function payeLignesPrep(k, p) {
   const c = payeCfg(), saisie = (p && p.saisie) || {}, max = payeMaxOf(c);
   return foncs().filter(f => f.actif !== false || saisie[f.id] || ptSemaine(f.discordId, k).h > 0).map(f => {
-    const taux = gradeTaux(f.grade), pt = f.discordId ? ptSemaine(f.discordId, k) : null, man = saisie[f.id];
+    const taux = gradeTaux(f.grade), pt = f.discordId && !semSaisie(k) ? ptSemaine(f.discordId, k) : null, man = saisie[f.id];
     const manH = man && man.heures != null && man.heures !== "" && Number.isFinite(Number(man.heures)) ? Math.max(0, Number(man.heures)) : null;
     const heures = roundH(manH != null ? manH : pt ? pt.h : 0), hp = roundH(Math.min(heures, Number(c.plafondHeures) || 0));
     const brut = Math.min(Math.round(hp * taux), max);
@@ -4505,7 +4520,9 @@ function payeVerserDlg(k) {
   const enCours = lignes.filter(l => l.enCours), verif = lignes.filter(l => l.aVerifier), sansTaux = lignes.filter(l => !l.taux && l.heures > 0);
   const manque = lignes.reduce((t, l) => t + l.reste, 0), rest = x.rappels.filter(r => r.inclus).reduce((t, r) => t + (r.du - r.verse), 0);
   const notes = [
-    enCours.length ? h("p", { class: "py-note", text: `${enCours.length} agent${plural(enCours.length)} encore en service (${enCours.map(l => l.nom).join(", ")}) : ses heures sont comptées jusqu’à maintenant. Les heures pointées après le versement se paieront en rappel.` }) : null,
+    enCours.length ? h("p", { class: "py-note", text: ptFerme()
+      ? `Service non fini à la fermeture de la pointeuse pour ${enCours.map(l => l.nom).join(", ")} : ses heures sont comptées jusqu’au ${PT_FERMETURE_TXT}. Si l’heure de fin est connue, clôturez le service depuis la fiche de l’agent avant de verser.`
+      : `${enCours.length} agent${plural(enCours.length)} encore en service (${enCours.map(l => l.nom).join(", ")}) : ses heures sont comptées jusqu’à maintenant. Les heures pointées après le versement se paieront en rappel.` }) : null,
     verif.length ? h("p", { class: "py-note", text: `Service de plus de 12 h à vérifier pour ${verif.map(l => l.nom).join(", ")} : corrigez le pointage avant de verser si c’est un oubli.` }) : null,
     sansTaux.length ? h("p", { class: "py-note", text: `Sans taux horaire (grade absent du barème) : ${sansTaux.map(l => l.nom).join(", ")}. Leur paye vaut 0 €.` }) : null,
     x.coef < 1 ? h("p", { class: "py-note", text: `Le budget de la semaine ne couvre que ${Math.round(x.coef * 100)} % des payes : chaque agent reçoit ${Math.round(x.coef * 100)} % de sa paye, et ${money(manque)} deviennent des rappels à verser plus tard.` }) : null,
@@ -4665,7 +4682,8 @@ function payePrevision(k) {
   const maxSem = [...grades.values()].reduce((t, g) => t + g.total, 0), b = payeBudget(k, payeOf(k));
   // Rythme : ce qui est dû à ce jour, prolongé jusqu'à la fin de la semaine, sans dépasser le plafond de chacun.
   const bd = bounds(k), now = Date.now(), el = bd ? (now - bd.start.getTime()) / (bd.end.getTime() - bd.start.getTime()) : 1;
-  const enCours = bd && now >= bd.start.getTime() && now <= bd.end.getTime();
+  // Heures saisies à la main (semaine 46 et après) : elles arrivent d'un coup, pas de rythme à prolonger.
+  const enCours = bd && now >= bd.start.getTime() && now <= bd.end.getTime() && !semSaisie(k);
   let proj = null, du = 0;
   if (enCours) {
     const lignes = payeLignesPrep(k, payeOf(k));
@@ -4711,7 +4729,8 @@ function renderPayes(force) {
   if (!S.connected || need.some(n => !S.loaded.has(n))) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
   if (!force && box.contains(document.activeElement) && document.activeElement.matches("input")) return;
   const c = payeCfg(), k = S.payeSem = S.payeSem || semKey(new Date()), x = payeCalc(k), b = x.budget || {}, wk = (bounds(k) || {}).week;
-  $("#py-intro").textContent = `La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service × taux horaire du grade, ${c.plafondHeures} h et ${money(c.payeMax)} au plus par semaine. Elle est déduite de l’enveloppe ${c.service} ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.`;
+  const saisieK = semSaisie(k);
+  $("#py-intro").textContent = `La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service${saisieK ? " relevées sur la tablette en jeu et saisies ici" : ""} × taux horaire du grade, ${c.plafondHeures} h et ${money(c.payeMax)} au plus par semaine. Elle est déduite de l’enveloppe ${c.service} ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.`;
   payeSemOptions($("#py-sem"), k);
   // Reprise des salaires déjà versés par une demande « budget salaires ».
   const rep = repriseCandidats();
@@ -4752,21 +4771,23 @@ function renderPayes(force) {
     const edit = w && !x.versee, anyRet = shown.some(l => l.retenue > 0);
     const rows = shown.map(l => {
       const flags = [];
-      if (l.enCours) flags.push(chip(["En service", "info"]));
+      if (l.enCours) flags.push(ptFerme() ? chip(["Service non fini à la fermeture", "warn"]) : chip(["En service", "info"]));
       if (l.aVerifier) flags.push(chip(["Plus de 12 h à vérifier", "warn"]));
-      if (l.manuel) flags.push(chip(["Heures saisies", "muted"]));
+      if (l.manuel && !saisieK) flags.push(chip(["Heures saisies", "muted"]));
       if (!l.taux) flags.push(chip(["Grade sans taux", "bad"]));
       if (l.plafonne) flags.push(chip([`Plafond ${money(c.payeMax)}`, "muted"]));
       let hc;
       if (edit) {
-        const inp = h("input", { class: "py-h", inputmode: "decimal", autocomplete: "off", "data-fid": l.fid, "aria-label": `Heures retenues · ${l.nom}`, placeholder: l.heuresPointees != null ? fmtH(l.heuresPointees) : "0 h 00" });
+        const lab = saisieK ? "Heures de service" : "Heures retenues";
+        const inp = h("input", { class: "py-h", inputmode: "decimal", autocomplete: "off", "data-fid": l.fid, "aria-label": `${lab} · ${l.nom}`, placeholder: l.heuresPointees != null ? fmtH(l.heuresPointees) : "0 h 00" });
         inp.value = l.manuel ? fmtH(l.heures) : "";
-        hc = h("td", { "data-l": "Heures retenues" }, h("div", { class: "py-h-row" }, inp, l.manuel ? h("button", { class: "icon-btn", type: "button", title: "Revenir aux heures pointées", "aria-label": `Revenir aux heures pointées · ${l.nom}`, onclick: () => payeHeures(k, l.fid, ""), text: "×" }) : null),
-          h("span", { class: "small-meta", text: l.manuel ? (l.heuresPointees != null ? `pointé ${fmtH(l.heuresPointees)}` : "saisi à la main") : l.heuresPointees != null ? "heures pointées" : "pas de pointeuse" }));
-      } else hc = h("td", { class: "num", "data-l": "Heures retenues", text: fmtH(l.heures) });
+        const efface = saisieK ? ["Effacer les heures saisies", `Effacer les heures saisies · ${l.nom}`] : ["Revenir aux heures pointées", `Revenir aux heures pointées · ${l.nom}`];
+        hc = h("td", { "data-l": lab }, h("div", { class: "py-h-row" }, inp, l.manuel ? h("button", { class: "icon-btn", type: "button", title: efface[0], "aria-label": efface[1], onclick: () => payeHeures(k, l.fid, ""), text: "×" }) : null),
+          h("span", { class: "small-meta", text: saisieK ? (l.manuel ? "saisies" : "à saisir") : l.manuel ? (l.heuresPointees != null ? `pointé ${fmtH(l.heuresPointees)}` : "saisi à la main") : l.heuresPointees != null ? "heures pointées" : "pas de pointeuse" }));
+      } else hc = h("td", { class: "num", "data-l": saisieK ? "Heures de service" : "Heures retenues", text: fmtH(l.heures) });
       return h("tr", { class: l.heures > 0 || l.brut > 0 ? null : "py-off" },
         h("td", {}, h("button", { class: "linkbtn py-nom", type: "button", onclick: () => openFonc(l.fid, k), text: l.nom || "Agent" }), h("span", { class: "small-meta", text: l.grade || "sans grade" }), flags.length ? h("div", { class: "py-flags" }, flags) : null),
-        h("td", { class: "num", "data-l": "Pointées", text: l.heuresPointees != null ? fmtH(l.heuresPointees) : "—" }),
+        saisieK ? null : h("td", { class: "num", "data-l": "Pointées", text: l.heuresPointees != null ? fmtH(l.heuresPointees) : "—" }),
         hc,
         h("td", { class: "num", "data-l": "Taux", text: l.taux ? money(l.taux) : "—" }),
         h("td", { class: "num", "data-l": "Payées", text: fmtH(l.heuresPayees) }),
@@ -4777,10 +4798,12 @@ function renderPayes(force) {
     });
     const sumH = shown.reduce((t, l) => t + (Number(l.heuresPayees) || 0), 0);
     fill(box, h("div", { class: "tbl-wrap" }, h("table", { class: "compact py-tbl" },
-      h("thead", {}, h("tr", {}, ["Agent", "Pointées", "Retenues", "Taux", "Payées", "Paye due", "Versée"].concat(anyRet ? ["Trop-perçu"] : [], ["Rappel"]).map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+      h("thead", {}, h("tr", {}, (saisieK ? ["Agent", "Heures de service"] : ["Agent", "Pointées", "Retenues"]).concat(["Taux", "Payées", "Paye due", "Versée"], anyRet ? ["Trop-perçu"] : [], ["Rappel"]).map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
       h("tbody", {}, rows),
-      h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), h("td", {}), h("td", {}), h("td", {}), h("td", { class: "num", "data-l": "Payées", text: fmtH(sumH) }), h("td", { class: "num", "data-l": "Paye due", text: money(x.totalDu) }), h("td", { class: "num", "data-l": "Versée", text: money(x.totalVerse) }), anyRet ? h("td", { class: "num py-reste", "data-l": "Trop-perçu retenu", text: "− " + money(x.totalRetenues) }) : null, h("td", { class: "num py-reste", "data-l": "Rappel", text: x.totalDu - x.totalVerse > 0 ? money(x.totalDu - x.totalVerse) : "" }))))),
-      edit ? h("p", { class: "hint", style: "margin:8px 0 0", text: `Les heures pointées remplissent la paye toutes seules. Tapez d’autres heures pour un agent sans pointeuse ou pour corriger (12 h 30, 12:30 ou 12,5). Au-delà de ${c.plafondHeures} h, les heures ne sont pas payées.` }) : null);
+      h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), saisieK ? null : h("td", {}), h("td", {}), h("td", {}), h("td", { class: "num", "data-l": "Payées", text: fmtH(sumH) }), h("td", { class: "num", "data-l": "Paye due", text: money(x.totalDu) }), h("td", { class: "num", "data-l": "Versée", text: money(x.totalVerse) }), anyRet ? h("td", { class: "num py-reste", "data-l": "Trop-perçu retenu", text: "− " + money(x.totalRetenues) }) : null, h("td", { class: "num py-reste", "data-l": "Rappel", text: x.totalDu - x.totalVerse > 0 ? money(x.totalDu - x.totalVerse) : "" }))))),
+      edit ? h("p", { class: "hint", style: "margin:8px 0 0", text: saisieK
+        ? `Saisissez pour chaque agent ses heures de service de la semaine, relevées sur la tablette en jeu (12 h 30, 12:30 ou 12,5) : la paye se calcule toute seule. Au-delà de ${c.plafondHeures} h, les heures ne sont pas payées.`
+        : `Les heures pointées remplissent la paye toutes seules. Tapez d’autres heures pour un agent sans pointeuse ou pour corriger (12 h 30, 12:30 ou 12,5). Au-delà de ${c.plafondHeures} h, les heures ne sont pas payées.${ptFerme() ? ` La pointeuse est fermée depuis le ${PT_FERMETURE_TXT} : à partir de la semaine 46, les heures se saisissent à la main.` : ""}` }) : null);
   }
   // Rappels de cette paye
   const rr = x.rappels.filter(r => x.versee || r.du > 0);
@@ -4821,16 +4844,16 @@ function renderPayes(force) {
 }
 function renderFoncList(k) {
   const w = writer(), all = foncs(), act = all.filter(f => f.actif !== false), old = all.filter(f => f.actif === false);
-  const sans = [...new Set(ptActifs().filter(p => ptDans(p, k) > 0 && !foncByDiscord(p.discordId)).map(p => p.discordId))];
-  $("#py-fonc-sub").textContent = act.length ? `${act.length} agent${plural(act.length)} en service à la Préfecture · ${act.filter(f => f.discordId).length} relié${plural(act.filter(f => f.discordId).length)} à la pointeuse.` : "Les agents payés par la Préfecture, leur grade et leur compte de pointeuse.";
+  const sk = semSaisie(k), sans = sk ? [] : [...new Set(ptActifs().filter(p => ptDans(p, k) > 0 && !foncByDiscord(p.discordId)).map(p => p.discordId))];
+  $("#py-fonc-sub").textContent = act.length ? `${act.length} agent${plural(act.length)} en service à la Préfecture${sk ? "" : ` · ${act.filter(f => f.discordId).length} relié${plural(act.filter(f => f.discordId).length)} à la pointeuse`}.` : sk ? "Les agents payés par la Préfecture et leur grade." : "Les agents payés par la Préfecture, leur grade et leur compte de pointeuse.";
   fill($("#py-fonc"),
     sans.length ? h("div", { class: "py-note", style: "margin:0 0 10px" }, h("b", { text: "Pointages sans fiche. " }), sans.map((d, i) => { const p = ptActifs().find(z => z.discordId === d); const hh = ptSemaine(d, k).h; return h("span", {}, i ? " · " : "", `${(p && p.nom) || d} (${fmtH(hh)})`, w ? h("button", { class: "linkbtn", type: "button", style: "margin-left:4px", onclick: () => openFoncForm(null, { nom: (p && p.nom) || "", discordId: d }), text: "créer la fiche" }) : null); }), " : ces heures ne sont pas payées tant que l’agent n’a pas de fiche.") : null,
     act.length ? h("ul", { class: "ent-list" }, act.map(f => {
       const pt = ptSemaine(f.discordId, k), taux = gradeTaux(f.grade);
       return h("li", {},
         h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFonc(f.id, k), text: f.nom || "Agent" }),
-          h("span", { class: "meta", text: `${f.grade || "sans grade"}${taux ? " · " + money(taux) + "/h" : " · pas de taux"} · ${f.discordId ? (pt.h ? fmtH(pt.h) + " pointées" : "pointeuse reliée") : "heures saisies à la main"}` })),
-        pt.open ? chip(["En service", "info"]) : h("span", {}),
+          h("span", { class: "meta", text: `${f.grade || "sans grade"}${taux ? " · " + money(taux) + "/h" : " · pas de taux"} · ${sk ? "heures saisies dans la paye" : f.discordId ? (pt.h ? fmtH(pt.h) + " pointées" : "pointeuse reliée") : "heures saisies à la main"}` })),
+        pt.open ? (ptFerme() ? chip(["Service non fini", "warn"]) : chip(["En service", "info"])) : h("span", {}),
         w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openFoncForm(f), text: "Modifier" }) : h("span", {}));
     })) : h("div", { class: "empty", text: "Aucun fonctionnaire enregistré." }),
     old.length ? h("p", { class: "hint", style: "margin:10px 0 0" }, `Retirés des effectifs : `, old.map((f, i) => [i ? ", " : "", h("button", { class: "linkbtn", type: "button", onclick: () => openFonc(f.id, k), text: f.nom })])) : null);
@@ -4961,8 +4984,11 @@ function openFoncForm(f, preset, back) {
   const info = h("p", { class: "hint", style: "margin:4px 0 0" });
   const sync = () => {
     const id = dsel.value.replace(/\s/g, ""), known = (S.agents || []).find(a => a.discord_id === id);
-    accesRow.hidden = !S.admin || !/^\d{15,21}$/.test(id) || !!known;
-    info.textContent = !id ? "Sans compte Discord, ses heures se saisissent à la main dans la paye." : known ? `Compte « ${known.nom || id} » · ${ROLE_LABEL[known.role] || known.role} : il pointe déjà depuis le guichet.` : /^\d{15,21}$/.test(id) ? "Ce compte n’a pas encore accès au guichet." : "Un identifiant Discord compte 17 à 20 chiffres.";
+    // Pointeuse fermée : plus d'accès « Pointeuse » à donner ; le compte Discord sert à mentionner l'agent.
+    const ferme = ptFerme();
+    accesRow.hidden = ferme || !S.admin || !/^\d{15,21}$/.test(id) || !!known;
+    info.textContent = ferme ? (id && !/^\d{15,21}$/.test(id) ? "Un identifiant Discord compte 17 à 20 chiffres." : "Ses heures de service, relevées sur la tablette en jeu, se saisissent à la main dans la paye.")
+      : !id ? "Sans compte Discord, ses heures se saisissent à la main dans la paye." : known ? `Compte « ${known.nom || id} » · ${ROLE_LABEL[known.role] || known.role} : il pointe déjà depuis le guichet.` : /^\d{15,21}$/.test(id) ? "Ce compte n’a pas encore accès au guichet." : "Un identifiant Discord compte 17 à 20 chiffres.";
   };
   dsel.addEventListener("input", sync); sync();
   const err = h("span", { class: "err", "aria-live": "polite" });
@@ -4993,7 +5019,7 @@ function openFoncForm(f, preset, back) {
   if (f && f.actif === false) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, f, { actif: true, retireLe: null, modifieLe: nowISO() }); delete body.id; if (await write(() => S.db.doc("fonctionnaires/" + f.id).set(body))) { closeDialog(); toast(`${f.nom} de nouveau dans les effectifs.`); } }, text: "Remettre dans les effectifs" }));
   foot.push(h("span", { class: "spacer" }), go);
   openDialog({ eyebrow: "Payes de la Préfecture", title: f ? `Modifier · ${f.nom}` : "Ajouter un fonctionnaire",
-    body: [h("div", { class: "row2" }, field("py-f-nom", "Nom", nom), field("py-f-grade", "Grade", grade)), field("py-f-discord", "Compte Discord pour la pointeuse", dsel), dl, info, accesRow, field("py-f-note", "Note", note), err], foot });
+    body: [h("div", { class: "row2" }, field("py-f-nom", "Nom", nom), field("py-f-grade", "Grade", grade)), field("py-f-discord", ptFerme() ? "Compte Discord" : "Compte Discord pour la pointeuse", dsel), dl, info, accesRow, field("py-f-note", "Note", note), err], foot });
   setTimeout(() => nom.focus(), 30);
 }
 function openFonc(fid, k0) {
@@ -5003,23 +5029,24 @@ function openFonc(fid, k0) {
   const rap = rappelsTous().filter(r => r.fid === fid), dus = rap.filter(r => r.reste > 0), tps = retenuesTous().filter(r => r.fid === fid), tpd = tps.filter(r => r.reste > 0);
   const hist = payesVersees().map(p => ({ p, l: (p.lignes || []).find(z => z.fid === fid), r: (p.rappels || []).filter(z => z.fid === fid) })).filter(z => z.l || z.r.length).sort((a, b) => String(b.p.id).localeCompare(String(a.p.id)));
   const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
-  const verseeK = payeVersee(payeOf(k));
+  const verseeK = payeVersee(payeOf(k)), sk = semSaisie(k), ferme = ptFerme();
   const ptRows = pt.list.map(p => {
     const kd = ptDans(p, k), full = ptDuree(p);
     return h("li", {},
-      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${fmtDateTime(new Date(p.debut))} → ${p.fin ? fmtHr(new Date(p.fin)) : "en cours"}` }),
-        h("span", { class: "meta", text: [Math.abs(kd - full) > 0.01 ? `${fmtH(kd)} cette semaine sur ${fmtH(full)}` : fmtH(full), p.source === "direction" ? "saisi par la Direction" : "", (p.corrections || []).length ? "corrigé" : "", ptLong(p) ? "plus de 12 h, à vérifier" : ""].filter(Boolean).join(" · ") })),
-      p.fin ? h("span", { class: "mono", text: fmtH(kd) }) : chip(["En service", "info"]),
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${fmtDateTime(new Date(p.debut))} → ${p.fin ? fmtHr(new Date(p.fin)) : ferme ? "non fini" : "en cours"}` }),
+        h("span", { class: "meta", text: [Math.abs(kd - full) > 0.01 ? `${fmtH(kd)} cette semaine sur ${fmtH(full)}` : fmtH(full), !p.fin && ferme ? `compté jusqu’à la fermeture de la pointeuse (${PT_FERMETURE_TXT})` : "", p.source === "direction" ? "saisi par la Direction" : "", (p.corrections || []).length ? "corrigé" : "", ptLong(p) ? "plus de 12 h, à vérifier" : ""].filter(Boolean).join(" · ") })),
+      p.fin ? h("span", { class: "mono", text: fmtH(kd) }) : ferme ? chip(["Non fini", "warn"]) : chip(["En service", "info"]),
       w ? h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => openPtForm(p, null, reopen), text: p.fin ? "Corriger" : "Clore" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openPtAnnuler(p, reopen), text: "Annuler" })) : h("span", {}));
   });
   const body = [
     h("div", { class: "minis" },
       mk("Grade", f.grade || "—", taux ? `${money(taux)} de l’heure` : "pas de taux au barème", taux ? "kpi-txt" : "kpi-txt bad"),
-      mk("Heures de la semaine", fmtH(l ? l.heures : pt.h), l && l.manuel ? "saisies à la main" : f.discordId ? "pointées" : "à saisir dans la paye"),
+      mk("Heures de la semaine", fmtH(l ? l.heures : pt.h), l && l.manuel ? "saisies à la main" : f.discordId && !sk ? "pointées" : "à saisir dans la paye"),
       mk(x.versee ? "Versé" : "Paye prévue", money(l ? l.verse : 0), l ? `${fmtH(l.heuresPayees)} payées${l.reste > 0 ? " · " + money(l.reste) + " en rappel" : ""}` : "pas d’heures", x.versee ? "ok" : ""),
       mk("Rappels dus", money(dus.reduce((t, r) => t + r.reste, 0)), dus.length ? `${dus.length} rappel${plural(dus.length)}` : "aucun", dus.length ? "warn" : ""),
       tps.length ? mk("Trop-perçus", "− " + money(tpd.reduce((t, r) => t + r.reste, 0)), tpd.length ? "à retenir sur ses payes" : "régularisés", tpd.length ? "warn" : "") : null),
-    f.discordId ? sec(`Pointages · ${periodLabel(k)}`, pt.list.length ? h("ul", { class: "ent-list" }, ptRows) : h("p", { class: "muted", style: "margin:0", text: "Aucun pointage cette semaine." }),
+    sk ? sec("Heures", h("p", { class: "muted", style: "margin:0", text: `Depuis la fermeture de la pointeuse (${PT_FERMETURE_TXT}), les heures de service se relèvent sur la tablette en jeu et se saisissent dans la paye de la semaine.` }))
+    : f.discordId ? sec(`Pointages · ${periodLabel(k)}`, pt.list.length ? h("ul", { class: "ent-list" }, ptRows) : h("p", { class: "muted", style: "margin:0", text: "Aucun pointage cette semaine." }),
       verseeK && w ? h("p", { class: "hint", style: "margin:6px 0 0", text: "La paye de cette semaine est versée : corriger un pointage ne change pas ce qui a été versé. Ajoutez un rappel pour payer des heures en plus." }) : null,
       w ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => openPtForm(null, { discordId: f.discordId, nom: f.nom, k }, reopen), text: "Ajouter un pointage" }) : null)
       : sec("Heures", h("p", { class: "muted", style: "margin:0", text: "Pas de compte Discord relié : ses heures de service se saisissent dans la paye de chaque semaine." })),
@@ -5040,7 +5067,7 @@ function openFonc(fid, k0) {
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semPrec(k)), text: "‹ Semaine" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semSuiv(k)), text: "Semaine ›" }), h("span", { class: "spacer" })];
   if (l || x.rappels.some(r => r.fid === fid && r.verse > 0)) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(bulletinDoc(k, fid), reopen), text: "Bulletin" }));
   if (w) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openRappelForm({ fid, back: reopen }), text: "Ajouter un rappel" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openTropPercuForm({ fid, back: reopen }), text: "Trop-perçu" }), h("button", { class: "btn ink small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: "Modifier" }));
-  openDialog({ eyebrow: `Fonctionnaire · ${periodLabel(k)}`, title: f.nom || "Agent", wide: true, stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : pt.open ? stamp(["EN SERVICE", "info"]) : null, body, foot });
+  openDialog({ eyebrow: `Fonctionnaire · ${periodLabel(k)}`, title: f.nom || "Agent", wide: true, stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : pt.open && !ferme ? stamp(["EN SERVICE", "info"]) : null, body, foot });
 }
 
 /* Pointages : corrections de la Direction */
@@ -5050,7 +5077,7 @@ function openPtForm(pt, preset, back) {
   const deb = h("input", { type: "datetime-local" }), fin = h("input", { type: "datetime-local" });
   const b = preset.k ? bounds(preset.k) : null, d0 = b ? new Date(Math.min(Date.now(), b.end.getTime()) - 2 * 3600e3) : new Date(Date.now() - 2 * 3600e3);
   deb.value = toLocalInput(pt ? new Date(pt.debut) : d0);
-  fin.value = pt ? toLocalInput(pt.fin ? new Date(pt.fin) : new Date()) : toLocalInput(new Date(d0.getTime() + 2 * 3600e3));
+  fin.value = pt ? toLocalInput(pt.fin ? new Date(pt.fin) : new Date(Math.min(Date.now(), PT_FERMETURE))) : toLocalInput(new Date(Math.min(d0.getTime() + 2 * 3600e3, Math.max(PT_FERMETURE, d0.getTime() + 60e3))));
   const motif = h("input", { autocomplete: "off", placeholder: pt ? (pt.fin ? "Erreur d’heure, oubli de fin de service…" : "Oubli de fin de service") : "Service fait sans pointer" });
   // Le pointage d'un autre agent : il reçoit une alerte, avec le son de l'auteur et, au besoin, un message vocal.
   const cible = pt ? pt.discordId : preset.discordId;
@@ -5066,6 +5093,7 @@ function openPtForm(pt, preset, back) {
     if (!e || isNaN(e)) { err.textContent = "Indiquez la fin du service."; fin.focus(); return; }
     if (e <= s) { err.textContent = "La fin doit venir après le début."; fin.focus(); return; }
     if (e.getTime() > Date.now() + 5 * 60e3) { err.textContent = "La fin ne peut pas être dans le futur."; fin.focus(); return; }
+    if (ptFerme() && e.getTime() > PT_FERMETURE) { err.textContent = `La pointeuse est fermée depuis le ${PT_FERMETURE_TXT} : un service ne peut pas finir après. Les heures suivantes se saisissent dans la paye de la semaine.`; fin.focus(); return; }
     if (!motif.value.trim()) { err.textContent = "Indiquez le motif : il reste dans le dossier."; motif.focus(); return; }
     const other = ptActifs().find(z => z.discordId === (pt ? pt.discordId : preset.discordId) && (!pt || z.id !== pt.id) && new Date(z.debut).getTime() < e.getTime() && ptFinT(z) > s.getTime());
     if (other) { err.textContent = `Ce service chevauche celui du ${fmtDateTime(new Date(other.debut))} : corrigez plutôt celui-là.`; return; }
@@ -5465,6 +5493,7 @@ function openReprise(id) {
 // que cette page). L'heure de prise et de fin de service est celle de la base (fonction pointer).
 async function pointer(action, btn) {
   if (!S.sb || !S.connected) return false;
+  if (ptFerme()) { toast(`La pointeuse est fermée depuis le ${PT_FERMETURE_TXT} : les heures de service se relèvent sur la tablette en jeu.`, true); return false; }
   if (btn) btn.disabled = true;
   let res;
   try { res = await S.sb.rpc("pointer", { p_action: action }); } catch (e) { res = { error: { message: "Réseau indisponible" } }; }
@@ -5544,7 +5573,7 @@ function ptLive() {
     : open ? `+${moneyC(info.taux / 3600)} chaque seconde · ${base}` : base;
 }
 function renderPointeuse() {
-  if (S.tab !== "pointeuse") return;
+  if (S.tab !== "pointeuse" || ptFerme()) return;
   const box = $("#pt-me");
   if (!S.connected || !S.loaded.has("pointages")) { ptVue = null; fill(box, h("div", { class: "empty", text: S.offline ? "Pointeuse indisponible hors connexion." : "Chargement…" })); fill($("#pt-week")); $("#pt-now-card").hidden = true; return; }
   const me = S.discordId, open = ptOuvert(me), k = semKey(new Date()), wk = ptSemaine(me, k), info = maPayeInfo();
@@ -5600,7 +5629,16 @@ function renderPointeuse() {
 }
 // L'horloge, la durée du service et la paye avancent chaque seconde ; le reste de la page toutes les 30 secondes.
 setInterval(() => { if (document.visibilityState === "visible") ptLive(); }, 1000);
-setInterval(() => { if (document.visibilityState !== "visible" || !S.connected) return; if (S.tab === "pointeuse") renderPointeuse(); else if (S.tab === "payes" && ptActifs().some(p => !p.fin)) renderPayes(); }, 30e3);
+setInterval(() => { if (document.visibilityState !== "visible" || !S.connected) return; if (S.tab === "pointeuse") renderPointeuse(); else if (S.tab === "payes" && !ptFerme() && ptActifs().some(p => !p.fin)) renderPayes(); }, 30e3);
+// Passage de la fermeture de la pointeuse, page ouverte : le rôle « Pointeuse » retrouve l'écran de fin
+// d'accès (au rechargement), les autres perdent l'onglet Pointeuse.
+let ptFermeVue = ptFerme();
+setInterval(() => {
+  if (ptFermeVue || !ptFerme()) return;
+  ptFermeVue = true;
+  if (S.role === "pointeuse") { location.reload(); return; }
+  if (S.connected) { applyRole(); if (S.tab === "payes") renderPayes(true); }
+}, 15e3);
 
 /* ---------- Alerte : pointage modifié par un autre agent ---------- */
 // Quand un pointage de l'agent connecté est corrigé, clos, ajouté ou annulé par quelqu'un d'autre, un grand
