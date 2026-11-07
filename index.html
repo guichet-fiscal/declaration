@@ -4279,7 +4279,10 @@ function openCatImport() {
 // la fonction pointer de la base), « payes » (une par semaine, « 2026-S42 »), « rappels » (rappels saisis
 // à la main ; ceux nés d'un prorata se déduisent des payes versées).
 const PAYE_GRADES = [["Agent de sécurité", 3000], ["Directeur adjoint de la sécurité", 3150], ["Directeur de la sécurité", 3300], ["Agent administratif", 3500], ["Délégué territorial", 3650], ["Inspecteur des finances publiques", 3800], ["Directeur des finances publiques", 4000], ["Secrétaire général de la zone de défense et de sécurité de Paris", 4150], ["Directeur adjoint de cabinet", 4300], ["Directeur de cabinet", 4500], ["Sous-préfet", 4650], ["Préfet délégué", 4800], ["Préfet", 5000]];
-const PAYE_DEF = { service: "Préfecture", budgetMois: 3500000, plafondHeures: 20, payeMax: 100000, grades: PAYE_GRADES.map(([nom, taux]) => ({ nom, taux })) };
+// Primes de présence : le palier le plus haut atteint par les heures de service de la semaine s'ajoute
+// au salaire, la paye restant plafonnée (100 000 €). Elles comptent à partir de la semaine 45.
+const PAYE_PRIMES = [{ nom: "Présence haute", heures: 15, montant: 5000 }, { nom: "Présence moyenne", heures: 10, montant: 3750 }, { nom: "Présence faible", heures: 5, montant: 1000 }];
+const PAYE_DEF = { service: "Préfecture", budgetMois: 3500000, plafondHeures: 20, payeMax: 100000, grades: PAYE_GRADES.map(([nom, taux]) => ({ nom, taux })), primes: PAYE_PRIMES, primesDepuis: "2026-S45" };
 function payeCfg() { return payeCfgFrom(S.config && S.config.payes); }
 // Barème des payes à partir de ce qui est réglé (ou de ce que la base donne à la pointeuse), complété par défaut.
 function payeCfgFrom(src) {
@@ -4289,8 +4292,28 @@ function payeCfgFrom(src) {
   c.grades = c.grades.filter(g => g && String(g.nom || "").trim()).map(g => ({ nom: String(g.nom).trim(), taux: Math.max(0, Math.round(Number(g.taux) || 0)) }));
   ["budgetMois", "plafondHeures", "payeMax"].forEach(x => { const v = Number(c[x]); c[x] = Number.isFinite(v) && v >= 0 ? v : PAYE_DEF[x]; });
   if (!String(c.service || "").trim()) c.service = PAYE_DEF.service;
+  // Paliers du plus haut au plus bas ; une liste vide (réglée exprès) supprime les primes.
+  c.primes = (Array.isArray(c.primes) ? c.primes : PAYE_DEF.primes).filter(x => x && Number(x.heures) > 0 && Number(x.montant) > 0)
+    .map(x => ({ nom: String(x.nom || "").trim() || `Prime ${x.heures} h`, heures: Number(x.heures), montant: Math.round(Number(x.montant)) })).sort((a, b) => b.heures - a.heures);
+  if (!/^\d{4}-S\d{2}$/.test(String(c.primesDepuis || ""))) c.primesDepuis = PAYE_DEF.primesDepuis;
   return c;
 }
+// Palier de prime atteint par les heures de service d'une semaine (null si aucun, ou semaine d'avant les primes).
+function primePalier(heures, k, c) {
+  c = c || payeCfg();
+  if (k && String(k) < c.primesDepuis) return null;
+  const hh = Number(heures) || 0;
+  return c.primes.find(x => hh + 1e-9 >= x.heures) || null;
+}
+// Palier suivant à viser, s'il y en a un.
+function primeSuivante(heures, k, c) {
+  c = c || payeCfg();
+  if (k && String(k) < c.primesDepuis) return null;
+  const hh = Number(heures) || 0, l = c.primes.filter(x => x.heures > hh + 1e-9);
+  return l.length ? l[l.length - 1] : null;
+}
+const primeMontant = (heures, k, c) => { const x = primePalier(heures, k, c); return x ? x.montant : 0; };
+const primeTexte = x => `${x.nom} (${fmtH(x.heures).replace(" h 00", " h")} et plus)`;
 const payeSvc = () => payeCfg().service;
 const gradeTaux = g => { const x = payeCfg().grades.find(z => norm(z.nom) === norm(g)); return x ? x.taux : 0; };
 const gradeRang = g => payeCfg().grades.findIndex(z => norm(z.nom) === norm(g));
@@ -4451,9 +4474,13 @@ function payeLignesPrep(k, p) {
     const taux = gradeTaux(f.grade), pt = f.discordId && !semSaisie(k) ? ptSemaine(f.discordId, k) : null, man = saisie[f.id];
     const manH = man && man.heures != null && man.heures !== "" && Number.isFinite(Number(man.heures)) ? Math.max(0, Number(man.heures)) : null;
     const heures = roundH(manH != null ? manH : pt ? pt.h : 0), hp = roundH(Math.min(heures, Number(c.plafondHeures) || 0));
-    const brut = Math.min(Math.round(hp * taux), max);
+    // Salaire des heures payées, plus la prime du palier de présence atteint, dans la limite de la paye maximum.
+    const salaire = Math.round(hp * taux), pal = primePalier(heures, k, c), prime = pal ? pal.montant : 0, suiv = primeSuivante(heures, k, c);
+    const brut = Math.min(salaire + prime, max);
     return { fid: f.id, nom: f.nom || "", grade: f.grade || "", discordId: f.discordId || "", taux, heuresPointees: pt ? pt.h : null, heures, manuel: manH != null,
-      note: (man && man.note) || "", heuresPayees: hp, brut, enCours: !!(pt && pt.open), aVerifier: pt ? pt.verif : 0, plafonne: brut < Math.round(hp * taux) };
+      note: (man && man.note) || "", heuresPayees: hp, salaire, prime, primeNom: pal ? pal.nom : "", primeSeuil: pal ? pal.heures : null,
+      primeSuivante: suiv ? { nom: suiv.nom, heures: suiv.heures, montant: suiv.montant } : null,
+      brut, enCours: !!(pt && pt.open), aVerifier: pt ? pt.verif : 0, plafonne: brut < salaire + prime };
   });
 }
 function payeBudget(k, p) {
@@ -4519,7 +4546,8 @@ async function payeHeures(k, fid, raw) {
   return payeSet(k, { saisie });
 }
 function payeLigneSnap(l) {
-  return { fid: l.fid, nom: l.nom, grade: l.grade, discordId: l.discordId || "", taux: l.taux, heuresPointees: l.heuresPointees, heures: l.heures, manuel: !!l.manuel, heuresPayees: l.heuresPayees, brut: l.brut, verse: l.verse, reste: l.reste, retenue: l.retenue || 0 };
+  return { fid: l.fid, nom: l.nom, grade: l.grade, discordId: l.discordId || "", taux: l.taux, heuresPointees: l.heuresPointees, heures: l.heures, manuel: !!l.manuel, heuresPayees: l.heuresPayees,
+    salaire: l.salaire != null ? l.salaire : null, prime: l.prime || 0, primeNom: l.primeNom || "", primeSeuil: l.primeSeuil != null ? l.primeSeuil : null, plafonne: !!l.plafonne, brut: l.brut, verse: l.verse, reste: l.reste, retenue: l.retenue || 0 };
 }
 function payeVerserDlg(k) {
   if (!writer()) return;
@@ -4602,18 +4630,18 @@ function payeDoc(k) {
   const doc = {
     kind: "ÉTAT DE PAYE", no: pyNo(k), date: x.versee ? "Versée le " + longDate(new Date(x.p.verseeLe)) : "En préparation au " + longDate(new Date()),
     meta: [["Service", payeSvc()], ["Semaine", periodLabel(k)], ["Budget", `Enveloppe ${payeSvc()} · ${moisNom(moisDe(k))}`], ["Agents", String(ls.length)]],
-    lines: [["Payes dues", money(x.totalDu)], ["Budget de la semaine", money((x.budget || {}).dispo)]].concat(x.coef < 1 ? [[`Prorata appliqué (${pctC(x.coef)} versés)`, "− " + money(x.totalDu - x.totalVerse)]] : [])
+    lines: [["Payes dues", money(x.totalDu)]].concat(ls.some(l => l.prime > 0) ? [["dont primes de présence", money(ls.reduce((t, l) => t + (Number(l.prime) || 0), 0))]] : []).concat([["Budget de la semaine", money((x.budget || {}).dispo)]]).concat(x.coef < 1 ? [[`Prorata appliqué (${pctC(x.coef)} versés)`, "− " + money(x.totalDu - x.totalVerse)]] : [])
       .concat(x.totalRappels ? [[`Rappels versés (${x.rappels.filter(r => r.verse > 0).length})`, money(x.totalRappels)]] : [])
       .concat(x.totalRetenues ? [[`Trop-perçus retenus (${x.retenues.filter(r => r.retenu > 0).length})`, "− " + money(x.totalRetenues)]] : []),
     total: [x.versee ? "Total versé" : "Total à verser", money(x.total)],
     stamp: x.versee ? ["VERSÉE", "ok"] : ["EN PRÉPARATION", "info"],
     note: x.coef < 1 ? `Budget de la semaine insuffisant : ${money(x.totalDu - x.totalVerse)} restent dus aux agents en rappel.` : "", noteTitle: "Prorata",
-    footer: `Paye à l’heure de service, au taux horaire du grade, ${payeCfg().plafondHeures} h et ${money(payeCfg().payeMax)} au plus par semaine. Préfecture de police · Direction des impôts et cotisations.`,
+    footer: `Paye à l’heure de service, au taux horaire du grade${ls.some(l => l.prime > 0) ? ", plus la prime de présence du palier atteint" : ""}, ${payeCfg().plafondHeures} h et ${money(payeCfg().payeMax)} au plus par semaine. Préfecture de police · Direction des impôts et cotisations.`,
     discord: { channel: "services", mentions: [svcMention(payeSvc())].filter(Boolean), text: `**État de paye ${pyNo(k)}** · ${payeSvc()} · semaine ${b.week} : ${money(x.total)} ${x.versee ? "versés" : "à verser"} à ${ls.length} agent${plural(ls.length)}${x.coef < 1 ? ` (prorata ${Math.round(x.coef * 100)} %)` : ""}.` },
-    table: { title: "Agents", head: ["Agent", "Heures", "Taux", "Versé"], cols: [0, 0.52, 0.68, 0.84], align: ["left", "right", "right", "right"], mono: [1, 2, 3], strong0: true,
-      rows: ls.map(l => ({ cells: [l.nom, fmtH(l.heuresPayees), money(l.taux), money(l.verse)], sub: [l.grade, l.reste > 0 ? `${money(l.reste)} en rappel` : ""].filter(Boolean).join(" · ") }))
-        .concat(x.rappels.filter(r => r.verse > 0).map(r => ({ cells: [`Rappel · ${r.nom}`, "—", "—", money(r.verse)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}` })))
-        .concat(x.retenues.filter(r => r.retenu > 0).map(r => ({ cells: [`Trop-perçu · ${r.nom}`, "—", "—", "− " + money(r.retenu)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}${r.du > r.retenu ? ` · ${money(r.du - r.retenu)} restent à retenir` : ""}` }))) },
+    table: { title: "Agents", head: ["Agent", "Heures", "Taux", "Prime", "Versé"], cols: [0, 0.42, 0.56, 0.70, 0.85], align: ["left", "right", "right", "right", "right"], mono: [1, 2, 3, 4], strong0: true,
+      rows: ls.map(l => ({ cells: [l.nom, fmtH(l.heuresPayees), money(l.taux), l.prime ? money(l.prime) : "—", money(l.verse)], sub: [l.grade, l.primeNom ? `prime ${l.primeNom.toLowerCase()}` : "", l.plafonne ? `plafond de ${money(payeCfg().payeMax)}` : "", l.reste > 0 ? `${money(l.reste)} en rappel` : ""].filter(Boolean).join(" · ") }))
+        .concat(x.rappels.filter(r => r.verse > 0).map(r => ({ cells: [`Rappel · ${r.nom}`, "—", "—", "—", money(r.verse)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}` })))
+        .concat(x.retenues.filter(r => r.retenu > 0).map(r => ({ cells: [`Trop-perçu · ${r.nom}`, "—", "—", "—", "− " + money(r.retenu)], sub: `Semaine ${(bounds(r.semaine) || {}).week || r.semaine} · ${r.motif || ""}${r.du > r.retenu ? ` · ${money(r.du - r.retenu)} restent à retenir` : ""}` }))) },
     tableFirst: true
   };
   return doc;
@@ -4621,7 +4649,11 @@ function payeDoc(k) {
 function bulletinDoc(k, fid) {
   const x = payeCalc(k), l = x.lignes.find(z => z.fid === fid), f = foncOf(fid) || {}, rs = x.rappels.filter(r => r.fid === fid && r.verse > 0), ts = (x.retenues || []).filter(r => r.fid === fid && r.retenu > 0);
   const nom = (l && l.nom) || f.nom || "Agent", total = (l ? Number(l.verse) || 0 : 0) + rs.reduce((t, r) => t + r.verse, 0) - ts.reduce((t, r) => t + r.retenu, 0);
-  const lines = l ? [["Heures de service", fmtH(l.heures)], [`Heures payées (au plus ${payeCfg().plafondHeures} h)`, fmtH(l.heuresPayees)], ["Taux horaire du grade", money(l.taux)], ["Paye de la semaine", money(l.brut), true]]
+  const sal = l ? (l.salaire != null ? Number(l.salaire) : Math.round((Number(l.heuresPayees) || 0) * (Number(l.taux) || 0))) : 0;
+  const lines = l ? [["Heures de service", fmtH(l.heures)], [`Heures payées (au plus ${payeCfg().plafondHeures} h)`, fmtH(l.heuresPayees)], ["Taux horaire du grade", money(l.taux)]]
+    .concat(l.prime > 0 ? [["Salaire des heures", money(sal)], [`Prime ${l.primeNom ? "« " + l.primeNom + " »" : "de présence"}${l.primeSeuil ? ` (${fmtH(l.primeSeuil).replace(" h 00", " h")} et plus)` : ""}`, money(l.prime)]] : [])
+    .concat(l.plafonne ? [[`Plafond de la paye (${money(payeCfg().payeMax)} par semaine)`, "− " + money(sal + (Number(l.prime) || 0) - l.brut)]] : [])
+    .concat([["Paye de la semaine", money(l.brut), true]])
     .concat(l.reste > 0 ? [[`Prorata du budget (${pctC(x.coef)} versés)`, "− " + money(l.reste)]] : []) : [];
   rs.forEach(r => lines.push([`Rappel · semaine ${(bounds(r.semaine) || {}).week || r.semaine}`, money(r.verse)]));
   ts.forEach(r => lines.push([`Trop-perçu retenu · semaine ${(bounds(r.semaine) || {}).week || r.semaine}`, "− " + money(r.retenu)]));
@@ -4681,7 +4713,7 @@ function repriseCandidats() {
 // cours et le risque de prorata, face au budget de la semaine et au reste du mois.
 function payePrevision(k) {
   const c = payeCfg(), mx = payeMaxOf(c), ph = Math.max(0, Number(c.plafondHeures) || 0);
-  const maxOf = f => Math.min(ph * gradeTaux(f.grade), mx);
+  const maxOf = f => Math.min(ph * gradeTaux(f.grade) + primeMontant(ph, k, c), mx);
   const grades = new Map();
   for (const f of foncs().filter(f => f.actif !== false)) {
     const nom = f.grade || "Sans grade", m = maxOf(f), g = grades.get(nom) || { grade: nom, n: 0, max: m, total: 0 };
@@ -4738,7 +4770,7 @@ function renderPayes(force) {
   if (!force && box.contains(document.activeElement) && document.activeElement.matches("input")) return;
   const c = payeCfg(), k = S.payeSem = S.payeSem || semKey(new Date()), x = payeCalc(k), b = x.budget || {}, wk = (bounds(k) || {}).week;
   const saisieK = semSaisie(k);
-  $("#py-intro").textContent = `La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service${saisieK ? " relevées sur la tablette en jeu et saisies ici" : ""} × taux horaire du grade, ${c.plafondHeures} h et ${money(c.payeMax)} au plus par semaine. Elle est déduite de l’enveloppe ${c.service} ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.`;
+  $("#py-intro").textContent = `La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service${saisieK ? " relevées sur la tablette en jeu et saisies ici" : ""} × taux horaire du grade${c.primes.length && k >= c.primesDepuis ? `, plus une prime de présence (${c.primes.slice().reverse().map(x => `${money(x.montant)} dès ${fmtH(x.heures).replace(" h 00", " h")}`).join(", ")})` : ""}, ${c.plafondHeures} h et ${money(c.payeMax)} au plus par semaine, prime comprise. Elle est déduite de l’enveloppe ${c.service} ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.`;
   payeSemOptions($("#py-sem"), k);
   // Reprise des salaires déjà versés par une demande « budget salaires ».
   const rep = repriseCandidats();
@@ -4777,12 +4809,15 @@ function renderPayes(force) {
   } else if (!shown.length) fill(box, h("div", { class: "empty", text: "Personne n’a été payé cette semaine." }));
   else {
     const edit = w && !x.versee, anyRet = shown.some(l => l.retenue > 0);
+    // Colonne des primes : semaines où elles comptent (une paye versée avant les primes n'en a pas).
+    const primesK = x.versee ? shown.some(l => l.prime > 0 || l.salaire != null) : c.primes.length > 0 && k >= c.primesDepuis;
     const rows = shown.map(l => {
       const flags = [];
       if (l.enCours) flags.push(ptFerme() ? chip(["Service non fini à la fermeture", "warn"]) : chip(["En service", "info"]));
       if (l.aVerifier) flags.push(chip(["Plus de 12 h à vérifier", "warn"]));
       if (l.manuel && !saisieK) flags.push(chip(["Heures saisies", "muted"]));
       if (!l.taux) flags.push(chip(["Grade sans taux", "bad"]));
+      if (l.primeNom) flags.push(chip([l.primeNom, "ok"]));
       if (l.plafonne) flags.push(chip([`Plafond ${money(c.payeMax)}`, "muted"]));
       let hc;
       if (edit) {
@@ -4799,6 +4834,8 @@ function renderPayes(force) {
         hc,
         h("td", { class: "num", "data-l": "Taux", text: l.taux ? money(l.taux) : "—" }),
         h("td", { class: "num", "data-l": "Payées", text: fmtH(l.heuresPayees) }),
+        primesK ? h("td", { class: "num", "data-l": "Prime" }, h("span", { text: l.prime ? money(l.prime) : "—" }),
+          !x.versee && l.primeSuivante ? h("span", { class: "small-meta", text: `encore ${fmtH(Math.max(0, l.primeSuivante.heures - l.heures))} pour ${money(l.primeSuivante.montant)}` }) : null) : null,
         h("td", { class: "num", "data-l": "Paye due", text: money(l.brut) }),
         h("td", { class: "num", "data-l": "Versée", style: "font-weight:650", text: money(l.verse) }),
         anyRet ? h("td", { class: "num py-reste", "data-l": "Trop-perçu retenu", text: l.retenue > 0 ? "− " + money(l.retenue) : "" }) : null,
@@ -4806,9 +4843,9 @@ function renderPayes(force) {
     });
     const sumH = shown.reduce((t, l) => t + (Number(l.heuresPayees) || 0), 0);
     fill(box, h("div", { class: "tbl-wrap" }, h("table", { class: "compact py-tbl" },
-      h("thead", {}, h("tr", {}, (saisieK ? ["Agent", "Heures de service"] : ["Agent", "Pointées", "Retenues"]).concat(["Taux", "Payées", "Paye due", "Versée"], anyRet ? ["Trop-perçu"] : [], ["Rappel"]).map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+      h("thead", {}, h("tr", {}, (saisieK ? ["Agent", "Heures de service"] : ["Agent", "Pointées", "Retenues"]).concat(["Taux", "Payées"], primesK ? ["Prime"] : [], ["Paye due", "Versée"], anyRet ? ["Trop-perçu"] : [], ["Rappel"]).map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
       h("tbody", {}, rows),
-      h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), saisieK ? null : h("td", {}), h("td", {}), h("td", {}), h("td", { class: "num", "data-l": "Payées", text: fmtH(sumH) }), h("td", { class: "num", "data-l": "Paye due", text: money(x.totalDu) }), h("td", { class: "num", "data-l": "Versée", text: money(x.totalVerse) }), anyRet ? h("td", { class: "num py-reste", "data-l": "Trop-perçu retenu", text: "− " + money(x.totalRetenues) }) : null, h("td", { class: "num py-reste", "data-l": "Rappel", text: x.totalDu - x.totalVerse > 0 ? money(x.totalDu - x.totalVerse) : "" }))))),
+      h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), saisieK ? null : h("td", {}), h("td", {}), h("td", {}), h("td", { class: "num", "data-l": "Payées", text: fmtH(sumH) }), primesK ? h("td", { class: "num", "data-l": "Prime", text: money(shown.reduce((t, l) => t + (Number(l.prime) || 0), 0)) }) : null, h("td", { class: "num", "data-l": "Paye due", text: money(x.totalDu) }), h("td", { class: "num", "data-l": "Versée", text: money(x.totalVerse) }), anyRet ? h("td", { class: "num py-reste", "data-l": "Trop-perçu retenu", text: "− " + money(x.totalRetenues) }) : null, h("td", { class: "num py-reste", "data-l": "Rappel", text: x.totalDu - x.totalVerse > 0 ? money(x.totalDu - x.totalVerse) : "" }))))),
       edit ? h("p", { class: "hint", style: "margin:8px 0 0", text: saisieK
         ? `Saisissez pour chaque agent ses heures de service de la semaine, relevées sur la tablette en jeu (12 h 30, 12:30 ou 12,5) : la paye se calcule toute seule. Au-delà de ${c.plafondHeures} h, les heures ne sont pas payées.`
         : `Les heures pointées remplissent la paye toutes seules. Tapez d’autres heures pour un agent sans pointeuse ou pour corriger (12 h 30, 12:30 ou 12,5). Au-delà de ${c.plafondHeures} h, les heures ne sont pas payées.${ptFerme() ? ` La pointeuse est fermée depuis le ${PT_FERMETURE_TXT} : à partir de la semaine 46, les heures se saisissent à la main.` : ""}` }) : null);
@@ -4949,6 +4986,20 @@ function openPayeReglages() {
     rows.push(r); rowsBox.append(r.el);
   };
   c.grades.forEach(addRow);
+  // Primes de présence : un palier par ligne (nom, heures de service à atteindre dans la semaine, montant).
+  const prBox = h("div", { class: "art-rows" }), prRows = [];
+  const addPrime = x => {
+    const nom = h("input", { autocomplete: "off", placeholder: "Nom du palier", "aria-label": "Nom du palier" });
+    const hrs = h("input", { type: "number", min: "0.5", step: "0.5", inputmode: "decimal", placeholder: "Heures", "aria-label": "Heures de service à atteindre dans la semaine" });
+    const mt = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "aria-label": "Montant de la prime" });
+    nom.value = x ? x.nom : ""; hrs.value = x ? String(x.heures) : ""; mt.value = x ? String(x.montant) : "";
+    const r = { nom, hrs, mt };
+    const rm = h("button", { class: "btn ghost small art-rm", type: "button", "aria-label": "Retirer ce palier", text: "×" });
+    r.el = h("div", { class: "art-row", style: "grid-template-columns:minmax(0,1fr) 110px 150px 32px" }, nom, hrs, h("div", { class: "money", "data-cur": cur() }, mt), rm);
+    rm.addEventListener("click", () => { prRows.splice(prRows.indexOf(r), 1); r.el.remove(); });
+    prRows.push(r); prBox.append(r.el);
+  };
+  c.primes.slice().reverse().forEach(addPrime);
   const err = h("span", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer" });
   go.addEventListener("click", async () => {
@@ -4959,8 +5010,13 @@ function openPayeReglages() {
     if (grades.some(g => !(g.taux > 0))) { err.textContent = "Chaque grade a besoin d’un taux horaire."; return; }
     const B = Math.round(Number(bud.value)), P = Number(plaf.value), M = Math.round(Number(max.value));
     if (!(B >= 0) || !(P > 0 && P <= 168) || !(M >= 0)) { err.textContent = "Vérifiez le budget, le plafond d’heures et la paye maximum."; return; }
+    const complet = x => Number.isFinite(x.heures) && x.heures > 0 && x.montant > 0;
+    const primes = prRows.map(r => ({ nom: r.nom.value.trim(), heures: Number(r.hrs.value), montant: Math.round(Number(r.mt.value)) })).filter(x => x.nom || complet(x));
+    if (primes.some(x => !complet(x))) { err.textContent = "Chaque palier de prime a besoin d’un nombre d’heures et d’un montant."; return; }
+    if (new Set(primes.map(x => x.heures)).size !== primes.length) { err.textContent = "Deux paliers de prime demandent le même nombre d’heures."; return; }
     go.disabled = true;
-    const payes = Object.assign({}, (S.config || {}).payes || {}, { service: svc.value, budgetMois: B, plafondHeures: P, payeMax: M, grades: grades.map(g => ({ nom: g.nom, taux: g.taux })) });
+    const payes = Object.assign({}, (S.config || {}).payes || {}, { service: svc.value, budgetMois: B, plafondHeures: P, payeMax: M, grades: grades.map(g => ({ nom: g.nom, taux: g.taux })),
+      primes: primes.map(x => ({ nom: x.nom || `Prime ${x.heures} h`, heures: x.heures, montant: x.montant })).sort((a, b) => b.heures - a.heures) });
     if (!(await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { payes, updatedAt: nowISO() }))))) { go.disabled = false; return; }
     // Grade renommé : les fiches des agents suivent.
     for (const g of grades) if (g.orig && norm(g.orig) !== norm(g.nom)) for (const f of (S.fonctionnaires || []).filter(z => norm(z.grade) === norm(g.orig))) { const body = Object.assign({}, f, { grade: g.nom, modifieLe: nowISO() }); delete body.id; await write(() => S.db.doc("fonctionnaires/" + f.id).set(body)); }
@@ -4970,7 +5026,9 @@ function openPayeReglages() {
     body: [h("div", { class: "row2" }, field("py-r-svc", "Enveloppe imputée", svc), h("div", { class: "field" }, h("label", { for: "py-r-bud", text: "Budget des payes par mois" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(bud, { id: "py-r-bud" })))),
       h("div", { class: "row2" }, field("py-r-plaf", "Heures payées au plus par semaine", plaf), h("div", { class: "field" }, h("label", { for: "py-r-max", text: "Paye maximum par semaine" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(max, { id: "py-r-max" })))),
       h("h4", { style: "margin:14px 0 2px", text: "Grades et taux horaires" }), h("p", { class: "hint", style: "margin:0", text: "Du premier grade au plus haut. Le taux horaire multiplie les heures de service de l’agent." }),
-      rowsBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addRow(null), text: "Ajouter un grade" }), err],
+      rowsBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addRow(null), text: "Ajouter un grade" }),
+      h("h4", { style: "margin:14px 0 2px", text: "Primes de présence" }), h("p", { class: "hint", style: "margin:0", text: `Pour chaque palier : son nom, les heures de service à atteindre dans la semaine, le montant. Le palier le plus haut atteint s’ajoute au salaire, sans dépasser la paye maximum. À partir de la semaine ${(bounds(c.primesDepuis) || {}).week || c.primesDepuis}.` }),
+      prBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addPrime(null), text: "Ajouter un palier" }), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 
@@ -5050,7 +5108,8 @@ function openFonc(fid, k0) {
     h("div", { class: "minis" },
       mk("Grade", f.grade || "—", taux ? `${money(taux)} de l’heure` : "pas de taux au barème", taux ? "kpi-txt" : "kpi-txt bad"),
       mk("Heures de la semaine", fmtH(l ? l.heures : pt.h), l && l.manuel ? "saisies à la main" : f.discordId && !sk ? "pointées" : "à saisir dans la paye"),
-      mk(x.versee ? "Versé" : "Paye prévue", money(l ? l.verse : 0), l ? `${fmtH(l.heuresPayees)} payées${l.reste > 0 ? " · " + money(l.reste) + " en rappel" : ""}` : "pas d’heures", x.versee ? "ok" : ""),
+      mk(x.versee ? "Versé" : "Paye prévue", money(l ? l.verse : 0), l ? `${fmtH(l.heuresPayees)} payées${l.prime ? " · prime comprise" : ""}${l.reste > 0 ? " · " + money(l.reste) + " en rappel" : ""}` : "pas d’heures", x.versee ? "ok" : ""),
+      l && (l.prime || (!x.versee && l.primeSuivante)) ? mk("Prime de présence", l.prime ? money(l.prime) : "—", [l.primeNom || (l.prime ? "" : "aucun palier atteint"), !x.versee && l.primeSuivante ? `encore ${fmtH(Math.max(0, l.primeSuivante.heures - l.heures))} pour ${l.primeSuivante.nom.toLowerCase()} (${money(l.primeSuivante.montant)})` : ""].filter(Boolean).join(" · "), l.prime ? "ok" : "") : null,
       mk("Rappels dus", money(dus.reduce((t, r) => t + r.reste, 0)), dus.length ? `${dus.length} rappel${plural(dus.length)}` : "aucun", dus.length ? "warn" : ""),
       tps.length ? mk("Trop-perçus", "− " + money(tpd.reduce((t, r) => t + r.reste, 0)), tpd.length ? "à retenir sur ses payes" : "régularisés", tpd.length ? "warn" : "") : null),
     sk ? sec("Heures", h("p", { class: "muted", style: "margin:0", text: `Depuis la fermeture de la pointeuse (${PT_FERMETURE_TXT}), les heures de service se relèvent sur la tablette en jeu et se saisissent dans la paye de la semaine.` }))
@@ -5166,7 +5225,7 @@ function openRappelForm(preset) {
     let montant = 0, heures = null, note = "";
     if (mode.value === "heures") {
       const v = parseH(hrs.value);
-      if (v != null && Number.isFinite(v) && v > 0) { heures = roundH(Math.min(v, maxH)); montant = Math.min(Math.round(heures * d.taux), maxM === Infinity ? Infinity : maxM); if (v > maxH) note = ` Au-delà de ${c.plafondHeures} h dans la semaine, les heures ne sont pas payées : ${fmtH(heures)} retenues.`; }
+      if (v != null && Number.isFinite(v) && v > 0) { heures = roundH(Math.min(v, maxH)); const pr = Math.max(0, primeMontant(d.heures + heures, k) - primeMontant(d.heures, k)); montant = Math.min(Math.round(heures * d.taux) + pr, maxM === Infinity ? Infinity : maxM); if (pr) note += ` Dont ${money(pr)} de prime de présence (palier atteint avec ces heures).`; if (v > maxH) note += ` Au-delà de ${c.plafondHeures} h dans la semaine, les heures ne sont pas payées : ${fmtH(heures)} retenues.`; }
     } else { const v = Math.round(Number(mt.value) || 0); montant = Math.min(v, maxM); if (v > maxM) note = ` La paye d’une semaine ne dépasse pas ${money(c.payeMax)} : rappel ramené à ${money(montant)}.`; }
     if (!Number.isFinite(montant)) montant = 0;
     res = { fid, k, heures, montant, taux: d.taux };
@@ -5359,7 +5418,7 @@ function openRegulariser(k) {
     const H = parseH(hIn.value), ok = Number.isFinite(H) && H >= 0;
     if (!touchedMotif && ok) motif.value = `Régularisation de la semaine ${wk} sur la base de ${fmtH(H).replace(" h 00", " h")} de service`;
     rows = (p.lignes || []).map(l => {
-      const taux = Number(l.taux) || gradeTaux(l.grade), du = ok ? Math.min(Math.round(Math.min(H, c.plafondHeures) * taux), payeMaxOf(c)) : 0;
+      const taux = Number(l.taux) || gradeTaux(l.grade), du = ok ? Math.min(Math.round(Math.min(H, c.plafondHeures) * taux) + primeMontant(H, k, c), payeMaxOf(c)) : 0;
       const d = percuSemaine(l.fid, k), ecart = d.total - du;
       // Un rappel ou un trop-perçu de cette semaine déjà annulé : la Direction a tranché, l'agent n'est pas coché d'office.
       const ann = (S.rappels || []).filter(r => r.fid === l.fid && r.semaine === k && r.statut === "annule" && !String(r.id).startsWith("auto-") && (ecart > 0 ? r.origine === "retenue" : r.origine !== "retenue"));
@@ -5572,9 +5631,10 @@ function ptLive() {
   if (wh) wh.textContent = fmtH(hrs);
   const info = ptVue.info, v = box && $("[data-pt-pay]", box), sub = box && $("[data-pt-pay-s]", box);
   if (!v || !info || info.manque) return;
-  const hp = Math.min(hrs, info.plafond), brut = Math.min(hp * info.taux, info.max);
+  const pal = primePalier(hrs, k), suiv = primeSuivante(hrs, k);
+  const hp = Math.min(hrs, info.plafond), brut = Math.min(hp * info.taux + (pal ? pal.montant : 0), info.max);
   v.textContent = moneyC(brut);
-  const base = `${fmtH(hp)} payée${hp >= 2 ? "s" : ""} × ${money(info.taux)} de l’heure`;
+  const base = `${fmtH(hp)} payée${hp >= 2 ? "s" : ""} × ${money(info.taux)} de l’heure${pal ? ` + prime ${pal.nom.toLowerCase()} ${money(pal.montant)}` : ""}${suiv ? ` · encore ${fmtH(Math.max(0, suiv.heures - hrs))} pour ${suiv.nom.toLowerCase()} (${money(suiv.montant)})` : ""}`;
   sub.textContent = !info.taux ? "Votre grade n’a pas de taux horaire au barème : voyez la Direction."
     : brut >= info.max ? `Paye maximum atteinte (${money(info.max)} par semaine) : votre paye de la semaine est complète.`
     : hrs >= info.plafond ? `Plafond de ${fmtH(info.plafond).replace(" h 00", " h")} atteint : les heures en plus ne sont pas payées cette semaine.`
