@@ -614,6 +614,14 @@ dialog.pt-alerte[open]{animation:ptAlPulse 1.1s ease-in-out 3}
 @media (max-width:560px){.pt-al-in{padding:18px 16px 16px}.btn.pt-al-ok{align-self:stretch}}
 .pt-al-voix{display:grid;gap:5px;margin-top:4px;font-weight:650}
 .pt-al-lect{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+/* Relevés en série */
+.serie-list{margin-top:4px}
+.ent-list li.serie-it{grid-template-columns:96px minmax(0,1fr) auto;gap:12px}
+.serie-img{display:block;width:96px;height:60px;border-radius:6px;overflow:hidden;background:var(--paper)}
+.serie-img img{width:100%;height:100%;object-fit:cover;display:block}
+.serie-raisons{color:var(--warn)}
+.serie-droite{display:grid;gap:6px;justify-items:end}
+@media (max-width:560px){.ent-list li.serie-it{grid-template-columns:64px minmax(0,1fr)}.serie-img{width:64px;height:44px}.serie-droite{grid-column:1/-1;justify-items:start}}
 .btn.pt-al-play{background:#fff;color:#a3201a;border-color:#fff;font-size:15px;font-weight:750;min-width:148px;padding:9px 16px}
 .btn.pt-al-play:disabled{opacity:.6;cursor:not-allowed}
 .btn.pt-al-play:focus-visible{outline:3px solid #fff;outline-offset:3px}
@@ -1344,7 +1352,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
           <h3>Surveillance des comptes</h3>
           <p class="sub" id="rc-comptes-sub">Soldes des comptes des entreprises rapprochés de leurs déclarations.</p>
         </div>
-        <button class="btn ghost small" type="button" id="rc-releve-new" hidden>Relevé de compte</button>
+        <div class="row-actions"><button class="btn ghost small" type="button" id="rc-serie-new" hidden>Relevés en série</button><button class="btn ghost small" type="button" id="rc-releve-new" hidden>Relevé de compte</button></div>
       </div>
       <div id="rc-comptes"><div class="empty">Chargement…</div></div>
     </div>
@@ -15304,7 +15312,7 @@ function concordanceTexte(c) {
   return Math.abs(c.ecart) < 1 ? { ok: true, texte: `Concorde avec le relevé ${q} : les mouvements lus expliquent toute la différence.` }
     : { ok: null, texte: `Depuis le relevé ${q}, des mouvements plus anciens que ceux lus ici n’ont pas été vus (${(c.ecart > 0 ? "+" : "") + money(c.ecart)} au total). Relevez plus souvent pour tout voir.` };
 }
-const CASH_RE = /\bcash\b|esp[eè]ces/i, SALAIRE_RE = /salaire|\bprimes?\b|\bpaies?\b/i, NON_RECETTE_RE = /rembours|\bpr[eê]ts?\b|subvention|\baides?\b/i;
+const CASH_RE = /\bcash\b|esp[eè]ces/i, SALAIRE_RE = /salaire|\bsa[lt]a?ire\b|\bprimes?\b|\bpaies?\b/i, NON_RECETTE_RE = /rembours|\bpr[eê]ts?\b|subvention|\baides?\b/i;
 const quandMvt = t => { const d = new Date(t); return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} à ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 const delaiMvt = ms => ms >= 2 * 864e5 ? `${Math.round(ms / 864e5)} jours` : ms < 36e5 ? `${Math.max(1, Math.round(ms / 6e4))} min` : `${Math.floor(ms / 36e5)} h ${pad(Math.round(ms % 36e5 / 6e4))}`;
 // Libellé court : « Reçu de · Facture reçue (cash) — Bahama Mamas » → « Facture reçue (cash) — Bahama Mamas ».
@@ -15703,8 +15711,16 @@ function lireMontant(t) {
   return { v, signe: m[1] ? (m[1] === "+" ? 1 : -1) : 0, index: m.index, len: m[0].length };
 }
 // Date du mouvement « 13/10 03:54 » : l'année est celle du relevé, ou la précédente si la date serait à venir.
+// Lettres que l'OCR prend pour des chiffres dans une date « 05/11 21:11 » lue « OS/11 21:11 » ou « 26/10 OT:11 ».
+const DATE_CONF = { O: "0", o: "0", D: "0", Q: "0", S: "5", s: "5", I: "1", l: "1", i: "1", "|": "1", T: "7", B: "8", Z: "2", z: "2", G: "6" };
+const DATE_CH = "[\\dOoDQSsIli|TBZzG]";
+const DATE_RE = new RegExp(`(?<!\\p{L})(${DATE_CH}{1,2})\\/(${DATE_CH}{1,2})(\\s+)(${DATE_CH}{1,2})(\\s?[:h.;]\\s?)(${DATE_CH}{2})(?!\\p{L})`, "gu");
 function lireDate(t, ref) {
-  const s = String(t || "").replace(/(?<!\p{L})[\dOo]{1,2}(?!\p{L})/gu, x => x.replace(/[Oo]/g, "0"));
+  const s = String(t || "").replace(/(?<!\p{L})[\dOo]{1,2}(?!\p{L})/gu, x => x.replace(/[Oo]/g, "0"))
+    .replace(DATE_RE, (all, a, b, sp, c, sep, d) => {
+      const y = [a, b, c, d].map(x => x.replace(/[^\d]/g, ch => DATE_CONF[ch] || ch));
+      return y.every(v => /^\d+$/.test(v)) && /\d/.test(a + b) && /\d/.test(c + d) ? `${y[0]}/${y[1]}${sp}${y[2]}${sep}${y[3]}` : all;
+    });
   const m = /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\s*(?:à\s*)?(\d{1,2})\s?[:h.;,\-]?\s?(\d{2})(?!\d)/.exec(s);
   if (!m || +m[2] < 1 || +m[2] > 12 || +m[1] < 1 || +m[1] > 31 || +m[4] > 23 || +m[5] > 59) return null;
   const r = ref instanceof Date && Number.isFinite(ref.getTime()) ? ref : new Date();
@@ -15768,7 +15784,7 @@ function verifierOrdre(mv, ref) {
     if (t == null) return;
     const av = ts.slice(0, i).filter(x => x != null), ap = ts.slice(i + 1).filter(x => x != null);
     const plusRecent = av.length ? av[av.length - 1] : null, plusAncien = ap.length ? ap[0] : null;
-    if (t > r + 6e4 * 10 || t < r - 60 * 864e5 || (plusRecent != null && t > plusRecent && (plusAncien == null || plusAncien <= plusRecent)) || (plusAncien != null && t < plusAncien && (plusRecent == null || plusAncien <= plusRecent))) m.douteux = true;
+    if (t > r + 6e4 * 10 || t < r - 60 * 864e5 || (plusRecent != null && t > plusRecent && (plusAncien == null || plusAncien <= plusRecent)) || (plusAncien != null && t < plusAncien && (plusRecent == null || plusAncien <= plusRecent))) m.douteux = m.ordre = true;
   });
 }
 // Capture de la tablette : les pastilles donnent les lignes et le sens ; l'OCR lit chaque ligne.
@@ -15788,15 +15804,19 @@ async function lireCapture(blob, ref, suivi) {
   const pas = ecarts[Math.floor(ecarts.length / 2)], hp = p.map(x => x.y1 - x.y0).sort((a, b) => a - b)[Math.floor(p.length / 2)];
   // Agrandissement : le texte des lignes doit mesurer une quarantaine de pixels pour l'OCR.
   const k = Math.max(1, Math.min(4, 40 / Math.max(8, hp * 0.75)));
-  // Icône colorée de la ligne, à gauche : le texte commence juste après.
+  // Icône colorée de la ligne, à gauche : le texte commence juste après. C'est la dernière tache
+  // colorée étroite avant le texte : plus à gauche, le décor du jeu (un gilet, de la verdure) ou le menu
+  // de la tablette peuvent avoir du rouge ou du vert, et leur texte se mêlerait au libellé.
   const icone = (yc, xmax) => {
-    let fin = -1, deb = -1;
+    let fin = -1, deb = -1, best = null;
+    const clore = () => { if (fin >= 0 && fin - deb < pas) best = { deb, fin }; deb = fin = -1; };
     for (let x = 0; x < xmax; x++) {
       let hit = false;
       for (let y = Math.max(0, Math.round(yc - hp * 0.5)); y <= Math.min(H - 1, yc + hp * 0.5) && !hit; y++) { const j = (y * W + x) * 4; hit = estRouge(d[j], d[j + 1], d[j + 2]) || estVert(d[j], d[j + 1], d[j + 2]); }
-      if (hit) { if (deb < 0) deb = x; fin = x; } else if (fin >= 0 && x - fin > hp * 1.5) { if (fin - deb < pas) break; deb = fin = -1; }
+      if (hit) { if (deb < 0) deb = x; fin = x; } else if (fin >= 0 && x - fin > hp * 1.5) clore();
     }
-    return fin >= 0 && fin - deb < pas ? { deb, fin } : null;
+    clore();
+    return best;
   };
   const mouvements = [], ics = p.map((x, i) => icone(Math.round(centres[i]), x.x0 - hp * 0.8)), vus = ics.filter(Boolean);
   const finIc = vus.length ? vus.map(v => v.fin).sort((a, b) => a - b)[Math.floor(vus.length / 2)] : null;
@@ -15818,20 +15838,187 @@ async function lireCapture(blob, ref, suivi) {
     if (!mm) mm = mts.find(Boolean) || null;
     const lib = r.txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
       .map(l => { const dd = lireDate(l, ref); return nettoyer(dd ? l.slice(0, dd.index) + " " + l.slice(dd.index + dd.len) : l); }).filter(Boolean).join(" · ");
-    // Un signe écrit qui contredit la couleur de la pastille est aussi à vérifier.
-    mouvements.push({ t: r.dt ? r.dt.t.toISOString() : null, libelle: lib, montant: mm ? mm.v * x.signe : null, conf: Math.round(r.conf), douteux: !r.dt || !mm || !sur || r.conf < 60 || (!!mm.signe && mm.signe !== x.signe) });
+    // Un signe écrit qui contredit la couleur de la pastille est aussi à vérifier. Les autres lectures du
+    // montant sont gardées : le relevé précédent peut dire laquelle est la bonne.
+    const alts = [...new Set(mts.filter(Boolean).map(a => a.v * x.signe))];
+    mouvements.push({ t: r.dt ? r.dt.t.toISOString() : null, libelle: lib, montant: mm ? mm.v * x.signe : null, conf: Math.round(r.conf), douteux: !r.dt || !mm || !sur || r.conf < 60 || (!!mm.signe && mm.signe !== x.signe), alts: alts.length > 1 ? alts : undefined });
   }
   verifierOrdre(mouvements, ref);
   // En-tête : le solde à gauche, le RIB à droite, au-dessus de « Mouvements récents ».
   const droite = Math.max(...p.map(x => x.x1)), y1 = centres[0] - pas / 2, y0 = Math.max(0, y1 - pas * 2.2);
   const xg = gauche < W ? Math.max(0, gauche - hp) : Math.max(0, droite - W * 0.9);
   const kh = Math.max(1, Math.min(4, k)), larg = droite - xg;
-  let solde = null, solde2 = null;
-  for (const l of (await lire(decoupe(c, xg, y0, larg * 0.55, y1 - y0, kh, true), 6)).split(/\r?\n/)) { const m = lireMontant(l); if (m) { solde = m.v; break; } }
-  for (const l of (await lire(decoupe(c, xg, y0, larg * 0.55, y1 - y0, kh, true), 6, "0123456789€ ")).split(/\r?\n/)) { const m = lireMontant(l); if (m) { solde2 = m.v; break; } }
-  if (solde == null) solde = solde2;
+  // Le solde commence souvent à l'aplomb du cadre des icônes, à gauche de leur flèche : la découpe part
+  // plus à gauche pour ne pas rogner son premier chiffre (un 5 rogné se lit 9). Trois lectures, à deux
+  // tailles : deux lectures identiques font foi ; toutes sont gardées pour la concordance.
+  const xs = Math.max(0, xg - Math.max(2 * hp, pas * 0.5)), ls = xg + larg * 0.55 - xs, lectures = [];
+  for (const [kk, liste] of [[kh, ""], [kh, "0123456789€ "], [Math.max(1, kh * 0.6), "0123456789€ "]]) {
+    for (const l of (await lire(decoupe(c, xs, y0, ls, y1 - y0, kk, true), 6, liste)).split(/\r?\n/)) { const m = lireMontant(l); if (m) { lectures.push(m.v); break; } }
+  }
+  const nb = v => lectures.filter(z => z === v).length;
+  const solde = lectures.length ? lectures.slice().sort((a, b) => nb(b) - nb(a))[0] : null;
   const rib = lireRib(await lire(decoupe(c, xg + larg * 0.45, y0, larg * 0.55 + hp, y1 - y0, kh * 1.3), 6));
-  return { solde, soldeDouteux: solde == null || solde2 !== solde, rib, mouvements, mode: "capture" };
+  return { solde, soldeDouteux: solde == null || nb(solde) < 2, soldeAlts: [...new Set(lectures)], rib, mouvements, mode: "capture" };
+}
+// Une seule lecture à la fois : le lecteur de captures est partagé (relevé seul et relevés en série).
+let ocrFile = Promise.resolve();
+function lireCaptureEnFile(blob, ref, suivi) {
+  const p = ocrFile.then(() => lireCapture(blob, ref, suivi));
+  ocrFile = p.catch(() => {});
+  return p;
+}
+
+/* ---------- Lecture améliorée : nettoyage, mouvements déjà connus, vocabulaire, concordance ---------- */
+// Restes de lecture à retirer d'un libellé : « v Reçu de », « c de · Virement », « Virement - 0 »,
+// « Mission Taxi PNJ- -:27 », « Chantier BTP · 2 2 », bout de date « 25/ N:26 ».
+function propreLibelle(lib) {
+  let s = String(lib || "").replace(/\s+/g, " ").trim();
+  s = s.replace(/^(?:\p{L}\s+)?(?:Re)?[çcÇC]u?\s+de\b/u, "Reçu de");
+  for (let i = 0; i < 4; i++) {
+    const avant = s;
+    s = s.replace(/\s*[-–—·]?\s*[\dOoSIl]{1,2}\/\s*\S{0,2}\s*\S{0,2}\s*:\s*\d{0,2}\s*$/u, "")
+      .replace(/\s*[-–—·:;,.]+[\s\-–—·:;,.]*(?:\d{1,2}|\p{L})?\s*$/u, "")
+      .replace(/(?:\s·?\s?(?:\d|\p{Ll}))+$/u, "")
+      .trim();
+    if (s === avant) break;
+  }
+  return s;
+}
+// Distance d'édition bornée : au-delà de max, renvoie max + 1 sans finir le calcul.
+function levMax(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i]; let best = i;
+    for (let j = 1; j <= b.length; j++) { const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); cur.push(v); if (v < best) best = v; }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// Vocabulaire des comptes : les mots des libellés déjà relevés (vérifiés par un agent) et les noms des
+// entreprises. Un mot mal lu est remplacé par le mot connu le plus proche, s'il n'y a pas d'hésitation.
+function vocabMvts() {
+  return mvtMemo("vocab", () => {
+    const n = new Map(), mots = s => String(s || "").match(/\p{L}[\p{L}'’-]{3,}/gu) || [];
+    for (const r of S.releves || []) for (const m of Array.isArray(r.mouvements) ? r.mouvements : []) for (const w of mots(m.libelle)) n.set(w, (n.get(w) || 0) + 1);
+    for (const e of S.entreprises || []) for (const nm of nomsDe(e)) for (const w of mots(nm)) n.set(w, (n.get(w) || 0) + 5);
+    return n;
+  });
+}
+// Mots qui comptent pour l'analyse du compte (« salaire » sépare les salaires des autres dépenses) : une
+// lettre près suffit à les corriger, et leurs erreurs de lecture connues sont rattrapées (« Satire »).
+const MOTS_CLES = ["Salaire", "Virement", "Facture", "Livraison", "Remboursement", "Paiement", "semaine", "Commande", "Prestation"];
+const LUS_POUR = { satire: "salaire", salire: "salaire", solre: "salaire", saiaire: "salaire", saliare: "salaire" };
+function motCle(w) {
+  const wl = w.toLowerCase(), cas = x => (w[0] === w[0].toUpperCase() ? x[0].toUpperCase() : x[0].toLowerCase()) + x.slice(1);
+  if (LUS_POUR[wl]) return cas(LUS_POUR[wl]);
+  for (const k of MOTS_CLES) {
+    const kl = k.toLowerCase();
+    if (wl === kl || (wl.startsWith(kl) && wl.length - kl.length <= 2)) return null;
+    if (wl[0] === kl[0] && levMax(wl, kl, 1) <= 1) return cas(kl);
+  }
+  return null;
+}
+function corrigerMots(lib) {
+  const voc = vocabMvts();
+  if (!lib) return lib;
+  return String(lib).replace(/\p{L}[\p{L}'’-]{4,}/gu, w => {
+    const mc = motCle(w);
+    if (mc) return mc;
+    if (!voc.size) return w;
+    const f = voc.get(w) || 0, max = w.length >= 8 ? 2 : 1, wl = w.toLowerCase();
+    let best = null, bd = 9, bf = 0, second = 0;
+    for (const [c, n] of voc) {
+      if (c === w || Math.abs(c.length - w.length) > max) continue;
+      const d = levMax(wl, c.toLowerCase(), max);
+      if (d > max) continue;
+      if (d < bd) { second = 0; best = c; bd = d; bf = n; }
+      else if (d === bd) { if (n > bf) { second = bf; best = c; bf = n; } else second = Math.max(second, n); }
+    }
+    if (!best || bd === 0) return w;
+    // Un mot déjà connu n'est remplacé que par une variante bien plus courante (« bücheron » → « bûcheron »).
+    if (f && !(bd === 1 && f <= 3 && bf >= 10 * f)) return w;
+    if (!f && bf < 3) return w;
+    if (second && bf < 3 * second) return w;
+    return best;
+  });
+}
+// Mouvements déjà relevés sur ce compte (même minute) : repris tels qu'un agent les a vérifiés.
+function recalerConnus(x, mv) {
+  if (!x) return 0;
+  const k = mvtsOf(x);
+  if (!k.length) return 0;
+  const pris = new Set();
+  let n = 0;
+  const prendre = (m, z) => { pris.add(z); m.t = new Date(z.t).toISOString(); m.montant = z.montant; m.libelle = z.libelle; m.douteux = false; m.ordre = false; m.connu = true; n++; };
+  for (const m of mv) {
+    const t = m.t ? new Date(m.t).getTime() : NaN;
+    if (!Number.isFinite(t)) continue;
+    const cands = k.filter(z => !pris.has(z) && Math.abs(z.t - t) <= 6e4);
+    let z = cands.find(c => c.montant === m.montant) || cands.find(c => (m.alts || []).includes(c.montant)) || null;
+    // Montant mal lu : un seul mouvement connu à cette minute, du même sens, à un chiffre près.
+    if (!z && cands.length === 1 && (m.douteux || m.montant == null)) {
+      const c = cands[0];
+      if (m.montant == null || (Math.sign(c.montant) === Math.sign(m.montant) && levMax(String(Math.abs(Math.round(c.montant))), String(Math.abs(Math.round(m.montant))), 1) <= 1)) z = c;
+    }
+    if (z) prendre(m, z);
+  }
+  // Date illisible : le mouvement connu de même montant entre ses deux voisins.
+  mv.forEach((m, i) => {
+    if (m.t || m.montant == null) return;
+    const ts = j => (mv[j] && mv[j].t ? new Date(mv[j].t).getTime() : null);
+    let hi = null, lo = null;
+    for (let j = i - 1; j >= 0 && hi == null; j--) hi = ts(j);
+    for (let j = i + 1; j < mv.length && lo == null; j++) lo = ts(j);
+    const cands = k.filter(z => !pris.has(z) && (z.montant === m.montant || (m.alts || []).includes(z.montant)) && (hi == null || z.t <= hi + 6e4) && (lo == null || z.t >= lo - 6e4));
+    if (cands.length === 1) prendre(m, cands[0]);
+  });
+  return n;
+}
+// Concordance avec le relevé précédent : si elle tient, montants et solde sont confirmés ; sinon, une
+// autre lecture du solde ou d'un seul montant qui la rétablit est retenue (s'il n'y en a qu'une).
+function lignesLues(mv) {
+  return (mv || []).filter(m => m.t && m.montant != null && Number.isFinite(Number(m.montant)) && Number(m.montant) !== 0)
+    .map(m => ({ t: new Date(m.t).getTime(), libelle: m.libelle || "", montant: Math.round(Number(m.montant) * 100) / 100 }))
+    .filter(m => Number.isFinite(m.t)).sort((a, b) => b.t - a.t);
+}
+function reparerConcordance(x, r, T) {
+  if (!x || r.solde == null) return null;
+  const essai = solde => { const l = lignesLues(r.mouvements), c = concordance(x, solde, Math.max(T, l.length ? l[0].t : 0), l, null); return c && c.complet ? c : null; };
+  const c0 = essai(r.solde);
+  if (!c0) return null;
+  if (Math.abs(c0.ecart) < 1) return { ok: true, c: c0 };
+  const fixes = [];
+  for (const s of r.soldeAlts || []) if (s !== r.solde) { const c = essai(s); if (c && Math.abs(c.ecart) < 1) fixes.push(() => { r.solde = s; }); }
+  for (const m of r.mouvements) for (const a of m.alts || []) {
+    if (a === m.montant) continue;
+    const old = m.montant; m.montant = a;
+    const c = essai(r.solde);
+    m.montant = old;
+    if (c && Math.abs(c.ecart) < 1) fixes.push(() => { m.montant = a; });
+  }
+  if (fixes.length !== 1) return { ok: false, c: c0 };
+  fixes[0]();
+  return { ok: true, repare: true, c: essai(r.solde) };
+}
+// Lecture prête à vérifier : heures ramenées à l'heure de Paris, libellés nettoyés, entreprise reconnue,
+// mouvements déjà connus repris, mots corrigés, concordance vérifiée.
+function preparerLecture(r0, T, ent) {
+  const D = decalageA(T) * 36e5;
+  const r = Object.assign({}, r0, { mouvements: (r0.mouvements || []).map(x0 => {
+    const y = Object.assign({}, x0), t = y.t ? new Date(y.t).getTime() : NaN;
+    if (Number.isFinite(t) && D) y.t = new Date(t - D).toISOString();
+    y.libelle = propreLibelle(y.libelle);
+    return y;
+  }) });
+  const trouvee = ent ? null : entDeReleve(r.rib, r.mouvements);
+  const x = ent || (trouvee && trouvee.e) || null;
+  const connus = recalerConnus(x, r.mouvements);
+  r.mouvements.forEach(m => { if (!m.connu) m.libelle = corrigerMots(m.libelle); });
+  const conc = reparerConcordance(x, r, T);
+  if (conc && conc.ok) { r.mouvements.forEach(m => { m.douteux = !m.t || !!m.ordre; }); r.soldeDouteux = false; }
+  return { r, x, trouvee, D: D / 36e5, connus, conc };
 }
 
 // Relevé de compte fait par un agent : il prend le job pour afficher le compte de l'entreprise et
@@ -15871,14 +16058,18 @@ function mvRow(x) {
 // La fenêtre de relevé ouverte reçoit ce qui est collé (capture ou texte des mouvements).
 let collageReleve = null;
 dlg.addEventListener("paste", ev => { if (collageReleve && collageReleve.zone.isConnected) collageReleve.fn(ev); });
-function openReleve(e, back, image) {
+// opts : { lu (capture déjà lue, sans relecture), at (heure de la capture), entNom (entreprise proposée),
+// entDouteuse, onSaved(id) } ; utilisé par les relevés en série.
+function openReleve(e, back, image, opts) {
   if (!canAgent()) return;
+  opts = opts || {};
   let blob = null, lecture = "saisie", rib = null, url0 = null, seq = 0, decUsed = null;
   const ent = e || null;
   const entIn = ent ? null : h("input", { id: "rv-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" });
+  if (entIn && opts.entNom) { entIn.value = opts.entNom; entIn.classList.toggle("a-verifier", !!opts.entDouteuse); }
   const m = h("input", { id: "rv-montant", type: "number", step: "1", inputmode: "numeric", placeholder: "0" });
   const at = h("input", { id: "rv-at", type: "datetime-local" }); at.value = toLocalInput(new Date());
-  const file = h("input", { id: "rv-file", type: "file", accept: "image/*" }); file.hidden = true;
+  const file = h("input", { id: "rv-file", type: "file", accept: "image/*", multiple: true, "data-vue": "1" }); file.hidden = true;
   const url = h("input", { id: "rv-url", type: "url", autocomplete: "off", placeholder: "Message Discord, Imgur…" });
   const note = h("input", { id: "rv-note", autocomplete: "off", placeholder: "Facultatif : circonstances du relevé" });
   const etat = h("p", { class: "hint rv-etat", "aria-live": "polite" });
@@ -15909,7 +16100,7 @@ function openReleve(e, back, image) {
     });
     return { list: list.sort((a, b) => b.t - a.t), bad };
   };
-  const nouveaux = (x, list) => list.length ? signauxMouvements(fusionMvts(mvtsOf(x), list.map(mm => Object.assign({ neuf: true }, mm)))).filter(s => s.mvts.some(mm => mm.neuf) && !sigClasse(x, s)) : [];
+  const nouveaux = signauxNouveaux;
   // Concordance avec le relevé précédent et mouvements suspects, à mesure que l'agent vérifie.
   const maj = () => {
     const x = entreprise(), v = Number(m.value), { list } = lireLignes();
@@ -15926,36 +16117,37 @@ function openReleve(e, back, image) {
     autreRib.hidden = !(autre && autre.id !== x.id);
     if (!autreRib.hidden) autreRib.textContent = `Ce RIB est celui de « ${autre.nom} » d’après ses relevés : vérifiez l’entreprise avant d’enregistrer.`;
   };
-  const appliquer = (r, texte) => {
-    const D = decalageA(refDate().getTime()) * 36e5;
-    decUsed = D / 36e5;
-    r = Object.assign({}, r, { mouvements: (r.mouvements || []).map(x => { const t = x && x.t ? new Date(x.t).getTime() : NaN; return Number.isFinite(t) && D ? Object.assign({}, x, { t: new Date(t - D).toISOString() }) : x; }) });
+  const appliquer = (r0, texte) => {
+    // Heures à l'heure de Paris, libellés nettoyés, entreprise reconnue (RIB, mouvements déjà relevés,
+    // libellés), mouvements déjà connus repris, mots corrigés, concordance avec le relevé précédent.
+    const p = preparerLecture(r0, refDate().getTime(), entreprise()), r = p.r, D = p.D * 36e5;
+    decUsed = p.D;
     if (r.solde != null) m.value = String(Math.round(r.solde));
     m.classList.toggle("a-verifier", !!r.soldeDouteux && r.solde != null);
     if (r.rib) rib = r.rib;
-    // Entreprise à indiquer : reconnue à son RIB, à ses mouvements déjà relevés ou à ses libellés.
     let trouvee = null;
-    if (entIn && !entIn.value.trim()) { trouvee = entDeReleve(rib, r.mouvements); if (trouvee) entIn.value = trouvee.e.nom; entIn.classList.toggle("a-verifier", !!trouvee && trouvee.par !== "rib"); }
+    if (entIn && !entIn.value.trim()) { trouvee = p.trouvee; if (trouvee) entIn.value = trouvee.e.nom; entIn.classList.toggle("a-verifier", !!trouvee && trouvee.par !== "rib"); }
     fill(rows, (r.mouvements.length ? r.mouvements : [null]).map(mvRow));
     const n = r.mouvements.length, dout = r.mouvements.filter(x => x.douteux).length;
     const parQuoi = trouvee ? { rib: "à son RIB", mouvements: "à des mouvements déjà relevés sur son compte", libelles: "à ses libellés, à confirmer" }[trouvee.par] : "";
     etat.className = "hint rv-etat";
     etat.textContent = n
-      ? `${n} mouvement${plural(n)} lu${plural(n)}${dout ? `, dont ${dout} à vérifier (surligné${plural(dout)})` : ""}${r.soldeDouteux && r.solde != null ? " · solde à vérifier" : ""}${trouvee ? ` · entreprise « ${trouvee.e.nom} » reconnue ${parQuoi}` : entIn && !entIn.value.trim() ? " · entreprise non reconnue : indiquez-la" : ""}. Comparez avec la capture avant d’enregistrer.`
+      ? `${n} mouvement${plural(n)} lu${plural(n)}${dout ? `, dont ${dout} à vérifier (surligné${plural(dout)})` : ""}${r.soldeDouteux && r.solde != null ? " · solde à vérifier" : ""}${trouvee ? ` · entreprise « ${trouvee.e.nom} » reconnue ${parQuoi}` : entIn && !entIn.value.trim() ? " · entreprise non reconnue : indiquez-la" : ""}${p.connus ? ` · ${p.connus} déjà relevé${plural(p.connus)} avant, repris tel${plural(p.connus)} quel${plural(p.connus)}` : ""}${p.conc && p.conc.repare ? " · une lecture corrigée grâce au relevé précédent" : ""}. Comparez avec la capture avant d’enregistrer.`
       : `Aucun mouvement reconnu${r.solde != null ? " (solde lu)" : ""} : ${texte ? "vérifiez le texte collé" : "collez une capture plus nette, ou recopiez-les"}.`;
     if (n && D) etat.textContent += ` Heures ramenées à l’heure de Paris (la tablette avance de ${D / 36e5} h).`;
     maj();
   };
-  const lireImage = async f => {
+  const lireImage = async (f, lu) => {
     const n = ++seq;
     blob = f; lecture = "capture";
     if (url0) URL.revokeObjectURL(url0);
     url0 = URL.createObjectURL(f); img.src = url0; imgA.href = url0; imgA.hidden = false;
-    const tf = heureFichier(f);
+    const tf = opts.at || heureFichier(f);
     if (tf) at.value = toLocalInput(tf);
+    if (lu) { appliquer(lu); return; }
     etat.className = "hint rv-etat"; etat.textContent = "Lecture de la capture…";
     try {
-      const r = await lireCapture(f, refDate(), p => {
+      const r = await lireCaptureEnFile(f, refDate(), p => {
         if (n !== seq) return;
         if (p.status === "lecture des mouvements") etat.textContent = `Lecture des mouvements… ${Math.round((p.progress || 0) * 100)} %`;
         else if (/load|initiali/i.test(p.status || "")) etat.textContent = "Chargement du lecteur de captures (la première fois seulement)…";
@@ -15980,10 +16172,12 @@ function openReleve(e, back, image) {
   collageReleve = { zone, fn: surCollage, url: () => url0 };
   zone.addEventListener("dragover", ev => { ev.preventDefault(); zone.classList.add("on"); });
   zone.addEventListener("dragleave", () => zone.classList.remove("on"));
-  zone.addEventListener("drop", ev => { ev.preventDefault(); zone.classList.remove("on"); const f = [...((ev.dataTransfer && ev.dataTransfer.files) || [])].find(x => /^image\//.test(x.type)); if (f) lireImage(f); });
+  // Plusieurs captures d'un coup : elles passent aux relevés en série.
+  const images = l => [...(l || [])].filter(x => /^image\//.test(x.type));
+  zone.addEventListener("drop", ev => { ev.preventDefault(); zone.classList.remove("on"); const fs = images(ev.dataTransfer && ev.dataTransfer.files); if (fs.length > 1) openSerie(fs); else if (fs[0]) lireImage(fs[0]); });
   zone.addEventListener("click", ev => { if (ev.target !== choisir) zone.focus(); });
   choisir.addEventListener("click", () => file.click());
-  file.addEventListener("change", () => { if (file.files && file.files[0]) lireImage(file.files[0]); });
+  file.addEventListener("change", () => { const fs = images(file.files); if (fs.length > 1) openSerie(fs); else if (fs[0]) lireImage(fs[0]); });
   rows.addEventListener("click", ev => { const b = ev.target.closest("[data-del]"); if (!b) return; b.closest(".mv-row").remove(); if (!$$(".mv-row", rows).length) rows.append(mvRow()); maj(); });
   rows.addEventListener("input", ev => { const r = ev.target.closest(".mv-row"); if (r) r.classList.remove("a-verifier"); maj(); });
   m.addEventListener("input", () => { m.classList.remove("a-verifier"); maj(); });
@@ -15999,28 +16193,17 @@ function openReleve(e, back, image) {
     if (m.value === "" || !Number.isFinite(v)) { err.textContent = "Indiquez le solde affiché sur le compte."; m.focus(); return; }
     const { list, bad } = lireLignes();
     if (bad.length) { err.textContent = `Mouvement${plural(bad.length)} ${bad.join(", ")} : date (jj/mm hh:mm) ou montant illisible. Corrigez ou retirez la ligne.`; return; }
-    // L'heure du relevé ne peut pas précéder le dernier mouvement affiché.
-    let T = refDate().getTime(), corrige = false;
-    if (list.length && list[0].t > T) { T = list[0].t; corrige = true; }
     go.disabled = true;
-    const sig = nouveaux(x, list);
-    const ref = S.db.collection("releves").doc();
-    const fichier = blob ? (blob instanceof File && blob.name ? blob : new File([blob], "capture.png", { type: blob.type || "image/png" })) : null;
-    const preuve = (fichier ? await uploadProof(`releves/${ref.id}`, fichier) : null) || linkProof(url.value);
-    const r = { entrepriseId: x.id || null, entrepriseNom: x.nom, montant: Math.round(v), at: new Date(T).toISOString(), agent: S.agentName || "", by: S.uid || null, preuve, note: note.value.trim(), createdAt: nowISO(),
-      mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? lecture : "saisie", decalageH: decUsed != null ? decUsed : decalageA(T) };
-    if (rib) r.rib = rib;
-    if (!(await write(() => ref.set(r)))) { go.disabled = false; return; }
-    // Déclarations dont ce relevé montre que le solde déclaré était faux.
-    const faux = declsOf(x).filter(d => dStatus(d) !== "rejetee" && d.depotAt).map(d => ({ d, vs: verifSolde(d) })).filter(y => y.vs && !y.vs.ok && y.vs.rel.id === ref.id);
-    const n = list.length;
-    toast(`Relevé ${dossierNo("RC", ref.id)} enregistré${n ? ` avec ${n} mouvement${plural(n)}` : ""}${corrige ? " (heure portée à celle du dernier mouvement)" : ""}${sig.length ? ` · ${sig.length} mouvement${plural(sig.length)} suspect${plural(sig.length)} : ${sig[0].texte}${sig.length > 1 ? "…" : ""}` : ""}${faux.length ? ` · solde déclaré inexact pour ${faux.map(y => periodPlain(y.d.periode).toLowerCase()).join(", ")}` : ""}.`, sig.length > 0 || faux.length > 0);
+    const res = await enregistrerReleve({ x, solde: v, T: refDate().getTime(), list, lecture, rib, blob, url: url.value, note: note.value, decUsed });
+    if (!res) { go.disabled = false; return; }
+    toast(texteReleveEnregistre(res), res.sig.length > 0 || res.faux.length > 0);
+    if (opts.onSaved) opts.onSaved(res.id);
     (back || closeDialog)();
   });
   const champ = (id, label, el) => h("div", { class: "field" }, h("label", { for: id, text: label }), el);
   openDialog({
     eyebrow: "Surveillance des comptes", title: "Relevé de compte" + (ent ? " · " + ent.nom : ""), wide: true,
-    body: [h("p", { style: "margin:0", text: "Prenez le job pour afficher le compte de l’entreprise, faites une capture (Windows + Maj + S) et collez-la. Relevez quand vous voulez, plusieurs fois par semaine : chaque relevé complète l’historique du compte et fait foi face au solde déclaré." }),
+    body: [h("p", { style: "margin:0" }, "Prenez le job pour afficher le compte de l’entreprise, faites une capture (Windows + Maj + S) et collez-la. Relevez quand vous voulez, plusieurs fois par semaine : chaque relevé complète l’historique du compte et fait foi face au solde déclaré. Plusieurs comptes d’affilée : ", h("button", { class: "linkbtn", type: "button", onclick: () => openSerie(), text: "relevés en série" }), "."),
       entIn ? champ("rv-ent", "Entreprise", entIn) : null,
       zone, file,
       h("div", { class: "rv-cap" },
@@ -16035,8 +16218,184 @@ function openReleve(e, back, image) {
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go]
   });
   setTimeout(() => (entIn && !image ? entIn : zone).focus(), 30);
-  if (image) lireImage(image);
+  if (image) lireImage(image, opts.lu);
 }
+// Mouvements suspects que ce relevé ferait apparaître (hors ceux déjà classés).
+function signauxNouveaux(x, list) {
+  return x && list.length ? signauxMouvements(fusionMvts(mvtsOf(x), list.map(mm => Object.assign({ neuf: true }, mm)))).filter(s => s.mvts.some(mm => mm.neuf) && !sigClasse(x, s)) : [];
+}
+// Enregistrement d'un relevé (fenêtre de relevé et relevés en série). o : { x, solde, T, list (t en ms,
+// libellé, montant), lecture, rib, blob, url, note, decUsed }. Renvoie { id, n, sig, faux, corrige } ou null.
+async function enregistrerReleve(o) {
+  const x = o.x, list = o.list || [];
+  // L'heure du relevé ne peut pas précéder le dernier mouvement affiché.
+  let T = o.T, corrige = false;
+  if (list.length && list[0].t > T) { T = list[0].t; corrige = true; }
+  const sig = signauxNouveaux(x, list);
+  const ref = S.db.collection("releves").doc();
+  const blob = o.blob, fichier = blob ? (blob instanceof File && blob.name ? blob : new File([blob], "capture.png", { type: blob.type || "image/png" })) : null;
+  const preuve = (fichier ? await uploadProof(`releves/${ref.id}`, fichier) : null) || linkProof(o.url);
+  const r = { entrepriseId: x.id || null, entrepriseNom: x.nom, montant: Math.round(Number(o.solde)), at: new Date(T).toISOString(), agent: S.agentName || "", by: S.uid || null, preuve, note: String(o.note || "").trim(), createdAt: nowISO(),
+    mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? o.lecture || "capture" : "saisie", decalageH: o.decUsed != null ? o.decUsed : decalageA(T) };
+  if (o.rib) r.rib = o.rib;
+  if (o.serie) r.serie = true;
+  if (!(await write(() => ref.set(r)))) return null;
+  // Déclarations dont ce relevé montre que le solde déclaré était faux.
+  const faux = declsOf(x).filter(d => dStatus(d) !== "rejetee" && d.depotAt).map(d => ({ d, vs: verifSolde(d) })).filter(y => y.vs && !y.vs.ok && y.vs.rel.id === ref.id);
+  return { id: ref.id, n: list.length, sig, faux, corrige };
+}
+function texteReleveEnregistre(res) {
+  const n = res.n, sig = res.sig, faux = res.faux;
+  return `Relevé ${dossierNo("RC", res.id)} enregistré${n ? ` avec ${n} mouvement${plural(n)}` : ""}${res.corrige ? " (heure portée à celle du dernier mouvement)" : ""}${sig.length ? ` · ${sig.length} mouvement${plural(sig.length)} suspect${plural(sig.length)} : ${sig[0].texte}${sig.length > 1 ? "…" : ""}` : ""}${faux.length ? ` · solde déclaré inexact pour ${faux.map(y => periodPlain(y.d.periode).toLowerCase()).join(", ")}` : ""}.`;
+}
+
+/* ---------- Relevés en série : plusieurs captures lues et enregistrées à la suite ---------- */
+// L'agent colle, dépose ou choisit plusieurs captures. Chacune est lue à son tour ; l'entreprise est
+// reconnue à son RIB (ou à des mouvements déjà relevés). Une capture lue sans aucun doute (entreprise,
+// solde, chaque mouvement, concordance avec le relevé précédent) est enregistrée toute seule ; les
+// autres attendent une vérification dans la fenêtre de relevé habituelle, déjà remplie. La liste et la
+// lecture continuent fenêtre fermée.
+const SERIE = { items: [], seq: 0, tourne: false, auto: (() => { try { return localStorage.getItem("gf-serie-auto") !== "0"; } catch (e) { return true; } })() };
+let serieVue = null;
+function serieAjouter(files) {
+  const deja = new Set(SERIE.items.map(i => i.sig));
+  let n = 0;
+  for (const f of [...(files || [])]) {
+    if (!f || !/^image\//.test(f.type)) continue;
+    // Un même fichier choisi deux fois n'est lu qu'une fois (une capture collée a toujours un nouveau nom).
+    const sig = `${f.name}|${f.size}|${f.lastModified}`;
+    if (deja.has(sig) && !/^image\.\w+$/.test(f.name || "")) continue;
+    deja.add(sig);
+    SERIE.items.push({ id: ++SERIE.seq, sig, file: f, url: URL.createObjectURL(f), at: heureFichier(f) || new Date(), etat: "attente", raisons: [] });
+    n++;
+  }
+  if (n) { serieRendre(); serieTourner(); }
+  return n;
+}
+function serieRetirer(it) {
+  SERIE.items = SERIE.items.filter(i => i !== it);
+  try { URL.revokeObjectURL(it.url); } catch (e) { /* déjà libérée */ }
+  serieRendre();
+}
+// Lecture et décision pour une capture.
+async function serieTraiter(it) {
+  const T = it.at.getTime();
+  const r0 = await lireCaptureEnFile(it.file, it.at, p => { if (p.status === "lecture des mouvements") { it.progres = p.progress || 0; serieRendre(); } });
+  const p = preparerLecture(r0, T, null), r = p.r, list = lignesLues(r.mouvements);
+  Object.assign(it, { r0, x: p.x, trouvee: p.trouvee, solde: r.solde, n: r.mouvements.length, connus: p.connus, repare: !!(p.conc && p.conc.repare) });
+  const raisons = [];
+  if (!p.x) raisons.push("entreprise non reconnue");
+  else if (p.trouvee && p.trouvee.par === "libelles") raisons.push("entreprise reconnue à ses libellés seulement");
+  if (r.solde == null) raisons.push("solde non lu");
+  else if (r.soldeDouteux) raisons.push("solde à vérifier");
+  const dout = r.mouvements.filter(m => m.douteux || !m.t || m.montant == null || !Number(m.montant)).length;
+  if (!r.mouvements.length) raisons.push("aucun mouvement lu");
+  else if (dout) raisons.push(`${dout} mouvement${plural(dout)} à vérifier`);
+  if (p.conc && p.conc.ok === false) raisons.push(`ne concorde pas avec le relevé précédent (${(p.conc.c.ecart > 0 ? "+" : "") + money(p.conc.c.ecart)})`);
+  const autre = p.x && r.rib ? entParRib(r.rib) : null;
+  if (autre && p.x && autre.id !== p.x.id) raisons.push(`RIB de « ${autre.nom} »`);
+  if (list.length && list[0].t > T + 5 * 6e4) raisons.push("mouvement plus récent que la capture : heure ou avance de la tablette à revoir");
+  it.raisons = raisons;
+  // Déjà relevé : même solde et même dernier mouvement qu'un relevé enregistré.
+  if (p.x && r.solde != null && list.length && relevesOf(p.x).some(q => Number(q.montant) === Math.round(r.solde) && mvtsRel(q).length && mvtKey(mvtsRel(q)[0]) === mvtKey(list[0]))) { it.etat = "doublon"; return; }
+  if (raisons.length) { it.etat = "verifier"; return; }
+  if (!SERIE.auto) { it.etat = "pret"; return; }
+  await serieEnregistrer(it, p, list);
+}
+async function serieEnregistrer(it, p, list) {
+  p = p || preparerLecture(it.r0, it.at.getTime(), null);
+  list = list || lignesLues(p.r.mouvements);
+  it.etat = "envoi"; serieRendre();
+  const res = await enregistrerReleve({ x: p.x, solde: p.r.solde, T: it.at.getTime(), list, lecture: "capture", rib: p.r.rib, blob: it.file, decUsed: p.D, serie: true });
+  if (!res) { it.etat = "verifier"; it.raisons = ["l’enregistrement a échoué : réessayez"]; return; }
+  Object.assign(it, { etat: "enregistre", releveId: res.id, suspects: res.sig.length, faux: res.faux.length });
+}
+async function serieTourner() {
+  if (SERIE.tourne) return;
+  SERIE.tourne = true;
+  let it, fait = 0;
+  try {
+    while ((it = SERIE.items.find(i => i.etat === "attente"))) {
+      it.etat = "lecture"; it.progres = 0; serieRendre();
+      try { await serieTraiter(it); } catch (ex) { it.etat = "erreur"; it.raisons = [(ex && ex.message) || "capture illisible"]; }
+      fait++; serieRendre();
+    }
+  } finally { SERIE.tourne = false; }
+  // Fenêtre fermée pendant la lecture : un mot pour dire où en est la série.
+  if (fait && !(serieVue && serieVue.isConnected)) {
+    const c = serieCompte();
+    toast(`Relevés en série : ${c.enregistre} enregistré${plural(c.enregistre)}${c.verifier ? `, ${c.verifier} à vérifier` : ""}${c.doublon ? `, ${c.doublon} déjà relevé${plural(c.doublon)}` : ""}.`, c.verifier > 0);
+  }
+}
+function serieCompte() {
+  const c = { attente: 0, enregistre: 0, verifier: 0, doublon: 0, erreur: 0 };
+  for (const i of SERIE.items) {
+    if (i.etat === "attente" || i.etat === "lecture" || i.etat === "envoi") c.attente++;
+    else if (i.etat === "verifier" || i.etat === "pret") c.verifier++;
+    else if (c[i.etat] != null) c[i.etat]++;
+  }
+  return c;
+}
+function serieVerifier(it) {
+  const t = it.trouvee;
+  openReleve(null, () => openSerie(), it.file, { lu: it.r0, at: it.at, entNom: it.x ? it.x.nom : "", entDouteuse: !!(t && t.par !== "rib"),
+    onSaved: id => { Object.assign(it, { etat: "enregistre", releveId: id, raisons: [] }); } });
+}
+function serieRendre() {
+  const box = serieVue;
+  if (!box || !box.isConnected) return;
+  const c = serieCompte(), ETATS = {
+    attente: ["En attente", "muted"], lecture: ["Lecture…", "info"], envoi: ["Enregistrement…", "info"], enregistre: ["Enregistré", "ok"],
+    verifier: ["À vérifier", "warn"], pret: ["Lu, à enregistrer", "info"], doublon: ["Déjà relevé", "muted"], erreur: ["Illisible", "bad"] };
+  const resume = $("#serie-resume");
+  if (resume) resume.textContent = SERIE.items.length ? [c.enregistre ? `${c.enregistre} enregistré${plural(c.enregistre)}` : "", c.verifier ? `${c.verifier} à vérifier` : "", c.doublon ? `${c.doublon} déjà relevé${plural(c.doublon)}` : "", c.erreur ? `${c.erreur} illisible${plural(c.erreur)}` : "", c.attente ? `${c.attente} en cours` : ""].filter(Boolean).join(" · ") : "Aucune capture pour l’instant.";
+  fill(box, SERIE.items.map(it => {
+    const [lab, ton] = ETATS[it.etat] || ["?", "muted"];
+    const meta = it.etat === "attente" || it.etat === "lecture" ? `capture de ${fmtHr(it.at)}${it.etat === "lecture" && it.progres ? ` · ${Math.round(it.progres * 100)} %` : ""}`
+      : [it.solde != null ? `solde ${money(it.solde)}` : "", it.n != null ? `${it.n} mouvement${plural(it.n)}` : "", `capture de ${fmtHr(it.at)}`, it.connus ? `${it.connus} déjà connu${plural(it.connus)}` : "", it.repare ? "une lecture corrigée par la concordance" : ""].filter(Boolean).join(" · ");
+    const acts = [];
+    if (it.etat === "verifier" || it.etat === "pret") acts.push(h("button", { class: "btn ink small", type: "button", onclick: () => serieVerifier(it), text: "Vérifier" }));
+    if (it.etat === "pret") acts.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; await serieEnregistrer(it); serieRendre(); }, text: "Enregistrer" }));
+    if (["verifier", "pret", "doublon", "erreur"].includes(it.etat)) acts.push(h("button", { class: "btn ghost small", type: "button", onclick: () => serieRetirer(it), text: "Retirer" }));
+    return h("li", { class: "serie-it" },
+      h("a", { class: "serie-img", href: it.url, target: "_blank", rel: "noopener", title: "Agrandir la capture" }, h("img", { src: it.url, alt: "Capture du compte", loading: "lazy" })),
+      h("div", { style: "min-width:0" },
+        h("span", { style: "font-weight:600", text: it.x ? it.x.nom : it.etat === "attente" || it.etat === "lecture" ? "Capture" : "Entreprise à indiquer" }),
+        h("span", { class: "meta", text: meta }),
+        it.etat === "enregistre" ? h("span", { class: "meta", text: `${dossierNo("RC", it.releveId)}${it.suspects ? ` · ${it.suspects} mouvement${plural(it.suspects)} suspect${plural(it.suspects)}` : ""}${it.faux ? " · solde déclaré inexact" : ""}` }) : null,
+        it.raisons && it.raisons.length && it.etat !== "enregistre" ? h("span", { class: "meta serie-raisons", text: it.raisons.join(" · ") }) : null),
+      h("div", { class: "serie-droite" }, chip([lab, ton]), acts.length ? h("div", { class: "row-actions" }, acts) : null));
+  }));
+}
+function openSerie(files) {
+  if (!canAgent()) return;
+  if (files && files.length) serieAjouter(files);
+  const input = h("input", { type: "file", accept: "image/*", multiple: true, "data-vue": "1" }); input.hidden = true;
+  input.addEventListener("change", () => { serieAjouter(input.files); input.value = ""; });
+  const choisir = h("button", { class: "btn ghost small", type: "button", onclick: () => input.click(), text: "Choisir des captures" });
+  const zone = h("div", { class: "rv-zone", tabindex: "0", role: "group", "aria-label": "Coller ou déposer les captures des comptes" },
+    h("strong", { text: "Collez ou déposez vos captures" }),
+    h("span", { class: "hint", text: "Ctrl + V après chaque capture, ou plusieurs images glissées d’un coup, ou « Choisir des captures » pour en prendre plusieurs dans le dossier. Elles sont lues à la suite." }),
+    choisir);
+  zone.addEventListener("dragover", ev => { ev.preventDefault(); zone.classList.add("on"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("on"));
+  zone.addEventListener("drop", ev => { ev.preventDefault(); zone.classList.remove("on"); serieAjouter(ev.dataTransfer && ev.dataTransfer.files); });
+  const auto = h("input", { type: "checkbox", id: "serie-auto", "data-vue": "1" }); auto.checked = SERIE.auto;
+  auto.addEventListener("change", () => { SERIE.auto = auto.checked; try { localStorage.setItem("gf-serie-auto", auto.checked ? "1" : "0"); } catch (e) { /* gardé pour la visite */ } });
+  serieVue = h("ul", { class: "ent-list serie-list", "aria-live": "polite" });
+  collageReleve = { zone, fn: ev => { const f = imageCollee(ev.clipboardData); if (f) { ev.preventDefault(); serieAjouter([f]); } }, url: () => null };
+  const vider = h("button", { class: "btn ghost small", type: "button", text: "Retirer les captures traitées", onclick: () => { SERIE.items.filter(i => ["enregistre", "doublon"].includes(i.etat)).forEach(i => { try { URL.revokeObjectURL(i.url); } catch (e) { /* déjà libérée */ } }); SERIE.items = SERIE.items.filter(i => !["enregistre", "doublon"].includes(i.etat)); serieRendre(); } });
+  openDialog({ eyebrow: "Surveillance des comptes", title: "Relevés en série", wide: true,
+    body: [h("p", { style: "margin:0", text: "Pour relever plusieurs comptes d’affilée : faites une capture, collez-la ici, passez au compte suivant. Ou déposez d’un coup les captures déjà enregistrées. L’entreprise est reconnue à son RIB ; la lecture continue même fenêtre fermée." }),
+      zone, input,
+      h("label", { class: "switch", for: "serie-auto" }, auto, "Enregistrer automatiquement les relevés lus sans aucun doute : entreprise reconnue à son RIB ou à ses mouvements, solde et mouvements sûrs, accord avec le relevé précédent. Les autres attendent votre vérification."),
+      h("p", { class: "hint", id: "serie-resume", style: "margin:0", "aria-live": "polite" }),
+      serieVue],
+    foot: [vider, h("span", { class: "spacer" }), h("button", { class: "btn ink small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+  serieRendre();
+  setTimeout(() => zone.focus(), 30);
+}
+
 // Une capture collée n'importe où dans le guichet ouvre un relevé de compte.
 document.addEventListener("paste", ev => {
   if (!canAgent() || dlg.open || ev.defaultPrevented || !blc().actif) return;
@@ -16470,6 +16829,7 @@ function renderComptes() {
   if (!box) return;
   const s = blc(), ag = canAgent(), dir = writer();
   $("#rc-releve-new").hidden = !ag;
+  $("#rc-serie-new").hidden = !ag;
   if (!s.actif) { fill(box, h("div", { class: "empty", text: "Surveillance des comptes désactivée (Réglages → Recouvrement)." })); return; }
   const list = suspects();
   $("#rc-comptes-sub").textContent = list.length
@@ -16521,6 +16881,7 @@ function renderComptes() {
         h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => showDocImage(soupconDoc(x)), text: `${dossierNo("DS", x.id)} · ${x.entrepriseNom}` }), h("span", { class: "meta", text: `${money(x.montant)} · ${fmtDate(new Date(x.at))}${x.byNom ? " · " + x.byNom : ""}` })), chip(SOUPCON_STAT[x.statut] || SOUPCON_STAT.transmise), h("span", {})))) : h("p", { class: "muted", text: "Aucune déclaration de soupçon." }))) : null);
 }
 $("#rc-releve-new").addEventListener("click", () => pickEntreprise("Relevé de compte", e => openReleve(e)));
+$("#rc-serie-new").addEventListener("click", () => openSerie());
 
 // Indication sous le solde, pendant la saisie d'une déclaration.
 function soldeHint(key, ca, ch, ms) {
@@ -18052,6 +18413,7 @@ function newActions() {
       ["Tournée de collecte", "Convoquer à la suite les entreprises qui doivent de l’argent", () => openTournee()],
       ["Contrôle fiscal", "Vérifier une ou plusieurs déclarations", () => pickEntreprise("Ouvrir un contrôle fiscal", e => newControle(e, []), "Contrôle fiscal")],
       ["Relevé de compte", "Noter le solde du compte d’une entreprise", () => pickEntreprise("Relever le compte d’une entreprise", e => openReleve(e), "Surveillance des comptes")],
+      ["Relevés en série", "Plusieurs captures de comptes lues et enregistrées à la suite", () => openSerie()],
       ["Demande de prêt", "Prêt de la Préfecture à une entreprise", () => openPretForm(null)],
       ["Véhicule de société", "Inscrire un véhicule au registre", () => openVehForm(null)],
       w ? ["Entreprise au registre", "Ajouter une entreprise du serveur", () => { showTab("reglages"); setSetTab("entreprises"); setTimeout(() => { const i = $("#e-nom"); if (i) i.focus(); }, 60); }] : null]],
