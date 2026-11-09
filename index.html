@@ -931,6 +931,10 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
 }
 @keyframes sheet-up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){dialog[open]{animation:none}}
+/* Contrats de travail : aperçu des pages A4 */
+.ct-pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:4px}
+.ct-page{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 4px rgba(16,26,52,.10)}
+.ct-sig-apercu{min-height:48px;display:flex;align-items:center;padding:8px 12px;background:#fff;border:1px dashed var(--rule);border-radius:8px}
 </style>
 </head>
 <body data-gate="chargement">
@@ -2409,7 +2413,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], contratsTravail: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -3530,6 +3534,7 @@ function subscribe() {
   col("versements", s => { S.versements = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("catalogue", s => { S.catalogue = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("fonctionnaires", s => { S.fonctionnaires = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("contratsTravail", s => { S.contratsTravail = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); setTimeout(ptAlertes, 0); });
   col("sons", s => { S.sons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -4957,7 +4962,7 @@ function renderFoncList(k) {
       const pt = ptSemaine(f.discordId, k), taux = gradeTaux(f.grade);
       return h("li", {},
         h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFonc(f.id, k), text: f.nom || "Agent" }),
-          h("span", { class: "meta", text: `${f.grade || "sans grade"}${taux ? " · " + money(taux) + "/h" : " · pas de taux"} · ${sk ? "heures saisies dans la paye" : f.discordId ? (pt.h ? fmtH(pt.h) + " pointées" : "pointeuse reliée") : "heures saisies à la main"}` })),
+          h("span", { class: "meta", text: `${f.grade || "sans grade"}${taux ? " · " + money(taux) + "/h" : " · pas de taux"} · ${sk ? "heures saisies dans la paye" : f.discordId ? (pt.h ? fmtH(pt.h) + " pointées" : "pointeuse reliée") : "heures saisies à la main"} · ${ctrEtat(f)}` })),
         pt.open ? (ptFerme() ? chip(["Service non fini", "warn"]) : chip(["En service", "info"])) : h("span", {}),
         w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openFoncForm(f), text: "Modifier" }) : h("span", {}));
     })) : h("div", { class: "empty", text: "Aucun fonctionnaire enregistré." }),
@@ -5088,7 +5093,9 @@ function openPayeReglages() {
       h("h4", { style: "margin:14px 0 2px", text: "Grades et taux horaires" }), h("p", { class: "hint", style: "margin:0", text: "Du premier grade au plus haut. Le taux horaire multiplie les heures de service de l’agent." }),
       rowsBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addRow(null), text: "Ajouter un grade" }),
       h("h4", { style: "margin:14px 0 2px", text: "Primes de présence" }), h("p", { class: "hint", style: "margin:0", text: `Pour chaque palier : son nom, les heures de service à atteindre dans la semaine, le montant. Le palier le plus haut atteint s’ajoute au salaire, sans dépasser la paye maximum. À partir de la semaine ${(bounds(c.primesDepuis) || {}).week || c.primesDepuis}.` }),
-      prBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addPrime(null), text: "Ajouter un palier" }), err],
+      prBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addPrime(null), text: "Ajouter un palier" }),
+      h("h4", { style: "margin:14px 0 2px", text: "Contrats de travail" }), h("p", { class: "hint", style: "margin:0", text: "Clauses fixes et signature de l’employeur des contrats établis depuis la fiche de chaque agent." }),
+      h("button", { class: "btn ghost small", type: "button", style: "justify-self:start", onclick: () => openCtrModele(() => openPayeReglages()), text: "Modèle de contrat" }), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 
@@ -5138,6 +5145,8 @@ function openFoncForm(f, preset, back) {
       if (error) toast(/check constraint/i.test(error.message || "") ? "Fiche enregistrée. Pour l’accès Pointeuse, exécutez d’abord supabase/v18_payes_pointeuse.sql." : error.code === "23505" ? "Fiche enregistrée ; ce compte avait déjà un accès." : "Fiche enregistrée, mais l’accès Pointeuse a été refusé : " + error.message, true);
       else { toast(`${n} ajouté, avec l’accès Pointeuse.`); loadAgents(); }
     } else toast(f ? "Fiche modifiée." : `${n} ajouté aux fonctionnaires.`);
+    // Nouvel agent : son contrat de travail, prérempli, dans la foulée (« Plus tard » pour le faire après).
+    if (!f) { openCtrForm(Object.assign({ id: ref.id }, body), null, back); return; }
     if (back) back(); else closeDialog();
   });
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: back || closeDialog, text: back ? "Retour" : "Annuler" })];
@@ -5189,12 +5198,387 @@ function openFonc(fid, k0) {
     tps.length ? sec(`Trop-perçus · ${tps.length}`, h("ul", { class: "ent-list" }, tps.map(r => h("li", {},
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openTropPercu(r.id, reopen), text: `Semaine ${(bounds(r.semaine) || {}).week || "?"} · ${money(r.montant)}` }), h("span", { class: "meta", text: [r.motif || "", r.retenu ? money(r.retenu) + " retenus" : "", r.rembourse ? money(r.rembourse) + " remboursés" : ""].filter(Boolean).join(" · ") })),
       chip(r.annule ? ["Annulé", "muted"] : r.reste <= 0 ? ["Régularisé", "ok"] : ["À retenir", "warn"]), h("span", { class: "mono", text: r.reste > 0 ? "− " + money(r.reste) : "" }))))) : null,
+    ctrSection(f, reopen),
     kv([["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"], f.note ? ["Note", f.note] : null, f.actif === false ? ["Retiré des effectifs", f.retireLe ? longDate(new Date(f.retireLe)) : "oui"] : null])
   ];
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semPrec(k)), text: "‹ Semaine" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openFonc(fid, semSuiv(k)), text: "Semaine ›" }), h("span", { class: "spacer" })];
   if (l || x.rappels.some(r => r.fid === fid && r.verse > 0)) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(bulletinDoc(k, fid), reopen), text: "Bulletin" }));
   if (w) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openRappelForm({ fid, back: reopen }), text: "Ajouter un rappel" }), h("button", { class: "btn ghost small", type: "button", onclick: () => openTropPercuForm({ fid, back: reopen }), text: "Trop-perçu" }), h("button", { class: "btn ink small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: "Modifier" }));
   openDialog({ eyebrow: `Fonctionnaire · ${periodLabel(k)}`, title: f.nom || "Agent", wide: true, stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : pt.open && !ferme ? stamp(["EN SERVICE", "info"]) : null, body, foot });
+}
+
+/* ---------- Contrats de travail ---------- */
+// Contrat de travail d'un fonctionnaire, sur le modèle de la Préfecture : cadre, logo et signature de
+// l'employeur repris du modèle (assets/contrat-*.png). Le guichet remplit seul ce qu'il connaît (nom, poste
+// et taux horaire du grade, heures de la semaine, référence, dates) ; on ne tape que l'identité du personnage,
+// le service et le supérieur. Les clauses fixes viennent du modèle (Barème et budget → Modèle de contrat) et
+// sont recopiées dans le contrat : changer le modèle ne change pas les contrats déjà établis.
+// Collection « contratsTravail » : { fid, nom, discordId, ref, type, fin, signeLe, priseFonctions, naissance,
+// adresse, telephone, email, poste, service, superieur, taux, heures, horaires, essai, modele, statut
+// ("a_signer" | "signe"), salarieSigneLe, at, byNom }.
+const CTR_DEF = {
+  denomination: "Préfecture de Police de Paris", representant: "Mathys Marquina", fonction: "Secrétaire général",
+  qualite: "Directeur des Ressources Humaines", duree: "Temps Plein", lieu: "La préfecture de Paris",
+  versement: "Dimanche de chaque semaine", horaires: "21H – 23H", essai: "Une semaine", renouvellement: "réussite dans l’emploi",
+  equipements: "Badge\nTablette", ville: "Paris", exemplaires: "triple exemplaire", signature: ""
+};
+const CTR_CHAMPS = [
+  ["denomination", "Employeur (dénomination)"], ["representant", "Représenté par"], ["fonction", "Fonction du représentant"],
+  ["qualite", "Agissant en qualité de"], ["duree", "Durée de travail"], ["lieu", "Lieu de travail"],
+  ["versement", "Périodicité et modalités de versement"], ["horaires", "Horaires de service (par défaut)"], ["essai", "Période d’essai (par défaut)"],
+  ["renouvellement", "Conditions de renouvellement de l’essai"], ["equipements", "Équipements remis (un par ligne)"], ["ville", "Fait à"], ["exemplaires", "Exemplaires (« en … »)"]];
+const ctrCfg = () => { const m = Object.assign({}, CTR_DEF, cfg().contratTravail || {}); for (const k of Object.keys(CTR_DEF)) if (k !== "signature" && !String(m[k] || "").trim()) m[k] = CTR_DEF[k]; return m; };
+// Signature de l'employeur : celle importée dans le modèle, sinon celle du modèle d'origine tant que le
+// représentant est le même.
+const ctrSignature = m => m.signature || (norm(m.representant) === norm(CTR_DEF.representant) ? "assets/contrat-signature.png" : "");
+const ctrsTous = () => (S.contratsTravail || []).slice().sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")));
+const ctrsOf = fid => ctrsTous().filter(c => c.fid === fid);
+const ctrOf = id => (S.contratsTravail || []).find(c => c.id === id) || null;
+const ctrNo = c => c.ref || dossierNo("CT", c.id);
+const CTR_STAT = { a_signer: ["À signer", "warn"], signe: ["Signé", "ok"] };
+const ctrJour = s => { const d = /^\d{4}-\d{2}-\d{2}$/.test(s || "") ? new Date(s + "T12:00:00") : null; return d && !isNaN(d) ? longDate(d) : ""; };
+const ctrEtat = f => { const c = ctrsOf(f.id)[0]; return c ? (c.statut === "signe" ? "contrat signé" : "contrat à signer") : "sans contrat"; };
+
+function openCtrForm(f, ct, back) {
+  if (!writer() || !f) return;
+  if (ct && ct.statut === "signe") { toast("Ce contrat est signé : retirez d’abord la signature pour le modifier.", true); return; }
+  const m = ct && ct.modele ? Object.assign({}, CTR_DEF, ct.modele) : ctrCfg(), c = payeCfg(), auj = jourCle(new Date());
+  const v = Object.assign({ type: "CDI", fin: "", signeLe: auj, priseFonctions: f.at ? jourCle(new Date(f.at)) : auj, naissance: "", adresse: "", telephone: "", email: "",
+    poste: f.grade || "", service: "", superieur: "", taux: gradeTaux(f.grade) || "", heures: Number(c.plafondHeures) || 20, horaires: m.horaires, essai: m.essai }, ct || {});
+  const inp = (key, attrs) => { const el = h("input", Object.assign({ autocomplete: "off" }, attrs || {})); el.value = v[key] == null ? "" : v[key]; return el; };
+  const type = h("select", {}, [["CDI", "CDI · contrat à durée indéterminée"], ["CDD", "CDD · contrat à durée déterminée"]].map(([x, t]) => h("option", { value: x, text: t }))); type.value = v.type === "CDD" ? "CDD" : "CDI";
+  const fin = inp("fin", { type: "date" }), signeLe = inp("signeLe", { type: "date" }), prise = inp("priseFonctions", { type: "date" });
+  const naissance = inp("naissance", { type: "date" }), adresse = inp("adresse", { placeholder: "Adresse du personnage en jeu" }), tel = inp("telephone", { placeholder: "Numéro en jeu", inputmode: "tel" }), mail = inp("email", { placeholder: "Adresse en jeu", type: "email" });
+  const uniq = arr => [...new Set(arr.map(x => String(x || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  const dlPoste = h("datalist", { id: "ct-dl-poste" }, uniq((c.grades || []).map(g => g.nom).concat(ctrsTous().map(x => x.poste))).map(x => h("option", { value: x })));
+  const dlServ = h("datalist", { id: "ct-dl-service" }, uniq(ctrsTous().map(x => x.service)).map(x => h("option", { value: x })));
+  const dlSup = h("datalist", { id: "ct-dl-sup" }, uniq(foncs().filter(z => z.actif !== false && z.id !== f.id).map(z => z.nom).concat(ctrsTous().map(x => x.superieur))).map(x => h("option", { value: x })));
+  const poste = inp("poste", { list: "ct-dl-poste" }), service = inp("service", { list: "ct-dl-service", placeholder: "Ex. : Direction des impôts et cotisations" }), sup = inp("superieur", { list: "ct-dl-sup", placeholder: "Nom de son responsable" });
+  const taux = inp("taux", { type: "number", min: "1", step: "1", inputmode: "numeric" }), heures = inp("heures", { type: "number", min: "1", step: "1", inputmode: "numeric" });
+  const horaires = inp("horaires"), essai = inp("essai");
+  // Le taux suit le poste quand le poste est un grade du barème.
+  poste.addEventListener("change", () => { const t = gradeTaux(poste.value); if (t) taux.value = t; });
+  const finRow = field("ct-fin", "Date de fin du contrat", fin);
+  const syncType = () => { finRow.hidden = type.value !== "CDD"; }; type.addEventListener("change", syncType); syncType();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: ct ? "Enregistrer le contrat" : "Établir le contrat" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const t = Math.round(Number(taux.value)), hh = Number(heures.value);
+    const manque = [[signeLe.value, "la date de signature", signeLe], [prise.value, "la date de prise de fonctions", prise], [poste.value.trim(), "l’intitulé du poste", poste]].find(x => !x[0]);
+    if (manque) { err.textContent = `Indiquez ${manque[1]}.`; manque[2].focus(); return; }
+    if (!(t > 0)) { err.textContent = "Indiquez le taux horaire brut."; taux.focus(); return; }
+    if (!(hh > 0)) { err.textContent = "Indiquez la durée de travail par semaine."; heures.focus(); return; }
+    if (type.value === "CDD" && !fin.value) { err.textContent = "Indiquez la date de fin du CDD."; fin.focus(); return; }
+    if (type.value === "CDD" && fin.value <= prise.value) { err.textContent = "La date de fin doit suivre la prise de fonctions."; fin.focus(); return; }
+    go.disabled = true;
+    const ref = ct ? S.db.doc("contratsTravail/" + ct.id) : S.db.collection("contratsTravail").doc();
+    const modele = Object.assign({}, ctrCfg()); modele.signature = ctrSignature(modele);
+    const body = Object.assign({}, ct || {}, {
+      fid: f.id, nom: f.nom || "", discordId: f.discordId || "", ref: ct ? ctrNo(ct) : dossierNo("CT", ref.id), type: type.value, fin: type.value === "CDD" ? fin.value : "",
+      signeLe: signeLe.value, priseFonctions: prise.value, naissance: naissance.value, adresse: adresse.value.trim(), telephone: tel.value.trim(), email: mail.value.trim(),
+      poste: poste.value.trim(), service: service.value.trim(), superieur: sup.value.trim(), taux: t, heures: Math.round(hh * 100) / 100,
+      horaires: horaires.value.trim() || modele.horaires, essai: essai.value.trim() || modele.essai, modele,
+      statut: "a_signer", at: ct ? ct.at || nowISO() : nowISO(), byNom: ct ? ct.byNom || S.agentName || "" : S.agentName || "", modifieLe: ct ? nowISO() : null });
+    delete body.id;
+    if (!(await write(() => ref.set(body)))) { go.disabled = false; return; }
+    toast(ct ? "Contrat modifié." : `Contrat de travail de ${f.nom} établi : téléchargez-le pour le faire signer.`);
+    openCtr(ref.id, back);
+  });
+  const later = h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Plus tard" });
+  openDialog({ eyebrow: `Contrat de travail · ${f.nom || "Agent"}`, title: ct ? `Modifier le contrat ${ctrNo(ct)}` : "Établir le contrat de travail", wide: true,
+    body: [
+      h("p", { class: "hint", style: "margin:0" }, `Rempli d’après la fiche de l’agent et le barème : ${f.nom || "—"}, ${f.grade || "sans grade"}${gradeTaux(f.grade) ? ", " + money(gradeTaux(f.grade)) + " de l’heure" : ""}. Les clauses fixes viennent du modèle de contrat (`, h("button", { class: "linkbtn", type: "button", onclick: () => openCtrModele(() => openCtrForm(f, ct, back)), text: "modifier le modèle" }), ")."),
+      dlPoste, dlServ, dlSup,
+      h("h4", { class: "mini-title", text: "Contrat" }),
+      h("div", { class: "row2" }, field("ct-type", "Type de contrat", type), finRow),
+      h("div", { class: "row2" }, field("ct-signe", "Date de signature", signeLe), field("ct-prise", "Date de prise de fonctions", prise)),
+      h("h4", { class: "mini-title", text: "Le salarié (personnage en jeu)" }),
+      h("div", { class: "row2" }, field("ct-naissance", "Date de naissance", naissance), field("ct-tel", "Téléphone", tel)),
+      h("div", { class: "row2" }, field("ct-adresse", "Adresse", adresse), field("ct-mail", "Adresse électronique", mail)),
+      h("h4", { class: "mini-title", text: "Poste et rémunération" }),
+      h("div", { class: "row2" }, field("ct-poste", "Intitulé du poste", poste), field("ct-service", "Service d’affectation", service)),
+      field("ct-sup", "Supérieur hiérarchique direct", sup),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "ct-taux", text: "Taux horaire brut" }), h("div", { class: "money", "data-cur": (cur() || "€") + "/h" }, Object.assign(taux, { id: "ct-taux" }))), field("ct-heures", "Heures par semaine", heures)),
+      h("div", { class: "row2" }, field("ct-horaires", "Horaires de prise et de fin de service", horaires), field("ct-essai", "Période d’essai", essai)),
+      h("p", { class: "hint", style: "margin:0", text: "Un champ laissé vide reste en pointillés sur le contrat, à compléter à la main." }),
+      err],
+    foot: [later, h("span", { class: "spacer" }), go] });
+}
+
+// Modèle : les clauses fixes et la signature de l'employeur.
+function openCtrModele(back) {
+  if (!writer()) return;
+  const m = ctrCfg(), els = {};
+  const rows = CTR_CHAMPS.map(([k, label]) => {
+    const el = k === "equipements" ? h("textarea", { rows: "3" }) : h("input", { autocomplete: "off" });
+    el.value = m[k]; els[k] = el; return field("ctm-" + k, label, el);
+  });
+  let sig = m.signature || "";
+  const apercu = h("div", { class: "ct-sig-apercu" });
+  const majApercu = () => { const src = ctrSignature(Object.assign({}, m, { signature: sig, representant: els.representant.value })); fill(apercu, src ? h("img", { src, alt: "Signature de l’employeur", style: "max-width:260px;max-height:90px;display:block" }) : h("span", { class: "muted", text: "Aucune signature : la place reste vide sur le contrat." })); };
+  els.representant.addEventListener("input", majApercu);
+  const fichier = h("input", { type: "file", accept: "image/png,image/jpeg,image/webp", style: "display:none" });
+  fichier.addEventListener("change", async () => {
+    const fl = fichier.files && fichier.files[0]; if (!fl) return;
+    try {
+      const url = URL.createObjectURL(fl), img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+      const sc = Math.min(1, 520 / img.naturalWidth, 180 / img.naturalHeight), cv = document.createElement("canvas");
+      cv.width = Math.max(1, Math.round(img.naturalWidth * sc)); cv.height = Math.max(1, Math.round(img.naturalHeight * sc));
+      cv.getContext("2d").drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+      sig = cv.toDataURL("image/png"); majApercu();
+    } catch (x) { toast("Image illisible : choisissez un PNG ou un JPEG.", true); }
+  });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer le modèle" });
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    const ct = {}; for (const [k] of CTR_CHAMPS) ct[k] = els[k].value.trim();
+    ct.signature = sig;
+    if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { contratTravail: ct, updatedAt: nowISO() })))) { toast("Modèle de contrat enregistré : il vaut pour les prochains contrats."); if (back) back(); else closeDialog(); }
+    else go.disabled = false;
+  });
+  majApercu();
+  openDialog({ eyebrow: "Contrats de travail", title: "Modèle de contrat", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Les clauses fixes de chaque contrat. Un contrat garde le modèle du jour où il a été établi ou modifié pour la dernière fois." }),
+      h("div", { class: "row2" }, rows.slice(0, 2)), h("div", { class: "row2" }, rows.slice(2, 4)), h("div", { class: "row2" }, rows.slice(4, 6)),
+      h("div", { class: "row2" }, rows.slice(6, 8)), h("div", { class: "row2" }, rows.slice(8, 10)), rows[10], h("div", { class: "row2" }, rows.slice(11, 13)),
+      h("h4", { class: "mini-title", text: "Signature de l’employeur" }), apercu,
+      h("div", { class: "paste-row" }, fichier, h("button", { class: "btn ghost small", type: "button", onclick: () => fichier.click(), text: "Importer une signature" }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => { sig = ""; majApercu(); }, text: "Revenir à la signature du modèle" })),
+      h("p", { class: "hint", style: "margin:0", text: "Sans signature importée, celle du modèle d’origine n’apparaît que pour son signataire ; pour un autre représentant, importez sa signature (image PNG, de préférence sur fond transparent)." }),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+
+/* Dessin du contrat : pages A4 à 150 dpi, comme le modèle */
+const ctrImages = {};
+const ctrImage = src => ctrImages[src] || (ctrImages[src] = new Promise(ok => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => { delete ctrImages[src]; ok(null); }; i.src = src; }));
+// Écriture manuscrite pour la signature du salarié (police chargée à la demande).
+async function ctrPoliceSignature() {
+  if (!document.fonts) return false;
+  if (!document.querySelector("link[data-ct-sig]")) {
+    const l = h("link", { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Allura&display=swap", "data-ct-sig": "1" });
+    document.head.append(l);
+    await new Promise(ok => { l.onload = ok; l.onerror = ok; setTimeout(ok, 3000); });
+  }
+  try { await Promise.race([document.fonts.load('64px "Allura"'), new Promise(ok => setTimeout(ok, 3000))]); } catch (x) { /* police indisponible */ }
+  return document.fonts.check('64px "Allura"');
+}
+class CtrWriter {
+  constructor(no, cadre) {
+    this.W = 1240; this.H = 1754; this.L = 150; this.R = 150; this.T = 132; this.B = 168; this.no = no; this.cadre = cadre; this.pages = []; this.ink = "#111827"; this.gris = "#5b6472";
+    this.newPage();
+  }
+  get inner() { return this.W - this.L - this.R; }
+  newPage() {
+    const c = document.createElement("canvas"); c.width = this.W; c.height = this.H;
+    const g = c.getContext("2d"); g.fillStyle = "#ffffff"; g.fillRect(0, 0, this.W, this.H);
+    if (this.cadre) g.drawImage(this.cadre, 0, 0, this.W, this.H);
+    this.c = c; this.g = g; this.pages.push(c); this.y = this.T;
+  }
+  font(b, size, f) { return `${b ? 700 : 400} ${size}px ${f || PF.body}`; }
+  // Texte riche : [[texte, gras], …] ; « \n » force un retour à la ligne.
+  toks(runs, size) {
+    const out = [];
+    for (const [t, b] of runs) for (const part of String(t == null ? "" : t).split(/(\n|[ \t]+)/)) {
+      if (!part) continue;
+      if (part === "\n") { out.push({ br: true }); continue; }
+      if (/^[ \t]+$/.test(part)) { if (out.length && !out[out.length - 1].br) out[out.length - 1].sp = true; continue; }
+      this.g.font = this.font(b, size); out.push({ t: part, b: !!b, w: this.g.measureText(part).width, s: this.g.measureText(" ").width, sp: false });
+    }
+    return out;
+  }
+  lignes(runs, size, maxW) {
+    const lines = []; let cur = [], w = 0;
+    for (const tk of this.toks(runs, size)) {
+      if (tk.br) { lines.push(cur); cur = []; w = 0; continue; }
+      const prev = cur[cur.length - 1], add = (prev && prev.sp ? prev.s : 0) + tk.w;
+      if (cur.length && w + add > maxW) { lines.push(cur); cur = [tk]; w = tk.w; } else { cur.push(tk); w += add; }
+    }
+    lines.push(cur);
+    return lines;
+  }
+  largeur(line) { return line.reduce((t, tk, i) => t + tk.w + (i < line.length - 1 && tk.sp ? tk.s : 0), 0); }
+  dessine(line, x, y, size, color) {
+    const g = this.g; g.fillStyle = color || this.ink; g.textBaseline = "alphabetic";
+    line.forEach((tk, i) => { g.font = this.font(tk.b, size); g.fillText(tk.t, x, y); x += tk.w + (i < line.length - 1 && tk.sp ? tk.s : 0); });
+  }
+  hauteur(runs, o) { const size = o.size || 22, lh = Math.round(size * (o.lh || 1.38)); return this.lignes(runs, size, o.w || this.inner - (o.indent || 0)).length * lh; }
+  ensure(hh) { if (this.y + hh > this.H - this.B) this.newPage(); }
+  p(runs, o) {
+    o = o || {}; if (typeof runs === "string") runs = [[runs]];
+    const size = o.size || 22, lh = Math.round(size * (o.lh || 1.38)), x0 = (o.x != null ? o.x : this.L) + (o.indent || 0), w = (o.w || this.inner) - (o.indent || 0);
+    const lines = this.lignes(runs, size, w);
+    if (o.garder) this.ensure(lines.length * lh);
+    lines.forEach((line, i) => {
+      if (!o.garder) this.ensure(lh);
+      if (o.puce && i === 0) { const g = this.g; g.fillStyle = this.ink; g.beginPath(); g.arc(x0 - 26, this.y + size * 0.62, 4.5, 0, Math.PI * 2); g.fill(); }
+      const lw = this.largeur(line), x = o.align === "center" ? x0 + (w - lw) / 2 : x0;
+      this.dessine(line, x, this.y + size, size, o.color);
+      this.y += lh;
+    });
+    this.y += o.after == null ? 12 : o.after;
+  }
+  puces(items, o) { for (const it of items) this.p(it, Object.assign({ indent: 64, puce: true, after: 4 }, o || {})); this.y += 6; }
+  titre(t) { this.ensure(100); this.y += 12; this.p([[t, true]], { after: 8 }); }
+  // Pied de page : référence et numéro de page, dans le cadre.
+  finir() {
+    const n = this.pages.length;
+    this.pages.forEach((c, i) => { const g = c.getContext("2d"); g.fillStyle = this.gris; g.font = this.font(false, 17); g.textAlign = "center"; g.fillText(`Contrat de travail · ${this.no} · page ${i + 1}/${n}`, this.W / 2, this.H - 96); g.textAlign = "left"; });
+    return this.pages;
+  }
+}
+async function ctrPages(ct) {
+  const m = Object.assign({}, CTR_DEF, ct.modele || ctrCfg()), no = ctrNo(ct), signe = ct.statut === "signe";
+  const [cadre, logo, sigEmp] = await Promise.all([ctrImage("assets/contrat-cadre.png"), ctrImage("assets/contrat-logo.png"), m.signature || ctrSignature(m) ? ctrImage(m.signature || ctrSignature(m)) : Promise.resolve(null)]);
+  const manuscrite = signe ? await ctrPoliceSignature() : false;
+  try { if (document.fonts) await document.fonts.ready; } catch (x) { /* polices du système */ }
+  const pw = new CtrWriter(no, cadre), V = x => (String(x == null ? "" : x).trim() || "………………………………"), B = t => [t, true];
+  // En-tête : logo, Préfecture, titre.
+  if (logo) { const lw = 480, lh = lw * logo.naturalHeight / logo.naturalWidth; pw.g.drawImage(logo, (pw.W - lw) / 2, pw.y - 30, lw, lh); pw.y += lh - 18; }
+  pw.p([B("PRÉFECTURE DE POLICE DE PARIS")], { align: "center", size: 30, after: 8 });
+  pw.p([B("CONTRAT DE TRAVAIL")], { align: "center", size: 32, after: 22 });
+  pw.p([B("Référence du contrat : "), [no]], { align: "center", after: 8 });
+  pw.p([B("Type de contrat : "), [ct.type === "CDD" ? `CDD, jusqu’au ${V(ctrJour(ct.fin))}` : "CDI"]], { align: "center", after: 8 });
+  pw.p([B("Date de signature : "), [V(ctrJour(ct.signeLe))]], { align: "center", after: 18 });
+  pw.p([B("ENTRE LES SOUSSIGNÉS")], { align: "center", after: 18 });
+  // Les deux parties côte à côte.
+  const colW = (pw.inner - 50) / 2, xG = pw.L, xD = pw.L + colW + 50, y0 = pw.y;
+  const gauche = [[[B("L’employeur")], { align: "center", after: 14 }], [[["Dénomination : " + m.denomination]], {}], [[["Représentée par : "], B(m.representant)], {}], [[["Fonction : "], B(m.fonction)], {}], [[["Agissant en qualité de : " + m.qualite]], { after: 16 }], [[["Ci-après désignée « l’Employeur »,"]], {}]];
+  const droite = [[[B("Le salarié")], { align: "center", after: 14 }], [[["Nom et prénom : " + V(ct.nom)]], {}], [[["Date de naissance : " + V(ctrJour(ct.naissance))]], {}], [[["Adresse : " + V(ct.adresse)]], {}], [[["Téléphone : " + V(ct.telephone)]], {}], [[["Adresse électronique : " + V(ct.email)]], { after: 16 }], [[["Ci-après désigné « le Salarié »."]], {}]];
+  const colonne = (list, x) => { pw.y = y0; for (const [r, o] of list) pw.p(r, Object.assign({ x, w: colW, after: 4, garder: true }, o)); return pw.y; };
+  const yG = colonne(gauche, xG), yD = colonne(droite, xD); pw.y = Math.max(yG, yD) + 28;
+  pw.p("Les parties conviennent des dispositions suivantes.", { after: 10 });
+  pw.titre("ARTICLE 1 — OBJET DU CONTRAT");
+  pw.p("L’Employeur engage le Salarié en qualité de :");
+  pw.p([B("Intitulé du poste : "), [V(ct.poste)]]); pw.p([B("Service d’affectation : "), [V(ct.service)]]); pw.p([B("Supérieur hiérarchique direct : "), [V(ct.superieur)]]);
+  pw.p("Le Salarié exercera les missions et responsabilités correspondant à son poste, conformément à la fiche de poste qui pourra être annexée au présent contrat.");
+  pw.titre("ARTICLE 2 — NATURE ET DURÉE DU CONTRAT");
+  pw.p("Le présent contrat est conclu sous la forme suivante :");
+  pw.puces([[["Type de contrat : " + (ct.type === "CDD" ? "CDD" : "CDI")]], ct.type === "CDD" ? [["Date de fin du contrat : " + V(ctrJour(ct.fin))]] : null, [["Date de prise de fonctions : " + V(ctrJour(ct.priseFonctions))]], [["Durée de travail : " + m.duree]]].filter(Boolean));
+  pw.p("Toute modification du contrat devra faire l’objet d’un accord écrit, dans les conditions applicables.");
+  pw.titre("ARTICLE 3 — LIEU DE TRAVAIL");
+  pw.p("Le lieu principal d’exercice des fonctions est fixé à : " + m.lieu);
+  pw.p("Des déplacements professionnels pourront être demandés lorsque les fonctions l’exigent, dans les conditions applicables.");
+  pw.titre("ARTICLE 4 — RÉMUNÉRATION");
+  pw.p("En contrepartie de son travail, le Salarié percevra une rémunération calculée selon les modalités suivantes :");
+  const hTxt = n => `${String(n).replace(".", ",")} heure${n >= 2 ? "s" : ""}`;
+  pw.puces([[B("Taux horaire brut : "), [`${money(ct.taux)} /heure`]], [["Nombre d’heures hebdomadaires prévu : " + hTxt(ct.heures)]], [["Périodicité et modalités de versement : " + m.versement]]]);
+  pw.p("Les cotisations et prélèvements applicables seront effectués conformément aux règles en vigueur. Les éventuelles heures supplémentaires ou complémentaires seront traitées selon le régime applicable au statut du Salarié.");
+  pw.titre("ARTICLE 5 — TEMPS DE TRAVAIL ET HORAIRES");
+  pw.p(`La durée de travail est fixée à ${hTxt(ct.heures)} par semaine.`);
+  pw.p("Les horaires prévisionnels sont les suivants :");
+  pw.puces([[["Horaires de prise et de fin de service : " + V(ct.horaires)]]]);
+  pw.p("Le temps de travail, les repos et les éventuelles astreintes sont organisés conformément aux dispositions applicables à l’emploi concerné.");
+  pw.titre("ARTICLE 6 — PÉRIODE D’ESSAI");
+  pw.p("Une période d’essai est prévue :");
+  pw.puces([[["Durée : " + V(ct.essai)]], [["Conditions de renouvellement : " + m.renouvellement]], [["Conditions de rupture : conformément aux dispositions applicables."]]]);
+  pw.titre("ARTICLE 7 — CONGÉS ET ABSENCES");
+  pw.p("Le Salarié bénéficie des congés et autorisations d’absence prévus par les dispositions applicables à son statut et à son contrat.");
+  pw.p("Les absences doivent être signalées dans les meilleurs délais et justifiées selon les procédures applicables.");
+  pw.titre("ARTICLE 8 — OBLIGATIONS PROFESSIONNELLES");
+  pw.p("Le Salarié s’engage notamment à :");
+  pw.puces(["Exercer ses fonctions avec diligence, loyauté et professionnalisme ;", "Respecter les consignes de service et les règles de sécurité ;", "Respecter les obligations de confidentialité relatives aux informations auxquelles il a accès ;", "Protéger les documents, équipements et données qui lui sont confiés ;", "Respecter les obligations déontologiques et, le cas échéant, les obligations propres aux agents publics."].map(t => [[t]]));
+  pw.titre("ARTICLE 9 — CONFIDENTIALITÉ ET DONNÉES");
+  pw.p("Le Salarié s’engage à ne pas divulguer les informations confidentielles obtenues dans le cadre de ses fonctions, sauf lorsque leur communication est autorisée ou imposée par la loi.");
+  pw.p("Les informations personnelles et professionnelles sont traitées conformément aux règles applicables en matière de protection des données.");
+  pw.titre("ARTICLE 10 — MATÉRIEL ET MOYENS PROFESSIONNELS");
+  pw.p("Les équipements éventuellement remis au Salarié sont les suivants :");
+  const equip = String(m.equipements || "").split(/\n|,|;/).map(x => x.trim()).filter(Boolean);
+  pw.puces((equip.length ? equip : ["Aucun"]).map(t => [[t]]));
+  pw.p("Le Salarié s’engage à en faire un usage professionnel approprié et à les restituer à la fin de ses fonctions ou sur demande justifiée.");
+  pw.titre("ARTICLE 11 — FORMATION ET ÉVALUATION");
+  pw.p("Le Salarié pourra bénéficier des formations nécessaires à l’exercice de ses missions, selon les règles applicables.");
+  pw.titre("ARTICLE 12 — FIN DU CONTRAT");
+  pw.p("Le contrat prend fin dans les conditions prévues par sa nature et par les dispositions applicables.");
+  pw.p("Les modalités de préavis, de rupture anticipée, de non-renouvellement et de remise des documents de fin de contrat sont déterminées conformément au régime juridique applicable.");
+  // Signatures : le titre, la formule et les deux blocs restent sur la même page.
+  pw.ensure(470);
+  pw.titre("ARTICLE 13 — SIGNATURES");
+  pw.p(`Fait à ${m.ville} le ${V(ctrJour(ct.signeLe))}, en ${m.exemplaires}.`, { after: 30 });
+  const y1 = pw.y;
+  pw.p([B("POUR L’EMPLOYEUR")], { x: xG, w: colW, after: 6 }); pw.p(m.representant, { x: xG, w: colW, after: 2 }); pw.p([B(m.fonction)], { x: xG, w: colW, after: 12 });
+  pw.p("Signature :", { x: xG, w: colW, after: 6 });
+  if (sigEmp) { const sw = 300, sh = sw * sigEmp.naturalHeight / sigEmp.naturalWidth; pw.g.drawImage(sigEmp, xG + 30, pw.y, sw, sh); pw.y += sh; }
+  const yA = pw.y; pw.y = y1;
+  pw.p([B("POUR LE SALARIÉ")], { x: xD, w: colW, after: 6 }); pw.p("Nom et prénom : " + V(ct.nom), { x: xD, w: colW, after: 12 });
+  pw.p("Mention « Lu et approuvé » :", { x: xD, w: colW, after: 4 });
+  const g = pw.g, cursive = manuscrite ? '"Allura", cursive' : 'italic 400 34px Georgia, "Times New Roman", serif';
+  if (signe) { g.fillStyle = "#1c2f6b"; g.font = manuscrite ? `44px ${cursive}` : cursive; g.fillText("Lu et approuvé", xD + 10, pw.y + 38); }
+  else { g.fillStyle = "#9aa3ae"; g.fillRect(xD, pw.y + 44, colW - 40, 2); }
+  pw.y += 62;
+  pw.p("Signature :", { x: xD, w: colW, after: 4 });
+  if (signe) {
+    g.fillStyle = "#1c2f6b"; g.font = manuscrite ? `58px ${cursive}` : 'italic 400 40px Georgia, "Times New Roman", serif'; g.fillText(ct.nom || "", xD + 10, pw.y + 54);
+    pw.y += 74; pw.p(`Signé le ${V(ctrJour(ct.salarieSigneLe))}`, { x: xD, w: colW, size: 18, color: pw.gris, after: 4 });
+  } else { g.fillStyle = "#9aa3ae"; g.fillRect(xD, pw.y + 90, colW - 40, 2); pw.y += 100; }
+  pw.y = Math.max(pw.y, yA) + 10;
+  return pw.finir();
+}
+async function ctrPdf(ct) {
+  const pages = await ctrPages(ct), out = [];
+  for (const c of pages) { const blob = await canvasJpeg(c, 0.86); out.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: c.width, h: c.height }); }
+  return pdfFromJpegs(out, `Contrat de travail ${ctrNo(ct)} · ${ct.nom || ""}`);
+}
+const ctrFichier = ct => `contrat-de-travail-${ctrNo(ct).toLowerCase()}-${norm(ct.nom || "agent").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.pdf`;
+async function ctrTelecharger(ct, bt) {
+  if (bt) bt.disabled = true;
+  try { await S.downloads.save({ filename: ctrFichier(ct), data: await ctrPdf(ct) }); }
+  catch (x) { toast("Impossible de créer le PDF dans ce navigateur.", true); }
+  finally { if (bt) bt.disabled = false; }
+}
+
+// Le contrat : aperçu des pages, téléchargement, signature du salarié.
+function openCtr(id, back) {
+  const ct = ctrOf(id); if (!ct) { toast("Ce contrat n’existe plus.", true); return; }
+  const w = writer(), f = foncOf(ct.fid) || { id: ct.fid, nom: ct.nom, grade: ct.poste }, reopen = () => openCtr(id, back), signe = ct.statut === "signe";
+  const pages = h("div", { class: "ct-pages", "aria-label": "Aperçu du contrat" }, h("p", { class: "muted", style: "margin:0", text: "Préparation du contrat…" }));
+  ctrPages(ct).then(cs => { if (!pages.isConnected && !dlg.open) return; fill(pages, cs.map((c, i) => { c.className = "ct-page"; c.setAttribute("role", "img"); c.setAttribute("aria-label", `Page ${i + 1} sur ${cs.length}`); return c; })); })
+    .catch(() => fill(pages, h("p", { class: "err", text: "Aperçu impossible dans ce navigateur." })));
+  const sigDate = h("input", { type: "date", id: "ct-sig-date" }); sigDate.value = jourCle(new Date());
+  const sigBox = h("div", { class: "paste-row", hidden: true }, field("ct-sig-date", "Signé par le salarié le", sigDate),
+    h("button", { class: "btn ink small", type: "button", onclick: async ev => {
+      ev.currentTarget.disabled = true;
+      const body = Object.assign({}, ct, { statut: "signe", salarieSigneLe: sigDate.value || jourCle(new Date()), signeEnregistrePar: S.agentName || "", modifieLe: nowISO() }); delete body.id;
+      if (await write(() => S.db.doc("contratsTravail/" + id).set(body))) { toast(`Contrat ${ctrNo(ct)} signé par ${ct.nom}.`); reopen(); } else ev.currentTarget.disabled = false;
+    }, text: "Confirmer la signature" }));
+  const retirer = async (bt, quoi) => {
+    if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = quoi === "sig" ? "Confirmer : le contrat redevient à signer" : "Confirmer la suppression"; return; }
+    bt.disabled = true;
+    let ok;
+    if (quoi === "sig") { const body = Object.assign({}, ct, { statut: "a_signer", salarieSigneLe: null, modifieLe: nowISO() }); delete body.id; ok = await write(() => S.db.doc("contratsTravail/" + id).set(body)); }
+    else ok = await write(() => S.db.doc("contratsTravail/" + id).delete());
+    if (ok) { toast(quoi === "sig" ? "Signature retirée." : `Contrat ${ctrNo(ct)} supprimé.`); if (quoi === "sig") reopen(); else if (back) back(); else closeDialog(); }
+    else bt.disabled = false;
+  };
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" })];
+  if (w && !signe) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openCtrForm(f, ct, reopen), text: "Modifier" }),
+    h("button", { class: "btn ghost small", type: "button", onclick: ev => retirer(ev.currentTarget, "del"), text: "Supprimer" }));
+  if (w && signe) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: ev => retirer(ev.currentTarget, "sig"), text: "Retirer la signature" }));
+  foot.push(h("span", { class: "spacer" }));
+  if (w && !signe) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: ev => { sigBox.hidden = false; ev.currentTarget.hidden = true; sigDate.focus(); }, text: "Signé par le salarié" }));
+  foot.push(h("button", { class: "btn ink small", type: "button", onclick: ev => ctrTelecharger(ctrOf(id) || ct, ev.currentTarget), text: "Télécharger le PDF" }));
+  openDialog({ eyebrow: `Contrat de travail · ${ct.nom || "Agent"}`, title: `${ctrNo(ct)} · ${ct.type === "CDD" ? "CDD" : "CDI"} · ${ct.poste || "—"}`, wide: true, stampEl: stamp(CTR_STAT[ct.statut] ? [CTR_STAT[ct.statut][0].toUpperCase(), CTR_STAT[ct.statut][1]] : ["À SIGNER", "warn"]),
+    body: [
+      kv([["Salarié", ct.nom || "—"], ["Poste", `${ct.poste || "—"}${ct.service ? " · " + ct.service : ""}`], ["Rémunération", `${money(ct.taux)} de l’heure · ${String(ct.heures).replace(".", ",")} h par semaine`],
+        ["Prise de fonctions", ctrJour(ct.priseFonctions) || "—"], ["Établi", `le ${ctrJour(ct.signeLe) || "—"}${ct.byNom ? " par " + ct.byNom : ""}`],
+        ["Signature du salarié", signe ? `le ${ctrJour(ct.salarieSigneLe) || "—"}${ct.signeEnregistrePar ? ` (enregistrée par ${ct.signeEnregistrePar})` : ""}` : "pas encore"]]),
+      !signe ? h("p", { class: "hint", style: "margin:0", text: "Téléchargez le PDF et faites-le signer à l’agent. Une fois signé, « Signé par le salarié » ajoute sa signature au contrat et le fige." }) : null,
+      sigBox, pages],
+    foot });
+}
+function ctrSection(f, back) {
+  const list = ctrsOf(f.id), w = writer();
+  if (!list.length && !w) return null;
+  return sec("Contrat de travail",
+    list.length ? h("ul", { class: "ent-list" }, list.map(c => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openCtr(c.id, back), text: `${ctrNo(c)} · ${c.type === "CDD" ? "CDD" : "CDI"} · ${c.poste || "—"}` }),
+        h("span", { class: "meta", text: `établi le ${ctrJour(c.signeLe) || "—"}${c.statut === "signe" ? ` · signé par l’agent le ${ctrJour(c.salarieSigneLe) || "—"}` : ""}` })),
+      chip(CTR_STAT[c.statut] || CTR_STAT.a_signer),
+      h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(c, ev.currentTarget), text: "PDF" }))))
+      : h("p", { class: "muted", style: "margin:0", text: "Aucun contrat de travail." }),
+    w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openCtrForm(f, null, back), text: list.length ? "Établir un nouveau contrat (changement de poste…)" : "Établir le contrat de travail" }) : null);
 }
 
 /* Pointages : corrections de la Direction */
@@ -7952,7 +8336,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["contratsTravail", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -9061,7 +9445,7 @@ function describe(e) {
         if (plus.length === 1 && !moins.length) return `a inscrit une dotation de ${money(plus[0].montant)} au Trésor${plus[0].motif ? ` (${plus[0].motif})` : ""}`;
         if (moins.length === 1 && !plus.length) return `a retiré la dotation de ${money(moins[0].montant)} du Trésor`;
       }
-      const L = { dotations: "dotations du Trésor", tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { dotations: "dotations du Trésor", contratTravail: "modèle de contrat de travail", tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -9102,6 +9486,14 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le versement ${no}`;
       if (a.statut !== b.statut) return { confirme: `a confirmé la réception de ${money(a.montantRecu ?? a.montant)} d’amendes de ${qui} (${no})`, refuse: `a refusé le versement ${no} de ${qui}`, annule: `a annulé le versement ${no} de ${qui}` }[a.statut] || `a modifié le versement ${no}`;
       return `a modifié le versement ${no}`;
+    }
+    case "contratsTravail": {
+      const nom = v.nom || "un agent", no = v.ref || dossierNo("CT", e.doc_id);
+      if (x === "ajout") return `a établi le contrat de travail de ${nom} (${no} · ${v.type || "CDI"} · ${v.poste || "—"})`;
+      if (x === "suppression") return `a supprimé le contrat de travail ${no} de ${nom}`;
+      if (a.statut === "signe" && b.statut !== "signe") return `a enregistré la signature par ${nom} de son contrat de travail ${no}`;
+      if (b.statut === "signe" && a.statut !== "signe") return `a retiré la signature du contrat de travail ${no} de ${nom}`;
+      return `a modifié le contrat de travail ${no} de ${nom}`;
     }
     case "fonctionnaires": {
       const nom = v.nom || "un agent";
@@ -12968,7 +13360,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["contratsTravail", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
