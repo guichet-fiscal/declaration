@@ -1214,6 +1214,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <div class="paste-row" id="py-actions"></div>
     </div>
     <div class="card" id="py-prevision" style="margin-top:16px" hidden></div>
+    <div class="card" id="py-cls" style="margin-top:16px"></div>
     <div class="dash-grid">
       <div class="card">
         <div class="card-head"><div><h3>Fonctionnaires</h3><p class="sub" id="py-fonc-sub">Les agents payés par la Préfecture, leur grade et leur compte de pointeuse.</p></div></div>
@@ -4825,6 +4826,7 @@ function renderPayes(force) {
   const box = $("#py-table");
   const need = ["fonctionnaires", "payes", "pointages", "rappels", "config", "demandes", "arbitrages"];
   if (!S.connected || need.some(n => !S.loaded.has(n))) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
+  renderClassement();
   if (!force && box.contains(document.activeElement) && document.activeElement.matches("input")) return;
   const c = payeCfg(), k = S.payeSem = S.payeSem || semKey(new Date()), x = payeCalc(k), b = x.budget || {}, wk = (bounds(k) || {}).week;
   const saisieK = semSaisie(k);
@@ -6125,11 +6127,58 @@ async function chargerClassement(force) {
 }
 function servicesClassement() {
   const t = x => new Date(x).getTime();
-  if (S.role !== "pointeuse") return ptActifs().map(p => ({ a: p.discordId || p.nom, nom: ptNom(p), moi: !!S.discordId && p.discordId === S.discordId, debut: t(p.debut), fin: p.fin ? t(p.fin) : null }));
+  if (S.role !== "pointeuse") return ptActifs().map(p => ({ a: p.discordId || p.nom, nom: ptNom(p), moi: !!S.discordId && p.discordId === S.discordId, debut: t(p.debut), fin: p.fin ? t(p.fin) : ptFerme() ? PT_FERMETURE : null }));
   chargerClassement();
   const c = S.clsData;
   if (!c || c.erreur) return null;
   return c.list.filter(x => x && x.debut).map(x => ({ a: x.a, nom: x.nom || "Agent", moi: !!x.moi, debut: t(x.debut), fin: x.fin ? t(x.fin) : null }));
+}
+// Heures de service par agent et par semaine :
+//  - jusqu'à la fermeture de la pointeuse, les services pointés (à la minute, avec leur nombre) ;
+//  - ensuite (semaine 46 et suivantes), les heures relevées sur la tablette en jeu et saisies dans la paye,
+//    semaine versée ou non, plus les rappels en heures de la semaine.
+// Le même agent garde la même clé d'une source à l'autre : son compte Discord (à défaut, sa fiche).
+function heuresClassement() {
+  const svcs = servicesClassement();
+  if (!svcs) return null;
+  const out = new Map();
+  const add = (a, nom, moi, k, hh, sv, open) => {
+    if (!(hh > 0) || !k) return;
+    const id = a + "|" + k, x = out.get(id) || { a, nom, moi: false, k, h: 0, sv: new Set(), open: false };
+    x.h += hh; if (sv != null) x.sv.add(sv); if (moi) x.moi = true; if (open) x.open = true;
+    out.set(id, x);
+  };
+  svcs.forEach((x, i) => {
+    let k = semKey(new Date(x.debut));
+    for (let g = 0; g < 5; g++) {
+      const b = bounds(k); if (!b || b.start.getTime() > (x.fin || Date.now())) break;
+      add(x.a, x.nom, x.moi, k, clsDuree(x, b.start.getTime(), b.end.getTime() + 1), i, !x.fin);
+      k = semSuiv(k);
+    }
+  });
+  const agent = (fid, nom, discordId) => { const f = foncOf(fid), did = (f && f.discordId) || discordId || ""; return { a: did || "f:" + fid, nom: (f && f.nom) || nom || "Agent", moi: !!S.discordId && did === S.discordId }; };
+  for (const p of S.payes || []) {
+    const k = p && p.id;
+    if (!/^\d{4}-S\d{2}$/.test(k || "") || !semSaisie(k)) continue;
+    for (const l of payeVersee(p) ? (p.lignes || []) : payeLignesPrep(k, p)) { const g = agent(l.fid, l.nom, l.discordId); add(g.a, g.nom, g.moi, k, Number(l.heures) || 0); }
+  }
+  for (const r of S.rappels || []) {
+    if (String(r.id).startsWith("auto-") || r.origine === "retenue" || r.statut === "annule" || !semSaisie(r.semaine) || !foncOf(r.fid)) continue;
+    const g = agent(r.fid); add(g.a, g.nom, g.moi, r.semaine, Number(r.heures) || 0);
+  }
+  return [...out.values()];
+}
+// Classement d'une période : les semaines retenues par « garde », additionnées par agent.
+function clsRangSem(lignes, garde) {
+  const par = new Map();
+  for (const x of lignes) {
+    if (!garde(x.k)) continue;
+    const a = par.get(x.a) || { a: x.a, nom: x.nom, moi: false, h: 0, sv: new Set(), sem: new Set(), enService: false };
+    a.h += x.h; x.sv.forEach(v => a.sv.add(v)); a.sem.add(x.k); if (x.moi) a.moi = true; if (x.open && !ptFerme()) a.enService = true;
+    par.set(x.a, a);
+  }
+  return [...par.values()].map(a => Object.assign(a, { n: a.sv.size, nSem: a.sem.size }))
+    .sort((a, b) => b.h - a.h || String(a.nom).localeCompare(String(b.nom), "fr")).map((x, i) => Object.assign(x, { rang: i + 1 }));
 }
 const clsDuree = (x, t0, t1) => Math.max(0, Math.min(x.fin || Date.now(), t1) - Math.max(x.debut, t0)) / 36e5;
 function clsRang(svcs, t0, t1) {
@@ -6162,21 +6211,6 @@ function clsSerie(jours) {
   const auj = jour(jourCle(new Date())), cur = prev != null && auj - prev <= 1 ? run : 0;
   return { cur, best };
 }
-// Heures de l'équipe par semaine : la semaine en cours, et le record des semaines finies.
-function clsSemaines(svcs) {
-  if (!svcs.length) return { record: null, tot: new Map() };
-  const tot = new Map(), kNow = semKey(new Date());
-  let k = semKey(new Date(Math.min(...svcs.map(x => x.debut))));
-  for (let g = 0; g < 60; g++) {
-    const b = bounds(k); if (!b) break;
-    tot.set(k, svcs.reduce((t, x) => t + clsDuree(x, b.start.getTime(), b.end.getTime() + 1), 0));
-    if (k === kNow) break;
-    k = semSuiv(k);
-  }
-  let record = null;
-  for (const [kk, v] of tot) if (kk !== kNow && v > 0 && (!record || v > record.h)) record = { k: kk, h: v };
-  return { record, tot };
-}
 // Badges : ce que chacun peut viser, avec où il en est.
 function clsBadges(mine, svcs, plafond) {
   const jours = clsJours(mine), total = mine.reduce((t, x) => t + clsDuree(x, -Infinity, Infinity), 0), serie = clsSerie(jours);
@@ -6207,74 +6241,99 @@ function clsBadges(mine, svcs, plafond) {
 }
 const CLS_VUES = [["semaine", "Cette semaine"], ["derniere", "Semaine dernière"], ["mois", "Ce mois"], ["tout", "Depuis le début"]];
 function clsFenetre(v) {
-  const now = new Date(), k = semKey(now);
-  if (v === "derniere") { const b = bounds(semPrec(k)); return { t0: b.start.getTime(), t1: b.end.getTime() + 1, label: periodLabel(semPrec(k)), k: semPrec(k) }; }
-  if (v === "mois") return { t0: new Date(now.getFullYear(), now.getMonth(), 1).getTime(), t1: Date.now() + 1, label: moisNom(moisKey(now)) };
-  if (v === "tout") return { t0: -Infinity, t1: Date.now() + 1, label: "depuis le début" };
-  const b = bounds(k); return { t0: b.start.getTime(), t1: b.end.getTime() + 1, label: periodLabel(k), k };
+  const now = new Date(), k = semKey(now), m = moisKey(now);
+  if (v === "derniere") { const kp = semPrec(k); return { garde: x => x === kp, label: periodLabel(kp), k: kp }; }
+  // Le mois de paye : une semaine compte pour le mois de son jeudi, comme dans la paye.
+  if (v === "mois") return { garde: x => moisDe(x) === m, label: moisNom(m) };
+  if (v === "tout") return { garde: () => true, label: "depuis le début" };
+  return { garde: x => x === k, label: periodLabel(k), k };
 }
 const rangTxt = n => (n === 1 ? "1er" : n + "e");
 function renderClassement() {
-  const box = $("#pt-cls");
-  if (!box || S.tab !== "pointeuse") return;
-  const svcs = servicesClassement();
-  if (!svcs) {
+  const box = S.tab === "payes" ? $("#py-cls") : S.tab === "pointeuse" ? $("#pt-cls") : null;
+  if (!box) return;
+  const lignes = heuresClassement();
+  if (!lignes) {
     const c = S.clsData;
     fill(box, h("h3", { text: "Classement des heures de service" }), h("p", { class: "muted", style: "margin:8px 0 0", text: !c ? "Chargement du classement…" : c.absente ? "Le classement s’affichera ici dès que la Direction aura exécuté supabase/v26_classement_service.sql." : "Classement momentanément indisponible : rechargez la page dans un instant." }));
     return;
   }
+  const ferme = ptFerme();
   let vue = S.clsVue;
   if (!vue) { try { vue = localStorage.getItem("clsVue") || ""; } catch (e) { vue = ""; } }
-  if (!CLS_VUES.some(x => x[0] === vue)) vue = "semaine";
+  if (!CLS_VUES.some(x => x[0] === vue)) vue = ferme ? "derniere" : "semaine";
   S.clsVue = vue;
-  const f = clsFenetre(vue), rang = clsRang(svcs, f.t0, f.t1), moi = rang.find(x => x.moi);
-  const plafond = Number(payeCfg().plafondHeures) || 20;
+  const f = clsFenetre(vue), rang = clsRangSem(lignes, f.garde), moi = rang.find(x => x.moi);
+  const c = payeCfg(), plafond = Number(c.plafondHeures) || 20;
   const seg = h("div", { class: "seg", role: "group", "aria-label": "Période du classement" }, CLS_VUES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.clsVue = k; try { localStorage.setItem("clsVue", k); } catch (e) { /* préférence non gardée */ } renderClassement(); }, text: l })));
-  // Record de l'équipe : la meilleure semaine finie, à battre cette semaine.
-  const sem = clsSemaines(svcs), kNow = semKey(new Date()), totNow = sem.tot.get(kNow) || 0, rec = sem.record;
-  const equipe = vue === "semaine" && rec ? h("div", { class: "cls-team" },
-    h("div", { class: "cls-team-t" }, h("span", { text: `L’équipe cette semaine : ${fmtH(totNow)}` }), h("span", { class: "hint", text: totNow > rec.h ? `record battu (ancien record : ${fmtH(rec.h)})` : `record à battre : ${fmtH(rec.h)}, ${periodPlain(rec.k).toLowerCase()} · encore ${fmtH(rec.h - totNow)}` })),
-    h("div", { class: "cls-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(Math.round(rec.h)), "aria-valuenow": String(Math.round(totNow)), "aria-label": "Heures de l’équipe face au record" }, h("span", { style: `width:${Math.min(100, totNow / rec.h * 100).toFixed(1)}%` }))) : null;
+  // Heures de l'équipe par semaine ; record : la meilleure semaine finie, à battre.
+  const kNow = semKey(new Date()), tot = new Map();
+  for (const x of lignes) tot.set(x.k, (tot.get(x.k) || 0) + x.h);
+  const recordHors = kx => { let r = null; for (const [kk, v] of tot) if (kk !== kNow && kk !== kx && v > 0 && (!r || v > r.h)) r = { k: kk, h: v }; return r; };
+  const record = recordHors(null), sem = { record, tot };
+  let equipe = null;
+  if (f.k) {
+    const totK = tot.get(f.k) || 0, rec = recordHors(f.k), enCours = f.k === kNow;
+    const qui = enCours ? "L’équipe cette semaine" : "L’équipe la semaine dernière";
+    if (rec && (totK > 0 || enCours)) equipe = h("div", { class: "cls-team" },
+      h("div", { class: "cls-team-t" }, h("span", { text: `${qui} : ${fmtH(totK)}` }),
+        h("span", { class: "hint", text: totK > rec.h ? `record battu (ancien record : ${fmtH(rec.h)}, ${periodPlain(rec.k).toLowerCase()})` : enCours ? `record à battre : ${fmtH(rec.h)}, ${periodPlain(rec.k).toLowerCase()} · encore ${fmtH(rec.h - totK)}` : `record : ${fmtH(rec.h)}, ${periodPlain(rec.k).toLowerCase()}` })),
+      h("div", { class: "cls-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(Math.round(rec.h)), "aria-valuenow": String(Math.round(totK)), "aria-label": "Heures de l’équipe face au record" }, h("span", { style: `width:${Math.min(100, totK / rec.h * 100).toFixed(1)}%` })));
+  }
   // Ma place, et ce qu'il manque pour monter.
   const devant = moi && moi.rang > 1 ? rang[moi.rang - 2] : null;
-  const maPlace = h("p", { class: "cls-me" }, !S.discordId ? "" : moi
-    ? `Vous êtes ${rangTxt(moi.rang)} sur ${rang.length} avec ${fmtH(moi.h)}${devant ? ` · encore ${fmtH(devant.h - moi.h + 1 / 60)} pour passer devant ${devant.nom}` : " · vous menez le classement"}.`
-    : vue === "derniere" ? "Vous n’avez pas été en service la semaine dernière." : "Pas encore de service sur cette période : prenez votre service pour entrer au classement.");
+  const maPlace = moi ? h("p", { class: "cls-me", text: `Vous êtes ${rangTxt(moi.rang)} sur ${rang.length} avec ${fmtH(moi.h)}${devant ? ` · encore ${fmtH(devant.h - moi.h + 1 / 60)} pour passer devant ${devant.nom}` : " · vous menez le classement"}.` })
+    : !S.discordId || ferme ? null
+    : h("p", { class: "cls-me", text: vue === "derniere" ? "Vous n’avez pas été en service la semaine dernière." : "Pas encore de service sur cette période : prenez votre service pour entrer au classement." });
+  // Sous chaque nom : pour une semaine, le palier de prime atteint ; sinon, les semaines en service.
+  const detail = x => {
+    const pal = f.k ? primePalier(x.h, f.k, c) : null;
+    return [f.k ? "" : `${x.nSem} semaine${plural(x.nSem)} en service`, x.n ? `${x.n} service${plural(x.n)} pointé${plural(x.n)}` : "", pal ? pal.nom : "", x.enService ? "en service maintenant" : ""].filter(Boolean).join(" · ");
+  };
   const ligne = x => h("li", { class: x.moi ? "cls-moi" : null },
     h("span", { class: "cls-rang", text: rangTxt(x.rang) }),
-    h("div", { style: "min-width:0" }, h("span", { class: "cls-nom", text: x.nom + (x.moi ? " (vous)" : "") }), h("span", { class: "meta", text: `${x.n} service${plural(x.n)}${x.enService ? " · en service maintenant" : ""}` }),
+    h("div", { style: "min-width:0" }, h("span", { class: "cls-nom", text: x.nom + (x.moi ? " (vous)" : "") }), h("span", { class: "meta", text: detail(x) }),
       h("div", { class: "cls-bar thin", "aria-hidden": "true" }, h("span", { style: `width:${(rang[0] ? x.h / rang[0].h * 100 : 0).toFixed(1)}%` }))),
     h("span", { class: "cls-h", text: fmtH(x.h) }));
   const podium = rang.slice(0, 3);
+  const vide = f.k && semSaisie(f.k)
+    ? (f.k === kNow ? "Aucune heure saisie pour cette semaine. Les heures relevées sur la tablette entrent au classement dès qu’elles sont remplies dans la paye (colonne « Heures de service »)." : "Aucune heure saisie pour cette semaine : remplissez la colonne « Heures de service » de la paye.")
+    : "Personne n’a encore pris son service sur cette période.";
   const pod = podium.length ? h("ol", { class: "cls-podium", "aria-label": "Podium" }, [1, 0, 2].map(i => podium[i]).filter(Boolean).map(x => h("li", { class: `cls-p${x.rang}${x.moi ? " cls-moi" : ""}` },
     h("span", { class: "cls-p-rang", text: rangTxt(x.rang) }), h("span", { class: "cls-p-nom", text: x.nom }), h("span", { class: "cls-p-h", text: fmtH(x.h) }),
-    h("span", { class: "meta", text: `${x.n} service${plural(x.n)}${x.enService ? " · en service" : ""}` })))) : h("p", { class: "muted", style: "margin:10px 0 0", text: "Personne n’a encore pris son service sur cette période." });
+    h("span", { class: "meta", text: detail(x) })))) : h("p", { class: "muted", style: "margin:10px 0 0", text: vide });
   const reste = rang.slice(3);
-  // Mes badges et ma série.
-  const mine = svcs.filter(x => x.moi), badges = S.discordId ? clsBadges(mine, svcs, plafond) : [], serie = clsSerie(clsJours(mine)), nb = badges.filter(b => b.ok).length;
+  // Mes badges et ma série : tant que la pointeuse donnait les services jour par jour.
+  const svcs = ferme ? [] : servicesClassement() || [], mine = svcs.filter(x => x.moi);
+  const badges = !ferme && S.discordId ? clsBadges(mine, svcs, plafond) : [], serie = clsSerie(clsJours(mine)), nb = badges.filter(b => b.ok).length;
   const mesBadges = badges.length ? h("div", { class: "cls-badges" },
     h("h4", { class: "mini-title", text: `Mes badges · ${nb} sur ${badges.length}${serie.cur ? ` · série en cours : ${serie.cur} jour${plural(serie.cur)}` : ""}${serie.best > 1 ? ` · meilleure série : ${serie.best} jours` : ""}` }),
     h("ul", { class: "cls-badge-list" }, badges.map(b => h("li", { class: b.ok ? "ok" : null, title: b.desc },
       h("span", { class: "cls-badge-n", text: (b.ok ? "✓ " : "") + b.nom }), h("span", { class: "meta", text: b.ok ? b.desc : b.prog ? `${b.desc} · ${b.prog}` : b.desc }))))) : null;
   const pub = writer() && rang.length ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(classementDoc(vue, f, rang, sem)), text: "Classement en image" }) : null;
+  const source = ferme ? h("p", { class: "hint", style: "margin:0 0 8px", text: "Heures pointées jusqu’à la fermeture de la pointeuse, puis heures relevées sur la tablette et saisies dans la paye, rappels en heures compris." }) : null;
   fill(box,
     h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Classement des heures de service" }), h("p", { class: "sub", text: f.label.charAt(0).toUpperCase() + f.label.slice(1) })), pub),
-    seg, equipe, maPlace, pod,
+    source, seg, equipe, maPlace, pod,
     reste.length ? h("ol", { class: "cls-list", start: "4" }, reste.slice(0, S.clsTout ? 100 : 7).map(ligne)) : null,
     reste.length > 7 ? h("button", { class: "linkbtn", type: "button", onclick: () => { S.clsTout = !S.clsTout; renderClassement(); }, text: S.clsTout ? "Réduire" : `Afficher les ${reste.length - 7} autres` }) : null,
     mesBadges);
 }
 // Classement en image, à poster dans le salon des agents.
 function classementDoc(vue, f, rang, sem) {
-  const tot = rang.reduce((t, x) => t + x.h, 0), rec = sem && sem.record;
+  const tot = rang.reduce((t, x) => t + x.h, 0), rec = sem && sem.record, ferme = ptFerme(), c = payeCfg();
   const titre = vue === "tout" ? "depuis le début" : f.label;
+  // Quatrième colonne : les services pointés tant qu'il y avait la pointeuse ; ensuite, la prime de
+  // présence atteinte (une semaine) ou le nombre de semaines en service.
+  const col4 = !ferme ? ["Services", x => String(x.n)] : f.k ? ["Prime", x => { const p = primePalier(x.h, f.k, c); return p ? p.nom : "—"; }] : ["Semaines", x => String(x.nSem)];
   return {
     kind: "CLASSEMENT DES HEURES DE SERVICE", no: vue === "semaine" || vue === "derniere" ? periodPlain(f.k) : vue === "mois" ? f.label.charAt(0).toUpperCase() + f.label.slice(1) : "Général", date: "Arrêté le " + longDate(new Date()),
     meta: [["Période", titre.charAt(0).toUpperCase() + titre.slice(1)], ["Agents en service", String(rang.length)], ["Premier", rang[0] ? `${rang[0].nom} · ${fmtH(rang[0].h)}` : "—"], ["Record de l’équipe", rec ? `${fmtH(rec.h)} · ${periodPlain(rec.k).toLowerCase()}` : "—"]],
     lines: [], total: ["Heures de l’équipe", fmtH(tot)], stamp: ["BRAVO", "ok"],
-    table: { title: "Classement", head: ["Rang", "Agent", "Heures", "Services"], cols: [0, 0.12, 0.66, 0.86], align: ["left", "left", "right", "right"], mono: [2, 3], strong0: true,
-      rows: rang.slice(0, 15).map(x => ({ cells: [rangTxt(x.rang), x.nom, fmtH(x.h), String(x.n)] })) },
-    footer: "Merci à tous les agents en service. Prenez votre service à la pointeuse dès que vous arrivez en ville : chaque heure compte pour votre paye et pour le classement.",
+    table: { title: "Classement", head: ["Rang", "Agent", "Heures", col4[0]], cols: ferme && f.k ? [0, 0.1, 0.52, 0.7] : [0, 0.12, 0.66, 0.86], align: ["left", "left", "right", "right"], mono: ferme && f.k ? [2] : [2, 3], strong0: true,
+      rows: rang.slice(0, 15).map(x => ({ cells: [rangTxt(x.rang), x.nom, fmtH(x.h), col4[1](x)] })) },
+    footer: ferme ? "Merci à tous les agents. Vos heures de service sont relevées sur la tablette en jeu : chaque heure compte pour votre paye, votre prime de présence et le classement."
+      : "Merci à tous les agents en service. Prenez votre service à la pointeuse dès que vous arrivez en ville : chaque heure compte pour votre paye et pour le classement.",
     discord: { channel: "agents", mentions: [], text: `**Classement des heures de service** · ${titre} : ${rang.slice(0, 3).map(x => `${rangTxt(x.rang)} ${x.nom} (${fmtH(x.h)})`).join(", ")} · ${fmtH(tot)} pour l’équipe.` }
   };
 }
