@@ -2433,7 +2433,7 @@ const URG = { normale: ["Normale", "muted"], prioritaire: ["Prioritaire", "warn"
 const DSTAT = {
   soumise: ["À valider", "info"], validee: ["À payer", "warn"], payee: ["Payée", "ok"],
   controle: ["En contrôle", "accent"], rejetee: ["Rejetée", "bad"],
-  retard: ["En retard", "bad"], defaut: ["Défaut sanctionné", "muted"], attendue: ["Attendue", "muted"], encours: ["Période en cours", "muted"], avant: ["Pas encore ouverte", "muted"]
+  retard: ["En retard", "bad"], defaut: ["Défaut sanctionné", "muted"], passee: ["Semaine passée", "muted"], attendue: ["Attendue", "muted"], encours: ["Période en cours", "muted"], avant: ["Pas encore ouverte", "muted"]
 };
 const ASTAT = {
   attente: ["En attente", "info"], etude: ["À l’étude", "accent"], accordee: ["Accordée", "ok"],
@@ -2580,11 +2580,16 @@ function findEnt(name) {
   const loose = S.entreprises.filter(e => nomsDe(e).some((x, i) => { const en = norm(x); return en && (i === 0 || en.length >= 4) && (en.includes(n) || n.includes(en)); }));
   return loose.length === 1 ? loose[0] : null;
 }
+// Semaine passée : la Direction dispense l'entreprise de déclarer cette semaine (pas de PDG, reprise en
+// cours…). Rien n'est attendu : pas de retard, de rappel, de mise en demeure ni d'imposition d'office.
+// Une déclaration déposée quand même pour cette semaine compte normalement.
+const semPassee = (e, k) => { const m = e && e.semainesPassees; return m && typeof m === "object" && m[k] ? m[k] : null; };
 function entStatus(e, key) {
   const ds = S.declarations.filter(d => d.entrepriseId === e.id && d.periode === key && dStatus(d) !== "rejetee").sort(byCreatedDesc);
   if (ds.length) return { status: dStatus(ds[0]), decl: ds[0] };
   if (keyStart(key) < entStartTime(e)) return { status: "avant" };
   if (defautOf(e, key)) return { status: "defaut" };
+  if (semPassee(e, key)) return { status: "passee", passe: semPassee(e, key) };
   const b = bounds(key);
   const now = Date.now();
   if (b && now > deadline(key).getTime()) return { status: "retard" };
@@ -3644,7 +3649,7 @@ function renderDashboard() {
   }
   const penDue = S.penalites.filter(p => p.statut === "due" && p.createdAt && keyOf(new Date(p.createdAt)) === key).reduce((sum, p) => sum + (Number(p.montant) || 0), 0);
   const ents = activeEnts();
-  const sts = ents.map(e => Object.assign({ e }, entStatus(e, key))).filter(x => x.status !== "avant");
+  const sts = ents.map(e => Object.assign({ e }, entStatus(e, key))).filter(x => x.status !== "avant" && x.status !== "passee");
   const ok = sts.filter(x => ["soumise", "validee", "payee", "controle"].includes(x.status)).length;
   const late = sts.filter(x => x.status === "retard").length;
   const pend = S.demandes.filter(dm => ["attente", "etude"].includes(aStatus(dm)));
@@ -7738,7 +7743,8 @@ $("#tab-modeles").addEventListener("click", e => {
 });
 $("#btn-recap").addEventListener("click", () => {
   const key = S.dashKey || defaultKey();
-  const sts = activeEnts().map(e => Object.assign({ e }, entStatus(e, key))).filter(x => x.status !== "avant");
+  const tous = activeEnts().map(e => Object.assign({ e }, entStatus(e, key))).filter(x => x.status !== "avant");
+  const sts = tous.filter(x => x.status !== "passee"), passees = tous.filter(x => x.status === "passee");
   const g = (...st) => sts.filter(x => st.includes(x.status));
   const names = arr => arr.map(x => x.e.nom).join(", ");
   const enc = S.declarations.filter(d => d.periode === key && dStatus(d) === "payee").reduce((s, d) => s + dMontant(d), 0);
@@ -7748,7 +7754,8 @@ $("#btn-recap").addEventListener("click", () => {
   if (g("validee").length) L.push(`💶 À payer : ${g("validee").map(x => `${x.e.nom} (${money(dMontant(x.decl))})`).join(", ")}`);
   if (g("retard").length) L.push(`❌ En retard, majoration de ${pct(cfg().majoration)} : ${names(g("retard"))}`);
   if (g("attendue", "encours").length) L.push(`⏳ Pas encore déclaré : ${names(g("attendue", "encours"))}`);
-  if (!sts.length) L.push("Aucune entreprise enregistrée au registre.");
+  if (passees.length) L.push(`➖ Rien à déclarer cette semaine : ${names(passees)}`);
+  if (!tous.length) L.push("Aucune entreprise enregistrée au registre.");
   L.push("", `Recettes encaissées sur la période : ${money(enc)}`);
   copyText(L.join("\n"), "Récap copié : collez-le dans votre salon Discord.");
 });
@@ -8659,7 +8666,8 @@ function openFiche(e, opts) {
     ["declarations", "Déclarations", sm.ds.length, [
     sec("Chiffre d’affaires et montant dû, " + spanLabel(keysEnding(defaultKey(), 12), 12), legend, chartBox),
       sec("Historique des déclarations", hist),
-      sec("Pénalités et redressements", pens, penForm)]],
+      passeesSection(e, reopen),
+      sec("Pénalités et redressements", pens, penForm)].filter(Boolean)],
     ["compte", "Compte", relevesOf(e).length, [compteSection(e, reopen)]],
     ["controles", "Contrôles et recouvrement", ctrls.length, [
       actions.length ? h("div", { class: "paste-row fiche-actions" }, actions) : null,
@@ -8980,6 +8988,11 @@ function describe(e) {
     case "entreprises":
       if (x === "ajout") return `a ajouté l’entreprise ${v.nom} au registre`;
       if (x === "suppression") return `a retiré l’entreprise ${v.nom} du registre`;
+      if (JSON.stringify(a.semainesPassees || {}) !== JSON.stringify(b.semainesPassees || {})) {
+        const av = b.semainesPassees || {}, ap = a.semainesPassees || {}, plus = Object.keys(ap).filter(k => !av[k]), moins = Object.keys(av).filter(k => !ap[k]);
+        if (plus.length === 1 && !moins.length) return `a passé la ${periodPlain(plus[0]).toLowerCase()} de ${a.nom} : rien à déclarer${ap[plus[0]].motif ? ` (${ap[plus[0]].motif})` : ""}`;
+        if (moins.length === 1 && !plus.length) return `a rétabli la ${periodPlain(moins[0]).toLowerCase()} de ${a.nom} : déclaration de nouveau attendue`;
+      }
       if (a.actif !== b.actif) return a.actif === false ? `a ${a.fermeMotif && a.fermeLe !== b.fermeLe ? "fermé" : "désactivé"} l’entreprise ${a.nom}${a.fermeMotif && a.fermeLe !== b.fermeLe ? " (" + a.fermeMotif + ")" : ""}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
@@ -9905,7 +9918,7 @@ const entStartTime = e => {
 };
 function expectedKeys(e) {
   const st = Math.max(startTime(), entStartTime(e));
-  return keysEnding(lastClosedKey(), 80).filter(k => keyStart(k) >= st && Date.now() > deadline(k).getTime());
+  return keysEnding(lastClosedKey(), 80).filter(k => keyStart(k) >= st && Date.now() > deadline(k).getTime() && !semPassee(e, k));
 }
 const hasDecl = (e, k) => S.declarations.some(d => sameEnt(d, e) && d.periode === k && dStatus(d) !== "rejetee");
 // Semaines ouvertes sans déclaration : on peut encore relancer, mettre en demeure, taxer d'office.
@@ -9918,6 +9931,104 @@ function missingKeys(e) {
 const defautOf = (e, k) => pensOf(e).find(p => p.type === "defaut" && p.periode === k && p.statut !== "annulee") || null;
 function closedMissing(e) {
   return expectedKeys(e).filter(k => isClosed(k) && !hasDecl(e, k) && !defautOf(e, k));
+}
+
+/* ---------- Semaines passées ---------- */
+// Une entreprise restée sans PDG une semaine, puis reprise, n'a rien à déclarer pour cette semaine : la
+// Direction la passe. La semaine n'est plus attendue (ni retard, ni rappel, ni mise en demeure, ni défaut,
+// ni imposition d'office) et sort de son espace entreprise. On peut la rétablir à tout moment.
+// Sur la fiche de l'entreprise : { [semaine]: { motif, byNom, by, at } } dans « semainesPassees ».
+const laPeriode = k => (/-S\d{2}$/.test(k) ? "la " + periodPlain(k).toLowerCase() : periodLabel(k).toLowerCase());
+const passeesDe = e => Object.entries((e && e.semainesPassees) || {}).filter(([k, v]) => v && bounds(k))
+  .map(([k, v]) => Object.assign({}, v, { k })).sort((a, b) => keyStart(b.k) - keyStart(a.k));
+function semainesAPasser(e) {
+  const st = Math.max(startTime(), entStartTime(e)), nowK = keyOf(new Date());
+  const ks = new Set([nextKeyOf(nowK)].concat(recentKeys(6), missingKeys(e), closedMissing(e)));
+  return [...ks].filter(k => k && bounds(k) && keyStart(k) >= st && !hasDecl(e, k) && !semPassee(e, k) && !defautOf(e, k))
+    .sort((a, b) => keyStart(b) - keyStart(a));
+}
+function etatSemaine(k) {
+  const b = bounds(k), now = Date.now();
+  if (isClosed(k)) return "clôturée sans déclaration";
+  if (now > deadline(k).getTime()) return "en retard";
+  if (now > b.end.getTime()) return "à déclarer";
+  if (now >= b.start.getTime()) return "en cours";
+  return "à venir";
+}
+async function majPassees(e, fn) {
+  const cur = S.entreprises.find(x => x.id === e.id) || e;
+  const map = Object.assign({}, cur.semainesPassees || {});
+  fn(map);
+  return write(() => S.db.doc("entreprises/" + e.id).update({ semainesPassees: map }));
+}
+async function retablirSemaine(e, k, bt, back) {
+  if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = "Confirmer : la déclaration sera de nouveau attendue"; return; }
+  bt.disabled = true;
+  if (await majPassees(e, m => { delete m[k]; })) {
+    toast(`${periodPlain(k)} rétablie : ${e.nom} doit de nouveau la déclarer${Date.now() > deadline(k).getTime() && !isClosed(k) ? ", elle est en retard" : ""}.`);
+    if (back) back();
+  } else bt.disabled = false;
+}
+function openPasserSemaine(e, back, k0) {
+  if (!writer() || !e || !e.id) return;
+  const cands = semainesAPasser(e);
+  const reopen = () => openPasserSemaine(S.entreprises.find(x => x.id === e.id) || e, back);
+  const deja = passeesDe(e);
+  const liste = deja.length ? sec("Déjà passées", h("ul", { class: "ent-list" }, deja.map(x => h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: periodLabel(x.k) }),
+      h("span", { class: "meta", text: [x.motif, x.byNom ? "par " + x.byNom : "", x.at ? "le " + fmtDate(new Date(x.at)) : ""].filter(Boolean).join(" · ") })),
+    hasDecl(e, x.k) ? chip(["Déclarée quand même", "info"]) : chip(DSTAT.passee),
+    h("button", { class: "btn ghost small", type: "button", onclick: ev => retablirSemaine(e, x.k, ev.currentTarget, reopen), text: "Rétablir" }))))) : null;
+  if (!cands.length) {
+    openDialog({ eyebrow: e.nom, title: "Passer une semaine",
+      body: [h("p", { class: "muted", style: "margin:0", text: "Aucune semaine à passer : les semaines récentes sont déclarées, sanctionnées ou déjà passées." }), liste],
+      foot: [h("span", { class: "spacer" }), h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" })] });
+    return;
+  }
+  const miss = missingKeys(e).concat(closedMissing(e)).sort((a, b) => keyStart(b) - keyStart(a));
+  const nowK = keyOf(new Date());
+  const def = [k0, miss[0], nowK].find(k => k && cands.includes(k)) || cands[0];
+  const sel = h("select", { id: "ps-sem" }, cands.map(k => h("option", { value: k, text: `${periodLabel(k)} · ${etatSemaine(k)}` })));
+  sel.value = def;
+  const motif = h("input", { id: "ps-motif", autocomplete: "off", maxlength: "120" }); motif.value = "Pas de PDG cette semaine";
+  const info = h("p", { class: "hint", style: "margin:0" });
+  const majInfo = () => {
+    const k = sel.value, rl = relancesOf(e).filter(r => (r.periodes || []).includes(k) && r.type !== "echeance");
+    info.textContent = `${e.nom} n’aura rien à déclarer pour ${laPeriode(k)} : pas de retard, de rappel, de mise en demeure, de défaut ni d’imposition d’office, et la semaine sort de son espace entreprise. Si elle déclare quand même, sa déclaration compte normalement.`
+      + (rl.length ? ` ${rl.length > 1 ? "Les relances" : isMed(rl[0]) ? "La mise en demeure" : "La relance"} déjà envoyée${rl.length > 1 ? "s" : ""} pour cette semaine ${rl.length > 1 ? "seront considérées" : "sera considérée"} comme réglée${rl.length > 1 ? "s" : ""}.` : "");
+  };
+  sel.addEventListener("change", majInfo); majInfo();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Passer la semaine" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const k = sel.value, m = motif.value.trim();
+    if (!m) { err.textContent = "Indiquez le motif, par exemple « Pas de PDG cette semaine »."; motif.focus(); return; }
+    if (hasDecl(e, k)) { err.textContent = `${periodPlain(k)} est déjà déclarée.`; return; }
+    go.disabled = true;
+    if (await majPassees(e, map => { map[k] = { motif: m, byNom: S.agentName || "", by: S.uid || null, at: nowISO() }; })) {
+      toast(`${periodPlain(k)} passée : ${e.nom} n’a rien à déclarer pour cette semaine.`);
+      if (back) back(); else closeDialog();
+    } else go.disabled = false;
+  });
+  openDialog({ eyebrow: e.nom, title: "Passer une semaine",
+    body: [
+      h("p", { class: "hint", style: "margin:0", text: "Pour une entreprise restée sans PDG une semaine avant d’être reprise, ou qui n’a pas eu d’activité à déclarer. On peut rétablir la semaine à tout moment." }),
+      field("ps-sem", "Semaine", sel), field("ps-motif", "Motif", motif), info, err, liste],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function passeesSection(e, reopen) {
+  if (!e.id) return null;
+  const w = writer(), list = passeesDe(e);
+  if (!list.length && !w) return null;
+  return sec("Semaines passées",
+    list.length ? h("ul", { class: "ent-list" }, list.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: periodLabel(x.k) }),
+        h("span", { class: "meta", text: [x.motif, x.byNom ? "passée par " + x.byNom : "", x.at ? "le " + fmtDate(new Date(x.at)) : ""].filter(Boolean).join(" · ") })),
+      hasDecl(e, x.k) ? chip(["Déclarée quand même", "info"]) : chip(DSTAT.passee),
+      w ? h("button", { class: "btn ghost small", type: "button", onclick: ev => retablirSemaine(e, x.k, ev.currentTarget, reopen), text: "Rétablir" }) : h("span", {}))))
+      : h("p", { class: "muted", style: "margin:0", text: "Aucune. Passez une semaine quand l’entreprise n’a rien à déclarer, par exemple restée sans PDG avant d’être reprise." }),
+    w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openPasserSemaine(e, reopen), text: "Passer une semaine" }) : null);
 }
 const payDelayMs = () => (Number(cfg().delaiPaiementJours) || 0) * 864e5;
 const payDue = d => { const dec = S.decisions[d.id]; return dec && dec.at ? new Date(new Date(dec.at).getTime() + payDelayMs()) : null; };
@@ -10010,9 +10121,9 @@ const justiceEnCours = t => justiceOpen(t) || (t.statut === "transmis" && !(t.it
 const relanceFor = (e, type, keysOrItems) => relancesOf(e).find(r => r.type === type && (type === "declaration"
   ? (r.periodes || []).some(k => keysOrItems.includes(k))
   : (r.items || []).some(i => keysOrItems.some(x => sameItem(i, x))))) || null;
-const rlSettled = r => r.type === "echeance" ? (r.periodes || []).every(k => hasDecl(entOf(r), k))
+const rlSettled = r => r.type === "echeance" ? (r.periodes || []).every(k => hasDecl(entOf(r), k) || semPassee(entOf(r), k))
   : r.type === "declaration"
-  ? (r.periodes || []).every(k => { const e = entOf(r); return hasDecl(e, k) || (isClosed(k) && defautOf(e, k)); })
+  ? (r.periodes || []).every(k => { const e = entOf(r); return hasDecl(e, k) || semPassee(e, k) || (isClosed(k) && defautOf(e, k)); })
   : (r.items || []).length > 0 && (r.items || []).every(itemSettled);
 function rlStateChip(r) {
   if (r.type === "echeance") return rlSettled(r) ? chip(["Déclarée", "ok"]) : new Date(r.echeance).getTime() < Date.now() ? chip(["Date limite passée", "warn"]) : chip(["Avant la date limite", "muted"]);
@@ -10110,7 +10221,7 @@ function echeanceProchaine() {
   return { k, lim, moment, ouverte: Date.now() > bounds(k).end.getTime() };
 }
 const rappelDe = (e, k) => relancesOf(e).find(r => r.type === "echeance" && (r.periodes || []).includes(k)) || null;
-const rappelCandidats = k => activeEnts().filter(e => e.id && entStartTime(e) <= keyStart(k) && !hasDecl(e, k)).map(e => ({ e, deja: rappelDe(e, k) }));
+const rappelCandidats = k => activeEnts().filter(e => e.id && entStartTime(e) <= keyStart(k) && !hasDecl(e, k) && !semPassee(e, k)).map(e => ({ e, deja: rappelDe(e, k) }));
 const dePeriode = k => (/-S\d{2}$/.test(k) ? "de la " + periodPlain(k).toLowerCase() : deMois(k));
 const jourLimite = d => d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 function rappelEcheanceParts(x, ents) {
@@ -10249,7 +10360,8 @@ function relancesSection(e, reopen) {
   if (miss.length) {
     const last = relanceFor(e, "declaration", miss), x = { e, keys: miss };
     rows.push(h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `Déclaration${plural(miss.length)} manquante${plural(miss.length)}` }), h("span", { class: "meta", text: miss.map(periodPlain).join(", ") })),
-      rlChip(last), ag ? h("span", { class: "row-actions" }, btn("Rappel de déclaration", () => relanceOne(x, "declaration", "relance", { back: reopen })), btn("Mise en demeure de déclarer", () => relanceOne(x, "declaration", "mise_en_demeure", { back: reopen }))) : h("span", {})));
+      rlChip(last), ag ? h("span", { class: "row-actions" }, btn("Rappel de déclaration", () => relanceOne(x, "declaration", "relance", { back: reopen })), btn("Mise en demeure de déclarer", () => relanceOne(x, "declaration", "mise_en_demeure", { back: reopen })),
+        writer() ? h("button", { class: "btn ghost small", type: "button", title: "Rien à déclarer cette semaine (pas de PDG, reprise…)", onclick: () => openPasserSemaine(e, reopen, miss[miss.length - 1]), text: "Passer une semaine" }) : null) : h("span", {})));
   }
   if (ech.length) {
     const last = free.length ? relanceFor(e, "paiement", free) : null, x = { e, items: free };
@@ -18759,7 +18871,7 @@ const P_STAT = { soumise: ["Reçue · avis à venir", "info"], validee: ["Avis �
 const depotDe = k => (S.depots || []).find(d => d.periode === k) || null;
 function portailPeriodes(e) {
   const st = Math.max(startTime(), entStartTime(e));
-  return recentKeys(10).filter(k => keyStart(k) >= st && !isClosed(k) && !hasDecl(e, k)).sort();
+  return recentKeys(10).filter(k => keyStart(k) >= st && !isClosed(k) && !hasDecl(e, k) && !semPassee(e, k)).sort();
 }
 function portailMessage(titre, texte) {
   fill($("#portail"), h("div", { class: "gate-card", style: "margin:24px auto" },
@@ -18813,8 +18925,12 @@ function renderPortail() {
       h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; await chargerEspace(); toast("Espace à jour."); }, text: "Mettre à jour" })),
     ferme ? h("div", { class: "notice", style: "margin:8px 0 0" }, h("div", { text: "Votre entreprise est fermée au registre : elle ne peut plus déposer de déclaration." })) : null,
     xo ? h("div", { class: "exo-line", style: "margin-top:8px" }, h("strong", { text: "Exonération :" }), chip([xo.text, xo.tone])) : null);
-  // À déclarer
-  const todo = pers.map(k => {
+  // À déclarer, et les semaines passées par la Direction (pas de PDG, reprise…) : rien à y déposer.
+  const stP = Math.max(startTime(), entStartTime(e));
+  const passK = ferme ? [] : recentKeys(10).filter(k => semPassee(e, k) && !hasDecl(e, k) && !isClosed(k) && keyStart(k) >= stP);
+  const todo = pers.concat(passK).sort().map(k => {
+    if (semPassee(e, k)) return h("li", {}, h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: periodLabel(k) }), h("span", { class: "meta", text: "La Préfecture vous dispense de cette déclaration : rien à déposer pour cette semaine." })),
+      chip(["Rien à déclarer", "muted"]), h("span", {}));
     const dp = depotDe(k), late = Date.now() > deadline(k).getTime(), cur = k === nowK && Date.now() <= bounds(k).end.getTime();
     const state = dp && dp.statut === "recu" ? ["Envoyée", "info"] : dp && dp.statut === "refuse" ? ["Refusée · à renvoyer", "bad"] : late ? ["En retard", "bad"] : cur ? ["En cours", "muted"] : ["À déclarer", "warn"];
     const txt = dp && dp.statut === "recu" ? `Envoyée le ${fmtDateTime(new Date(dp.modifieLe || dp.recuLe))}${dp.envois > 1 ? " (corrigée)" : ""}. La Préfecture l’enregistre, puis vous envoie l’avis.`
