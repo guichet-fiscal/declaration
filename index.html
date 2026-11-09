@@ -1058,6 +1058,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <h3>Trésor</h3>
             <p class="sub" id="dash-tr-sub">Recettes encaissées, crédits accordés et achats payés, 8 dernières périodes.</p>
           </div>
+          <button class="btn ghost small" type="button" id="tr-dotations">Fonds et dotations</button>
         </div>
         <div class="legend" id="legend"></div>
         <div class="chart" id="chart"></div>
@@ -2020,7 +2021,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
                 <div class="field">
                   <label for="s-budget">Fonds de départ du Trésor</label>
                   <input id="s-budget" type="number" min="0" step="1" class="mono">
-                  <span class="hint">Somme déjà disponible avant les premières recettes.</span>
+                  <span class="hint">Somme déjà disponible avant les premières recettes. Les sommes reçues ensuite (budget des services publics) s’inscrivent comme <button class="linkbtn" type="button" id="s-dotations">dotations du Trésor</button>.</span>
                 </div>
                 <div class="field">
                   <label for="s-devise">Devise affichée</label>
@@ -2394,7 +2395,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 /* ---------- État ---------- */
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
-  budgetInitial: 0, devise: "€", salaireMin: 0, enveloppes: {}, enveloppesSemaines: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
+  budgetInitial: 0, dotations: [], devise: "€", salaireMin: 0, enveloppes: {}, enveloppesSemaines: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
   exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
   mecActive: true, mecTaux: 60, mecPlafond: 20000,
   delaiMiseEnDemeureJours: 2, majorationImpaye: 10, majorationOffice: 40,
@@ -2590,6 +2591,14 @@ function entStatus(e, key) {
   if (b && now > b.end.getTime()) return { status: "attendue" };
   return { status: "encours" };
 }
+// Dotations reçues par le Trésor en plus du fonds de départ (budget des services publics versé par le
+// serveur) : { id, montant, le (date), motif, par, at }, dans les réglages.
+function dotationsTresor() {
+  const l = cfg().dotations;
+  return (Array.isArray(l) ? l : []).filter(x => x && Number(x.montant) > 0)
+    .map(x => ({ id: String(x.id || x.at || x.le || ""), montant: Math.round(Number(x.montant)), le: String(x.le || x.at || ""), motif: String(x.motif || ""), par: String(x.par || ""), at: String(x.at || "") }))
+    .sort((a, b) => a.le.localeCompare(b.le));
+}
 function treasury() {
   let rec = 0, dep = 0;
   for (const d of S.declarations) rec += dEncaisse(d);
@@ -2601,7 +2610,7 @@ function treasury() {
   }
   // Payes des fonctionnaires de la Préfecture (une demande « budget salaires » reprise en paye n'est comptée qu'une fois).
   const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0) - retenuesTous().reduce((t, r) => t + r.rembourse, 0) + aPartTous().reduce((t, x) => t + x.montant, 0);
-  const budget = Number(cfg().budgetInitial) || 0;
+  const budget = Number(cfg().budgetInitial) || 0, dotations = dotationsTresor().reduce((t, x) => t + x.montant, 0);
   // Prêts : le capital versé sort du Trésor, les remboursements (intérêts compris) y reviennent.
   let pv = 0, pr = 0, pd = 0;
   for (const p of S.prets || []) if (p.statut === "en_cours" || p.statut === "rembourse") {
@@ -2621,7 +2630,7 @@ function treasury() {
   for (const v of S.versements || []) amendes += vtRecu(v);
   // Primes versées aux aviseurs.
   const primes = primesVersees().reduce((t, c) => t + (Number(c.prime.montant) || 0), 0);
-  return { rec, dep, budget, achats, amendes, payes, primes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, aDeduire: Math.max(0, deduits - compense), solde: budget + rec + amendes - dep - achats - payes - primes - pv + pr };
+  return { rec, dep, budget, dotations, achats, amendes, payes, primes, pretsVerses: pv, pretsRembourses: pr, pretsDehors: pd, aDeduire: Math.max(0, deduits - compense), solde: budget + dotations + rec + amendes - dep - achats - payes - primes - pv + pr };
 }
 const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter(x => x != null && x !== false));
 const longDate = d => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -3646,7 +3655,7 @@ function renderDashboard() {
   setKpi("k-reste", money(reste + penDue), penDue ? `dont ${money(penDue)} de pénalités` : "avis émis, non payés", reste + penDue > 0 ? "warn" : "");
   setKpi("k-conf", ents.length ? `${ok} / ${sts.length}` : "—", late ? `${late} en retard` : (ents.length ? "aucun retard" : "aucune entreprise"), late ? "bad" : "");
   setKpi("k-dem", String(pend.length), pend.length ? `${money(pendSum)} demandés` : "rien à arbitrer", pend.length ? "warn" : "");
-  setKpi("k-solde", money(t.solde), `${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.payes ? ` − ${money(t.payes)} de payes` : ""}${t.primes ? ` − ${money(t.primes)} de primes d’aviseur` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}${t.aDeduire > 0 ? ` · ${money(t.aDeduire)} dus aux entreprises, à déduire de leurs impôts` : ""}`, t.solde < 0 ? "bad" : "");
+  setKpi("k-solde", money(t.solde), `${t.dotations ? `${money(t.budget + t.dotations)} de fonds et dotations + ` : ""}${money(t.rec)} encaissés${t.amendes ? ` + ${money(t.amendes)} d’amendes` : ""} − ${money(t.dep)} accordés${t.achats ? ` − ${money(t.achats)} d’achats` : ""}${t.payes ? ` − ${money(t.payes)} de payes` : ""}${t.primes ? ` − ${money(t.primes)} de primes d’aviseur` : ""}${t.pretsDehors > 0 ? ` · prêts : ${money(t.pretsDehors)} dehors` : ""}${t.aDeduire > 0 ? ` · ${money(t.aDeduire)} dus aux entreprises, à déduire de leurs impôts` : ""}`, t.solde < 0 ? "bad" : "");
 
   // Entreprises à surveiller
   const reg = $("#registry");
@@ -3821,6 +3830,50 @@ function treasuryChart(box, legend, n, givenKeys) {
     series: [{ name: "Recettes encaissées", cls: "b1", values: t.rec }, { name: "Crédits et achats", cls: "b2", values: t.dep }],
     label: `Recettes encaissées, crédits accordés et achats payés, ${spanLabel(keys, n)}`, empty: "Aucun mouvement sur ces périodes pour l’instant."
   });
+}
+// Fonds et dotations du Trésor : le fonds de départ (Réglages) et chaque somme reçue ensuite.
+function openDotations() {
+  if (!S.connected) return;
+  const w = writer(), t = treasury(), c = cfg(), list = dotationsTresor();
+  const dateDe = x => { const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(x) ? x + "T12:00:00" : x); return isNaN(d) ? "—" : longDate(d); };
+  const retirer = async (x, bt) => {
+    if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = "Confirmer le retrait"; return; }
+    bt.disabled = true;
+    const reste = (Array.isArray(S.config && S.config.dotations) ? S.config.dotations : []).filter(y => String(y.id || y.at || y.le) !== x.id);
+    if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { dotations: reste, updatedAt: nowISO() })))) { toast(`Dotation de ${money(x.montant)} retirée du Trésor.`); openDotations(); }
+    else bt.disabled = false;
+  };
+  const lignes = list.length ? h("ul", { class: "ent-list" }, list.slice().reverse().map(x => h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: x.motif || "Dotation" }),
+      h("span", { class: "meta", text: [`reçue le ${dateDe(x.le)}`, x.par ? `inscrite par ${x.par}` : ""].filter(Boolean).join(" · ") })),
+    h("span", { class: "mono", text: money(x.montant) }),
+    w ? h("button", { class: "btn ghost small", type: "button", onclick: ev => retirer(x, ev.currentTarget), text: "Retirer" }) : h("span", {}))))
+    : h("p", { class: "muted", style: "margin:0", text: "Aucune dotation inscrite : le Trésor ne compte que son fonds de départ." });
+  const mt = h("input", { id: "dt-montant", type: "number", min: "1", step: "1", inputmode: "numeric", placeholder: "0" });
+  const le = h("input", { id: "dt-le", type: "date" }); le.value = toLocalInput(new Date()).slice(0, 10);
+  const motif = h("input", { id: "dt-motif", autocomplete: "off", maxlength: "120" }); motif.value = "Budget des services publics";
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Inscrire la dotation" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const v = Math.round(Number(mt.value));
+    if (!(v > 0)) { err.textContent = "Indiquez le montant reçu."; mt.focus(); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(le.value)) { err.textContent = "Indiquez la date de réception."; le.focus(); return; }
+    go.disabled = true;
+    const x = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), montant: v, le: le.value, motif: motif.value.trim() || "Dotation", par: S.agentName || "", at: nowISO() };
+    const avant = Array.isArray(S.config && S.config.dotations) ? S.config.dotations : [];
+    if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { dotations: avant.concat([x]), updatedAt: nowISO() })))) { toast(`Dotation de ${money(v)} inscrite : le Trésor passe à ${money(treasury().solde)}.`); openDotations(); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Trésor", title: "Fonds et dotations",
+    body: [
+      kv([["Fonds de départ", money(t.budget)], ["Dotations reçues", money(t.dotations)], ["Solde du Trésor", money(t.solde), "tot"]]),
+      h("p", { class: "hint", style: "margin:0", text: "Le fonds de départ se règle dans Réglages → Calendrier et taux. Chaque somme reçue ensuite par le Trésor (budget des services publics) s’inscrit ici, avec sa date : elle s’ajoute au solde." }),
+      lignes,
+      w ? h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "dt-montant", text: "Montant reçu" }), h("div", { class: "money", "data-cur": c.devise || "€" }, mt)), field("dt-le", "Reçue le", le)) : null,
+      w ? field("dt-motif", "Motif", motif) : null,
+      w ? err : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }), w ? go : null] });
 }
 function renderChart() {
   treasuryChart($("#chart"), $("#legend"), 8);
@@ -8930,7 +8983,13 @@ function describe(e) {
       if (a.actif !== b.actif) return a.actif === false ? `a ${a.fermeMotif && a.fermeLe !== b.fermeLe ? "fermé" : "désactivé"} l’entreprise ${a.nom}${a.fermeMotif && a.fermeLe !== b.fermeLe ? " (" + a.fermeMotif + ")" : ""}` : `a réactivé l’entreprise ${a.nom}`;
       return `a modifié l’entreprise ${a.nom}`;
     case "config": {
-      const L = { tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      if (JSON.stringify(a.dotations || []) !== JSON.stringify(b.dotations || [])) {
+        const av = (b.dotations || []).map(x => x.id), ap = (a.dotations || []).map(x => x.id);
+        const plus = (a.dotations || []).filter(x => !av.includes(x.id)), moins = (b.dotations || []).filter(x => !ap.includes(x.id));
+        if (plus.length === 1 && !moins.length) return `a inscrit une dotation de ${money(plus[0].montant)} au Trésor${plus[0].motif ? ` (${plus[0].motif})` : ""}`;
+        if (moins.length === 1 && !plus.length) return `a retiré la dotation de ${money(moins[0].montant)} du Trésor`;
+      }
+      const L = { dotations: "dotations du Trésor", tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -16942,6 +17001,8 @@ function renderComptes() {
 }
 $("#rc-releve-new").addEventListener("click", () => pickEntreprise("Relevé de compte", e => openReleve(e)));
 $("#rc-serie-new").addEventListener("click", () => openSerie());
+$("#tr-dotations").addEventListener("click", () => openDotations());
+$("#s-dotations").addEventListener("click", () => openDotations());
 
 // Indication sous le solde, pendant la saisie d'une déclaration.
 function soldeHint(key, ca, ch, ms) {
