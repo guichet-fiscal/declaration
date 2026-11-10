@@ -6042,7 +6042,11 @@ function renderEspace() {
       h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(x, ev.currentTarget), text: "PDF" }))))
       : h("p", { class: "muted", style: "margin:8px 0 0", text: "Pas encore de contrat de travail : les ressources humaines vous l’établiront." }));
   // Mes sanctions (notifiées par l'encadrement)
-  const sancs = (E.sanctions || []).filter(x => x.statut !== "annulee").sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  // L'encadrement lit aussi le registre : ses propres sanctions y sont à jour, même si la base ne les met pas
+  // encore dans l'espace (mise à jour 31 pas exécutée) ou entre deux rechargements de l'espace.
+  const sancMap = new Map((E.sanctions || []).map(x => [x.id, x]));
+  if (S.role !== "agent" && S.loaded.has("sanctions")) for (const x of sanctionsOf(fid)) sancMap.set(x.id, x);
+  const sancs = [...sancMap.values()].filter(x => x.statut !== "annulee").sort((a, b) => String(b.at).localeCompare(String(a.at)));
   const cardSanc = sancs.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes sanctions" }), h("p", { class: "sub", text: "Décisions de la Direction ou des ressources humaines. Vos observations : écrivez à l’encadrement." }))),
     h("ul", { class: "ent-list" }, sancs.map(x => h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: (SANC_TYPES[x.type] || { nom: x.type }).nom }), h("span", { class: "meta", text: [sancNo(x), x.at ? "le " + longDate(new Date(x.at)) : "", sancEffet(x)].filter(Boolean).join(" · ") })),
