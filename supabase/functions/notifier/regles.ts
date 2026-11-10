@@ -5,7 +5,7 @@
 export const TYPES = ["declaration", "paiement", "demande", "pret", "controle", "vehicule", "convocation", "contrat", "versement", "delais"];
 
 const NF = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
-const money = (n) => NF.format(Math.round(Number(n) || 0)).replace(/ | /g, " ") + " €";
+const money = (n) => NF.format(Math.round(Number(n) || 0)).replace(/\s/g, " ") + " €";
 const no = (p, id) => p + "-" + String(id || "").replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase();
 function periode(k) {
   let m = /^(\d{4})-S(\d{2})$/.exec(k || "");
@@ -110,4 +110,121 @@ export function delais(rows, depuis, maintenant) {
   for (const r of by("convocations")) { const x = r.data || {}; if (x.statut === "convoquee" && proche(x.date)) out.push(`${no("CV", r.id)} · ${x.entrepriseNom || ""} : ${x.motif === "autre" && x.objet ? x.objet : MOTIFS[x.motif] || "convocation"} à ${heure(x.date)}`); }
   if (!out.length) return null;
   return { type: "delais", title: out.length === 1 ? "Délai à surveiller" : `${out.length} délais à surveiller`, body: out.slice(0, 4).join("\n") + (out.length > 4 ? `\n+ ${out.length - 4} autre${out.length - 4 > 1 ? "s" : ""}` : ""), url: "#recouvrement", tag: "delais-" + Math.floor(maintenant / 36e5) };
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Personnel de la Préfecture (mises à jour 30 à 32) : messages, agenda, notes de service, absences, payes.
+// Un changement → { agents, equipe, discord } :
+//  - agents : notifications aux fonctionnaires concernés, { fids (null = tous), type, msg } ou
+//    { type, parFid: { fid: msg } } quand chacun reçoit un texte à lui (sa paye) ;
+//  - equipe : une notification à l'encadrement (type « personnel ») ;
+//  - discord : messages pour le salon des alertes du personnel (« personnel ») ou de la Direction
+//    (« direction »), avec les mentions. Jamais le contenu d'un message ni d'une sanction.
+// ctx.foncs : Map fid → { nom, discordId, actif } ; ctx.site : adresse du guichet ; ctx.rolePersonnel : rôle Discord.
+export const TYPES_AGENTS = ["a_message", "a_agenda", "a_note", "a_paye", "a_absence"];
+export const COLLECTIONS_PERSONNEL = ["messagesAgents", "agenda", "notesService", "absences", "payes"];
+const court = (t, n) => { const s = String(t || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+const TZ = "Europe/Paris";
+function jour(k) {
+  const d = new Date(String(k || "") + "T12:00:00Z");
+  return Number.isFinite(d.getTime()) ? d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: TZ }) : String(k || "");
+}
+const periodeAbs = (a) => a.du === a.au ? `le ${jour(a.du)}` : `du ${jour(a.du)} au ${jour(a.au)}`;
+function quand(ev) {
+  const d = new Date(ev.debut || 0);
+  if (!Number.isFinite(d.getTime())) return "";
+  const j = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: TZ });
+  return ev.journee ? j : `${j} à ${heure(ev.debut)}`;
+}
+const pour = (ev) => (ev.audience === "agents" ? (Array.isArray(ev.participants) ? ev.participants : []) : null);
+
+export function personnel(e, ctx) {
+  const c = e.collection, id = e.id, ins = e.action === "INSERT";
+  const b = e.avant || {}, n = e.apres || {};
+  ctx = ctx || {};
+  const foncs = ctx.foncs || new Map(), site = ctx.site || "";
+  const did = (fid, x) => (x && x.discordId) || (foncs.get(fid) || {}).discordId || "";
+  // Le rôle est réglé au guichet sous la forme <@&ID> : on n'en garde que l'identifiant.
+  const rolePersonnel = (String(ctx.rolePersonnel || "").match(/\d{15,21}/) || [""])[0];
+  const out = { agents: [], equipe: null, discord: [] };
+  const lien = (h) => site ? ` ${site}${h}` : "";
+  switch (c) {
+    case "messagesAgents": {
+      if (!ins || !recent(n.at, 2)) return null;
+      if (n.de === "equipe") {
+        out.agents.push({ fids: [n.fid], type: "a_message", msg: { title: "Message de l’encadrement", body: n.sanction ? "Une décision de l’encadrement vous concerne : à lire dans votre espace." : `${n.auteur || "L’encadrement"} : ${court(n.texte, 140)}`, url: "#espace", tag: "msg-" + n.fid } });
+        const u = did(n.fid, n);
+        if (u) out.discord.push({ canal: "personnel", auto: "alertesAgents", texte: `<@${u}> 📩 Vous avez un nouveau message de l’encadrement. À lire dans votre espace :${lien("#espace")}`, users: [u] });
+      } else if (n.de === "agent") {
+        out.equipe = { type: "personnel", title: `Message de ${n.nom || "un fonctionnaire"}`, body: court(n.texte, 160), url: "#personnel", tag: "msg-equipe-" + n.fid };
+        out.discord.push({ canal: "direction", auto: "alertesEquipe", texte: `📨 **${n.nom || "Un fonctionnaire"}** a écrit à l’encadrement. À lire dans Personnel → Messagerie :${lien("#personnel")}` });
+      }
+      return out;
+    }
+    case "agenda": {
+      const cible = pour(n), annule = n.statut === "annule" && b.statut !== "annule", deplace = !ins && n.statut !== "annule" && (n.debut !== b.debut);
+      if (ins && (!recent(n.at, 2) || n.statut === "annule")) return null;
+      if (!ins && !annule && !deplace) return null;
+      const titre = ins ? "Nouveau rendez-vous" : annule ? "Rendez-vous annulé" : "Rendez-vous déplacé";
+      const corps = `${n.titre || "Rendez-vous"} · ${quand(n)}${n.lieu && !annule ? " · " + n.lieu : ""}`;
+      if (n.audience === "encadrement") { out.equipe = { type: "personnel", title: titre + " (encadrement)", body: corps, url: "#personnel", tag: "ag-" + id }; return out; }
+      out.agents.push({ fids: cible, type: "a_agenda", msg: { title: titre, body: corps, url: "#espace", tag: "ag-" + id } });
+      const users = (cible || []).map((f) => did(f)).filter(Boolean);
+      const role = !cible ? rolePersonnel : "";
+      const tete = users.length ? users.map((u) => `<@${u}>`).join(" ") + " " : role ? `<@&${role}> ` : "";
+      const texte = ins
+        ? `${tete}📅 Nouveau rendez-vous : **${n.titre || "Rendez-vous"}**, ${quand(n)}${n.lieu ? ", " + n.lieu : ""}. ${n.reponseDemandee ? "Dites dans votre espace si vous serez présent" : "Les détails sont dans votre espace"} :${lien("#espace")}`
+        : annule ? `${tete}❌ Rendez-vous annulé : **${n.titre || "Rendez-vous"}**, prévu ${quand(n)}.`
+        : `${tete}🔁 Rendez-vous déplacé : **${n.titre || "Rendez-vous"}**, désormais ${quand(n)}${n.lieu ? ", " + n.lieu : ""}.${lien("#espace")}`;
+      out.discord.push({ canal: "personnel", auto: "alertesAgents", texte, users, roles: role ? [role] : [] });
+      return out;
+    }
+    case "notesService": {
+      if (!ins || n.retiree || !recent(n.at, 2)) return null;
+      out.agents.push({ fids: null, type: "a_note", msg: { title: "Note de service", body: n.titre || "Nouvelle note de service", url: "#espace", tag: "note-" + id } });
+      const role = rolePersonnel;
+      out.discord.push({ canal: "personnel", auto: "alertesAgents", texte: `${role ? `<@&${role}> ` : ""}📌 Nouvelle note de service : **${n.titre || "Note de service"}**. À lire dans votre espace :${lien("#espace")}`, roles: role ? [role] : [] });
+      return out;
+    }
+    case "absences": {
+      if (ins && !recent(n.at, 2)) return null;
+      if (ins && n.par === "agent") {
+        out.equipe = { type: "personnel", title: `Absence signalée · ${n.nom || "fonctionnaire"}`, body: `${periodeAbs(n)}${n.motif ? " · " + court(n.motif, 80) : ""}`, url: "#personnel", tag: "abs-" + id };
+        out.discord.push({ canal: "direction", auto: "alertesEquipe", texte: `🗓️ **${n.nom || "Un fonctionnaire"}** signale une absence ${periodeAbs(n)}. Personnel → Absences :${lien("#personnel")}` });
+        return out;
+      }
+      if (ins && n.par === "equipe" && !n.sanction) { out.agents.push({ fids: [n.fid], type: "a_absence", msg: { title: "Absence enregistrée", body: `${periodeAbs(n)}${n.auteur ? " · par " + n.auteur : ""}`, url: "#espace", tag: "abs-" + id } }); return out; }
+      if (!ins && n.statut === "prise_en_compte" && b.statut === "signalee") { out.agents.push({ fids: [n.fid], type: "a_absence", msg: { title: "Absence prise en compte", body: `${periodeAbs(n)}${n.priseEnComptePar ? " · par " + n.priseEnComptePar : ""}`, url: "#espace", tag: "abs-" + id } }); return out; }
+      if (!ins && n.statut === "annulee" && b.statut !== "annulee" && n.annuleePar !== "agent" && !n.sanction) { out.agents.push({ fids: [n.fid], type: "a_absence", msg: { title: "Absence annulée par l’encadrement", body: periodeAbs(n), url: "#espace", tag: "abs-" + id } }); return out; }
+      return null;
+    }
+    case "payes": {
+      if (ins || n.statut !== "versee" || b.statut === "versee") return null;
+      const net = new Map();
+      for (const l of n.lignes || []) net.set(l.fid, (net.get(l.fid) || 0) + (Number(l.verse) || 0));
+      for (const r of n.rappels || []) if (Number(r.verse) > 0) net.set(r.fid, (net.get(r.fid) || 0) + Number(r.verse));
+      for (const r of n.retenues || []) if (Number(r.retenu) > 0) net.set(r.fid, (net.get(r.fid) || 0) - Number(r.retenu));
+      const parFid = {};
+      for (const [fid, v] of net) if (v > 0) parFid[fid] = { title: "Paye versée", body: `${periode(id).replace(/^s/, "S")} : ${money(v)} versés. Le bulletin est dans votre espace.`, url: "#espace", tag: "paye-" + id };
+      if (!Object.keys(parFid).length) return null;
+      out.agents.push({ type: "a_paye", parFid });
+      const users = [...new Set(Object.keys(parFid).map((fid) => did(fid, (n.lignes || []).find((l) => l.fid === fid))).filter(Boolean))];
+      out.discord.push({ canal: "personnel", auto: "alertesAgents", texte: `💶 La paye de la ${periode(id)} est versée.${users.length ? " " + users.map((u) => `<@${u}>`).join(" ") : ""} Le détail et le bulletin sont dans votre espace :${lien("#espace")}`, users });
+      return out;
+    }
+  }
+  return null;
+}
+
+// Rendez-vous de l'heure qui vient, pour les fonctionnaires concernés (sauf ceux qui ont répondu « non »).
+export function rappelsAgenda(rows, depuis, maintenant) {
+  const out = [], fin = maintenant + (maintenant - depuis);
+  for (const r of rows) {
+    if (r.collection !== "agenda") continue;
+    const x = r.data || {}, t = new Date(x.debut || 0).getTime();
+    if (x.statut === "annule" || x.journee || x.audience === "encadrement" || !Number.isFinite(t) || t <= maintenant || t > fin) continue;
+    const non = Object.entries(x.reponses || {}).filter(([, v]) => v && v.r === "non").map(([k]) => k);
+    out.push({ fids: pour(x), exclure: non, type: "a_agenda", msg: { title: "Rendez-vous dans moins d’une heure", body: `${x.titre || "Rendez-vous"} à ${heure(x.debut)}${x.lieu ? " · " + x.lieu : ""}`, url: "#espace", tag: "ag-rappel-" + r.id } });
+  }
+  return out;
 }

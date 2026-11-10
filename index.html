@@ -1266,6 +1266,7 @@ table.es-payes{min-width:0;width:100%}
         <h2 id="espace-nom">Mon espace</h2>
         <p class="sub" id="espace-sub">Votre fiche, vos payes et vos heures, vos échanges avec l’encadrement.</p>
       </div>
+      <div class="toolbar"><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
     </div>
     <div id="espace-main"></div>
   </section>
@@ -3295,7 +3296,7 @@ function applyRole() {
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
   $("#btn-search").hidden = !S.connected || ["pointeuse", "rh", "agent"].includes(S.role);
-  $("#notif-btn").hidden = !S.connected || !S.role || ["pointeuse", "rh", "agent"].includes(S.role);
+  $("#notif-btn").hidden = !S.connected || !S.role || S.role === "pointeuse";
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
@@ -11162,7 +11163,8 @@ const DISCORD_CHANNELS = [
   ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."],
   ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."],
   ["agents", "Salon des agents de la Préfecture", "Classement des heures de service, publié depuis la pointeuse. Laissez vide pour ne pas le publier."],
-  ["direction", "Salon de la Direction", "Bilan de chaque semaine, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Laissez vide pour ne pas le publier."]
+  ["direction", "Salon de la Direction", "Bilan de chaque semaine, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Aussi les alertes de l’encadrement (message d’un fonctionnaire, absence signalée). Laissez vide pour ne pas le publier."],
+  ["personnel", "Salon des alertes du personnel", "Alertes aux fonctionnaires, postées par le service d’envoi : nouveau message dans leur espace (l’agent est mentionné), rendez-vous de l’agenda, notes de service, paye versée. Jamais le contenu d’un message ni d’une sanction. Laissez vide pour ne pas les publier."]
 ];
 const DISCORD_AUTO = [
   ["avis", "Avis d’imposition, dès qu’il est émis", "entreprises"],
@@ -11180,10 +11182,12 @@ const DISCORD_AUTO = [
   ["communiques", "Communiqué des redressements de la semaine, le lendemain de la date limite", "entreprises"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
   ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"],
-  ["bilans", "Bilan de la semaine, le lendemain de la date limite (salon de la Direction)", "direction"]
+  ["bilans", "Bilan de la semaine, le lendemain de la date limite (salon de la Direction)", "direction"],
+  ["alertesAgents", "Alertes aux fonctionnaires : messages, agenda, notes de service, paye versée (salon des alertes du personnel)", "personnel"],
+  ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["bilans"]);
+const AUTO_DEFAUT = new Set(["bilans", "alertesAgents", "alertesEquipe"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
   return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : "");
@@ -11280,6 +11284,7 @@ function renderDiscordSettings(force) {
   $("#dw-nom").value = d.nom || "";
   $("#dw-mjustice").value = d.mentionJustice || "";
   $("#dw-mpolice").value = d.mentionPolice || "";
+  $("#dw-mpersonnel").value = d.mentionPersonnel || "";
   DISCORD_AUTO.forEach(([k]) => { $("#da-" + k).checked = fresh ? true : k in a ? !!a[k] : AUTO_DEFAUT.has(k); });
   S.discordDirty = false;
 }
@@ -11294,7 +11299,8 @@ function buildDiscordForm() {
       h("div", { class: "field" }, h("label", { for: "dw-mjustice", text: "Rôle de la justice, par défaut" }), h("input", { id: "dw-mjustice", class: "mono", autocomplete: "off", placeholder: "ID du rôle" }), h("span", { class: "hint", text: "Mentionné sur les dossiers transmis si le service Justice n’a pas de rôle (Réglages → Services publics)." })),
       h("div", { class: "field" }, h("label", { for: "dw-mpolice", text: "Rôle de la police, par défaut" }), h("input", { id: "dw-mpolice", class: "mono", autocomplete: "off", placeholder: "ID du rôle" }), h("span", { class: "hint", text: "Mentionné quand un véhicule est requalifié si ni la police nationale ni la gendarmerie n’ont de rôle (Réglages → Services publics)." }))),
     h("div", { class: "row2" },
-      h("div", { class: "field" }, h("label", { for: "dw-nom", text: "Nom affiché dans Discord" }), h("input", { id: "dw-nom", autocomplete: "off", placeholder: "Préfecture de police" }))),
+      h("div", { class: "field" }, h("label", { for: "dw-nom", text: "Nom affiché dans Discord" }), h("input", { id: "dw-nom", autocomplete: "off", placeholder: "Préfecture de police" })),
+      h("div", { class: "field" }, h("label", { for: "dw-mpersonnel", text: "Rôle des fonctionnaires" }), h("input", { id: "dw-mpersonnel", class: "mono", autocomplete: "off", placeholder: "ID du rôle" }), h("span", { class: "hint", text: "Mentionné pour les rendez-vous ouverts à tous et les notes de service. Laissez vide pour ne mentionner personne." }))),
     h("fieldset", { class: "checks" }, h("legend", { text: "Publier automatiquement" }),
       DISCORD_AUTO.map(([k, l]) => h("label", { class: "switch", for: "da-" + k }, h("input", { type: "checkbox", id: "da-" + k }), l))),
     h("p", { class: "hint", style: "margin:0", text: "Chaque document garde aussi un bouton « Publier sur Discord » pour un envoi à la main." }),
@@ -11315,11 +11321,13 @@ function buildDiscordForm() {
     }
     const mj = $("#dw-mjustice").value.trim();
     if (mj && !parseMention(mj, "role")) { $("#dw-msg").textContent = "Rôle de la justice : collez l’identifiant du rôle ou <@&ID>."; $("#dw-mjustice").focus(); return; }
+    const mpe = $("#dw-mpersonnel").value.trim();
+    if (mpe && !parseMention(mpe, "role")) { $("#dw-msg").textContent = "Rôle des fonctionnaires : collez l’identifiant du rôle ou <@&ID>."; $("#dw-mpersonnel").focus(); return; }
     const mp = $("#dw-mpolice").value.trim();
     if (mp && !parseMention(mp, "role")) { $("#dw-msg").textContent = "Rôle de la police : collez l’identifiant du rôle ou <@&ID>."; $("#dw-mpolice").focus(); return; }
     const auto = {};
     DISCORD_AUTO.forEach(([k]) => { auto[k] = $("#da-" + k).checked; });
-    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim(), mentionJustice: normMention(mj, "role"), mentionPolice: normMention(mp, "role") };
+    const valeur = { webhooks, auto, nom: $("#dw-nom").value.trim(), mentionJustice: normMention(mj, "role"), mentionPolice: normMention(mp, "role"), mentionPersonnel: normMention(mpe, "role") };
     const { error } = await S.sb.from("parametres_prives").upsert({ cle: "discord", valeur, modifie_le: nowISO() }, { onConflict: "cle" });
     if (error) { $("#dw-msg").textContent = "Enregistrement refusé : " + error.message; return; }
     S.discord = valeur; S.discordDirty = false;
@@ -19252,9 +19260,20 @@ const NOTIF_TYPES = [
   ["convocation", "Convocations", "Absence à sanctionner, collecte à encaisser, rendez-vous de l’heure à venir."],
   ["contrat", "Contrats et partenariats", "Projet de contrat ou de convention à signer."],
   ["versement", "Amendes versées", "Un versement d’amendes arrivé par convoi attend la confirmation de la Direction."],
-  ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, conventions arrivées à terme (vérifié chaque heure)."]
+  ["delais", "Délais expirés", "Mises en demeure, réponses aux contrôles, avis devenus exigibles, échéances de prêt, conventions arrivées à terme (vérifié chaque heure)."],
+  ["personnel", "Personnel", "Un fonctionnaire écrit à l’encadrement ou signale une absence ; rendez-vous de l’encadrement."]
 ];
-const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "contrat", "versement", "delais"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais"], lecture: ["delais"] };
+// Ce que reçoit un fonctionnaire de son espace (et l'encadrement qui a une fiche, pour son propre espace).
+const NOTIF_AGENT = [
+  ["a_message", "Messages de l’encadrement", "Un message de la Direction, de l’Inspection ou des ressources humaines."],
+  ["a_agenda", "Agenda", "Nouveau rendez-vous, rendez-vous déplacé ou annulé, rappel une heure avant."],
+  ["a_note", "Notes de service", "Une nouvelle note de service."],
+  ["a_paye", "Paye versée", "Le montant versé, chaque semaine."],
+  ["a_absence", "Absences", "Une absence enregistrée, prise en compte ou annulée par l’encadrement."]
+];
+const NOTIF_DEFAUT = { direction: ["declaration", "demande", "pret", "convocation", "contrat", "versement", "delais", "personnel"], inspecteur: ["declaration", "controle", "vehicule", "convocation", "delais", "personnel"], lecture: ["delais"], rh: ["personnel"], agent: NOTIF_AGENT.map(x => x[0]) };
+// Les choix proposés selon le rôle ; « Mon espace » en plus pour l'encadrement qui a une fiche.
+const notifChoix = () => S.role === "agent" ? NOTIF_AGENT : (S.role === "rh" ? NOTIF_TYPES.filter(x => x[0] === "personnel") : NOTIF_TYPES).concat(S.monFid ? NOTIF_AGENT : []);
 const notifUrl = () => String((window.GUICHET_CONFIG || {}).supabaseUrl || "").replace(/\/$/, "") + "/functions/v1/notifier";
 const notifSupport = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 function appareilNom() {
@@ -19291,7 +19310,7 @@ async function notifCle() {
 async function notifEnregistrer(sub, prefs) {
   const j = sub.toJSON();
   const { error } = await S.sb.from("notif_abonnements").upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, prefs, appareil: appareilNom(), modifie_le: nowISO() }, { onConflict: "endpoint" });
-  if (error) throw new Error(tableMissing(error) ? "Exécutez d’abord supabase/v10_notifications.sql dans Supabase." : "Enregistrement refusé : " + (error.message || "erreur"));
+  if (error) throw new Error(tableMissing(error) ? "Exécutez d’abord supabase/v10_notifications.sql dans Supabase." : /row-level security|violates/i.test(error.message || "") && ["agent", "rh"].includes(S.role) ? "Les notifications ne sont pas encore ouvertes à votre compte : la Direction doit exécuter supabase/v32_notifications_personnel.sql." : "Enregistrement refusé : " + (error.message || "erreur"));
 }
 async function notifActiver(prefs) {
   const perm = await Notification.requestPermission();
@@ -19314,8 +19333,8 @@ async function notifEssai(endpoint) {
 async function openNotifs() {
   const st = await notifEtat();
   const on = !!(st.sub && st.row);
-  const prefs = on ? st.row.prefs || [] : (NOTIF_DEFAUT[S.role] || NOTIF_DEFAUT.lecture);
-  const boxes = NOTIF_TYPES.map(([k, l, d]) => { const cb = h("input", { type: "checkbox", id: "nt-" + k, "data-k": k, disabled: !st.support }); cb.checked = prefs.includes(k); return h("label", { for: "nt-" + k }, cb, h("span", { text: l }), h("span", { class: "hint", text: d })); });
+  const prefs = on ? st.row.prefs || [] : (NOTIF_DEFAUT[S.role] || NOTIF_DEFAUT.lecture).concat(S.role !== "agent" && S.monFid ? NOTIF_AGENT.map(x => x[0]) : []);
+  const boxes = notifChoix().map(([k, l, d]) => { const cb = h("input", { type: "checkbox", id: "nt-" + k, "data-k": k, disabled: !st.support }); cb.checked = prefs.includes(k); return h("label", { for: "nt-" + k }, cb, h("span", { text: l }), h("span", { class: "hint", text: d })); });
   const chosen = () => boxes.map(b => $("input", b)).filter(i => i.checked).map(i => i.dataset.k);
   const err = h("span", { class: "err", "aria-live": "polite" });
   const busy = async (btn, fn) => { btn.disabled = true; err.textContent = ""; try { await fn(); } catch (e) { err.textContent = e.message || String(e); } btn.disabled = false; };
@@ -19354,6 +19373,7 @@ async function openNotifs() {
   $("#notif-btn").classList.toggle("on", on);
 }
 $("#notif-btn").addEventListener("click", openNotifs);
+$("#espace-notifs").addEventListener("click", openNotifs);
 
 // Un clic sur une notification ouvre le dossier : « #ouvrir=collection/id ».
 function ouvrirDossier(spec) {

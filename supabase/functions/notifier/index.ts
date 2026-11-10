@@ -2,15 +2,17 @@
 //
 // Appelé par la base (mise à jour 10) quand le registre change, et une fois par heure pour les
 // délais expirés ; appelé par le guichet pour connaître la clé publique d'envoi et pour une
-// notification d'essai. Les clés d'envoi sont créées au premier appel et gardées dans la table
-// privée notif_config : rien à copier à la main.
+// notification d'essai. Depuis la mise à jour 32, il prévient aussi les fonctionnaires (messages,
+// agenda, notes de service, absences, paye versée) sur leurs appareils, et poste les alertes du
+// personnel dans les salons Discord réglés au guichet (Réglages → Discord). Les clés d'envoi sont
+// créées au premier appel et gardées dans la table privée notif_config : rien à copier à la main.
 //
 // Déploiement : Supabase → Edge Functions → notifier, avec « Verify JWT » désactivé (la base
 // s'authentifie avec la clé de notif_config, le guichet avec la session de l'agent).
 
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
-import { evenement, delais } from "./regles.ts";
+import { evenement, delais, personnel, rappelsAgenda, COLLECTIONS_PERSONNEL } from "./regles.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS = {
@@ -55,6 +57,53 @@ async function destinataires(type: string, auteur: string | null): Promise<Abo[]
   return (data || []) as Abo[];
 }
 
+// Fonctionnaires : leurs appareils abonnés à ce type (fids null = tous ceux en service).
+type AboAgent = Abo & { fid: string };
+async function aboAgents(fids: string[] | null, type: string): Promise<AboAgent[]> {
+  const { data, error } = await db.rpc("notif_agents", { p_fids: fids, p_type: type });
+  if (error) return [];
+  return (data || []) as AboAgent[];
+}
+const SITE = "https://guichet-fiscal.github.io/declaration/";
+type Discord = { webhooks?: Record<string, string>; auto?: Record<string, boolean>; nom?: string; mentionPersonnel?: string };
+async function discordConf(): Promise<Discord> {
+  const { data } = await db.from("parametres_prives").select("valeur").eq("cle", "discord").maybeSingle();
+  return ((data && data.valeur) || {}) as Discord;
+}
+// Discord refuse tout le message si une mention autorisée n'est pas un identifiant valable.
+const ids = (l?: string[]) => [...new Set((l || []).map(String).filter((v) => /^\d{15,21}$/.test(v)))].slice(0, 100);
+async function posterDiscord(d: Discord, x: { canal: string; auto?: string; texte: string; users?: string[]; roles?: string[] }) {
+  const url = d.webhooks && d.webhooks[x.canal];
+  if (!url) return false;
+  if (x.auto && d.auto && x.auto in d.auto && !d.auto[x.auto]) return false;
+  try {
+    const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      content: x.texte.slice(0, 1990), username: d.nom || "Préfecture de police",
+      allowed_mentions: { parse: [], users: ids(x.users), roles: ids(x.roles) } }) });
+    return r.ok;
+  } catch (_e) { return false; }
+}
+async function fonctionnaires() {
+  const { data } = await db.from("registre").select("id,data").eq("collection", "fonctionnaires");
+  return new Map((data || []).map((r: { id: string; data: Record<string, unknown> }) => [r.id, r.data]));
+}
+// Un changement du personnel : notifications aux fonctionnaires, à l'encadrement, et salons Discord.
+async function traiterPersonnel(c: Conf, body: Record<string, unknown>) {
+  const d = await discordConf();
+  const res = personnel(body, { foncs: await fonctionnaires(), site: SITE, rolePersonnel: d.mentionPersonnel || "" });
+  if (!res) return { envoyes: 0, discord: 0 };
+  let envoyes = 0, discord = 0;
+  for (const a of res.agents) {
+    if (a.parFid) {
+      const abos = await aboAgents(Object.keys(a.parFid), a.type);
+      for (const [fid, msg] of Object.entries(a.parFid)) envoyes += await envoyer(c, abos.filter((x) => x.fid === fid), { ...(msg as Record<string, unknown>), type: a.type });
+    } else envoyes += await envoyer(c, await aboAgents(a.fids, a.type), { ...a.msg, type: a.type });
+  }
+  if (res.equipe) envoyes += await envoyer(c, await destinataires("personnel", (body.auteur as string) || null), res.equipe);
+  for (const x of res.discord) if (await posterDiscord(d, x)) discord++;
+  return { envoyes, discord };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
@@ -68,11 +117,18 @@ Deno.serve(async (req) => {
       if (cle !== c.secret) return json({ error: "clé refusée" }, 401);
       if (body.type === "delais") {
         const now = Date.now();
-        const { data } = await db.from("registre").select("collection,id,data").in("collection", ["config", "relances", "controles", "decisions", "declarations", "prets", "convocations", "conventions"]);
+        const { data } = await db.from("registre").select("collection,id,data").in("collection", ["config", "relances", "controles", "decisions", "declarations", "prets", "convocations", "conventions", "agenda"]);
+        // Rendez-vous de l'heure qui vient : un rappel aux fonctionnaires concernés.
+        let rappels = 0;
+        for (const r of rappelsAgenda(data || [], now - 3600e3, now)) {
+          const abos = (await aboAgents(r.fids, r.type)).filter((x) => !r.exclure.includes(x.fid));
+          rappels += await envoyer(c, abos, { ...r.msg, type: r.type });
+        }
         const msg = delais(data || [], now - 3600e3, now);
-        if (!msg) return json({ ok: true, envoyes: 0 });
-        return json({ ok: true, envoyes: await envoyer(c, await destinataires("delais", null), msg) });
+        if (!msg) return json({ ok: true, envoyes: rappels });
+        return json({ ok: true, envoyes: rappels + await envoyer(c, await destinataires("delais", null), msg) });
       }
+      if (COLLECTIONS_PERSONNEL.includes(body.collection)) return json({ ok: true, ...(await traiterPersonnel(c, body)) });
       let ctx = {};
       if (body.collection === "decisions") {
         const { data } = await db.from("registre").select("data").eq("collection", "declarations").eq("id", body.id).maybeSingle();
