@@ -935,6 +935,79 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
 .ct-pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:4px}
 .ct-page{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 4px rgba(16,26,52,.10)}
 .ct-sig-apercu{min-height:48px;display:flex;align-items:center;padding:8px 12px;background:#fff;border:1px dashed var(--rule);border-radius:8px}
+/* Onglet avec des choses à traiter */
+.tab[data-n]:not([data-n=""])::after{content:attr(data-n);display:inline-block;margin-left:6px;min-width:18px;padding:0 5px;border-radius:999px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center;font-family:var(--f-mono)}
+/* Conversation */
+.fil-box{display:grid;gap:8px;margin-top:10px}
+.fil{display:flex;flex-direction:column;gap:6px;max-height:420px;min-height:120px;overflow-y:auto;padding:10px;border:1px solid var(--rule-2);border-radius:10px;background:var(--paper)}
+.fil-vide{margin:auto;text-align:center;font-size:13.5px}
+.fil-jour{align-self:center;font-size:11.5px;color:var(--ink-3);padding:4px 0 2px}
+.fil-jour::first-letter{text-transform:uppercase}
+.bulle{max-width:82%;align-self:flex-start;background:var(--sheet);border:1px solid var(--rule);border-radius:12px 12px 12px 4px;padding:7px 11px}
+.bulle.mienne{align-self:flex-end;background:var(--accent-soft);border-color:transparent;border-radius:12px 12px 4px 12px}
+.bulle-t{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14.5px;line-height:1.45}
+.bulle-m{font-size:11.5px;color:var(--ink-3);margin-top:3px}
+.fil-ecrire{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.fil-ecrire textarea{resize:vertical;min-height:44px}
+/* Messagerie de l'encadrement */
+.msg-grid{display:grid;grid-template-columns:minmax(220px,320px) minmax(0,1fr);gap:16px;align-items:start}
+.msg-grid > .card{margin-top:0}
+@media (max-width:820px){.msg-grid{grid-template-columns:minmax(0,1fr)}}
+.msg-list select{margin-top:10px;width:100%}
+.conv-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:4px;max-height:520px;overflow-y:auto}
+.conv{appearance:none;width:100%;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 8px;padding:8px 10px;border:1px solid transparent;border-radius:9px;background:none;color:inherit;font:inherit;cursor:pointer}
+.conv:hover{background:var(--paper)}
+.conv.on{background:var(--accent-soft);border-color:var(--rule)}
+.conv-n{font-weight:650;font-size:14px}
+.conv-badge{background:var(--bad);color:#fff;border-radius:999px;font-size:11px;font-weight:700;padding:0 7px;line-height:18px;align-self:center}
+.conv-x{grid-column:1 / -1;font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conv-t{grid-column:1 / -1;font-size:11.5px;color:var(--ink-3)}
+/* Agenda */
+.ag{margin-top:10px}
+.ag-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.ag-titre{font-size:15px;min-width:150px;text-align:center}
+.ag-grille{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--rule);border-radius:10px;overflow:hidden;background:var(--rule-2);gap:1px}
+.ag-jsem{background:var(--sheet);font-size:11px;font-weight:650;color:var(--ink-3);text-align:center;padding:5px 0;text-transform:uppercase;letter-spacing:.06em}
+.ag-case{background:var(--sheet);min-height:84px;padding:4px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.ag-case.hors{background:var(--paper)}
+.ag-case.hors .ag-num{opacity:.45}
+.ag-num{appearance:none;border:0;background:none;font:inherit;font-size:12px;font-weight:650;color:var(--ink-2);text-align:left;padding:1px 3px;border-radius:5px;cursor:default;align-self:flex-start}
+button.ag-num{cursor:pointer}
+button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
+.ag-case.auj .ag-num{background:var(--accent);color:var(--accent-ink)}
+.ag-ev{appearance:none;border:0;text-align:left;font:inherit;font-size:11.5px;line-height:1.3;padding:2px 5px;border-radius:5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--info-soft);color:var(--info)}
+.ag-ev.t-formation{background:var(--ok-soft);color:var(--ok)}
+.ag-ev.t-service{background:var(--muted-soft);color:var(--ink-2)}
+.ag-ev.t-ceremonie{background:var(--warn-soft);color:var(--warn)}
+.ag-ev.annule{text-decoration:line-through;opacity:.6}
+.ag-abs{font-size:11px;line-height:1.3;padding:1px 5px;border-radius:5px;background:var(--bad-soft);color:var(--bad);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ag-plus{font-size:11px;color:var(--ink-3);padding-left:4px}
+@media (max-width:640px){.ag-case{min-height:58px;padding:2px}.ag-ev,.ag-abs{font-size:10px;padding:1px 3px}.ag-jsem{font-size:10px}}
+.ev-invites{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:4px 12px;max-height:220px;overflow-y:auto;padding:8px;border:1px solid var(--rule);border-radius:8px}
+.ev-inv{display:flex;gap:7px;align-items:center;font-size:13.5px}
+/* Mon espace */
+.es-col-g,.es-col-d{display:grid;gap:16px;align-content:start;min-width:0}
+.es-col-g > .card,.es-col-d > .card{margin-top:0}
+table.es-payes{min-width:0;width:100%}
+.es-payes .meta{display:block;font-size:11.5px;color:var(--ink-3);font-family:var(--f-body)}
+.es-payes tr.cliquable{cursor:pointer}
+@media (max-width:520px){.es-payes th:nth-child(3),.es-payes td:nth-child(3){display:none}}
+.es-payes tr.cliquable:hover td{background:var(--paper)}
+.es-payes tr.cliquable:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.es-barres{position:relative;display:flex;align-items:flex-end;gap:6px;height:190px;margin-top:14px;padding:18px 0 22px 34px;border-bottom:1px solid var(--rule)}
+.es-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;position:relative;z-index:1}
+.es-bar{width:min(34px,80%);background:var(--accent);border-radius:5px 5px 0 0}
+.es-bar.est{background:repeating-linear-gradient(135deg,var(--accent) 0 6px,var(--accent-soft) 6px 10px)}
+.es-val{font-size:10.5px;font-family:var(--f-mono);color:var(--ink-2);margin-bottom:3px;white-space:nowrap}
+.es-lab{position:absolute;bottom:-20px;font-size:11px;color:var(--ink-3)}
+.es-palier{position:absolute;left:0;right:0;border-top:1px dashed var(--warn);z-index:0;margin-bottom:22px}
+.es-palier span{position:absolute;left:0;top:-7px;font-size:10px;line-height:14px;color:var(--warn);font-family:var(--f-mono);background:var(--sheet);padding-right:3px}
+.es-notes{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}
+.es-notes li{border-top:1px solid var(--rule-2);padding-top:10px}
+.es-notes li:first-child{border-top:0;padding-top:0}
+.es-note-t{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.es-note-t .spacer{flex:1}
+.es-note-x{white-space:pre-wrap;margin:6px 0 0;font-size:14px;line-height:1.5}
 </style>
 </head>
 <body data-gate="chargement">
@@ -975,6 +1048,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
   <div class="wrap sub-rail" id="sub-rail" role="tablist" aria-label="Pages de la rubrique">
     <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" data-grp="accueil" aria-selected="true">Tableau de bord</button>
     <button class="tab" role="tab" type="button" id="tab-btn-pointeuse" data-tab="pointeuse" data-grp="accueil" aria-selected="false">Pointeuse</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-espace" data-tab="espace" data-grp="accueil" aria-selected="false" hidden>Mon espace</button>
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" data-grp="dossiers" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" data-grp="dossiers" aria-selected="false" data-agent>Saisir une déclaration</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" data-grp="dossiers" aria-selected="false">Recouvrement</button>
@@ -1185,18 +1259,31 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     </div>
   </section>
 
+  <!-- MON ESPACE : la page de chaque fonctionnaire -->
+  <section class="panel" id="tab-espace" role="tabpanel" aria-labelledby="tab-btn-espace" hidden>
+    <div class="panel-head">
+      <div>
+        <h2 id="espace-nom">Mon espace</h2>
+        <p class="sub" id="espace-sub">Votre fiche, vos payes et vos heures, vos échanges avec l’encadrement.</p>
+      </div>
+    </div>
+    <div id="espace-main"></div>
+  </section>
+
   <!-- SERVICES PUBLICS : PERSONNEL (ressources humaines) -->
   <section class="panel" id="tab-personnel" role="tabpanel" aria-labelledby="tab-btn-personnel" hidden>
     <div class="panel-head">
       <div>
         <h2>Personnel de la Préfecture</h2>
-        <p class="sub">Les fonctionnaires de la Préfecture et leurs contrats de travail. Un fonctionnaire ajouté ici entre dans la paye ; retiré des effectifs, il n’y est plus compté.</p>
+        <p class="sub">Les fonctionnaires, leurs contrats de travail, la messagerie, l’agenda, les absences et les notes de service. Chaque fonctionnaire retrouve ce qui le concerne dans son espace.</p>
       </div>
       <div class="toolbar">
         <button class="btn ghost" type="button" id="rh-modele" hidden>Modèle de contrat</button>
         <button class="btn" type="button" id="rh-new" hidden>Ajouter un fonctionnaire</button>
       </div>
     </div>
+    <div id="rh-espaces" style="margin:0 0 14px"></div>
+    <div data-rh-vue="effectif">
     <div class="minis" id="rh-kpis"></div>
     <div class="card" style="margin-top:16px">
       <div class="card-head">
@@ -1206,6 +1293,11 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <div id="rh-seg"></div>
       <div id="rh-list"></div>
     </div>
+    </div>
+    <div data-rh-vue="messages" hidden><div id="rh-messagerie"></div></div>
+    <div data-rh-vue="agenda" hidden><div id="rh-agenda"></div></div>
+    <div data-rh-vue="absences" hidden><div id="rh-absences"></div></div>
+    <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
   </section>
 
   <!-- SERVICES PUBLICS : PAYES DE LA PRÉFECTURE -->
@@ -2437,7 +2529,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], contratsTravail: [], rh: {}, pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], contratsTravail: [], rh: {}, msgs: [], agenda: [], absences: [], notes: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -3182,6 +3274,7 @@ function applyRole() {
   if (S.offline) role.textContent = "Hors ligne";
   else if (!S.connected) role.textContent = "Connexion au registre…";
   else if (S.role === "pointeuse") role.textContent = "Pointeuse" + (S.agentName ? " · " + S.agentName : "");
+  else if (S.role === "agent") role.textContent = "Fonctionnaire" + (S.agentName ? " · " + S.agentName : "");
   else if (S.role === "rh" && !S.readOnly) { role.textContent = "Ressources humaines" + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
   else if (S.readOnly || !canAgent()) role.textContent = "Lecture seule" + (S.agentName ? " · " + S.agentName : "");
   else { role.textContent = (ROLE_LABEL[S.role] || "Agent") + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
@@ -3190,15 +3283,18 @@ function applyRole() {
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
   // Rôle « pointeuse » : la pointeuse et rien d'autre.
   if (S.role === "pointeuse") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "pointeuse"; }); if (S.tab !== "pointeuse") showTab("pointeuse"); }
+  // Fonctionnaire sans autre accès : son espace, rien d'autre.
+  else if (S.role === "agent") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "espace"; }); if (S.tab !== "espace") showTab("espace"); }
   // Rôle « rh » : le personnel et ses contrats, rien d'autre (la base ne lui montre que cela).
-  else if (S.role === "rh") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "personnel"; }); if (S.tab !== "personnel") showTab("personnel"); }
+  else if (S.role === "rh") { $$(".tab").forEach(b => { b.hidden = !(b.dataset.tab === "personnel" || (b.dataset.tab === "espace" && S.monFid)); }); if (S.tab !== "personnel" && S.tab !== "espace") showTab("personnel"); }
   // Pointeuse fermée : l'onglet disparaît pour tous ; les heures se saisissent dans la paye.
   else if (ptFerme()) { $("#tab-btn-pointeuse").hidden = true; if (S.tab === "pointeuse") showTab("payes"); }
-  if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
+  if (S.role !== "agent" && S.role !== "pointeuse" && S.role !== "rh") $("#tab-btn-espace").hidden = !S.monFid;
+  if (known && S.role !== "agent" && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
-  $("#btn-search").hidden = !S.connected || S.role === "pointeuse" || S.role === "rh";
-  $("#notif-btn").hidden = !S.connected || !S.role || S.role === "pointeuse" || S.role === "rh";
+  $("#btn-search").hidden = !S.connected || ["pointeuse", "rh", "agent"].includes(S.role);
+  $("#notif-btn").hidden = !S.connected || !S.role || ["pointeuse", "rh", "agent"].includes(S.role);
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
@@ -3447,6 +3543,9 @@ async function init() {
   if (error) { showGate("erreur", error.message); return; }
   S.discordId = acces && acces.discord_id;
   S.agentName = (acces && acces.nom) || (session.user.user_metadata && (session.user.user_metadata.full_name || session.user.user_metadata.name)) || "";
+  S.monFid = (acces && acces.fonctionnaire && acces.fonctionnaire.id) || null;
+  // Fonctionnaire sans autre accès (ou ancien compte Pointeuse) : son espace seulement.
+  if (S.monFid && (!acces.role || (acces.role === "pointeuse" && ptFerme()))) { S.agentName = acces.fonctionnaire.nom || S.agentName; initAgent(sb); return; }
   if (!acces || !acces.role) { showGate("refuse"); return; }
   S.role = acces.role;
   if (S.role === "pointeuse" && ptFerme()) { showGate("pointeuse-fermee"); return; }
@@ -3482,6 +3581,21 @@ async function init() {
   if (S.tab === "reglages" && S.admin) loadKeys();
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
 }
+
+// Espace d'un fonctionnaire : pas de registre, seulement mon_espace() et ses quatre gestes.
+async function initAgent(sb) {
+  S.role = "agent"; S.admin = false; S.canWrite = false; S.readOnly = true;
+  hideGate();
+  S.connected = true;
+  $$("#grp-accueil span").forEach(x => { x.textContent = "Mon espace"; });
+  applyRole();
+  await chargerMonEspace();
+  setInterval(() => { if (document.visibilityState === "visible") chargerMonEspace(); }, 20000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") chargerMonEspace(); });
+  sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
+}
+// L'encadrement qui a une fiche : son espace se recharge quand il le regarde.
+setInterval(() => { if (S.role !== "agent" && S.monFid && S.tab === "espace" && document.visibilityState === "visible") chargerMonEspace(); }, 30000);
 
 /* ---------- Gestion des accès ---------- */
 async function loadAgents() {
@@ -3569,6 +3683,19 @@ function subscribe() {
   col("fonctionnaires", s => { S.fonctionnaires = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("contratsTravail", s => { S.contratsTravail = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("rh", s => { S.rh = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); });
+  col("messagesAgents", s => {
+    const avant = S.msgsVus, list = s.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    // Nouveau message d'un fonctionnaire : prévenir l'encadrement qui n'a pas la conversation sous les yeux.
+    if (avant && ENCADRANTS.includes(S.role)) {
+      const neufs = list.filter(m => m.de === "agent" && !m.luEquipe && !avant.has(m.id));
+      const ouvert = S.tab === "personnel" && S.rhEspace === "messages";
+      neufs.filter(m => !(ouvert && S.filFid === m.fid)).slice(0, 3).forEach(m => toast(`Message de ${m.nom || "un fonctionnaire"} : ${String(m.texte).slice(0, 80)}${String(m.texte).length > 80 ? "…" : ""}`));
+    }
+    S.msgsVus = new Set(list.map(m => m.id)); S.msgs = list; majBadges();
+  });
+  col("agenda", s => { S.agenda = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("absences", s => { S.absences = s.docs.map(d => Object.assign({ id: d.id }, d.data())); majBadges(); });
+  col("notesService", s => { S.notes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); setTimeout(ptAlertes, 0); });
   col("sons", s => { S.sons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3620,6 +3747,8 @@ function render() {
   renderCatalogue();
   renderPayes();
   renderPersonnel();
+  renderEspace();
+  majBadges();
   renderPointeuse();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
@@ -5626,6 +5755,8 @@ const rhEtat = f => { const c = ctrsOf(f.id)[0]; return c ? (c.statut === "signe
 function renderPersonnel() {
   const box = $("#rh-list");
   if (!box || S.tab !== "personnel") return;
+  renderEncadrement();
+  if ((S.rhEspace || "effectif") !== "effectif") return;
   const w = rhWriter();
   $("#rh-new").hidden = !w; $("#rh-modele").hidden = !w;
   if (!S.connected || !S.loaded.has("fonctionnaires")) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
@@ -5669,15 +5800,556 @@ function openAgent(fid, back) {
         ["Entré", f.at ? `le ${longDate(new Date(f.at))}${f.byNom ? " · fiche créée par " + f.byNom : ""}` : "—"],
         f.actif === false ? ["Retiré des effectifs", f.retireLe ? `le ${longDate(new Date(f.retireLe))}` : "oui"] : null,
         f.note ? ["Note", f.note] : null]),
-      ctrSection(f, reopen)],
+      ctrSection(f, reopen),
+      (() => { const ab = (S.absences || []).filter(a => a.fid === fid && a.statut !== "annulee" && String(a.au) >= jourCle(new Date())); return ab.length ? sec("Absences à venir", h("ul", { class: "ent-list" }, ab.map(a => h("li", {}, h("span", { text: a.du === a.au ? jourTxt(a.du) : `du ${jourTxt(a.du)} au ${jourTxt(a.au)}${a.motif ? " · " + a.motif : ""}` }), chip(ABS_STAT[a.statut] || ABS_STAT.signalee), h("span", {}))))) : null; })()],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" }),
       S.role !== "rh" ? h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); showTab("payes"); openFonc(fid); }, text: "Sa paye" }) : null,
+      h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); S.rhEspace = "messages"; S.filFid = fid; if (S.tab !== "personnel") showTab("personnel"); else renderPersonnel(); }, text: msgsOf(fid).some(m => m.de === "agent" && !m.luEquipe) ? "Messages (non lus)" : "Messages" }),
       h("span", { class: "spacer" }),
       w ? h("button", { class: "btn small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: f.actif === false ? "Modifier ou réintégrer" : "Modifier ou retirer des effectifs" }) : null] });
 }
 $("#rh-new").addEventListener("click", () => openFoncForm(null));
 $("#rh-modele").addEventListener("click", () => openCtrModele());
 $("#rh-q").addEventListener("input", () => renderPersonnel());
+
+/* ---------- Encadrement des fonctionnaires : messages, agenda, absences, notes de service ---------- */
+// L'encadrement (Direction, Inspection, Ressources humaines) écrit aux fonctionnaires, tient l'agenda et
+// suit les absences ; la Direction et les Ressources humaines publient les notes de service. Chaque
+// fonctionnaire voit sa conversation, l'agenda qui le concerne, les notes et ses absences dans son espace
+// (fonction « mon_espace », supabase/v30_espace_agents.sql).
+// Collections : messagesAgents { fid, nom, de: "agent"|"equipe", auteur, auteurRole, texte, at, luEquipe, luAgent },
+// agenda { titre, type, debut, fin, journee, lieu, description, audience: "tous"|"agents"|"encadrement",
+// participants: [fid], reponseDemandee, reponses: { fid: { r, nom, at } }, statut, at, byNom },
+// absences { fid, nom, du, au, motif, statut: "signalee"|"prise_en_compte"|"annulee", par, auteur, at },
+// notesService { titre, texte, epinglee, retiree, at, auteur }.
+const ENCADRANTS = ["direction", "inspecteur", "rh"];
+const encadrant = () => S.connected && !S.readOnly && ENCADRANTS.includes(S.role);
+const notesWriter = () => S.connected && !S.readOnly && (S.admin || S.role === "rh");
+const AG_TYPES = { reunion: "Réunion", formation: "Formation", service: "Service", ceremonie: "Cérémonie", autre: "Autre" };
+const AG_REP = { oui: ["Présent", "ok"], non: ["Absent", "bad"], "peut-etre": ["Peut-être", "warn"] };
+const ABS_STAT = { signalee: ["Signalée", "warn"], prise_en_compte: ["Prise en compte", "ok"], annulee: ["Annulée", "muted"] };
+const msgsOf = fid => (S.msgs || []).filter(m => m.fid === fid).sort((a, b) => String(a.at).localeCompare(String(b.at)));
+const msgsNonLusEquipe = () => (S.msgs || []).filter(m => m.de === "agent" && !m.luEquipe);
+const absEnAttente = () => (S.absences || []).filter(a => a.statut === "signalee" && String(a.au || "") >= jourCle(new Date()));
+const agJour = iso => { const d = new Date(iso); return isNaN(d) ? "" : jourCle(d); };
+const agHeure = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
+const jourTxt = k => { const d = new Date(k + "T12:00:00"); return isNaN(d) ? k : d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }); };
+const agQuand = ev => {
+  const j = agJour(ev.debut), jf = ev.fin ? agJour(ev.fin) : j;
+  if (ev.journee) return j === jf ? jourTxt(j) : `du ${jourTxt(j)} au ${jourTxt(jf)}`;
+  return `${jourTxt(j)} · ${agHeure(ev.debut)}${ev.fin ? (jf === j ? ` – ${agHeure(ev.fin)}` : ` au ${jourTxt(jf)} ${agHeure(ev.fin)}`) : ""}`;
+};
+const quandMsg = iso => { const d = new Date(iso); if (isNaN(d)) return ""; const auj = jourCle(new Date()) === jourCle(d); return auj ? `aujourd’hui à ${agHeure(iso)}` : fmtDateTime(d); };
+
+// Conversation : bulles, la sienne à droite ; zone d'écriture (Entrée envoie, Maj+Entrée va à la ligne).
+function filMessages(list, o) {
+  const moi = o.moi, fil = h("div", { class: "fil", role: "log", "aria-label": o.label || "Conversation", "aria-live": "polite" });
+  if (!list.length) fil.append(h("p", { class: "muted fil-vide", text: o.vide || "Aucun message pour l’instant." }));
+  let jour = "";
+  for (const m of list) {
+    const j = agJour(m.at);
+    if (j !== jour) { jour = j; fil.append(h("div", { class: "fil-jour", text: jourTxt(j) })); }
+    const mien = m.de === moi;
+    const qui = m.de === "agent" ? (moi === "agent" ? "Vous" : m.auteur || m.nom || "Agent") : (moi === "equipe" && m.auteur === S.agentName ? "Vous" : `${m.auteur || "Encadrement"}${m.auteurRole && ROLE_LABEL[m.auteurRole] ? " · " + ROLE_LABEL[m.auteurRole] : ""}`);
+    const lu = mien ? (m.de === "agent" ? m.luEquipe : m.luAgent) : null;
+    fil.append(h("div", { class: "bulle" + (mien ? " mienne" : "") },
+      h("div", { class: "bulle-t", text: m.texte }),
+      h("div", { class: "bulle-m", text: `${qui} · ${agHeure(m.at)}${mien ? (lu ? " · lu" : " · envoyé") : ""}` })));
+  }
+  const out = [fil];
+  if (o.onSend) {
+    const ta = h("textarea", { rows: "2", maxlength: "2000", placeholder: o.placeholder || "Écrire un message…", "aria-label": "Votre message" });
+    const bt = h("button", { class: "btn small", type: "button", text: "Envoyer" });
+    const err = h("span", { class: "err", "aria-live": "polite" });
+    const envoyer = async () => {
+      const t = ta.value.trim(); if (!t) { ta.focus(); return; }
+      bt.disabled = true; err.textContent = "";
+      const ok = await o.onSend(t, e => { err.textContent = e; });
+      bt.disabled = false;
+      if (ok) { ta.value = ""; ta.focus(); }
+    };
+    bt.addEventListener("click", envoyer);
+    ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); envoyer(); } });
+    out.push(h("div", { class: "fil-ecrire" }, ta, bt), err);
+  } else if (o.lecture) out.push(h("p", { class: "hint", style: "margin:6px 0 0", text: o.lecture }));
+  requestAnimationFrame(() => { fil.scrollTop = fil.scrollHeight; });
+  return h("div", { class: "fil-box" }, out);
+}
+
+// Agenda : un mois, du lundi au dimanche ; événements et absences dans les cases.
+function agendaMois(o) {
+  const m0 = o.mois instanceof Date ? o.mois : new Date(), y = m0.getFullYear(), mo = m0.getMonth();
+  const premier = new Date(y, mo, 1), decal = (premier.getDay() + 6) % 7, debut = new Date(y, mo, 1 - decal), auj = jourCle(new Date());
+  const evs = (o.events || []).filter(e => e.statut !== "annule" || o.voirAnnules), abs = (o.absences || []).filter(a => a.statut !== "annulee");
+  const parJour = new Map();
+  const pousse = (k, x) => { if (!parJour.has(k)) parJour.set(k, []); parJour.get(k).push(x); };
+  for (const e of evs) {
+    const j0 = agJour(e.debut), j1 = e.fin ? agJour(e.fin) : j0;
+    for (let d = new Date(j0 + "T12:00:00"), g = 0; jourCle(d) <= j1 && g < 62; d.setDate(d.getDate() + 1), g++) pousse(jourCle(d), { e });
+  }
+  for (const a of abs) for (let d = new Date(a.du + "T12:00:00"), g = 0; jourCle(d) <= a.au && g < 62; d.setDate(d.getDate() + 1), g++) pousse(jourCle(d), { a });
+  const titre = premier.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const nav = h("div", { class: "ag-nav" },
+    h("button", { class: "btn ghost small", type: "button", "aria-label": "Mois précédent", onclick: () => o.onMois(new Date(y, mo - 1, 1)), text: "‹" }),
+    h("strong", { class: "ag-titre", text: titre.charAt(0).toUpperCase() + titre.slice(1) }),
+    h("button", { class: "btn ghost small", type: "button", "aria-label": "Mois suivant", onclick: () => o.onMois(new Date(y, mo + 1, 1)), text: "›" }),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => o.onMois(new Date()), text: "Aujourd’hui" }));
+  const grille = h("div", { class: "ag-grille", role: "grid", "aria-label": "Agenda de " + titre },
+    ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."].map(j => h("div", { class: "ag-jsem", role: "columnheader", text: j })));
+  const nbCases = Math.ceil((decal + new Date(y, mo + 1, 0).getDate()) / 7) * 7;
+  for (let i = 0; i < nbCases; i++) {
+    const d = new Date(debut.getFullYear(), debut.getMonth(), debut.getDate() + i), k = jourCle(d), items = parJour.get(k) || [];
+    const cell = h("div", { class: "ag-case" + (d.getMonth() !== mo ? " hors" : "") + (k === auj ? " auj" : ""), role: "gridcell" },
+      o.onJour ? h("button", { class: "ag-num", type: "button", title: "Ajouter un événement le " + jourTxt(k), onclick: () => o.onJour(k), text: String(d.getDate()) }) : h("span", { class: "ag-num", text: String(d.getDate()) }));
+    items.slice(0, 3).forEach(x => {
+      if (x.e) cell.append(h("button", { class: `ag-ev t-${x.e.type || "autre"}${x.e.statut === "annule" ? " annule" : ""}`, type: "button", title: `${x.e.titre} · ${agQuand(x.e)}`, onclick: () => o.onEvent && o.onEvent(x.e), text: `${x.e.journee ? "" : agHeure(x.e.debut) + " "}${x.e.titre}` }));
+      else cell.append(h("span", { class: "ag-abs", title: `${x.a.nom || "Agent"} absent${x.a.motif ? " · " + x.a.motif : ""}`, text: o.absTexte ? o.absTexte(x.a) : `Absent : ${x.a.nom || "agent"}` }));
+    });
+    if (items.length > 3) cell.append(h("span", { class: "ag-plus", text: `+${items.length - 3}` }));
+    grille.append(cell);
+  }
+  return h("div", { class: "ag" }, nav, grille);
+}
+// Liste des prochains événements (et ceux du jour), avec leurs réponses.
+function agendaListe(events, o) {
+  const now = Date.now(), list = events.filter(e => new Date(e.fin || e.debut).getTime() >= now - 3600e3 * (o.passesH || 2)).sort((a, b) => String(a.debut).localeCompare(String(b.debut))).slice(0, o.max || 12);
+  if (!list.length) return h("p", { class: "muted", style: "margin:8px 0 0", text: o.vide || "Rien de prévu." });
+  return h("ul", { class: "ent-list" }, list.map(e => h("li", {},
+    h("div", { style: "min-width:0" },
+      o.onEvent ? h("button", { class: "linkbtn", type: "button", style: "font-weight:600;text-align:left", onclick: () => o.onEvent(e), text: e.titre }) : h("span", { style: "font-weight:600", text: e.titre }),
+      h("span", { class: "meta", text: [agQuand(e), e.lieu, AG_TYPES[e.type] || ""].filter(Boolean).join(" · ") }),
+      o.detail ? o.detail(e) : null),
+    e.statut === "annule" ? chip(["Annulé", "muted"]) : o.chip ? o.chip(e) : h("span", {}),
+    o.actions ? o.actions(e) : h("span", {}))));
+}
+
+/* ---------- Mon espace : la page de chaque fonctionnaire ---------- */
+// Tout fonctionnaire dont la fiche porte son compte Discord y arrive en se connectant, sans accès à donner :
+// sa fiche, son contrat, ses payes et ses heures des semaines passées (pas de pointeuse : les heures
+// arrivent quand la Direction les saisit), ses bulletins, sa conversation avec l'encadrement, l'agenda,
+// les notes de service et ses absences. L'encadrement qui a aussi une fiche a le même onglet.
+// Données : S.espace = mon_espace() ; le fonctionnaire seul n'a rien d'autre (S.role = "agent").
+async function chargerMonEspace() {
+  if (!S.sb || !S.monFid || S.espaceCharge) return;
+  S.espaceCharge = true;
+  try {
+    const { data, error } = await S.sb.rpc("mon_espace");
+    if (error) S.espaceErr = /mon_espace/.test(error.message || "") ? "absente" : error.message || "erreur";
+    else if (!data) S.espaceErr = "sans-fiche";
+    else { const avant = S.espace; S.espace = data; S.espaceErr = null; if (S.role === "agent") espaceVersS(data); nouveautesEspace(avant, data); }
+  } catch (e) { S.espaceErr = e.message || "erreur"; }
+  finally { S.espaceCharge = false; }
+  renderEspace(); majBadges();
+}
+// Le fonctionnaire seul : ses données tiennent lieu de registre, pour les bulletins et le barème.
+function espaceVersS(E) {
+  S.fonctionnaires = E.fonctionnaire ? [E.fonctionnaire] : [];
+  S.payes = (E.payes || []).map(p => Object.assign({}, p));
+  S.rappels = E.rappels || [];
+  S.contratsTravail = E.contrats || [];
+  S.config = Object.assign({}, S.config || {}, { payes: Object.assign({}, E.bareme || {}) });
+  ["fonctionnaires", "payes", "rappels", "contratsTravail", "config"].forEach(n => S.loaded.add(n));
+}
+function nouveautesEspace(avant, E) {
+  if (!avant) return;
+  const vus = new Set((avant.messages || []).map(m => m.id));
+  const neufs = (E.messages || []).filter(m => m.de === "equipe" && !vus.has(m.id));
+  if (neufs.length) toast(neufs.length > 1 ? `${neufs.length} nouveaux messages de l’encadrement.` : `Nouveau message de ${neufs[0].auteur || "l’encadrement"}.`);
+  const evVus = new Set((avant.agenda || []).map(e => e.id)), evNeufs = (E.agenda || []).filter(e => !evVus.has(e.id) && e.statut !== "annule");
+  if (evNeufs.length) toast(evNeufs.length > 1 ? `${evNeufs.length} nouveaux rendez-vous à l’agenda.` : `Nouveau à l’agenda : ${evNeufs[0].titre}.`);
+}
+// Paye estimée d'une semaine pas encore versée : heures × taux (au plus le plafond d'heures) + prime, plafonnée.
+function estimePaye(heures, k, f) {
+  const c = payeCfg(), taux = gradeTaux(f.grade) || 0, hp = Math.min(Number(heures) || 0, Number(c.plafondHeures) || 20);
+  const pal = primePalier(heures, k, c), prime = pal ? Number(pal.montant) || 0 : 0, sal = Math.round(hp * taux);
+  return { salaire: sal, prime, primeNom: pal ? pal.nom : "", brut: Math.min(sal + prime, Number(c.payeMax) || Infinity), taux };
+}
+// Les semaines de l'agent : versées (ce qu'il a touché) ou dont les heures sont saisies (paye estimée).
+function espaceSemaines(E) {
+  const fid = E.fid, f = E.fonctionnaire || {}, out = [];
+  for (const p of E.payes || []) {
+    const k = p.id; if (!bounds(k)) continue;
+    const l = (p.lignes || []).find(z => z.fid === fid), versee = p.statut === "versee";
+    const rapH = (E.rappels || []).filter(r => r.semaine === k && !String(r.id).startsWith("auto-") && r.origine !== "retenue" && r.statut !== "annule").reduce((t, r) => t + (Number(r.heures) || 0), 0);
+    if (versee) {
+      const rv = (p.rappels || []).reduce((t, r) => t + (Number(r.verse) || 0), 0), rt = (p.retenues || []).reduce((t, r) => t + (Number(r.retenu) || 0), 0);
+      if (!l && !rv && !rt) continue;
+      out.push({ k, versee, verseeLe: p.verseeLe, heures: l ? Number(l.heures) || 0 : 0, rapH, brut: l ? Number(l.brut) || 0 : 0, prime: l ? Number(l.prime) || 0 : 0, primeNom: l ? l.primeNom || "" : "",
+        rappels: rv, retenues: rt, net: (l ? Number(l.verse) || 0 : 0) + rv - rt, paye: !!l });
+    } else {
+      const s = p.saisie && p.saisie[fid];
+      if (!s || s.heures == null || s.heures === "") continue;
+      const hh = Number(s.heures) || 0, e = estimePaye(hh, k, f);
+      out.push({ k, versee: false, heures: hh, rapH, brut: e.brut, prime: e.prime, primeNom: e.primeNom, rappels: 0, retenues: 0, net: null, estime: true, paye: true });
+    }
+  }
+  return out.sort((a, b) => b.k.localeCompare(a.k));
+}
+let espaceLuEnvoye = 0;
+function renderEspace() {
+  const box = $("#espace-main");
+  if (!box || S.tab !== "espace") return;
+  const E = S.espace;
+  if (!S.monFid || S.espaceErr === "sans-fiche") { fill(box, h("div", { class: "empty", text: "Votre compte Discord n’est relié à aucune fiche de fonctionnaire en service. Demandez aux ressources humaines d’indiquer votre identifiant Discord sur votre fiche." })); return; }
+  if (S.espaceErr === "absente") { fill(box, h("div", { class: "empty", text: "L’espace des fonctionnaires ouvrira dès que la Direction aura exécuté supabase/v30_espace_agents.sql." })); return; }
+  if (!E) { fill(box, h("div", { class: "empty", text: S.espaceErr ? `Espace indisponible (${S.espaceErr}). Rechargez la page dans un instant.` : "Chargement de votre espace…" })); if (!S.espaceCharge && !S.espaceErr) chargerMonEspace(); return; }
+  if (box.contains(document.activeElement) && document.activeElement.matches("textarea, input, select")) return;
+  const f = E.fonctionnaire || {}, fid = E.fid, sem = espaceSemaines(E), c = payeCfg();
+  const kNow = semKey(new Date()), kPrec = semPrec(kNow), mNow = moisKey(new Date());
+  const ct = (E.contrats || [])[0], taux = gradeTaux(f.grade);
+  $("#espace-nom").textContent = f.nom || "Mon espace";
+  $("#espace-sub").textContent = [f.grade || "sans grade", taux ? `${money(taux)} de l’heure` : "", f.at ? `à la Préfecture depuis le ${longDate(new Date(f.at))}` : ""].filter(Boolean).join(" · ");
+  // Chiffres clés
+  const derniere = sem.find(x => x.versee && x.paye), prec = sem.find(x => x.k === kPrec), duMois = sem.filter(x => x.versee && moisDe(x.k) === mNow);
+  const nonLus = (E.messages || []).filter(m => m.de === "equipe" && !m.luAgent).length;
+  const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
+  const palPrec = prec ? primePalier(prec.heures, prec.k, c) : null;
+  const kpis = h("div", { class: "minis" },
+    mk("Dernière paye", derniere ? money(derniere.net) : "—", derniere ? `semaine ${bounds(derniere.k).week}${derniere.verseeLe ? ", versée le " + fmtDate(new Date(derniere.verseeLe)) : ""}` : "aucune paye versée"),
+    mk("Semaine dernière", prec ? fmtH(prec.heures) : "—", prec ? (palPrec ? `prime « ${palPrec.nom} »` : "de service, sans prime") : "heures pas encore saisies"),
+    mk("Ce mois-ci", money(duMois.reduce((t, x) => t + x.net, 0)), `${duMois.length} paye${plural(duMois.length)} versée${plural(duMois.length)} en ${moisNom(mNow)}`),
+    mk("Messages", String(nonLus), nonLus ? "non lu" + plural(nonLus) + " de l’encadrement" : "tout est lu", nonLus ? "warn" : ""));
+  // Mes payes
+  const lignes = sem.slice(0, 12).map(x => h("tr", { class: x.versee ? "cliquable" : null, tabindex: x.versee ? "0" : null, title: x.versee ? "Voir le bulletin" : null,
+      onclick: x.versee ? () => showDocImage(bulletinDoc(x.k, fid)) : null, onkeydown: x.versee ? ev => { if (ev.key === "Enter") showDocImage(bulletinDoc(x.k, fid)); } : null },
+    h("td", {}, h("span", { style: "font-weight:600;white-space:nowrap", text: `Semaine ${bounds(x.k).week}` }), h("span", { class: "meta", text: x.versee ? `versée${x.verseeLe ? " le " + fmtDate(new Date(x.verseeLe)) : ""}` : "estimée, pas encore versée" })),
+    h("td", { class: "num" }, fmtH(x.heures), x.rapH ? h("span", { class: "meta", text: `+ ${fmtH(x.rapH)} en rappel` }) : null),
+    h("td", { class: "num" }, money(x.brut), x.prime ? h("span", { class: "meta", text: `dont prime ${money(x.prime)}` }) : null),
+    h("td", { class: "num" }, x.versee ? money(x.net) : "—", x.rappels || x.retenues ? h("span", { class: "meta", text: [x.rappels ? "+ " + money(x.rappels) + " de rappel" : "", x.retenues ? "− " + money(x.retenues) + " retenus" : ""].filter(Boolean).join(" · ") }) : null)));
+  const dus = rappelsDus().filter(r => r.fid === fid).reduce((t, r) => t + r.reste, 0), aRet = retenuesDues().filter(r => r.fid === fid).reduce((t, r) => t + r.reste, 0);
+  const cardPayes = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes payes" }), h("p", { class: "sub", text: "Heures relevées sur la tablette et saisies par la Direction, après chaque semaine. Cliquez sur une paye versée pour son bulletin." }))),
+    sem.length ? h("div", { class: "tbl-wrap" }, h("table", { class: "compact es-payes" }, h("thead", {}, h("tr", {}, ["Semaine", "Heures", "Paye", "Net versé"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))), h("tbody", {}, lignes)))
+      : h("p", { class: "muted", style: "margin:8px 0 0", text: "Aucune paye pour l’instant : vos heures apparaîtront ici dès qu’elles seront saisies." }),
+    dus > 0 || aRet > 0 ? h("p", { class: "hint", style: "margin:10px 0 0", text: [dus > 0 ? `${money(dus)} vous restent dus en rappel de salaire.` : "", aRet > 0 ? `${money(aRet)} de trop-perçu restent à retenir sur vos prochaines payes.` : ""].filter(Boolean).join(" ") }) : null);
+  // Mes heures : 12 semaines, avec les paliers de prime
+  const hs = sem.slice(0, 12).reverse(), maxH = Math.max(20, ...hs.map(x => x.heures + x.rapH));
+  const paliers = (c.primes || []).map(p => Number(p.heures)).filter(x => x > 0 && x <= maxH);
+  const cardHeures = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes heures de service" }), h("p", { class: "sub", text: "Les 12 dernières semaines connues. Les lignes marquent les paliers de la prime de présence." }))),
+    hs.length ? h("div", { class: "es-barres", role: "img", "aria-label": hs.map(x => `semaine ${bounds(x.k).week} : ${fmtH(x.heures)}`).join(", ") },
+      paliers.map(p => h("div", { class: "es-palier", style: `bottom:${(p / maxH * 100).toFixed(1)}%`, title: `Palier de ${p} h` }, h("span", { text: p + " h" }))),
+      hs.map(x => h("div", { class: "es-col" }, h("span", { class: "es-val", text: fmtH(x.heures).replace(" h 00", " h") }), h("div", { class: "es-bar" + (x.estime ? " est" : ""), style: `height:${Math.max(1.5, x.heures / maxH * 100).toFixed(1)}%` }), h("span", { class: "es-lab", text: "S" + bounds(x.k).week }))))
+      : h("p", { class: "muted", style: "margin:8px 0 0", text: "Pas encore d’heures enregistrées." }));
+  // Mon contrat
+  const cardContrat = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Mon contrat de travail" })),
+    (E.contrats || []).length ? h("ul", { class: "ent-list" }, E.contrats.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${ctrNo(x)} · ${x.type === "CDD" ? "CDD" : "CDI"} · ${x.poste || "—"}` }),
+        h("span", { class: "meta", text: [x.priseFonctions ? "prise de fonctions le " + ctrJour(x.priseFonctions) : "", x.statut === "signe" ? "signé le " + ctrJour(x.salarieSigneLe) : "à signer auprès des ressources humaines"].filter(Boolean).join(" · ") })),
+      chip(CTR_STAT[x.statut] || CTR_STAT.a_signer),
+      h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(x, ev.currentTarget), text: "PDF" }))))
+      : h("p", { class: "muted", style: "margin:8px 0 0", text: "Pas encore de contrat de travail : les ressources humaines vous l’établiront." }));
+  // Messages
+  const msgs = E.messages || [];
+  const cardMsg = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Messages avec l’encadrement" }), h("p", { class: "sub", text: "Direction, Inspection et ressources humaines. Une question sur vos heures, votre paye, une absence : écrivez ici." }))),
+    filMessages(msgs, { moi: "agent", label: "Conversation avec l’encadrement", vide: "Aucun message. L’encadrement vous répondra ici.", placeholder: "Votre message à l’encadrement…",
+      onSend: async (t, err) => {
+        const { error } = await S.sb.rpc("envoyer_message", { p_texte: t });
+        if (error) { err(error.message || "Message non envoyé."); return false; }
+        await chargerMonEspace(); return true;
+      } }));
+  if (nonLus && document.visibilityState === "visible" && Date.now() - espaceLuEnvoye > 5000) {
+    espaceLuEnvoye = Date.now();
+    S.sb.rpc("messages_lus").then(({ error }) => { if (!error) { msgs.forEach(m => { if (m.de === "equipe") m.luAgent = true; }); majBadges(); } });
+  }
+  // Agenda
+  const evs = (E.agenda || []).slice(), absMoi = (E.absences || []).filter(a => a.statut !== "annulee");
+  const vueAg = S.espaceAgVue || "liste";
+  const repondre = async (e, r, bt) => {
+    bt.disabled = true;
+    const { error } = await S.sb.rpc("repondre_agenda", { p_id: e.id, p_reponse: r });
+    if (error) { toast(error.message || "Réponse non enregistrée.", true); bt.disabled = false; return; }
+    toast(`Réponse enregistrée : ${AG_REP[r][0].toLowerCase()}.`); await chargerMonEspace();
+  };
+  const maRep = e => e.reponses && e.reponses[fid] && e.reponses[fid].r;
+  const repBtns = e => e.reponseDemandee && e.statut !== "annule" && new Date(e.fin || e.debut).getTime() > Date.now()
+    ? h("span", { class: "seg", role: "group", "aria-label": "Votre réponse" }, Object.entries(AG_REP).map(([r, [l]]) => h("button", { type: "button", "aria-pressed": String(maRep(e) === r), onclick: ev => repondre(e, r, ev.currentTarget), text: l })))
+    : maRep(e) ? chip(AG_REP[maRep(e)]) : h("span", {});
+  const cardAg = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Agenda" }), h("p", { class: "sub", text: "Réunions, formations et rendez-vous qui vous concernent." })),
+      h("div", { class: "seg", role: "group", "aria-label": "Affichage de l’agenda" }, [["liste", "À venir"], ["mois", "Mois"]].map(([k, l]) => h("button", { type: "button", "aria-pressed": String(vueAg === k), onclick: () => { S.espaceAgVue = k; renderEspace(); }, text: l })))),
+    vueAg === "mois"
+      ? agendaMois({ mois: S.espaceMois || new Date(), events: evs, absences: absMoi, absTexte: () => "Absent", onMois: d => { S.espaceMois = d; renderEspace(); }, onEvent: e => openEvenement(e, { espace: true }) })
+      : agendaListe(evs, { vide: "Rien de prévu pour vous en ce moment.", onEvent: e => openEvenement(e, { espace: true }), detail: e => e.description ? h("span", { class: "meta", text: e.description.length > 140 ? e.description.slice(0, 140) + "…" : e.description }) : null, actions: repBtns }));
+  // Notes de service
+  let vues = {}; try { vues = JSON.parse(localStorage.getItem("gf-notes-vues") || "{}") || {}; } catch (e) { vues = {}; }
+  const notes = (E.notes || []).slice().sort((a, b) => (b.epinglee ? 1 : 0) - (a.epinglee ? 1 : 0) || String(b.at).localeCompare(String(a.at)));
+  const cardNotes = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Notes de service" })),
+    notes.length ? h("ul", { class: "es-notes" }, notes.slice(0, 8).map(n => h("li", {},
+      h("div", { class: "es-note-t" }, h("strong", { text: n.titre || "Note de service" }), n.epinglee ? chip(["Épinglée", "info"]) : null, !vues[n.id] ? chip(["Nouvelle", "warn"]) : null),
+      h("span", { class: "meta", text: `${n.auteur ? n.auteur + " · " : ""}${n.at ? longDate(new Date(n.at)) : ""}` }),
+      h("p", { class: "es-note-x", text: n.texte || "" }))))
+      : h("p", { class: "muted", style: "margin:8px 0 0", text: "Aucune note de service." }));
+  if (notes.some(n => !vues[n.id])) setTimeout(() => { try { const v = Object.assign({}, vues); notes.forEach(n => { v[n.id] = 1; }); localStorage.setItem("gf-notes-vues", JSON.stringify(v)); } catch (e) { /* préférence non gardée */ } }, 4000);
+  // Mes absences
+  const auj = jourCle(new Date());
+  const absList = (E.absences || []).slice().sort((a, b) => String(b.du).localeCompare(String(a.du)));
+  const du = h("input", { type: "date", id: "es-abs-du" }), au = h("input", { type: "date", id: "es-abs-au" }), motif = h("input", { id: "es-abs-motif", maxlength: "300", placeholder: "Ex. : vacances, examens, indisponible en ville" });
+  du.value = auj; au.value = auj;
+  du.addEventListener("change", () => { if (au.value < du.value) au.value = du.value; });
+  const absErr = h("span", { class: "err", "aria-live": "polite" });
+  const absBt = h("button", { class: "btn small", type: "button", text: "Signaler l’absence" });
+  absBt.addEventListener("click", async () => {
+    absErr.textContent = "";
+    if (!du.value || !au.value) { absErr.textContent = "Indiquez les dates."; return; }
+    absBt.disabled = true;
+    const { error } = await S.sb.rpc("signaler_absence", { p_du: du.value, p_au: au.value, p_motif: motif.value.trim() });
+    absBt.disabled = false;
+    if (error) { absErr.textContent = error.message || "Absence non enregistrée."; return; }
+    toast("Absence signalée à l’encadrement."); motif.value = ""; await chargerMonEspace();
+  });
+  const cardAbs = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes absences" }), h("p", { class: "sub", text: "Prévenez l’encadrement quand vous ne pourrez pas prendre votre service." }))),
+    absList.length ? h("ul", { class: "ent-list" }, absList.map(a => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: a.du === a.au ? jourTxt(a.du) : `Du ${jourTxt(a.du)} au ${jourTxt(a.au)}` }), h("span", { class: "meta", text: [a.motif, a.par === "equipe" ? "enregistrée par " + (a.auteur || "l’encadrement") : ""].filter(Boolean).join(" · ") })),
+      chip(ABS_STAT[a.statut] || ABS_STAT.signalee),
+      a.statut !== "annulee" && String(a.au) >= auj && a.par !== "equipe" ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+        const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer l’annulation"; return; }
+        b.disabled = true; const { error } = await S.sb.rpc("annuler_absence", { p_id: a.id });
+        if (error) { toast(error.message || "Annulation impossible.", true); b.disabled = false; return; }
+        toast("Absence annulée."); chargerMonEspace();
+      }, text: "Annuler" }) : h("span", {})))) : null,
+    h("div", { class: "row2", style: "margin-top:12px" }, field("es-abs-du", "Du", du), field("es-abs-au", "Au", au)),
+    field("es-abs-motif", "Motif (facultatif)", motif),
+    h("div", { class: "paste-row" }, absBt, absErr));
+  fill(box, kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat), h("div", { class: "es-col-d" }, cardMsg, cardAg, cardNotes, cardAbs)));
+}
+
+/* Encadrement : vues de l'onglet Personnel */
+const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["agenda", "Agenda"], ["absences", "Absences"], ["notes", "Notes de service"]];
+function majBadges() {
+  const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
+  const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length : 0;
+  if (tb) { tb.dataset.n = n ? String(n) : ""; tb.setAttribute("aria-label", n ? `Personnel, ${n} à traiter` : "Personnel"); }
+  const m = S.espace ? (S.espace.messages || []).filter(x => x.de === "equipe" && !x.luAgent).length : 0;
+  if (te) { te.dataset.n = m ? String(m) : ""; te.setAttribute("aria-label", m ? `Mon espace, ${m} message${plural(m)} non lu${plural(m)}` : "Mon espace"); }
+}
+function renderEncadrement() {
+  if (S.tab !== "personnel") return;
+  let v = S.rhEspace || "effectif"; if (!RH_ESPACES.some(x => x[0] === v)) v = "effectif";
+  const nMsg = msgsNonLusEquipe().length, nAbs = absEnAttente().length;
+  const cnt = { messages: nMsg, absences: nAbs };
+  fill($("#rh-espaces"), h("div", { class: "seg", role: "group", "aria-label": "Rubriques du personnel" }, RH_ESPACES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === v), onclick: () => { S.rhEspace = k; renderPersonnel(); }, text: l }, cnt[k] ? h("span", { class: "count", text: String(cnt[k]) }) : null))));
+  $$("#tab-personnel [data-rh-vue]").forEach(el => { el.hidden = el.dataset.rhVue !== v; });
+  if (v === "messages") renderMessagerie();
+  else if (v === "agenda") renderAgendaEquipe();
+  else if (v === "absences") renderAbsences();
+  else if (v === "notes") renderNotes();
+}
+// Messagerie : les conversations, la plus récente d'abord, et celle qui est ouverte.
+function renderMessagerie() {
+  const box = $("#rh-messagerie"); if (!box) return;
+  if (box.contains(document.activeElement) && document.activeElement.matches("textarea")) { majFilOuvert(); return; }
+  const parFid = new Map();
+  for (const m of S.msgs || []) { const x = parFid.get(m.fid) || { fid: m.fid, nom: m.nom, der: null, nl: 0 }; if (!x.der || String(m.at) > String(x.der.at)) x.der = m; if (m.de === "agent" && !m.luEquipe) x.nl++; parFid.set(m.fid, x); }
+  const convs = [...parFid.values()].sort((a, b) => (b.nl ? 1 : 0) - (a.nl ? 1 : 0) || String(b.der.at).localeCompare(String(a.der.at)));
+  const actifs = foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  let fid = S.filFid; if (fid && !foncOf(fid)) fid = null; if (!fid && convs.length) fid = convs[0].fid;
+  S.filFid = fid;
+  const choix = h("select", { "aria-label": "Écrire à un fonctionnaire" }, h("option", { value: "", text: "Écrire à un fonctionnaire…" }), actifs.map(f => h("option", { value: f.id, text: f.nom + (f.discordId ? "" : " (sans Discord)") })));
+  choix.addEventListener("change", () => { if (choix.value) { S.filFid = choix.value; renderMessagerie(); } });
+  const liste = h("ul", { class: "conv-list" }, convs.map(x => h("li", {}, h("button", { type: "button", class: "conv" + (x.fid === fid ? " on" : ""), onclick: () => { S.filFid = x.fid; renderMessagerie(); } },
+    h("span", { class: "conv-n", text: (foncOf(x.fid) || {}).nom || x.nom || "Agent" }), x.nl ? h("span", { class: "conv-badge", text: String(x.nl) }) : null,
+    h("span", { class: "conv-x", text: `${x.der.de === "equipe" ? (x.der.auteur || "Encadrement") + " : " : ""}${x.der.texte}` }), h("span", { class: "conv-t", text: quandMsg(x.der.at) })))));
+  fill(box, h("div", { class: "msg-grid" },
+    h("div", { class: "card msg-list" }, h("div", { class: "card-head" }, h("h3", { text: "Conversations" })), choix,
+      convs.length ? liste : h("p", { class: "muted", style: "margin:10px 0 0", text: "Aucune conversation. Choisissez un fonctionnaire pour lui écrire." })),
+    h("div", { class: "card msg-fil", id: "rh-fil" })));
+  majFilOuvert();
+}
+function majFilOuvert() {
+  const box = $("#rh-fil"), fid = S.filFid; if (!box) return;
+  if (box.contains(document.activeElement) && document.activeElement.matches("textarea") && box.dataset.fid === fid) {
+    // Saisie en cours : on ne remplace que les bulles.
+    const fil = box.querySelector(".fil"), neuf = filMessages(msgsOf(fid), { moi: "equipe" }).querySelector(".fil");
+    if (fil && neuf) { fil.replaceWith(neuf); requestAnimationFrame(() => { neuf.scrollTop = neuf.scrollHeight; }); }
+    marquerLusEquipe(fid); return;
+  }
+  if (!fid) { fill(box, h("p", { class: "muted", style: "margin:0", text: "Choisissez une conversation." })); box.dataset.fid = ""; return; }
+  const f = foncOf(fid) || { nom: "Agent" };
+  box.dataset.fid = fid;
+  fill(box, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: f.nom }), h("p", { class: "sub", text: [f.grade, f.discordId ? "lit ses messages dans son espace du guichet" : "pas de compte Discord sur sa fiche : il ne peut pas lire ces messages"].filter(Boolean).join(" · ") })),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => openAgent(fid), text: "Sa fiche" })),
+    filMessages(msgsOf(fid), { moi: "equipe", label: "Conversation avec " + f.nom, vide: "Aucun message. Écrivez-lui : il le lira dans son espace.",
+      placeholder: `Votre message à ${f.nom}…`, lecture: encadrant() ? null : "Lecture seule : seuls la Direction, l’Inspection et les ressources humaines écrivent aux fonctionnaires.",
+      onSend: encadrant() ? (t, err) => envoyerAuFonctionnaire(fid, t, err) : null }));
+  marquerLusEquipe(fid);
+}
+async function envoyerAuFonctionnaire(fid, texte, err) {
+  const f = foncOf(fid); if (!f || !encadrant()) return false;
+  if (texte.length > 2000) { err("Message trop long : 2 000 caractères au plus."); return false; }
+  const ok = await write(() => S.db.collection("messagesAgents").doc().set({ fid, nom: f.nom || "", discordId: f.discordId || "", de: "equipe", auteur: S.agentName || "", auteurRole: S.role, texte, at: nowISO(), luAgent: false }));
+  if (!ok) { err("Message non envoyé."); return false; }
+  return true;
+}
+const lusEnCours = new Set();
+function marquerLusEquipe(fid) {
+  if (!encadrant() || document.visibilityState !== "visible") return;
+  for (const m of msgsOf(fid)) if (m.de === "agent" && !m.luEquipe && !lusEnCours.has(m.id)) {
+    lusEnCours.add(m.id);
+    S.db.doc("messagesAgents/" + m.id).update({ luEquipe: true, luEquipeLe: nowISO(), luEquipePar: S.agentName || "" }).catch(() => {}).finally(() => lusEnCours.delete(m.id));
+  }
+}
+// Agenda de l'encadrement : tout, avec les absences de chacun.
+function renderAgendaEquipe() {
+  const box = $("#rh-agenda"); if (!box) return;
+  const w = encadrant(), evs = S.agenda || [], abs = S.absences || [];
+  fill(box, h("div", {},
+    h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Agenda" }), h("p", { class: "sub", text: w ? "Cliquez sur un jour pour y ajouter un rendez-vous, sur un rendez-vous pour le voir." : "Réunions, formations et absences." })),
+        w ? h("button", { class: "btn small", type: "button", onclick: () => openEvForm(null, jourCle(new Date())), text: "Nouveau rendez-vous" }) : null),
+      agendaMois({ mois: S.rhMois || new Date(), events: evs, absences: abs, voirAnnules: true, onMois: d => { S.rhMois = d; renderAgendaEquipe(); }, onJour: w ? k => openEvForm(null, k) : null, onEvent: e => openEvenement(e) })),
+    h("div", { class: "card", style: "margin-top:16px" }, h("div", { class: "card-head" }, h("h3", { text: "À venir" })),
+      agendaListe(evs, { max: 15, onEvent: e => openEvenement(e), vide: "Rien de prévu.", chip: e => e.audience === "encadrement" ? chip(["Encadrement", "muted"]) : e.audience === "agents" ? chip([`${(e.participants || []).length} invité${plural((e.participants || []).length)}`, "info"]) : chip(["Tous", "info"]),
+        detail: e => e.reponseDemandee ? h("span", { class: "meta", text: repResume(e) }) : null }))));
+}
+const repResume = e => { const r = Object.values(e.reponses || {}); const n = k => r.filter(x => x.r === k).length; return `${n("oui")} présent${plural(n("oui"))} · ${n("non")} absent${plural(n("non"))} · ${n("peut-etre")} peut-être${e.audience === "agents" ? ` · ${Math.max(0, (e.participants || []).length - r.length)} sans réponse` : ""}`; };
+function openEvenement(e, o) {
+  o = o || {};
+  const w = !o.espace && encadrant(), fid = S.espace && S.espace.fid;
+  const invites = e.audience === "agents" ? (e.participants || []).map(id => (foncOf(id) || {}).nom || (e.reponses && e.reponses[id] && e.reponses[id].nom) || "Agent") : [];
+  const reps = Object.entries(e.reponses || {}).map(([id, x]) => [x.nom || (foncOf(id) || {}).nom || "Agent", x.r]);
+  openDialog({ eyebrow: `Agenda · ${AG_TYPES[e.type] || "Rendez-vous"}`, title: e.titre, stampEl: e.statut === "annule" ? stamp(["ANNULÉ", "muted"]) : null,
+    body: [kv([["Quand", agQuand(e)], e.lieu ? ["Lieu", e.lieu] : null, ["Pour", e.audience === "encadrement" ? "l’encadrement seulement" : e.audience === "agents" ? invites.join(", ") || "—" : "tous les fonctionnaires"],
+        e.byNom ? ["Prévu par", e.byNom] : null, e.reponseDemandee && !o.espace ? ["Réponses", repResume(e)] : null, o.espace && fid && e.reponses && e.reponses[fid] ? ["Votre réponse", AG_REP[e.reponses[fid].r][0]] : null].filter(Boolean)),
+      e.description ? h("p", { style: "white-space:pre-wrap;margin:0", text: e.description }) : null,
+      !o.espace && reps.length ? sec("Réponses", h("ul", { class: "ent-list" }, reps.sort((a, b) => a[0].localeCompare(b[0], "fr")).map(([n, r]) => h("li", {}, h("span", { text: n }), chip(AG_REP[r] || ["?", "muted"]), h("span", {}))))) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }),
+      w && e.statut !== "annule" ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+        const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer l’annulation"; return; }
+        b.disabled = true; if (await write(() => S.db.doc("agenda/" + e.id).update({ statut: "annule", annuleLe: nowISO(), annulePar: S.agentName || "" }))) { toast("Rendez-vous annulé."); closeDialog(); } else b.disabled = false;
+      }, text: "Annuler le rendez-vous" }) : null,
+      w && e.statut !== "annule" ? h("button", { class: "btn small", type: "button", onclick: () => openEvForm(e), text: "Modifier" }) : null] });
+}
+function openEvForm(e, jour) {
+  if (!encadrant()) return;
+  const v = Object.assign({ titre: "", type: "reunion", journee: false, lieu: "", description: "", audience: "tous", participants: [], reponseDemandee: true }, e || {});
+  const d0 = e ? agJour(e.debut) : jour || jourCle(new Date());
+  const titre = h("input", { id: "ev-titre", maxlength: "120", autocomplete: "off", placeholder: "Ex. : Réunion de service" }); titre.value = v.titre;
+  const type = h("select", { id: "ev-type" }, Object.entries(AG_TYPES).map(([k, l]) => h("option", { value: k, text: l }))); type.value = v.type;
+  const date = h("input", { type: "date", id: "ev-date" }); date.value = d0;
+  const dateFin = h("input", { type: "date", id: "ev-datefin" }); dateFin.value = e && e.fin ? agJour(e.fin) : d0;
+  const hd = h("input", { type: "time", id: "ev-hd" }); hd.value = e && !e.journee ? agHeure(e.debut) : "21:00";
+  const hf = h("input", { type: "time", id: "ev-hf" }); hf.value = e && !e.journee && e.fin ? agHeure(e.fin) : "22:00";
+  const journee = h("input", { type: "checkbox", id: "ev-journee" }); journee.checked = !!v.journee;
+  const lieu = h("input", { id: "ev-lieu", maxlength: "120", autocomplete: "off", placeholder: "Ex. : Préfecture, salle de réunion" }); lieu.value = v.lieu;
+  const desc = h("textarea", { id: "ev-desc", rows: "3", maxlength: "2000", placeholder: "Ordre du jour, consignes…" }); desc.value = v.description;
+  const aud = h("select", { id: "ev-aud" }, [["tous", "Tous les fonctionnaires"], ["agents", "Des fonctionnaires choisis"], ["encadrement", "L’encadrement seulement"]].map(([k, l]) => h("option", { value: k, text: l }))); aud.value = v.audience;
+  const rep = h("input", { type: "checkbox", id: "ev-rep" }); rep.checked = v.reponseDemandee !== false;
+  const sel = new Set(v.participants || []);
+  const liste = h("div", { class: "ev-invites" }, foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(f => {
+    const cb = h("input", { type: "checkbox", value: f.id }); cb.checked = sel.has(f.id);
+    cb.addEventListener("change", () => { if (cb.checked) sel.add(f.id); else sel.delete(f.id); });
+    return h("label", { class: "ev-inv" }, cb, h("span", { text: f.nom }));
+  }));
+  const invRow = h("div", { class: "field" }, h("span", { class: "lbl", text: "Invités" }), liste);
+  const heuresRow = h("div", { class: "row2" }, field("ev-hd", "Début", hd), field("ev-hf", "Fin", hf));
+  const finRow = field("ev-datefin", "Jusqu’au", dateFin);
+  const sync = () => { invRow.hidden = aud.value !== "agents"; heuresRow.hidden = journee.checked; finRow.hidden = !journee.checked; };
+  aud.addEventListener("change", sync); journee.addEventListener("change", sync); sync();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: e ? "Enregistrer" : "Ajouter à l’agenda" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    if (!titre.value.trim()) { err.textContent = "Donnez un titre."; titre.focus(); return; }
+    if (!date.value) { err.textContent = "Choisissez la date."; date.focus(); return; }
+    let debut, fin;
+    if (journee.checked) { debut = new Date(date.value + "T00:00:00"); fin = new Date((dateFin.value && dateFin.value >= date.value ? dateFin.value : date.value) + "T23:59:00"); }
+    else {
+      if (!hd.value) { err.textContent = "Indiquez l’heure de début."; hd.focus(); return; }
+      debut = new Date(`${date.value}T${hd.value}:00`); fin = hf.value ? new Date(`${date.value}T${hf.value}:00`) : null;
+      if (fin && fin <= debut) fin.setDate(fin.getDate() + 1);
+    }
+    if (aud.value === "agents" && !sel.size) { err.textContent = "Choisissez au moins un invité."; return; }
+    go.disabled = true;
+    const ref = e ? S.db.doc("agenda/" + e.id) : S.db.collection("agenda").doc();
+    const body = Object.assign({}, e || {}, { titre: titre.value.trim(), type: type.value, journee: journee.checked, debut: debut.toISOString(), fin: fin ? fin.toISOString() : null, lieu: lieu.value.trim(), description: desc.value.trim(),
+      audience: aud.value, participants: aud.value === "agents" ? [...sel] : [], reponseDemandee: aud.value !== "encadrement" && rep.checked, reponses: (e && e.reponses) || {}, statut: "prevu",
+      at: (e && e.at) || nowISO(), byNom: (e && e.byNom) || S.agentName || "", modifieLe: e ? nowISO() : null });
+    delete body.id;
+    if (await write(() => ref.set(body))) { toast(e ? "Rendez-vous modifié." : "Rendez-vous ajouté : les fonctionnaires concernés le voient dans leur espace."); closeDialog(); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Agenda", title: e ? "Modifier le rendez-vous" : "Nouveau rendez-vous", wide: true,
+    body: [h("div", { class: "row2" }, field("ev-titre", "Titre", titre), field("ev-type", "Type", type)),
+      h("div", { class: "row2" }, field("ev-date", "Date", date), h("label", { class: "check", style: "align-self:end" }, journee, h("span", { text: "Toute la journée" }))),
+      heuresRow, finRow, field("ev-lieu", "Lieu", lieu), field("ev-desc", "Description", desc),
+      h("div", { class: "row2" }, field("ev-aud", "Pour qui", aud), h("label", { class: "check", style: "align-self:end" }, rep, h("span", { text: "Demander s’ils seront présents" }))),
+      invRow, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+// Absences : signalées par les fonctionnaires ou enregistrées par l'encadrement.
+function renderAbsences() {
+  const box = $("#rh-absences"); if (!box) return;
+  const w = encadrant(), auj = jourCle(new Date()), all = (S.absences || []).slice();
+  const enCours = all.filter(a => a.statut !== "annulee" && a.du <= auj && a.au >= auj), aVenir = all.filter(a => a.statut !== "annulee" && a.du > auj), passees = all.filter(a => a.statut === "annulee" || a.au < auj);
+  const ligne = a => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openAgent(a.fid), text: a.nom || (foncOf(a.fid) || {}).nom || "Agent" }),
+      h("span", { class: "meta", text: [a.du === a.au ? jourTxt(a.du) : `du ${jourTxt(a.du)} au ${jourTxt(a.au)}`, a.motif, a.par === "equipe" ? "enregistrée par " + (a.auteur || "l’encadrement") : "signalée le " + (a.at ? fmtDate(new Date(a.at)) : "—"), a.priseEnComptePar ? "vue par " + a.priseEnComptePar : ""].filter(Boolean).join(" · ") })),
+    chip(ABS_STAT[a.statut] || ABS_STAT.signalee),
+    w && a.statut === "signalee" ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; if (await write(() => S.db.doc("absences/" + a.id).update({ statut: "prise_en_compte", priseEnCompteLe: nowISO(), priseEnComptePar: S.agentName || "" }))) toast("Absence prise en compte."); }, text: "Prendre en compte" })
+      : w && a.statut !== "annulee" && a.au >= auj ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer l’annulation"; return; } b.disabled = true; if (await write(() => S.db.doc("absences/" + a.id).update({ statut: "annulee", annuleeLe: nowISO(), annuleePar: S.agentName || "" }))) toast("Absence annulée."); }, text: "Annuler" })
+      : h("span", {}));
+  const bloc = (t, l, vide) => h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: `${t} (${l.length})` })), l.length ? h("ul", { class: "ent-list" }, l.map(ligne)) : h("p", { class: "muted", style: "margin:8px 0 0", text: vide }));
+  fill(box, h("div", { class: "card-head", style: "margin:0 0 4px" }, h("p", { class: "sub", style: "margin:0", text: "Les fonctionnaires signalent leurs absences depuis leur espace ; elles apparaissent aussi dans l’agenda." }),
+      w ? h("button", { class: "btn small", type: "button", onclick: () => openAbsForm(), text: "Enregistrer une absence" }) : null),
+    bloc("En cours", enCours.sort((a, b) => String(a.au).localeCompare(String(b.au))), "Personne n’est absent aujourd’hui."),
+    bloc("À venir", aVenir.sort((a, b) => String(a.du).localeCompare(String(b.du))), "Aucune absence prévue."),
+    bloc("Passées et annulées", passees.sort((a, b) => String(b.au).localeCompare(String(a.au))).slice(0, 20), "Rien pour l’instant."));
+}
+function openAbsForm(fid0) {
+  if (!encadrant()) return;
+  const auj = jourCle(new Date());
+  const qui = h("select", { id: "ab-qui" }, foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(f => h("option", { value: f.id, text: f.nom }))); if (fid0) qui.value = fid0;
+  const du = h("input", { type: "date", id: "ab-du" }), au = h("input", { type: "date", id: "ab-au" }), motif = h("input", { id: "ab-motif", maxlength: "300", placeholder: "Ex. : congés, formation, suspension" });
+  du.value = auj; au.value = auj; du.addEventListener("change", () => { if (au.value < du.value) au.value = du.value; });
+  const err = h("span", { class: "err", "aria-live": "polite" }), go = h("button", { class: "btn ink small", type: "button", text: "Enregistrer l’absence" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    if (!qui.value || !du.value || !au.value || au.value < du.value) { err.textContent = "Choisissez l’agent et des dates valides."; return; }
+    const f = foncOf(qui.value); go.disabled = true;
+    if (await write(() => S.db.collection("absences").doc().set({ fid: f.id, nom: f.nom || "", du: du.value, au: au.value, motif: motif.value.trim(), statut: "prise_en_compte", par: "equipe", auteur: S.agentName || "", at: nowISO(), priseEnCompteLe: nowISO(), priseEnComptePar: S.agentName || "" }))) { toast("Absence enregistrée : l’agent la voit dans son espace."); closeDialog(); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Personnel", title: "Enregistrer une absence",
+    body: [field("ab-qui", "Fonctionnaire", qui), h("div", { class: "row2" }, field("ab-du", "Du", du), field("ab-au", "Au", au)), field("ab-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+// Notes de service : publiées par la Direction et les ressources humaines, lues par tous les fonctionnaires.
+function renderNotes() {
+  const box = $("#rh-notes"); if (!box) return;
+  const w = notesWriter(), notes = (S.notes || []).filter(n => !n.retiree).sort((a, b) => (b.epinglee ? 1 : 0) - (a.epinglee ? 1 : 0) || String(b.at).localeCompare(String(a.at)));
+  fill(box, h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Notes de service" }), h("p", { class: "sub", text: "Tous les fonctionnaires les lisent dans leur espace." })),
+      w ? h("button", { class: "btn small", type: "button", onclick: () => openNoteForm(), text: "Nouvelle note" }) : null),
+    notes.length ? h("ul", { class: "es-notes" }, notes.map(n => h("li", {},
+      h("div", { class: "es-note-t" }, h("strong", { text: n.titre || "Note de service" }), n.epinglee ? chip(["Épinglée", "info"]) : null, h("span", { class: "spacer" }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(noteDoc(n)), text: "En image" }),
+        w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openNoteForm(n), text: "Modifier" }) : null,
+        w ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer le retrait"; return; } b.disabled = true; if (await write(() => S.db.doc("notesService/" + n.id).update({ retiree: true, retireeLe: nowISO(), retireePar: S.agentName || "" }))) toast("Note retirée des espaces."); }, text: "Retirer" }) : null),
+      h("span", { class: "meta", text: `${n.auteur ? n.auteur + " · " : ""}${n.at ? longDate(new Date(n.at)) : ""}` }),
+      h("p", { class: "es-note-x", text: n.texte || "" })))) : h("p", { class: "muted", style: "margin:8px 0 0", text: "Aucune note de service." })));
+}
+function openNoteForm(n) {
+  if (!notesWriter()) return;
+  const titre = h("input", { id: "ns-titre", maxlength: "140", autocomplete: "off" }); titre.value = n ? n.titre || "" : "";
+  const texte = h("textarea", { id: "ns-texte", rows: "8", maxlength: "4000" }); texte.value = n ? n.texte || "" : "";
+  const ep = h("input", { type: "checkbox", id: "ns-ep" }); ep.checked = !!(n && n.epinglee);
+  const err = h("span", { class: "err", "aria-live": "polite" }), go = h("button", { class: "btn ink small", type: "button", text: n ? "Enregistrer" : "Publier la note" });
+  go.addEventListener("click", async () => {
+    if (!titre.value.trim() || !texte.value.trim()) { err.textContent = "Donnez un titre et un texte."; return; }
+    go.disabled = true;
+    const ref = n ? S.db.doc("notesService/" + n.id) : S.db.collection("notesService").doc();
+    const body = Object.assign({}, n || {}, { titre: titre.value.trim(), texte: texte.value.trim(), epinglee: ep.checked, at: (n && n.at) || nowISO(), auteur: (n && n.auteur) || S.agentName || "", modifieLe: n ? nowISO() : null, retiree: false });
+    delete body.id;
+    if (await write(() => ref.set(body))) { toast(n ? "Note modifiée." : "Note publiée dans l’espace de chaque fonctionnaire."); closeDialog(); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Personnel", title: n ? "Modifier la note de service" : "Nouvelle note de service", wide: true,
+    body: [field("ns-titre", "Titre", titre), field("ns-texte", "Texte", texte), h("label", { class: "check" }, ep, h("span", { text: "Épingler en haut des espaces" })), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function noteDoc(n) {
+  return { kind: "NOTE DE SERVICE", no: dossierNo("NS", n.id), date: n.at ? "Le " + longDate(new Date(n.at)) : "",
+    meta: [["Objet", n.titre || "—"], ["Destinataires", "Tous les fonctionnaires de la Préfecture"], ["Émise par", n.auteur || "La Direction"]],
+    lines: [], total: ["Note de service", dossierNo("NS", n.id)], stamp: n.epinglee ? ["ÉPINGLÉE", "info"] : ["DIFFUSÉE", "ok"], note: n.texte || "", noteTitle: n.titre || "Note de service",
+    footer: "Préfecture de police · à lire aussi dans votre espace du guichet.",
+    discord: { channel: "agents", mentions: [], text: `**Note de service** · ${n.titre || ""}` } };
+}
 
 /* Pointages : corrections de la Direction */
 function openPtForm(pt, preset, back) {
@@ -8434,7 +9106,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["contratsTravail", "rh", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -8804,7 +9476,7 @@ async function showDocImage(doc, back) {
   });
   const dl = h("a", { class: "btn ghost small", href: url, download: fname + ".png", text: "Télécharger" });
   openDialog({
-    eyebrow: "Image à poster sur Discord", title: `${capFirst(doc.kind)} ${doc.no}`, wide: true,
+    eyebrow: S.role === "agent" ? "Votre document" : "Image à poster sur Discord", title: `${capFirst(doc.kind)} ${doc.no}`, wide: true,
     body: [h("img", { class: "avis-preview", src: url, alt: `${capFirst(doc.kind)} ${doc.no}` })],
     foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour au dossier" }) : null, h("span", { class: "spacer" }),
       canAgent() && doc.discord && hookFor(doc.discord.channel) ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (!(await publishDoc(doc))) b.disabled = false; else b.textContent = "Publié sur Discord"; }, text: "Publier sur Discord" }) : null,
@@ -9585,6 +10257,24 @@ function describe(e) {
       if (a.statut !== b.statut) return { confirme: `a confirmé la réception de ${money(a.montantRecu ?? a.montant)} d’amendes de ${qui} (${no})`, refuse: `a refusé le versement ${no} de ${qui}`, annule: `a annulé le versement ${no} de ${qui}` }[a.statut] || `a modifié le versement ${no}`;
       return `a modifié le versement ${no}`;
     }
+    case "messagesAgents":
+      if (x === "ajout") return v.de === "agent" ? `a écrit à l’encadrement (${v.nom || "fonctionnaire"})` : `a écrit à ${v.nom || "un fonctionnaire"}`;
+      if (x === "suppression") return `a supprimé un message de la conversation de ${v.nom || "un fonctionnaire"}`;
+      return a.luAgent && !b.luAgent ? `a lu les messages de l’encadrement (${v.nom || "fonctionnaire"})` : a.luEquipe && !b.luEquipe ? `a lu le message de ${v.nom || "un fonctionnaire"}` : `a modifié un message de la conversation de ${v.nom || "un fonctionnaire"}`;
+    case "agenda":
+      if (x === "ajout") return `a ajouté à l’agenda : ${v.titre || "rendez-vous"} (${v.debut ? fmtDateTime(new Date(v.debut)) : "—"})`;
+      if (x === "suppression") return `a supprimé de l’agenda : ${v.titre || "rendez-vous"}`;
+      if (a.statut === "annule" && b.statut !== "annule") return `a annulé le rendez-vous : ${v.titre || ""}`;
+      if (JSON.stringify(a.reponses || {}) !== JSON.stringify(b.reponses || {})) return `a répondu au rendez-vous : ${v.titre || ""}`;
+      return `a modifié le rendez-vous : ${v.titre || ""}`;
+    case "absences":
+      if (x === "ajout") return `${v.par === "agent" ? "a signalé" : "a enregistré"} l’absence de ${v.nom || "un fonctionnaire"} (du ${v.du} au ${v.au})`;
+      if (a.statut !== b.statut) return a.statut === "prise_en_compte" ? `a pris en compte l’absence de ${v.nom || "un fonctionnaire"}` : a.statut === "annulee" ? `a annulé l’absence de ${v.nom || "un fonctionnaire"}` : `a modifié l’absence de ${v.nom || "un fonctionnaire"}`;
+      return `a modifié l’absence de ${v.nom || "un fonctionnaire"}`;
+    case "notesService":
+      if (x === "ajout") return `a publié la note de service « ${v.titre || ""} »`;
+      if (a.retiree && !b.retiree) return `a retiré la note de service « ${v.titre || ""} »`;
+      return `a modifié la note de service « ${v.titre || ""} »`;
     case "rh":
       return e.doc_id === "modeleContrat" ? "a modifié le modèle de contrat de travail" : "a modifié les réglages des ressources humaines";
     case "contratsTravail": {
@@ -13460,7 +14150,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["contratsTravail", "rh", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["contratsTravail", "rh", "agenda", "absences", "notesService", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -18820,6 +19510,7 @@ function drawSync() {
   const el = $("#foot-sync");
   if (!el) return;
   el.classList.toggle("is-live", !!(S.connected && S.live));
+  if (S.role === "agent") { el.classList.remove("is-live"); el.textContent = S.espace ? "Espace relu toutes les 20 s" : ""; el.title = "Votre espace se met à jour tout seul tant que la page est ouverte."; return; }
   el.textContent = !S.connected ? "" : !S.loaded.has("declarations") ? "Synchronisation…" : S.live ? "En direct" : "Actualisation toutes les 15 s";
   el.title = S.live ? "Les changements des autres agents arrivent tout seuls." : "Le direct est momentanément indisponible : le registre est relu régulièrement.";
 }
@@ -19132,13 +19823,14 @@ function showTab(name) {
   if (name === "reglages" && S.admin) { loadAgents(); loadKeys(); }
   if (name === "journal") loadJournal();
   const btn = tabBtn(name);
-  if (!btn || btn.hidden) name = S.role === "pointeuse" ? "pointeuse" : S.role === "rh" ? "personnel" : "dashboard";
+  if (!btn || btn.hidden) name = S.role === "pointeuse" ? "pointeuse" : S.role === "agent" ? "espace" : S.role === "rh" ? "personnel" : "dashboard";
   S.tab = name;
   navLast[grpOf(name)] = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
   navSync();
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue", "payes", "pointeuse", "personnel"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue", "payes", "pointeuse", "personnel", "espace"].includes(name)) schedule();
+  if (name === "espace" && S.monFid && (!S.espace || Date.now() - (S.espaceVuLe || 0) > 15000)) { S.espaceVuLe = Date.now(); chargerMonEspace(); }
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
   const rail = $("#sub-rail"), cur = tabBtn(name);
   if (rail && cur && rail.scrollWidth > rail.clientWidth) {
@@ -19672,7 +20364,7 @@ function openDepotForm(k0) {
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "svc", "enveloppes", "payes", "personnel", "catalogue", "pointeuse", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "svc", "enveloppes", "payes", "personnel", "espace", "catalogue", "pointeuse", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 { const m = ESPACE_RE.exec(location.hash || ""); if (m) initPortail(m[1].toLowerCase()); else { render(); init(); } }
 })();
 </script>
