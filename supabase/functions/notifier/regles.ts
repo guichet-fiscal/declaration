@@ -238,3 +238,42 @@ export function rappelsPerso(rows, depuis, maintenant) {
     return p.rappel && !p.journee && p.fid && Number.isFinite(t) && t > maintenant && t <= fin;
   }).map((p) => ({ fid: p.fid, type: "a_agenda", msg: { title: "Dans moins d’une heure", body: `${p.titre || "Événement"} à ${heure(p.debut)}${p.lieu ? " · " + p.lieu : ""}`, url: "#espace", tag: "perso-" + p.id } }));
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Rappels au choix de chacun (mise à jour 35), au passage de 5 minutes : un rappel part quand
+// « début − délai choisi » tombe dans le pas qui vient de s'écouler, ]t0 − pas, t0].
+//  - rendez-vous de l'encadrement : délai propre au rendez-vous (prefs.evenements[id], null = aucun),
+//    sinon délai habituel (prefs.defaut_min, null = aucun), sinon 1 h ; jamais pour qui a répondu « non » ;
+//  - agenda personnel : délai de l'événement (rappel_min ; ancien « rappel » coché = 1 h).
+// actifs : fids des fonctionnaires en service ; prefs : Map fid → { defaut_min, evenements }.
+const enAvance = (m) => (m >= 1440 ? "demain" : m >= 60 ? `dans ${m / 60} h` : `dans ${m} min`);
+const dansLePas = (t, m, t0, pas) => { const c = t - m * 60e3; return c > t0 - pas && c <= t0; };
+export function rappelsChoisis(rows, actifs, prefs, t0, pas) {
+  const out = [];
+  for (const r of rows || []) {
+    if (r.collection !== "agenda") continue;
+    const x = r.data || {}, t = new Date(x.debut || 0).getTime();
+    if (x.statut === "annule" || x.journee || x.audience === "encadrement" || !Number.isFinite(t) || t <= t0 - pas) continue;
+    const parDelai = new Map();
+    for (const fid of pour(x) || actifs || []) {
+      if (x.reponses && x.reponses[fid] && x.reponses[fid].r === "non") continue;
+      const p = prefs && prefs.get(fid);
+      const ev = p && p.evenements && Object.prototype.hasOwnProperty.call(p.evenements, r.id);
+      const m = ev ? p.evenements[r.id] : p && p.defaut_min !== undefined ? p.defaut_min : 60;
+      if (m == null || !(Number(m) > 0) || !dansLePas(t, Number(m), t0, pas)) continue;
+      if (!parDelai.has(Number(m))) parDelai.set(Number(m), []);
+      parDelai.get(Number(m)).push(fid);
+    }
+    for (const [m, fids] of parDelai) out.push({ fids, type: "a_agenda", msg: { title: `Rendez-vous ${enAvance(m)}`, body: `${x.titre || "Rendez-vous"} ${m >= 1440 ? "demain " : ""}à ${heure(x.debut)}${x.lieu ? " · " + x.lieu : ""}`, url: "#espace", tag: "ag-rappel-" + r.id } });
+  }
+  return out;
+}
+export function rappelsPersoChoisis(rows, t0, pas) {
+  return (rows || []).filter((p) => {
+    const t = new Date(p.debut || 0).getTime(), m = p.rappel_min != null ? Number(p.rappel_min) : p.rappel ? 60 : 0;
+    return !p.journee && p.fid && m > 0 && Number.isFinite(t) && dansLePas(t, m, t0, pas);
+  }).map((p) => {
+    const m = p.rappel_min != null ? Number(p.rappel_min) : 60;
+    return { fid: p.fid, type: "a_agenda", msg: { title: m >= 1440 ? "Demain" : `${enAvance(m).charAt(0).toUpperCase()}${enAvance(m).slice(1)}`, body: `${p.titre || "Événement"} ${m >= 1440 ? "demain " : ""}à ${heure(p.debut)}${p.lieu ? " · " + p.lieu : ""}`, url: "#espace", tag: "perso-" + p.id } };
+  });
+}

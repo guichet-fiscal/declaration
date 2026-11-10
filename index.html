@@ -990,6 +990,11 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .es-col-g,.es-col-d{display:grid;gap:16px;align-content:start;min-width:0}
 .es-col-g > .card,.es-col-d > .card{margin-top:0}
 .es-ag-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.es-rappel{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
+.es-rappel label{font-size:13px;font-weight:600;color:var(--ink-2)}
+.es-rappel select{max-width:260px}
+.es-rappel .hint{grid-column:1/-1}
+@media (max-width:640px){.es-rappel{grid-template-columns:1fr}}
 table.es-payes{min-width:0;width:100%}
 .es-payes .meta{display:block;font-size:11.5px;color:var(--ink-3);font-family:var(--f-body)}
 .es-payes tr.cliquable{cursor:pointer}
@@ -5949,14 +5954,34 @@ async function chargerMonEspace() {
 }
 // Agenda personnel (mise à jour 34) : les événements que chacun s'ajoute, visibles de lui seul
 // (table agenda_perso, hors registre : ni journal, ni sauvegarde, ni encadrement).
+// Rappels au choix (mise à jour 35) : délai en minutes, null = aucun rappel.
+const RAPPEL_OPTS = [[null, "Aucun rappel"], [10, "10 minutes avant"], [30, "30 minutes avant"], [60, "1 heure avant"], [120, "2 heures avant"], [1440, "La veille, à la même heure"]];
+const rappelTxt = m => (RAPPEL_OPTS.find(([v]) => v === m) || [null, m ? `${m} minutes avant` : "Aucun rappel"])[1];
+const tableAbsente = error => /does not exist|schema cache/i.test((error && error.message) || "") || (!!error && ["42P01", "42703", "PGRST204", "PGRST205"].includes(error.code));
 const persoVersEv = p => ({ id: p.id, titre: p.titre, debut: p.debut, fin: p.fin || null, journee: !!p.journee, lieu: p.lieu || "", description: p.note || "",
-  rappel: !!p.rappel, perso: true, type: "perso", statut: "prevu" });
+  rappelMin: p.journee ? null : p.rappel_min !== undefined ? p.rappel_min : p.rappel ? 60 : null, perso: true, type: "perso", statut: "prevu" });
 async function chargerPerso() {
   try {
-    const { data, error } = await S.sb.from("agenda_perso").select("*").order("debut");
-    if (error) { S.persoErr = /agenda_perso|does not exist|schema cache/i.test(error.message || "") || error.code === "42P01" ? "absente" : error.message || "erreur"; return; }
-    S.persoErr = null; S.espacePerso = (data || []).map(persoVersEv);
+    const [r1, r2] = await Promise.all([S.sb.from("agenda_perso").select("*").order("debut"), S.sb.from("rappels_agents").select("*").maybeSingle()]);
+    if (r2.error) S.rappelsErr = tableAbsente(r2.error) ? "absente" : r2.error.message || "erreur";
+    else { S.rappelsErr = null; S.rappelsPrefs = r2.data || null; }
+    if (r1.error) { S.persoErr = tableAbsente(r1.error) ? "absente" : r1.error.message || "erreur"; return; }
+    S.persoErr = null; S.espacePerso = (r1.data || []).map(persoVersEv);
   } catch (e) { S.persoErr = e.message || "erreur"; }
+}
+// Rappels de l'agenda commun : réglage habituel et réglages par rendez-vous (table rappels_agents).
+const rappelDefaut = () => (S.rappelsPrefs && S.rappelsPrefs.defaut_min !== undefined ? S.rappelsPrefs.defaut_min : 60);
+const rappelEvenement = id => { const ev = (S.rappelsPrefs && S.rappelsPrefs.evenements) || {}; return Object.prototype.hasOwnProperty.call(ev, id) ? ev[id] : undefined; };
+async function enregistrerRappels(maj) {
+  const E = S.espace || {}, fid = E.fid || S.monFid, avant = S.rappelsPrefs;
+  const p = Object.assign({ defaut_min: 60, evenements: {} }, avant || {}, maj, { fid, modifie_le: nowISO() });
+  // On ne garde que les réglages des rendez-vous encore à venir.
+  const aVenir = new Set((E.agenda || []).filter(e => new Date(e.fin || e.debut).getTime() > Date.now()).map(e => e.id));
+  p.evenements = Object.fromEntries(Object.entries(p.evenements || {}).filter(([id]) => aVenir.has(id)));
+  S.rappelsPrefs = p;
+  const { error } = await S.sb.from("rappels_agents").upsert(p, { onConflict: "fid" });
+  if (error) { S.rappelsPrefs = avant; toast(tableAbsente(error) ? "Les rappels au choix ouvriront dès que la Direction aura exécuté supabase/v35_rappels_agenda.sql." : error.message || "Rappel non enregistré.", true); return false; }
+  return true;
 }
 // Le fonctionnaire seul : ses données tiennent lieu de registre, pour les bulletins et le barème.
 function espaceVersS(E) {
@@ -6100,7 +6125,14 @@ function renderEspace() {
       ? agendaMois({ mois: S.espaceMois || new Date(), events: evs, absences: absMoi, absTexte: () => "Absent", onMois: d => { S.espaceMois = d; renderEspace(); }, onEvent: ouvrirEv, onJour: k => openPersoForm(null, k) })
       : agendaListe(evs, { vide: "Rien de prévu pour vous en ce moment. Ajoutez vos propres événements avec le bouton ci-dessus.", onEvent: ouvrirEv,
           chip: e => e.perso ? chip(["Personnel", "muted"]) : h("span", {}),
-          detail: e => e.description ? h("span", { class: "meta", text: e.description.length > 140 ? e.description.slice(0, 140) + "…" : e.description }) : null, actions: repBtns }));
+          detail: e => e.description ? h("span", { class: "meta", text: e.description.length > 140 ? e.description.slice(0, 140) + "…" : e.description }) : null, actions: repBtns }),
+    S.rappelsErr ? null : (() => {
+      const sel = h("select", { id: "es-rappel-defaut" }, RAPPEL_OPTS.map(([v, l]) => h("option", { value: v === null ? "" : String(v), text: l })));
+      sel.value = rappelDefaut() == null ? "" : String(rappelDefaut());
+      sel.addEventListener("change", async () => { if (await enregistrerRappels({ defaut_min: sel.value ? Number(sel.value) : null })) { toast(sel.value ? `Rappel des rendez-vous : ${rappelTxt(Number(sel.value)).toLowerCase()}.` : "Plus de rappel pour les rendez-vous de l’encadrement."); sel.blur(); renderEspace(); } });
+      return h("div", { class: "es-rappel" }, h("label", { for: "es-rappel-defaut", text: "Rappel des rendez-vous de l’encadrement" }), sel,
+        h("span", { class: "hint", text: "Réglable aussi rendez-vous par rendez-vous (cliquez sur l’un d’eux). Vos événements personnels ont chacun leur rappel." }));
+    })());
   // Notes de service
   let vues = {}; try { vues = JSON.parse(localStorage.getItem("gf-notes-vues") || "{}") || {}; } catch (e) { vues = {}; }
   const notes = (E.notes || []).slice().sort((a, b) => (b.epinglee ? 1 : 0) - (a.epinglee ? 1 : 0) || String(b.at).localeCompare(String(a.at)));
@@ -6233,10 +6265,24 @@ function renderAgendaEquipe() {
         detail: e => e.reponseDemandee ? h("span", { class: "meta", text: repResume(e) }) : null }))));
 }
 const repResume = e => { const r = Object.values(e.reponses || {}); const n = k => r.filter(x => x.r === k).length; return `${n("oui")} présent${plural(n("oui"))} · ${n("non")} absent${plural(n("non"))} · ${n("peut-etre")} peut-être${e.audience === "agents" ? ` · ${Math.max(0, (e.participants || []).length - r.length)} sans réponse` : ""}`; };
+// Dans son espace, le rappel d'un rendez-vous de l'encadrement : l'habituel ou un autre pour celui-ci.
+function monRappelEv(e, fid) {
+  if (S.rappelsErr || e.statut === "annule" || e.journee || e.audience === "encadrement" || new Date(e.debut).getTime() <= Date.now()) return null;
+  if (e.reponses && fid && e.reponses[fid] && e.reponses[fid].r === "non") return h("p", { class: "hint", style: "margin:0", text: "Pas de rappel : vous avez répondu « Absent »." });
+  const d = rappelDefaut(), ev = rappelEvenement(e.id);
+  const sel = h("select", { id: "ev-mon-rappel" }, [h("option", { value: "defaut", text: `Comme d’habitude (${rappelTxt(d).toLowerCase()})` })].concat(RAPPEL_OPTS.map(([v, l]) => h("option", { value: v === null ? "" : String(v), text: l }))));
+  sel.value = ev === undefined ? "defaut" : ev === null ? "" : String(ev);
+  sel.addEventListener("change", async () => {
+    const evs = Object.assign({}, (S.rappelsPrefs && S.rappelsPrefs.evenements) || {});
+    if (sel.value === "defaut") delete evs[e.id]; else evs[e.id] = sel.value ? Number(sel.value) : null;
+    if (await enregistrerRappels({ evenements: evs })) toast(sel.value === "defaut" ? "Rappel habituel pour ce rendez-vous." : sel.value ? `Rappel : ${rappelTxt(Number(sel.value)).toLowerCase()}.` : "Pas de rappel pour ce rendez-vous.");
+  });
+  return h("div", { class: "field", style: "margin:0" }, h("label", { for: "ev-mon-rappel", text: "Mon rappel" }), sel);
+}
 // Un événement de l'agenda personnel : vu de son seul auteur, modifiable et supprimable par lui.
 function openPerso(e) {
   openDialog({ eyebrow: "Mon agenda · personnel", title: e.titre,
-    body: [kv([["Quand", agQuand(e)], e.lieu ? ["Lieu", e.lieu] : null, ["Rappel", e.journee ? "—" : e.rappel ? "une heure avant, sur vos appareils où les notifications sont activées" : "aucun"]].filter(Boolean)),
+    body: [kv([["Quand", agQuand(e)], e.lieu ? ["Lieu", e.lieu] : null, ["Rappel", e.journee ? "—" : e.rappelMin != null ? rappelTxt(e.rappelMin).toLowerCase() + ", sur vos appareils où les notifications sont activées" : "aucun"]].filter(Boolean)),
       e.description ? h("p", { style: "white-space:pre-wrap;margin:0", text: e.description }) : null,
       h("p", { class: "hint", style: "margin:0", text: "Événement personnel : ni la Direction, ni l’Inspection, ni les ressources humaines ne le voient." })],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }),
@@ -6261,10 +6307,14 @@ function openPersoForm(e, jour) {
   const journee = h("input", { type: "checkbox", id: "pe-journee" }); journee.checked = !!(e && e.journee);
   const lieu = h("input", { id: "pe-lieu", maxlength: "120", autocomplete: "off", placeholder: "Facultatif" }); lieu.value = e ? e.lieu : "";
   const note = h("textarea", { id: "pe-note", rows: "3", maxlength: "1000", placeholder: "Facultatif : ce qu’il ne faut pas oublier" }); note.value = e ? e.description : "";
-  const rappel = h("input", { type: "checkbox", id: "pe-rappel" }); rappel.checked = e ? e.rappel : true;
+  // Sans la mise à jour 35, seul le rappel d'une heure existe.
+  const opts = S.rappelsErr === "absente" ? RAPPEL_OPTS.filter(([v]) => v === null || v === 60) : RAPPEL_OPTS;
+  const rappel = h("select", { id: "pe-rappel" }, opts.map(([v, l]) => h("option", { value: v === null ? "" : String(v), text: l })));
+  rappel.value = e ? (e.rappelMin == null ? "" : String(e.rappelMin)) : "60";
+  if (rappel.selectedIndex < 0) rappel.value = "60";
   const heuresRow = h("div", { class: "row2" }, field("pe-hd", "Début", hd), field("pe-hf", "Fin (facultatif)", hf));
   const finRow = field("pe-datefin", "Jusqu’au", dateFin);
-  const rappelRow = h("label", { class: "check" }, rappel, h("span", { text: "Me prévenir une heure avant (sur les appareils où j’ai activé les notifications)" }));
+  const rappelRow = h("div", { class: "field" }, h("label", { for: "pe-rappel", text: "Me prévenir" }), rappel, h("span", { class: "hint", text: "Sur les appareils où vous avez activé les notifications." }));
   const sync = () => { heuresRow.hidden = journee.checked; finRow.hidden = !journee.checked; rappelRow.hidden = journee.checked; };
   journee.addEventListener("change", sync); sync();
   const err = h("span", { class: "err", "aria-live": "polite" });
@@ -6280,7 +6330,9 @@ function openPersoForm(e, jour) {
       debut = new Date(`${date.value}T${hd.value}:00`); fin = hf.value ? new Date(`${date.value}T${hf.value}:00`) : null;
       if (fin && fin <= debut) fin.setDate(fin.getDate() + 1);
     }
-    const body = { titre: titre.value.trim(), debut: debut.toISOString(), fin: fin ? fin.toISOString() : null, journee: journee.checked, lieu: lieu.value.trim(), note: note.value.trim(), rappel: !journee.checked && rappel.checked };
+    const rmin = journee.checked || !rappel.value ? null : Number(rappel.value);
+    const body = { titre: titre.value.trim(), debut: debut.toISOString(), fin: fin ? fin.toISOString() : null, journee: journee.checked, lieu: lieu.value.trim(), note: note.value.trim(), rappel: rmin != null };
+    if (S.rappelsErr !== "absente") body.rappel_min = rmin;
     go.disabled = true;
     const fid = (S.espace && S.espace.fid) || S.monFid;
     const { error } = e ? await S.sb.from("agenda_perso").update(Object.assign(body, { modifie_le: nowISO() })).eq("id", e.id) : await S.sb.from("agenda_perso").insert(Object.assign(body, { fid }));
@@ -6290,13 +6342,13 @@ function openPersoForm(e, jour) {
         : /row-level security|violates/i.test(error.message || "") ? "Votre compte n’est relié à aucune fiche de fonctionnaire en service." : error.message || "Événement non enregistré.";
       return;
     }
-    if (!e && journee.checked === false && rappel.checked && !(typeof Notification !== "undefined" && Notification.permission === "granted")) toast("Ajouté. Pour recevoir le rappel, activez les notifications sur cet appareil (en haut de votre espace).");
+    if (!e && rmin != null && !(typeof Notification !== "undefined" && Notification.permission === "granted")) toast("Ajouté. Pour recevoir le rappel, activez les notifications sur cet appareil (en haut de votre espace).");
     else toast(e ? "Événement modifié." : "Ajouté à votre agenda.");
     closeDialog(); await chargerPerso(); renderEspace();
   });
   openDialog({ eyebrow: "Mon agenda · personnel", title: e ? "Modifier l’événement" : "Nouvel événement personnel", wide: true,
     body: [field("pe-titre", "Titre", titre),
-      h("div", { class: "row2" }, field("pe-date", "Date", date), h("label", { class: "check", style: "align-self:end" }, journee, h("span", { text: "Toute la journée" }))),
+      h("div", { class: "row2" }, field("pe-date", "Date", date), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, journee, h("span", { text: "Toute la journée" }))),
       heuresRow, finRow, field("pe-lieu", "Lieu", lieu), field("pe-note", "Note", note), rappelRow,
       h("p", { class: "hint", style: "margin:0", text: "Vous seul voyez cet événement : il n’est montré ni à la Direction, ni à l’Inspection, ni aux ressources humaines." }), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
@@ -6310,7 +6362,8 @@ function openEvenement(e, o) {
     body: [kv([["Quand", agQuand(e)], e.lieu ? ["Lieu", e.lieu] : null, ["Pour", e.audience === "encadrement" ? "l’encadrement seulement" : e.audience === "agents" ? invites.join(", ") || "—" : "tous les fonctionnaires"],
         e.byNom ? ["Prévu par", e.byNom] : null, e.reponseDemandee && !o.espace ? ["Réponses", repResume(e)] : null, o.espace && fid && e.reponses && e.reponses[fid] ? ["Votre réponse", AG_REP[e.reponses[fid].r][0]] : null].filter(Boolean)),
       e.description ? h("p", { style: "white-space:pre-wrap;margin:0", text: e.description }) : null,
-      !o.espace && reps.length ? sec("Réponses", h("ul", { class: "ent-list" }, reps.sort((a, b) => a[0].localeCompare(b[0], "fr")).map(([n, r]) => h("li", {}, h("span", { text: n }), chip(AG_REP[r] || ["?", "muted"]), h("span", {}))))) : null],
+      !o.espace && reps.length ? sec("Réponses", h("ul", { class: "ent-list" }, reps.sort((a, b) => a[0].localeCompare(b[0], "fr")).map(([n, r]) => h("li", {}, h("span", { text: n }), chip(AG_REP[r] || ["?", "muted"]), h("span", {}))))) : null,
+      o.espace ? monRappelEv(e, fid) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }),
       w && e.statut !== "annule" ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
         const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer l’annulation"; return; }
@@ -6369,9 +6422,9 @@ function openEvForm(e, jour) {
   });
   openDialog({ eyebrow: "Agenda", title: e ? "Modifier le rendez-vous" : "Nouveau rendez-vous", wide: true,
     body: [h("div", { class: "row2" }, field("ev-titre", "Titre", titre), field("ev-type", "Type", type)),
-      h("div", { class: "row2" }, field("ev-date", "Date", date), h("label", { class: "check", style: "align-self:end" }, journee, h("span", { text: "Toute la journée" }))),
+      h("div", { class: "row2" }, field("ev-date", "Date", date), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, journee, h("span", { text: "Toute la journée" }))),
       heuresRow, finRow, field("ev-lieu", "Lieu", lieu), field("ev-desc", "Description", desc),
-      h("div", { class: "row2" }, field("ev-aud", "Pour qui", aud), h("label", { class: "check", style: "align-self:end" }, rep, h("span", { text: "Demander s’ils seront présents" }))),
+      h("div", { class: "row2" }, field("ev-aud", "Pour qui", aud), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, rep, h("span", { text: "Demander s’ils seront présents" }))),
       invRow, err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
@@ -6442,7 +6495,7 @@ function openNoteForm(n) {
     else go.disabled = false;
   });
   openDialog({ eyebrow: "Personnel", title: n ? "Modifier la note de service" : "Nouvelle note de service", wide: true,
-    body: [field("ns-titre", "Titre", titre), field("ns-texte", "Texte", texte), h("label", { class: "check" }, ep, h("span", { text: "Épingler en haut des espaces" })), err],
+    body: [field("ns-titre", "Titre", titre), field("ns-texte", "Texte", texte), h("label", { class: "switch" }, ep, h("span", { text: "Épingler en haut des espaces" })), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 function noteDoc(n) {
@@ -6520,7 +6573,7 @@ function openSanctionForm(fid0, back) {
   const rowMontant = h("div", { class: "field" }, h("label", { for: "sd-montant", text: "Montant retenu" }), h("div", { class: "money", "data-cur": cur() || "€" }, montant));
   const rowExcl = h("div", { class: "row2" }, field("sd-du", "Exclu du", du), field("sd-au", "Au", au));
   const rowGrade = field("sd-grade", "Nouveau grade", grade);
-  const rowRev = h("label", { class: "check" }, confirme, h("span", { text: "Je confirme la révocation : l’agent sera retiré des effectifs." }));
+  const rowRev = h("label", { class: "switch" }, confirme, h("span", { text: "Je confirme la révocation : l’agent sera retiré des effectifs." }));
   const sync = () => { const t = type.value; desc.textContent = SANC_TYPES[t].desc; rowMontant.hidden = t !== "retenue"; rowExcl.hidden = t !== "exclusion"; rowGrade.hidden = t !== "retrogradation"; rowRev.hidden = t !== "revocation"; if (t === "retrogradation") syncGrades(); };
   type.addEventListener("change", sync); qui.addEventListener("change", sync); sync();
   const err = h("span", { class: "err", "aria-live": "polite" }), go = h("button", { class: "btn danger small", type: "button", text: "Prendre la sanction" });
@@ -6564,7 +6617,7 @@ function openSanctionForm(fid0, back) {
       rowMontant, rowExcl, rowGrade, rowRev,
       h("div", { class: "row2" }, field("sd-faits", "Date des faits", faits), field("sd-entretien", "Entretien préalable (facultatif)", entretien)),
       field("sd-motif", "Motif", motif), field("sd-obs", "Observations de l’agent (facultatif)", obs),
-      h("label", { class: "check" }, prevenir, h("span", { text: "Prévenir l’agent par un message dans son espace" })), err],
+      h("label", { class: "switch" }, prevenir, h("span", { text: "Prévenir l’agent par un message dans son espace" })), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 // Lever (la suite ne s'applique plus) ou annuler (la sanction est défaite).

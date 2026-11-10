@@ -4,7 +4,8 @@
 // délais expirés ; appelé par le guichet pour connaître la clé publique d'envoi et pour une
 // notification d'essai. Depuis la mise à jour 32, il prévient aussi les fonctionnaires (messages,
 // agenda, notes de service, absences, paye versée, rappels de leur agenda personnel depuis la mise
-// à jour 34) sur leurs appareils, et poste les alertes du
+// à jour 34, au délai choisi par chacun et toutes les 5 minutes depuis la 35) sur leurs appareils,
+// et poste les alertes du
 // personnel dans les salons Discord réglés au guichet (Réglages → Discord). Les clés d'envoi sont
 // créées au premier appel et gardées dans la table privée notif_config : rien à copier à la main.
 //
@@ -13,7 +14,7 @@
 
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
-import { evenement, delais, personnel, rappelsAgenda, rappelsPerso, COLLECTIONS_PERSONNEL } from "./regles.ts";
+import { evenement, delais, personnel, rappelsAgenda, rappelsPerso, rappelsChoisis, rappelsPersoChoisis, COLLECTIONS_PERSONNEL } from "./regles.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS = {
@@ -121,19 +122,37 @@ Deno.serve(async (req) => {
       if (body.type === "delais") {
         const now = Date.now();
         const { data } = await db.from("registre").select("collection,id,data").in("collection", ["config", "relances", "controles", "decisions", "declarations", "prets", "convocations", "conventions", "agenda"]);
-        // Rendez-vous de l'heure qui vient : un rappel aux fonctionnaires concernés.
+        // Rappels d'agenda fixes d'une heure, tant que la mise à jour 35 (rappels au choix, passage de
+        // 5 minutes) n'est pas exécutée ; ensuite, c'est le passage « rappels » qui s'en charge.
         let rappels = 0;
-        for (const r of rappelsAgenda(data || [], now - 3600e3, now)) {
-          const abos = (await aboAgents(r.fids, r.type)).filter((x) => !r.exclure.includes(x.fid));
-          rappels += await envoyer(c, abos, { ...r.msg, type: r.type });
+        const { error: sans35 } = await db.from("rappels_agents").select("fid").limit(1);
+        if (sans35) {
+          for (const r of rappelsAgenda(data || [], now - 3600e3, now)) {
+            const abos = (await aboAgents(r.fids, r.type)).filter((x) => !r.exclure.includes(x.fid));
+            rappels += await envoyer(c, abos, { ...r.msg, type: r.type });
+          }
+          const { data: perso } = await db.from("agenda_perso").select("id,fid,titre,debut,lieu,journee,rappel")
+            .eq("rappel", true).eq("journee", false).gt("debut", new Date(now).toISOString()).lte("debut", new Date(now + 3600e3).toISOString());
+          for (const r of rappelsPerso(perso || [], now - 3600e3, now)) rappels += await envoyer(c, await aboAgents([r.fid], r.type), { ...r.msg, type: r.type });
         }
-        // Agenda personnel (mise à jour 34) : rappel au seul fonctionnaire ; sans la table, rien à faire.
-        const { data: perso } = await db.from("agenda_perso").select("id,fid,titre,debut,lieu,journee,rappel")
-          .eq("rappel", true).eq("journee", false).gt("debut", new Date(now).toISOString()).lte("debut", new Date(now + 3600e3).toISOString());
-        for (const r of rappelsPerso(perso || [], now - 3600e3, now)) rappels += await envoyer(c, await aboAgents([r.fid], r.type), { ...r.msg, type: r.type });
         const msg = delais(data || [], now - 3600e3, now);
         if (!msg) return json({ ok: true, envoyes: rappels });
         return json({ ok: true, envoyes: rappels + await envoyer(c, await destinataires("delais", null), msg) });
+      }
+      // Passage de 5 minutes (mise à jour 35) : rappels d'agenda à l'heure choisie par chacun.
+      if (body.type === "rappels") {
+        const pas = 300e3, t0 = Math.floor(Date.now() / pas) * pas, jusqua = new Date(t0 + 1440 * 60e3 + pas).toISOString();
+        const { data: ag } = await db.from("registre").select("collection,id,data").eq("collection", "agenda");
+        const foncs = await fonctionnaires();
+        const actifs = [...foncs].filter(([, f]) => f && f.actif !== false).map(([id]) => id);
+        const { data: pr } = await db.from("rappels_agents").select("fid,defaut_min,evenements");
+        const prefs = new Map((pr || []).map((p: { fid: string }) => [p.fid, p]));
+        let envoyes = 0;
+        for (const r of rappelsChoisis(ag || [], actifs, prefs, t0, pas)) envoyes += await envoyer(c, await aboAgents(r.fids, r.type), { ...r.msg, type: r.type });
+        const { data: perso } = await db.from("agenda_perso").select("id,fid,titre,debut,lieu,journee,rappel,rappel_min")
+          .eq("journee", false).not("rappel_min", "is", null).gt("debut", new Date(t0 - pas).toISOString()).lte("debut", jusqua);
+        for (const r of rappelsPersoChoisis(perso || [], t0, pas)) envoyes += await envoyer(c, await aboAgents([r.fid], r.type), { ...r.msg, type: r.type });
+        return json({ ok: true, envoyes });
       }
       if (COLLECTIONS_PERSONNEL.includes(body.collection)) return json({ ok: true, ...(await traiterPersonnel(c, body)) });
       let ctx = {};
