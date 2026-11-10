@@ -50,6 +50,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v30_espace_agents.sql` : l’espace de chaque fonctionnaire (fonction « mon_espace » et ses gestes : écrire à l’encadrement, répondre à l’agenda, signaler une absence), la messagerie, l’agenda, les absences et les notes de service
 - `supabase/v31_sanctions.sql` : les sanctions disciplinaires (lues dans l’espace de l’agent ; prises par la Direction et les ressources humaines, avec la retenue sur salaire)
 - `supabase/v32_notifications_personnel.sql` : les notifications du personnel (messages, agenda, notes de service, absences, paye versée) sur les appareils des fonctionnaires, des ressources humaines et de l’encadrement, et les alertes du salon Discord du personnel
+- `supabase/v33_avatar_discord.sql` : le logo de la Préfecture sur le rappel automatique avant la date limite (envoyé par la base)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
 

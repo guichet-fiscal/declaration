@@ -65,6 +65,8 @@ async function aboAgents(fids: string[] | null, type: string): Promise<AboAgent[
   return (data || []) as AboAgent[];
 }
 const SITE = "https://guichet-fiscal.github.io/declaration/";
+// Même image que les messages publiés depuis le guichet (sinon Discord prend celle du webhook).
+const AVATAR = SITE + "assets/logo-prefecture.png";
 type Discord = { webhooks?: Record<string, string>; auto?: Record<string, boolean>; nom?: string; mentionPersonnel?: string };
 async function discordConf(): Promise<Discord> {
   const { data } = await db.from("parametres_prives").select("valeur").eq("cle", "discord").maybeSingle();
@@ -78,7 +80,7 @@ async function posterDiscord(d: Discord, x: { canal: string; auto?: string; text
   if (x.auto && d.auto && x.auto in d.auto && !d.auto[x.auto]) return false;
   try {
     const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-      content: x.texte.slice(0, 1990), username: d.nom || "Préfecture de police",
+      content: x.texte.slice(0, 1990), username: d.nom || "Préfecture de police", avatar_url: AVATAR,
       allowed_mentions: { parse: [], users: ids(x.users), roles: ids(x.roles) } }) });
     return r.ok;
   } catch (_e) { return false; }
