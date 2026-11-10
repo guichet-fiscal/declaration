@@ -3,7 +3,8 @@
 // Appelé par la base (mise à jour 10) quand le registre change, et une fois par heure pour les
 // délais expirés ; appelé par le guichet pour connaître la clé publique d'envoi et pour une
 // notification d'essai. Depuis la mise à jour 32, il prévient aussi les fonctionnaires (messages,
-// agenda, notes de service, absences, paye versée) sur leurs appareils, et poste les alertes du
+// agenda, notes de service, absences, paye versée, rappels de leur agenda personnel depuis la mise
+// à jour 34) sur leurs appareils, et poste les alertes du
 // personnel dans les salons Discord réglés au guichet (Réglages → Discord). Les clés d'envoi sont
 // créées au premier appel et gardées dans la table privée notif_config : rien à copier à la main.
 //
@@ -12,7 +13,7 @@
 
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
-import { evenement, delais, personnel, rappelsAgenda, COLLECTIONS_PERSONNEL } from "./regles.ts";
+import { evenement, delais, personnel, rappelsAgenda, rappelsPerso, COLLECTIONS_PERSONNEL } from "./regles.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS = {
@@ -126,6 +127,10 @@ Deno.serve(async (req) => {
           const abos = (await aboAgents(r.fids, r.type)).filter((x) => !r.exclure.includes(x.fid));
           rappels += await envoyer(c, abos, { ...r.msg, type: r.type });
         }
+        // Agenda personnel (mise à jour 34) : rappel au seul fonctionnaire ; sans la table, rien à faire.
+        const { data: perso } = await db.from("agenda_perso").select("id,fid,titre,debut,lieu,journee,rappel")
+          .eq("rappel", true).eq("journee", false).gt("debut", new Date(now).toISOString()).lte("debut", new Date(now + 3600e3).toISOString());
+        for (const r of rappelsPerso(perso || [], now - 3600e3, now)) rappels += await envoyer(c, await aboAgents([r.fid], r.type), { ...r.msg, type: r.type });
         const msg = delais(data || [], now - 3600e3, now);
         if (!msg) return json({ ok: true, envoyes: rappels });
         return json({ ok: true, envoyes: rappels + await envoyer(c, await destinataires("delais", null), msg) });

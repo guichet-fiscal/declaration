@@ -228,3 +228,13 @@ export function rappelsAgenda(rows, depuis, maintenant) {
   }
   return out;
 }
+
+// Événements de l'agenda personnel (mise à jour 34) qui commencent dans l'heure qui vient, rappel demandé :
+// une notification au seul fonctionnaire qui l'a noté. rows : lignes de la table agenda_perso.
+export function rappelsPerso(rows, depuis, maintenant) {
+  const fin = maintenant + (maintenant - depuis);
+  return (rows || []).filter((p) => {
+    const t = new Date(p.debut || 0).getTime();
+    return p.rappel && !p.journee && p.fid && Number.isFinite(t) && t > maintenant && t <= fin;
+  }).map((p) => ({ fid: p.fid, type: "a_agenda", msg: { title: "Dans moins d’une heure", body: `${p.titre || "Événement"} à ${heure(p.debut)}${p.lieu ? " · " + p.lieu : ""}`, url: "#espace", tag: "perso-" + p.id } }));
+}
