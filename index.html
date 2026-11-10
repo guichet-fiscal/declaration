@@ -988,6 +988,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
     <button class="tab" role="tab" type="button" id="tab-btn-demande" data-tab="demande" data-grp="services" aria-selected="false" data-agent>Saisir une demande</button>
     <button class="tab" role="tab" type="button" id="tab-btn-enveloppes" data-tab="enveloppes" data-grp="services" aria-selected="false">Enveloppes</button>
     <button class="tab" role="tab" type="button" id="tab-btn-payes" data-tab="payes" data-grp="services" aria-selected="false">Payes</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-personnel" data-tab="personnel" data-grp="services" aria-selected="false">Personnel</button>
     <button class="tab" role="tab" type="button" id="tab-btn-catalogue" data-tab="catalogue" data-grp="services" aria-selected="false">Catalogue des prix</button>
     <button class="tab" role="tab" type="button" id="tab-btn-journal" data-tab="journal" data-grp="outils" aria-selected="false">Journal</button>
     <button class="tab" role="tab" type="button" id="tab-btn-modeles" data-tab="modeles" data-grp="outils" aria-selected="false">Modèles Discord</button>
@@ -1181,6 +1182,29 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
       <h3>Sur six mois</h3>
       <p class="sub">Accordé et acheté par service, sur le plafond de chaque mois. Cliquez sur un mois pour l’afficher plus haut.</p>
       <div id="env-suivi"></div>
+    </div>
+  </section>
+
+  <!-- SERVICES PUBLICS : PERSONNEL (ressources humaines) -->
+  <section class="panel" id="tab-personnel" role="tabpanel" aria-labelledby="tab-btn-personnel" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Personnel de la Préfecture</h2>
+        <p class="sub">Les fonctionnaires de la Préfecture et leurs contrats de travail. Un fonctionnaire ajouté ici entre dans la paye ; retiré des effectifs, il n’y est plus compté.</p>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost" type="button" id="rh-modele" hidden>Modèle de contrat</button>
+        <button class="btn" type="button" id="rh-new" hidden>Ajouter un fonctionnaire</button>
+      </div>
+    </div>
+    <div class="minis" id="rh-kpis"></div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-head">
+        <div><h3>Fonctionnaires</h3><p class="sub" id="rh-sub"></p></div>
+        <input type="search" id="rh-q" placeholder="Chercher un nom ou un grade" aria-label="Chercher un fonctionnaire" autocomplete="off" style="max-width:260px">
+      </div>
+      <div id="rh-seg"></div>
+      <div id="rh-list"></div>
     </div>
   </section>
 
@@ -2288,7 +2312,7 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
             <form class="ent-add agent-add" id="form-agent" novalidate>
               <div class="field"><label for="a-id">Identifiant Discord</label><input id="a-id" class="mono" inputmode="numeric" autocomplete="off" placeholder="123456789012345678"></div>
               <div class="field"><label for="a-nom">Nom</label><input id="a-nom" autocomplete="off" placeholder="Ex. : Inspecteur Martin"></div>
-              <div class="field"><label for="a-role">Rôle</label><select id="a-role"><option value="direction">Direction</option><option value="inspecteur">Inspection</option><option value="lecture" selected>Lecture seule</option><option value="pointeuse">Pointeuse seulement</option></select></div>
+              <div class="field"><label for="a-role">Rôle</label><select id="a-role"><option value="direction">Direction</option><option value="inspecteur">Inspection</option><option value="lecture" selected>Lecture seule</option><option value="rh">Ressources humaines</option><option value="pointeuse">Pointeuse seulement</option></select></div>
               <button class="btn" type="submit" id="a-add">Ajouter</button>
             </form>
             <span id="a-msg" class="err" aria-live="polite"></span>
@@ -2413,7 +2437,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], contratsTravail: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], contratsTravail: [], rh: {}, pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -2431,7 +2455,9 @@ const cfg = () => {
 // writer() : la Direction. canAgent() : la Direction ou l’Inspection.
 const writer = () => S.connected && !S.readOnly && (S.admin || S.canWrite !== false);
 const canAgent = () => S.connected && !S.readOnly && (S.role === "direction" || S.role === "inspecteur");
-const ROLE_LABEL = { direction: "Direction", inspecteur: "Inspection", lecture: "Lecture seule", pointeuse: "Pointeuse" };
+// Ressources humaines : les fiches des fonctionnaires et leurs contrats de travail (Direction comprise).
+const rhWriter = () => S.connected && !S.readOnly && (S.admin || S.role === "rh");
+const ROLE_LABEL = { direction: "Direction", inspecteur: "Inspection", lecture: "Lecture seule", pointeuse: "Pointeuse", rh: "Ressources humaines" };
 
 const NATURES = { vehicule: "Véhicule", equipement: "Équipement & moyens", salaires: "Budget salaires", fonctionnement: "Fonctionnement", autre: "Autre" };
 const URG = { normale: ["Normale", "muted"], prioritaire: ["Prioritaire", "warn"], urgente: ["Urgente", "bad"] };
@@ -3156,6 +3182,7 @@ function applyRole() {
   if (S.offline) role.textContent = "Hors ligne";
   else if (!S.connected) role.textContent = "Connexion au registre…";
   else if (S.role === "pointeuse") role.textContent = "Pointeuse" + (S.agentName ? " · " + S.agentName : "");
+  else if (S.role === "rh" && !S.readOnly) { role.textContent = "Ressources humaines" + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
   else if (S.readOnly || !canAgent()) role.textContent = "Lecture seule" + (S.agentName ? " · " + S.agentName : "");
   else { role.textContent = (ROLE_LABEL[S.role] || "Agent") + (S.agentName ? " · " + S.agentName : ""); role.classList.add("admin"); }
   const w = writer(), ag = canAgent(), known = S.connected || S.offline;
@@ -3163,13 +3190,15 @@ function applyRole() {
   $$(".tab[data-agent]").forEach(b => { b.hidden = !ag && known; });
   // Rôle « pointeuse » : la pointeuse et rien d'autre.
   if (S.role === "pointeuse") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "pointeuse"; }); if (S.tab !== "pointeuse") showTab("pointeuse"); }
+  // Rôle « rh » : le personnel et ses contrats, rien d'autre (la base ne lui montre que cela).
+  else if (S.role === "rh") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "personnel"; }); if (S.tab !== "personnel") showTab("personnel"); }
   // Pointeuse fermée : l'onglet disparaît pour tous ; les heures se saisissent dans la paye.
   else if (ptFerme()) { $("#tab-btn-pointeuse").hidden = true; if (S.tab === "pointeuse") showTab("payes"); }
   if (known && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
-  $("#btn-search").hidden = !S.connected || S.role === "pointeuse";
-  $("#notif-btn").hidden = !S.connected || !S.role || S.role === "pointeuse";
+  $("#btn-search").hidden = !S.connected || S.role === "pointeuse" || S.role === "rh";
+  $("#notif-btn").hidden = !S.connected || !S.role || S.role === "pointeuse" || S.role === "rh";
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
@@ -3437,6 +3466,10 @@ async function init() {
     applyRole();
   } else startCollab();
   if (S.role === "pointeuse") { /* rien de plus à charger */ }
+  else if (S.role === "rh") {
+    applyRole();
+    setNotice([h("div", {}, h("strong", { text: "Ressources humaines. " }), "Vous ajoutez, modifiez et retirez les fonctionnaires de la Préfecture et établissez leurs contrats de travail. La paye, les entreprises et le reste du guichet restent à la Direction.")]);
+  }
   else if (S.role !== "direction" && S.role !== "inspecteur") setReadOnly();
   else {
     applyRole();
@@ -3464,12 +3497,12 @@ function renderAgents() {
   list.replaceChildren(...S.agents.map(a => {
     const me = a.discord_id === S.discordId;
     const sel = h("select", { id: "role-" + a.discord_id, "aria-label": "Rôle de " + (a.nom || a.discord_id), style: "width:auto" },
-      h("option", { value: "direction", text: "Direction" }), h("option", { value: "inspecteur", text: "Inspection" }), h("option", { value: "lecture", text: "Lecture seule" }), h("option", { value: "pointeuse", text: "Pointeuse seulement" }));
+      h("option", { value: "direction", text: "Direction" }), h("option", { value: "inspecteur", text: "Inspection" }), h("option", { value: "lecture", text: "Lecture seule" }), h("option", { value: "rh", text: "Ressources humaines" }), h("option", { value: "pointeuse", text: "Pointeuse seulement" }));
     sel.value = a.role;
     sel.disabled = me;
     sel.addEventListener("change", async () => {
       const { error } = await S.sb.from("agents").update({ role: sel.value }).eq("discord_id", a.discord_id);
-      if (error) { toast(/check constraint/i.test(error.message || "") ? (sel.value === "pointeuse" ? "Exécutez d’abord supabase/v18_payes_pointeuse.sql pour créer le rôle Pointeuse." : "Exécutez d’abord supabase/v4_inspection_cloture.sql pour créer le rôle Inspection.") : "Modification refusée.", true); sel.value = a.role; } else { a.role = sel.value; toast("Rôle mis à jour."); }
+      if (error) { toast(/check constraint/i.test(error.message || "") ? (sel.value === "rh" ? "Exécutez d’abord supabase/v29_role_rh.sql pour créer le rôle Ressources humaines." : sel.value === "pointeuse" ? "Exécutez d’abord supabase/v18_payes_pointeuse.sql pour créer le rôle Pointeuse." : "Exécutez d’abord supabase/v4_inspection_cloture.sql pour créer le rôle Inspection.") : "Modification refusée.", true); sel.value = a.role; } else { a.role = sel.value; toast("Rôle mis à jour."); }
     });
     const rm = h("button", { class: "btn danger small", type: "button", text: me ? "Vous" : "Retirer", disabled: me });
     rm.addEventListener("click", async () => {
@@ -3490,7 +3523,7 @@ $("#form-agent").addEventListener("submit", async e => {
   if (!/^\d{15,21}$/.test(id)) { $("#a-id").setAttribute("aria-invalid", "true"); $("#a-id").focus(); msg.textContent = "Un identifiant Discord compte 17 à 20 chiffres."; return; }
   $("#a-id").removeAttribute("aria-invalid");
   const { error } = await S.sb.from("agents").insert({ discord_id: id, nom, role });
-  if (error) { msg.textContent = error.code === "23505" ? "Cet identifiant a déjà accès." : error.code === "23514" ? `Rôle inconnu de la base : exécutez d’abord ${role === "pointeuse" ? "supabase/v18_payes_pointeuse.sql" : "supabase/v4_inspection_cloture.sql"}.` : "Ajout refusé : " + error.message; return; }
+  if (error) { msg.textContent = error.code === "23505" ? "Cet identifiant a déjà accès." : error.code === "23514" ? `Rôle inconnu de la base : exécutez d’abord ${role === "rh" ? "supabase/v29_role_rh.sql" : role === "pointeuse" ? "supabase/v18_payes_pointeuse.sql" : "supabase/v4_inspection_cloture.sql"}.` : "Ajout refusé : " + error.message; return; }
   $("#form-agent").reset();
   toast(`${nom || "Agent"} ajouté.`);
   loadAgents();
@@ -3535,6 +3568,7 @@ function subscribe() {
   col("catalogue", s => { S.catalogue = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("fonctionnaires", s => { S.fonctionnaires = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("contratsTravail", s => { S.contratsTravail = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("rh", s => { S.rh = Object.fromEntries(s.docs.map(d => [d.id, d.data()])); });
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); setTimeout(ptAlertes, 0); });
   col("sons", s => { S.sons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3585,6 +3619,7 @@ function render() {
   renderEnvPage();
   renderCatalogue();
   renderPayes();
+  renderPersonnel();
   renderPointeuse();
   drawSync();
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
@@ -5101,7 +5136,7 @@ function openPayeReglages() {
 
 /* Fiche d'un fonctionnaire */
 function openFoncForm(f, preset, back) {
-  if (!writer()) return;
+  if (!rhWriter()) return;
   preset = preset || {};
   const c = payeCfg();
   const nom = h("input", { autocomplete: "off", placeholder: "Prénom Nom" }); nom.value = f ? f.nom || "" : preset.nom || "";
@@ -5153,7 +5188,7 @@ function openFoncForm(f, preset, back) {
   if (f && f.actif !== false) foot.push(h("button", { class: "btn danger small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, f, { actif: false, retireLe: nowISO(), modifieLe: nowISO() }); delete body.id; if (await write(() => S.db.doc("fonctionnaires/" + f.id).set(body))) { closeDialog(); toast(`${f.nom} retiré des effectifs : ses payes passées sont gardées.`); } }, text: "Retirer des effectifs" }));
   if (f && f.actif === false) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const body = Object.assign({}, f, { actif: true, retireLe: null, modifieLe: nowISO() }); delete body.id; if (await write(() => S.db.doc("fonctionnaires/" + f.id).set(body))) { closeDialog(); toast(`${f.nom} de nouveau dans les effectifs.`); } }, text: "Remettre dans les effectifs" }));
   foot.push(h("span", { class: "spacer" }), go);
-  openDialog({ eyebrow: "Payes de la Préfecture", title: f ? `Modifier · ${f.nom}` : "Ajouter un fonctionnaire",
+  openDialog({ eyebrow: "Personnel de la Préfecture", title: f ? `Modifier · ${f.nom}` : "Ajouter un fonctionnaire",
     body: [h("div", { class: "row2" }, field("py-f-nom", "Nom", nom), field("py-f-grade", "Grade", grade)), field("py-f-discord", ptFerme() ? "Compte Discord" : "Compte Discord pour la pointeuse", dsel), dl, info, accesRow, field("py-f-note", "Note", note), err], foot });
   setTimeout(() => nom.focus(), 30);
 }
@@ -5227,7 +5262,9 @@ const CTR_CHAMPS = [
   ["qualite", "Agissant en qualité de"], ["duree", "Durée de travail"], ["lieu", "Lieu de travail"],
   ["versement", "Périodicité et modalités de versement"], ["horaires", "Horaires de service (par défaut)"], ["essai", "Période d’essai (par défaut)"],
   ["renouvellement", "Conditions de renouvellement de l’essai"], ["equipements", "Équipements remis (un par ligne)"], ["ville", "Fait à"], ["exemplaires", "Exemplaires (« en … »)"]];
-const ctrCfg = () => { const m = Object.assign({}, CTR_DEF, cfg().contratTravail || {}); for (const k of Object.keys(CTR_DEF)) if (k !== "signature" && !String(m[k] || "").trim()) m[k] = CTR_DEF[k]; return m; };
+// Le modèle vit dans « rh/modeleContrat » (écrit par la Direction et les ressources humaines).
+const ctrModeleDoc = () => (S.rh && S.rh.modeleContrat) || {};
+const ctrCfg = () => { const m = Object.assign({}, CTR_DEF, cfg().contratTravail || {}, ctrModeleDoc()); delete m.updatedAt; for (const k of Object.keys(CTR_DEF)) if (k !== "signature" && !String(m[k] || "").trim()) m[k] = CTR_DEF[k]; return m; };
 // Signature de l'employeur : celle importée dans le modèle, sinon celle du modèle d'origine tant que le
 // représentant est le même.
 const ctrSignature = m => m.signature || (norm(m.representant) === norm(CTR_DEF.representant) ? "assets/contrat-signature.png" : "");
@@ -5240,7 +5277,7 @@ const ctrJour = s => { const d = /^\d{4}-\d{2}-\d{2}$/.test(s || "") ? new Date(
 const ctrEtat = f => { const c = ctrsOf(f.id)[0]; return c ? (c.statut === "signe" ? "contrat signé" : "contrat à signer") : "sans contrat"; };
 
 function openCtrForm(f, ct, back) {
-  if (!writer() || !f) return;
+  if (!rhWriter() || !f) return;
   if (ct && ct.statut === "signe") { toast("Ce contrat est signé : retirez d’abord la signature pour le modifier.", true); return; }
   const m = ct && ct.modele ? Object.assign({}, CTR_DEF, ct.modele) : ctrCfg(), c = payeCfg(), auj = jourCle(new Date());
   const v = Object.assign({ type: "CDI", fin: "", signeLe: auj, priseFonctions: f.at ? jourCle(new Date(f.at)) : auj, naissance: "", adresse: "", telephone: "", email: "",
@@ -5308,7 +5345,7 @@ function openCtrForm(f, ct, back) {
 
 // Modèle : les clauses fixes et la signature de l'employeur.
 function openCtrModele(back) {
-  if (!writer()) return;
+  if (!rhWriter()) return;
   const m = ctrCfg(), els = {};
   const rows = CTR_CHAMPS.map(([k, label]) => {
     const el = k === "equipements" ? h("textarea", { rows: "3" }) : h("input", { autocomplete: "off" });
@@ -5335,7 +5372,7 @@ function openCtrModele(back) {
     go.disabled = true;
     const ct = {}; for (const [k] of CTR_CHAMPS) ct[k] = els[k].value.trim();
     ct.signature = sig;
-    if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { contratTravail: ct, updatedAt: nowISO() })))) { toast("Modèle de contrat enregistré : il vaut pour les prochains contrats."); if (back) back(); else closeDialog(); }
+    if (await write(() => S.db.doc("rh/modeleContrat").set(Object.assign({}, ct, { updatedAt: nowISO(), byNom: S.agentName || "" })))) { toast("Modèle de contrat enregistré : il vaut pour les prochains contrats."); if (back) back(); else closeDialog(); }
     else go.disabled = false;
   });
   majApercu();
@@ -5532,7 +5569,7 @@ async function ctrTelecharger(ct, bt) {
 // Le contrat : aperçu des pages, téléchargement, signature du salarié.
 function openCtr(id, back) {
   const ct = ctrOf(id); if (!ct) { toast("Ce contrat n’existe plus.", true); return; }
-  const w = writer(), f = foncOf(ct.fid) || { id: ct.fid, nom: ct.nom, grade: ct.poste }, reopen = () => openCtr(id, back), signe = ct.statut === "signe";
+  const w = rhWriter(), f = foncOf(ct.fid) || { id: ct.fid, nom: ct.nom, grade: ct.poste }, reopen = () => openCtr(id, back), signe = ct.statut === "signe";
   const pages = h("div", { class: "ct-pages", "aria-label": "Aperçu du contrat" }, h("p", { class: "muted", style: "margin:0", text: "Préparation du contrat…" }));
   ctrPages(ct).then(cs => { if (!pages.isConnected && !dlg.open) return; fill(pages, cs.map((c, i) => { c.className = "ct-page"; c.setAttribute("role", "img"); c.setAttribute("aria-label", `Page ${i + 1} sur ${cs.length}`); return c; })); })
     .catch(() => fill(pages, h("p", { class: "err", text: "Aperçu impossible dans ce navigateur." })));
@@ -5569,7 +5606,7 @@ function openCtr(id, back) {
     foot });
 }
 function ctrSection(f, back) {
-  const list = ctrsOf(f.id), w = writer();
+  const list = ctrsOf(f.id), w = rhWriter();
   if (!list.length && !w) return null;
   return sec("Contrat de travail",
     list.length ? h("ul", { class: "ent-list" }, list.map(c => h("li", {},
@@ -5580,6 +5617,67 @@ function ctrSection(f, back) {
       : h("p", { class: "muted", style: "margin:0", text: "Aucun contrat de travail." }),
     w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openCtrForm(f, null, back), text: list.length ? "Établir un nouveau contrat (changement de poste…)" : "Établir le contrat de travail" }) : null);
 }
+
+/* ---------- Personnel (ressources humaines) ---------- */
+// L'onglet Personnel : les fonctionnaires, l'état de leur contrat de travail, et leur fiche RH. Ouvert à la
+// Direction et au rôle « Ressources humaines » (qui ne voit que cet onglet), en lecture pour les autres.
+const RH_VUES = [["tous", "En service"], ["aucun", "Sans contrat"], ["a_signer", "À signer"], ["signe", "Signés"], ["retires", "Retirés"]];
+const rhEtat = f => { const c = ctrsOf(f.id)[0]; return c ? (c.statut === "signe" ? "signe" : "a_signer") : "aucun"; };
+function renderPersonnel() {
+  const box = $("#rh-list");
+  if (!box || S.tab !== "personnel") return;
+  const w = rhWriter();
+  $("#rh-new").hidden = !w; $("#rh-modele").hidden = !w;
+  if (!S.connected || !S.loaded.has("fonctionnaires")) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
+  const tous = foncs().slice().sort((a, b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr"));
+  const actifs = tous.filter(f => f.actif !== false), retires = tous.filter(f => f.actif === false);
+  const n = { aucun: 0, a_signer: 0, signe: 0 }; actifs.forEach(f => { n[rhEtat(f)]++; });
+  const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
+  fill($("#rh-kpis"),
+    mk("Effectif", String(actifs.length), `fonctionnaire${plural(actifs.length)} en service${retires.length ? ` · ${retires.length} retiré${plural(retires.length)}` : ""}`),
+    mk("Contrats signés", String(n.signe), actifs.length ? `${Math.round(n.signe / actifs.length * 100)} % de l’effectif` : "—", n.signe && n.signe === actifs.length ? "ok" : ""),
+    mk("À signer", String(n.a_signer), n.a_signer ? "contrat établi, signature de l’agent attendue" : "aucun contrat en attente", n.a_signer ? "warn" : ""),
+    mk("Sans contrat", String(n.aucun), n.aucun ? "contrat de travail à établir" : "tout le monde a un contrat", n.aucun ? "bad" : "ok"));
+  let vue = S.rhVue || "tous"; if (!RH_VUES.some(x => x[0] === vue)) vue = "tous";
+  const cnt = { tous: actifs.length, aucun: n.aucun, a_signer: n.a_signer, signe: n.signe, retires: retires.length };
+  fill($("#rh-seg"), h("div", { class: "seg", role: "group", "aria-label": "Filtrer les fonctionnaires", style: "margin:4px 0 10px" }, RH_VUES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.rhVue = k; renderPersonnel(); }, text: `${l} (${cnt[k]})` }))));
+  const q = norm($("#rh-q").value || "");
+  const list = (vue === "retires" ? retires : vue === "tous" ? actifs : actifs.filter(f => rhEtat(f) === vue)).filter(f => !q || norm(`${f.nom} ${f.grade}`).includes(q));
+  $("#rh-sub").textContent = vue === "retires" ? "Retirés des effectifs : plus comptés dans la paye. Leur fiche et leurs contrats restent consultables." : "Cliquez sur un nom pour ouvrir sa fiche et ses contrats.";
+  if (!list.length) { fill(box, h("div", { class: "empty", text: q ? "Aucun fonctionnaire ne correspond à cette recherche." : vue === "aucun" ? "Tout le monde a un contrat de travail." : vue === "a_signer" ? "Aucun contrat en attente de signature." : vue === "signe" ? "Aucun contrat signé pour l’instant." : vue === "retires" ? "Personne n’a été retiré des effectifs." : "Aucun fonctionnaire : ajoutez le premier." })); return; }
+  fill(box, h("ul", { class: "ent-list" }, list.map(f => {
+    const c = ctrsOf(f.id)[0], et = rhEtat(f), taux = gradeTaux(f.grade);
+    const act = !w || f.actif === false ? h("span", {})
+      : et === "aucun" ? h("button", { class: "btn small", type: "button", onclick: () => openCtrForm(f, null), text: "Établir le contrat" })
+      : et === "a_signer" ? h("button", { class: "btn ghost small", type: "button", onclick: () => openCtr(c.id), text: "Ouvrir le contrat" })
+      : h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(c, ev.currentTarget), text: "PDF" });
+    return h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openAgent(f.id), text: f.nom || "Sans nom" }),
+        h("span", { class: "meta", text: [f.grade || "sans grade", taux ? money(taux) + "/h" : "pas de taux au barème", f.at ? "entré le " + fmtDate(new Date(f.at)) : "", f.actif === false && f.retireLe ? "retiré le " + fmtDate(new Date(f.retireLe)) : "", c ? ctrNo(c) : ""].filter(Boolean).join(" · ") })),
+      f.actif === false ? chip(["Retiré", "muted"]) : et === "aucun" ? chip(["Sans contrat", "bad"]) : chip(CTR_STAT[et]),
+      act);
+  })));
+}
+// Fiche RH d'un fonctionnaire : identité, grade, contrats ; la paye reste dans l'onglet Payes.
+function openAgent(fid, back) {
+  const f = foncOf(fid); if (!f) return;
+  const w = rhWriter(), reopen = () => openAgent(fid, back), taux = gradeTaux(f.grade);
+  openDialog({ eyebrow: "Personnel de la Préfecture", title: f.nom || "Sans nom", stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : null,
+    body: [
+      kv([["Grade", f.grade || "—"], ["Taux horaire", taux ? `${money(taux)} de l’heure` : "pas dans le barème"],
+        ["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"],
+        ["Entré", f.at ? `le ${longDate(new Date(f.at))}${f.byNom ? " · fiche créée par " + f.byNom : ""}` : "—"],
+        f.actif === false ? ["Retiré des effectifs", f.retireLe ? `le ${longDate(new Date(f.retireLe))}` : "oui"] : null,
+        f.note ? ["Note", f.note] : null]),
+      ctrSection(f, reopen)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" }),
+      S.role !== "rh" ? h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); showTab("payes"); openFonc(fid); }, text: "Sa paye" }) : null,
+      h("span", { class: "spacer" }),
+      w ? h("button", { class: "btn small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: f.actif === false ? "Modifier ou réintégrer" : "Modifier ou retirer des effectifs" }) : null] });
+}
+$("#rh-new").addEventListener("click", () => openFoncForm(null));
+$("#rh-modele").addEventListener("click", () => openCtrModele());
+$("#rh-q").addEventListener("input", () => renderPersonnel());
 
 /* Pointages : corrections de la Direction */
 function openPtForm(pt, preset, back) {
@@ -8336,7 +8434,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["contratsTravail", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["contratsTravail", "rh", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -9487,6 +9585,8 @@ function describe(e) {
       if (a.statut !== b.statut) return { confirme: `a confirmé la réception de ${money(a.montantRecu ?? a.montant)} d’amendes de ${qui} (${no})`, refuse: `a refusé le versement ${no} de ${qui}`, annule: `a annulé le versement ${no} de ${qui}` }[a.statut] || `a modifié le versement ${no}`;
       return `a modifié le versement ${no}`;
     }
+    case "rh":
+      return e.doc_id === "modeleContrat" ? "a modifié le modèle de contrat de travail" : "a modifié les réglages des ressources humaines";
     case "contratsTravail": {
       const nom = v.nom || "un agent", no = v.ref || dossierNo("CT", e.doc_id);
       if (x === "ajout") return `a établi le contrat de travail de ${nom} (${no} · ${v.type || "CDI"} · ${v.poste || "—"})`;
@@ -13360,7 +13460,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["contratsTravail", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["contratsTravail", "rh", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -19032,13 +19132,13 @@ function showTab(name) {
   if (name === "reglages" && S.admin) { loadAgents(); loadKeys(); }
   if (name === "journal") loadJournal();
   const btn = tabBtn(name);
-  if (!btn || btn.hidden) name = S.role === "pointeuse" ? "pointeuse" : "dashboard";
+  if (!btn || btn.hidden) name = S.role === "pointeuse" ? "pointeuse" : S.role === "rh" ? "personnel" : "dashboard";
   S.tab = name;
   navLast[grpOf(name)] = name;
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
   navSync();
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue", "payes", "pointeuse"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue", "payes", "pointeuse", "personnel"].includes(name)) schedule();
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
   const rail = $("#sub-rail"), cur = tabBtn(name);
   if (rail && cur && rail.scrollWidth > rail.clientWidth) {
@@ -19572,7 +19672,7 @@ function openDepotForm(k0) {
 $("#d-date").value = toLocalInput(new Date());
 $("#m-date").value = toLocalInput(new Date());
 const startTab = (location.hash || "").replace("#", "");
-showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "svc", "enveloppes", "payes", "catalogue", "pointeuse", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
+showTab(["dashboard", "entreprises", "recouvrement", "convocations", "contrats", "amendes", "prets", "vehicules", "economie", "svc", "enveloppes", "payes", "personnel", "catalogue", "pointeuse", "declaration", "demande", "journal", "modeles", "reglages"].includes(startTab) ? startTab : "dashboard");
 { const m = ESPACE_RE.exec(location.hash || ""); if (m) initPortail(m[1].toLowerCase()); else { render(); init(); } }
 })();
 </script>
