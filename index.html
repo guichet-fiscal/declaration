@@ -1297,6 +1297,7 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="messages" hidden><div id="rh-messagerie"></div></div>
     <div data-rh-vue="agenda" hidden><div id="rh-agenda"></div></div>
     <div data-rh-vue="absences" hidden><div id="rh-absences"></div></div>
+    <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
     <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
   </section>
 
@@ -2529,7 +2530,7 @@ const DEFAULTS = {
 const S = {
   db: null, sb: null, downloads: null, backupMeta: null, uid: null, discordId: null, agentName: "", agents: [], admin: false, canWrite: null,
   connected: false, offline: false, readOnly: false, loaded: new Set(),
-  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], contratsTravail: [], rh: {}, msgs: [], agenda: [], absences: [], notes: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
+  config: {}, entreprises: [], declarations: [], decisions: {}, demandes: [], arbitrages: {}, penalites: [], echeanciers: {}, relances: [], clotures: {}, attestations: [], controles: [], saisies: [], transmissions: [], interdictions: [], rescrits: [], signalements: [], alertes: {}, releves: [], soupcons: [], prets: [], pretFilter: "cours", vehicules: [], vehFilter: "exam", convocations: [], convFilter: "avenir", contrats: [], ctFilter: "cours", conventions: [], prestations: [], cpFilter: "vigueur", versements: [], vtFilter: "attente", catalogue: [], fonctionnaires: [], contratsTravail: [], rh: {}, msgs: [], agenda: [], absences: [], notes: [], sanctions: [], pointages: [], payes: [], rappels: [], depots: [], payeSem: null, ptMissing: false, svcF: "", moisF: "", demQ: "", catQ: "", catF: "", envMois: null, envPageDirty: false, taxOffice: null, role: null,
   discord: null, discordState: null, discordDirty: false, rcAll: {},
   tab: "dashboard", dashKey: null, declFilter: "atraiter", demFilter: "attente",
   entFilter: "tout", entQ: "", entSort: "nom", entLimit: 50,
@@ -3696,6 +3697,7 @@ function subscribe() {
   col("agenda", s => { S.agenda = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("absences", s => { S.absences = s.docs.map(d => Object.assign({ id: d.id }, d.data())); majBadges(); });
   col("notesService", s => { S.notes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("sanctions", s => { S.sanctions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); setTimeout(ptAlertes, 0); });
   col("sons", s => { S.sons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -5784,7 +5786,7 @@ function renderPersonnel() {
       : h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(c, ev.currentTarget), text: "PDF" });
     return h("li", {},
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openAgent(f.id), text: f.nom || "Sans nom" }),
-        h("span", { class: "meta", text: [f.grade || "sans grade", taux ? money(taux) + "/h" : "pas de taux au barème", f.at ? "entré le " + fmtDate(new Date(f.at)) : "", f.actif === false && f.retireLe ? "retiré le " + fmtDate(new Date(f.retireLe)) : "", c ? ctrNo(c) : ""].filter(Boolean).join(" · ") })),
+        h("span", { class: "meta", text: [f.grade || "sans grade", taux ? money(taux) + "/h" : "pas de taux au barème", f.at ? "entré le " + fmtDate(new Date(f.at)) : "", f.actif === false && f.retireLe ? "retiré le " + fmtDate(new Date(f.retireLe)) : "", c ? ctrNo(c) : "", (() => { const n = sanctionsOf(f.id).filter(x => x.statut === "vigueur").length; return n ? `${n} sanction${plural(n)} en vigueur` : ""; })()].filter(Boolean).join(" · ") })),
       f.actif === false ? chip(["Retiré", "muted"]) : et === "aucun" ? chip(["Sans contrat", "bad"]) : chip(CTR_STAT[et]),
       act);
   })));
@@ -5801,6 +5803,7 @@ function openAgent(fid, back) {
         f.actif === false ? ["Retiré des effectifs", f.retireLe ? `le ${longDate(new Date(f.retireLe))}` : "oui"] : null,
         f.note ? ["Note", f.note] : null]),
       ctrSection(f, reopen),
+      sanctionsSection(f, reopen),
       (() => { const ab = (S.absences || []).filter(a => a.fid === fid && a.statut !== "annulee" && String(a.au) >= jourCle(new Date())); return ab.length ? sec("Absences à venir", h("ul", { class: "ent-list" }, ab.map(a => h("li", {}, h("span", { text: a.du === a.au ? jourTxt(a.du) : `du ${jourTxt(a.du)} au ${jourTxt(a.au)}${a.motif ? " · " + a.motif : ""}` }), chip(ABS_STAT[a.statut] || ABS_STAT.signalee), h("span", {}))))) : null; })()],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" }),
       S.role !== "rh" ? h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); showTab("payes"); openFonc(fid); }, text: "Sa paye" }) : null,
@@ -6037,6 +6040,13 @@ function renderEspace() {
       chip(CTR_STAT[x.statut] || CTR_STAT.a_signer),
       h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(x, ev.currentTarget), text: "PDF" }))))
       : h("p", { class: "muted", style: "margin:8px 0 0", text: "Pas encore de contrat de travail : les ressources humaines vous l’établiront." }));
+  // Mes sanctions (notifiées par l'encadrement)
+  const sancs = (E.sanctions || []).filter(x => x.statut !== "annulee").sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const cardSanc = sancs.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes sanctions" }), h("p", { class: "sub", text: "Décisions de la Direction ou des ressources humaines. Vos observations : écrivez à l’encadrement." }))),
+    h("ul", { class: "ent-list" }, sancs.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: (SANC_TYPES[x.type] || { nom: x.type }).nom }), h("span", { class: "meta", text: [sancNo(x), x.at ? "le " + longDate(new Date(x.at)) : "", sancEffet(x)].filter(Boolean).join(" · ") })),
+      chip(SANC_STAT[x.statut] || SANC_STAT.vigueur),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(sanctionDoc(x)), text: "Notification" }))))) : null;
   // Messages
   const msgs = E.messages || [];
   const cardMsg = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Messages avec l’encadrement" }), h("p", { class: "sub", text: "Direction, Inspection et ressources humaines. Une question sur vos heures, votre paye, une absence : écrivez ici." }))),
@@ -6108,11 +6118,11 @@ function renderEspace() {
     h("div", { class: "row2", style: "margin-top:12px" }, field("es-abs-du", "Du", du), field("es-abs-au", "Au", au)),
     field("es-abs-motif", "Motif (facultatif)", motif),
     h("div", { class: "paste-row" }, absBt, absErr));
-  fill(box, kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat), h("div", { class: "es-col-d" }, cardMsg, cardAg, cardNotes, cardAbs)));
+  fill(box, kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc), h("div", { class: "es-col-d" }, cardMsg, cardAg, cardNotes, cardAbs)));
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["agenda", "Agenda"], ["absences", "Absences"], ["notes", "Notes de service"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
   const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length : 0;
@@ -6131,6 +6141,7 @@ function renderEncadrement() {
   else if (v === "agenda") renderAgendaEquipe();
   else if (v === "absences") renderAbsences();
   else if (v === "notes") renderNotes();
+  else if (v === "sanctions") renderSanctions();
 }
 // Messagerie : les conversations, la plus récente d'abord, et celle qui est ouverte.
 function renderMessagerie() {
@@ -6349,6 +6360,180 @@ function noteDoc(n) {
     lines: [], total: ["Note de service", dossierNo("NS", n.id)], stamp: n.epinglee ? ["ÉPINGLÉE", "info"] : ["DIFFUSÉE", "ok"], note: n.texte || "", noteTitle: n.titre || "Note de service",
     footer: "Préfecture de police · à lire aussi dans votre espace du guichet.",
     discord: { channel: "agents", mentions: [], text: `**Note de service** · ${n.titre || ""}` } };
+}
+
+/* ---------- Sanctions disciplinaires ---------- */
+// Prises par la Direction ou les ressources humaines. Chaque sanction est notifiée à l'agent (message dans
+// son espace, notification en image) et produit ses effets dans le guichet :
+//  - retenue sur salaire : une retenue (comme un trop-perçu) prise sur les prochaines payes ;
+//  - exclusion temporaire : une absence sur la période, visible dans l'agenda ;
+//  - rétrogradation : le grade (et le taux horaire) de la fiche change ;
+//  - révocation : l'agent est retiré des effectifs et perd son espace.
+// « Lever » arrête ce qui reste à courir (retenue non encore prise, exclusion à venir) ; « Annuler » défait
+// aussi la rétrogradation et la révocation. Collection « sanctions » : { fid, nom, grade, type, motif, faits,
+// entretien, observations, montant, du, au, ancienGrade, nouveauGrade, statut: "vigueur"|"levee"|"annulee",
+// ref, effets: { rappel, absence }, at, byNom, byRole }.
+const SANC_TYPES = {
+  avertissement: { nom: "Avertissement", desc: "Rappel à l’ordre écrit, sans autre effet." },
+  blame: { nom: "Blâme", desc: "Réprimande écrite, inscrite au dossier de l’agent." },
+  retenue: { nom: "Retenue sur salaire", desc: "La somme est retenue sur ses prochaines payes, comme un trop-perçu." },
+  exclusion: { nom: "Exclusion temporaire de fonctions", desc: "Il ne prend pas son service pendant la période ; elle apparaît dans l’agenda comme une absence." },
+  retrogradation: { nom: "Rétrogradation", desc: "Il passe au grade choisi et à son taux horaire dès la prochaine paye." },
+  revocation: { nom: "Révocation", desc: "Il quitte la Préfecture : retiré des effectifs, il ne touche plus de paye et perd son espace." }
+};
+const SANC_STAT = { vigueur: ["En vigueur", "bad"], levee: ["Levée", "muted"], annulee: ["Annulée", "muted"] };
+const sanctionsWriter = () => S.connected && !S.readOnly && (S.admin || S.role === "rh");
+const sanctionsOf = fid => (S.sanctions || []).filter(x => x.fid === fid).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+const sancNo = x => x.ref || dossierNo("SD", x.id);
+function sancEffet(x) {
+  if (x.type === "retenue") return `${money(x.montant)} retenus sur les prochaines payes`;
+  if (x.type === "exclusion") return x.du === x.au ? `exclu le ${jourTxt(x.du)}` : `exclu du ${jourTxt(x.du)} au ${jourTxt(x.au)}`;
+  if (x.type === "retrogradation") return `de ${x.ancienGrade || "—"} à ${x.nouveauGrade || "—"}`;
+  if (x.type === "revocation") return "retiré des effectifs";
+  return "";
+}
+function sanctionDoc(x) {
+  const t = SANC_TYPES[x.type] || { nom: x.type };
+  const lines = [];
+  if (x.type === "retenue") lines.push(["Retenue sur salaire", money(x.montant), true]);
+  if (x.type === "exclusion") lines.push(["Exclusion temporaire de fonctions", x.du === x.au ? ctrJour(x.du) : `du ${ctrJour(x.du)} au ${ctrJour(x.au)}`, true]);
+  if (x.type === "retrogradation") lines.push(["Grade avant la sanction", x.ancienGrade || "—"], ["Nouveau grade", x.nouveauGrade || "—", true]);
+  if (x.type === "revocation") lines.push(["Fin de fonctions", "à la date de la sanction", true]);
+  if (x.entretien) lines.push(["Entretien préalable", ctrJour(x.entretien)]);
+  if (x.statut === "levee") lines.push(["Sanction levée", x.finLe ? longDate(new Date(x.finLe)) : "oui"]);
+  if (x.statut === "annulee") lines.push(["Sanction annulée", x.finLe ? longDate(new Date(x.finLe)) : "oui"]);
+  return { kind: "NOTIFICATION DE SANCTION", no: sancNo(x), date: "Prise le " + (x.at ? longDate(new Date(x.at)) : "—"),
+    meta: [["Agent", x.nom || "—"], ["Grade", x.grade || "—"], ["Faits du", x.faits ? ctrJour(x.faits) : "—"], ["Décision de", `${x.byNom || "la Direction"}${x.byRole && ROLE_LABEL[x.byRole] ? " · " + ROLE_LABEL[x.byRole] : ""}`]],
+    lines, total: ["Sanction disciplinaire", t.nom], stamp: x.statut === "vigueur" ? ["EN VIGUEUR", "bad"] : x.statut === "levee" ? ["LEVÉE", "muted"] : ["ANNULÉE", "muted"],
+    note: [x.motif, x.observations ? "Observations de l’agent : " + x.observations : ""].filter(Boolean).join("\n\n"), noteTitle: "Motif",
+    footer: "Vous pouvez présenter vos observations à l’encadrement depuis votre espace du guichet. Préfecture de police · Personnel." };
+}
+function openSanctionForm(fid0, back) {
+  if (!sanctionsWriter()) return;
+  const auj = jourCle(new Date()), c = payeCfg();
+  const actifs = foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  const qui = h("select", { id: "sd-qui" }, actifs.map(f => h("option", { value: f.id, text: `${f.nom} · ${f.grade || "sans grade"}` }))); if (fid0) qui.value = fid0;
+  const type = h("select", { id: "sd-type" }, Object.entries(SANC_TYPES).map(([k, t]) => h("option", { value: k, text: t.nom })));
+  const desc = h("p", { class: "hint", style: "margin:0" });
+  const faits = h("input", { type: "date", id: "sd-faits" }); faits.value = auj;
+  const motif = h("textarea", { id: "sd-motif", rows: "3", maxlength: "2000", placeholder: "Les faits reprochés, précisément : date, lieu, ce qui s’est passé." });
+  const entretien = h("input", { type: "date", id: "sd-entretien" });
+  const obs = h("textarea", { id: "sd-obs", rows: "2", maxlength: "2000", placeholder: "Ce que l’agent a répondu, s’il a été entendu." });
+  const montant = h("input", { id: "sd-montant", type: "number", min: "1", step: "1", inputmode: "numeric" });
+  const du = h("input", { type: "date", id: "sd-du" }), au = h("input", { type: "date", id: "sd-au" }); du.value = auj; au.value = auj;
+  du.addEventListener("change", () => { if (au.value < du.value) au.value = du.value; });
+  const grade = h("select", { id: "sd-grade" });
+  const syncGrades = () => { const f = foncOf(qui.value) || {}; fill(grade, (c.grades || []).filter(g => g.nom !== f.grade).map(g => h("option", { value: g.nom, text: `${g.nom} · ${money(g.taux)}/h` }))); };
+  const confirme = h("input", { type: "checkbox", id: "sd-conf" });
+  const prevenir = h("input", { type: "checkbox", id: "sd-msg" }); prevenir.checked = true;
+  const rowMontant = h("div", { class: "field" }, h("label", { for: "sd-montant", text: "Montant retenu" }), h("div", { class: "money", "data-cur": cur() || "€" }, montant));
+  const rowExcl = h("div", { class: "row2" }, field("sd-du", "Exclu du", du), field("sd-au", "Au", au));
+  const rowGrade = field("sd-grade", "Nouveau grade", grade);
+  const rowRev = h("label", { class: "check" }, confirme, h("span", { text: "Je confirme la révocation : l’agent sera retiré des effectifs." }));
+  const sync = () => { const t = type.value; desc.textContent = SANC_TYPES[t].desc; rowMontant.hidden = t !== "retenue"; rowExcl.hidden = t !== "exclusion"; rowGrade.hidden = t !== "retrogradation"; rowRev.hidden = t !== "revocation"; if (t === "retrogradation") syncGrades(); };
+  type.addEventListener("change", sync); qui.addEventListener("change", sync); sync();
+  const err = h("span", { class: "err", "aria-live": "polite" }), go = h("button", { class: "btn danger small", type: "button", text: "Prendre la sanction" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const f = foncOf(qui.value), t = type.value;
+    if (!f) { err.textContent = "Choisissez l’agent."; return; }
+    if (!motif.value.trim()) { err.textContent = "Écrivez le motif : les faits reprochés."; motif.focus(); return; }
+    const mt = Math.round(Number(montant.value));
+    if (t === "retenue" && !(mt > 0)) { err.textContent = "Indiquez le montant retenu."; montant.focus(); return; }
+    if (t === "exclusion" && (!du.value || !au.value || au.value < du.value)) { err.textContent = "Indiquez la période d’exclusion."; du.focus(); return; }
+    if (t === "retrogradation" && !grade.value) { err.textContent = "Choisissez le nouveau grade."; return; }
+    if (t === "revocation" && !confirme.checked) { err.textContent = "Cochez la confirmation de la révocation."; return; }
+    go.disabled = true;
+    const ref = S.db.collection("sanctions").doc(), no = dossierNo("SD", ref.id), at = nowISO(), par = S.agentName || "";
+    const effets = {};
+    const ops = [];
+    if (t === "retenue") { const r = S.db.collection("rappels").doc(); effets.rappel = r.id;
+      ops.push(() => r.set({ fid: f.id, nom: f.nom || "", grade: f.grade || "", semaine: semPrec(semKey(new Date())), montant: mt, motif: `Sanction ${no} : retenue sur salaire`, origine: "retenue", statut: "du", remboursements: [], sanction: ref.id, at, byNom: par })); }
+    if (t === "exclusion") { const r = S.db.collection("absences").doc(); effets.absence = r.id;
+      ops.push(() => r.set({ fid: f.id, nom: f.nom || "", du: du.value, au: au.value, motif: `Exclusion temporaire de fonctions (sanction ${no})`, statut: "prise_en_compte", par: "equipe", auteur: par, at, sanction: ref.id, priseEnCompteLe: at, priseEnComptePar: par })); }
+    if (t === "retrogradation") ops.push(() => S.db.doc("fonctionnaires/" + f.id).update({ grade: grade.value, modifieLe: at }));
+    if (t === "revocation") ops.push(() => S.db.doc("fonctionnaires/" + f.id).update({ actif: false, retireLe: at, retireMotif: `Révocation (sanction ${no})`, modifieLe: at }));
+    const body = { fid: f.id, nom: f.nom || "", grade: f.grade || "", type: t, motif: motif.value.trim(), faits: faits.value || "", entretien: entretien.value || "", observations: obs.value.trim(),
+      montant: t === "retenue" ? mt : null, du: t === "exclusion" ? du.value : null, au: t === "exclusion" ? au.value : null,
+      ancienGrade: t === "retrogradation" ? f.grade || "" : null, nouveauGrade: t === "retrogradation" ? grade.value : null,
+      statut: "vigueur", ref: no, effets, at, byNom: par, byRole: S.role };
+    if (!(await write(() => ref.set(body)))) { go.disabled = false; return; }
+    for (const op of ops) if (!(await write(op))) { err.textContent = "Sanction enregistrée, mais un de ses effets n’a pas pu l’être : vérifiez la fiche de l’agent."; go.disabled = false; return; }
+    if (prevenir.checked) {
+      const eff = sancEffet(body);
+      await write(() => S.db.collection("messagesAgents").doc().set({ fid: f.id, nom: f.nom || "", discordId: f.discordId || "", de: "equipe", auteur: par, auteurRole: S.role, at: nowISO(), luAgent: false, sanction: ref.id,
+        texte: `Sanction disciplinaire ${no} : ${SANC_TYPES[t].nom.toLowerCase()}${eff ? " (" + eff + ")" : ""}.\nMotif : ${body.motif}\nVous pouvez présenter vos observations en répondant ici. La notification est dans votre espace, rubrique « Mes sanctions ».` }));
+    }
+    toast(`${SANC_TYPES[t].nom} prise à l’encontre de ${f.nom}.`);
+    openSanction(ref.id, back);
+  });
+  openDialog({ eyebrow: "Personnel · Discipline", title: "Prendre une sanction", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Réservé à la Direction et aux ressources humaines. La sanction est notifiée à l’agent dans son espace et produit ses effets tout de suite." }),
+      h("div", { class: "row2" }, field("sd-qui", "Agent", qui), field("sd-type", "Sanction", type)), desc,
+      rowMontant, rowExcl, rowGrade, rowRev,
+      h("div", { class: "row2" }, field("sd-faits", "Date des faits", faits), field("sd-entretien", "Entretien préalable (facultatif)", entretien)),
+      field("sd-motif", "Motif", motif), field("sd-obs", "Observations de l’agent (facultatif)", obs),
+      h("label", { class: "check" }, prevenir, h("span", { text: "Prévenir l’agent par un message dans son espace" })), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+// Lever (la suite ne s'applique plus) ou annuler (la sanction est défaite).
+async function finSanction(x, mode, motifFin) {
+  const at = nowISO(), par = S.agentName || "";
+  const ops = [() => S.db.doc("sanctions/" + x.id).update({ statut: mode, finLe: at, finPar: par, finMotif: motifFin || "" })];
+  const r = x.effets && x.effets.rappel && (S.rappels || []).find(z => z.id === x.effets.rappel);
+  if (r && r.statut !== "annule") ops.push(() => S.db.doc("rappels/" + r.id).update({ statut: "annule", annuleLe: at, annuleParNom: par, annuleMotif: `Sanction ${sancNo(x)} ${mode === "levee" ? "levée" : "annulée"}` }));
+  const a = x.effets && x.effets.absence && (S.absences || []).find(z => z.id === x.effets.absence);
+  const auj = jourCle(new Date()), hier = jourCle(new Date(Date.now() - 864e5));
+  // Levée en cours d'exclusion : elle s'arrête hier ; pas encore commencée (ou annulée) : plus d'exclusion.
+  if (a && a.statut !== "annulee" && String(a.au) >= auj) { const patch = mode === "annulee" || String(a.du) >= auj ? { statut: "annulee", annuleeLe: at, annuleePar: par } : { au: hier, modifieLe: at }; ops.push(() => S.db.doc("absences/" + a.id).update(patch)); }
+  const f = foncOf(x.fid);
+  if (mode === "annulee" && f && x.type === "retrogradation" && x.ancienGrade && f.grade === x.nouveauGrade) ops.push(() => S.db.doc("fonctionnaires/" + f.id).update({ grade: x.ancienGrade, modifieLe: at }));
+  if (mode === "annulee" && f && x.type === "revocation" && f.actif === false) ops.push(() => S.db.doc("fonctionnaires/" + f.id).update({ actif: true, retireLe: null, retireMotif: null, modifieLe: at }));
+  for (const op of ops) if (!(await write(op))) return false;
+  return true;
+}
+function openSanction(id, back) {
+  const x = (S.sanctions || []).find(z => z.id === id); if (!x) { toast("Cette sanction n’existe plus.", true); return; }
+  const w = sanctionsWriter(), t = SANC_TYPES[x.type] || { nom: x.type }, reopen = () => openSanction(id, back);
+  const r = x.effets && x.effets.rappel && retenuesTous().find(z => z.id === x.effets.rappel);
+  const motifFin = h("input", { id: "sd-fin", maxlength: "300", placeholder: "Pourquoi (facultatif)" });
+  const fin = (mode, label) => h("button", { class: mode === "annulee" ? "btn danger small" : "btn ghost small", type: "button", onclick: async ev => {
+    const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = `Confirmer : ${label.toLowerCase()}`; return; }
+    b.disabled = true; if (await finSanction(x, mode, motifFin.value.trim())) { toast(mode === "levee" ? "Sanction levée." : "Sanction annulée et ses effets défaits."); reopen(); } else b.disabled = false;
+  }, text: label });
+  openDialog({ eyebrow: "Personnel · Discipline", title: `${t.nom} · ${x.nom || "Agent"}`, stampEl: stamp(x.statut === "vigueur" ? ["EN VIGUEUR", "bad"] : x.statut === "levee" ? ["LEVÉE", "muted"] : ["ANNULÉE", "muted"]),
+    body: [kv([["Référence", sancNo(x)], ["Agent", `${x.nom || "—"} · ${x.grade || "—"}`], ["Faits du", x.faits ? ctrJour(x.faits) : "—"], x.entretien ? ["Entretien préalable", ctrJour(x.entretien)] : null,
+        sancEffet(x) ? ["Effet", sancEffet(x)] : null, r ? ["Retenue", `${money(r.retenu)} déjà retenus sur ${money(r.montant)}${r.reste ? ` · ${money(r.reste)} restent` : ""}`] : null,
+        ["Décision", `le ${x.at ? longDate(new Date(x.at)) : "—"}${x.byNom ? " par " + x.byNom : ""}${x.byRole && ROLE_LABEL[x.byRole] ? " (" + ROLE_LABEL[x.byRole] + ")" : ""}`],
+        x.statut !== "vigueur" ? [x.statut === "levee" ? "Levée" : "Annulée", `le ${x.finLe ? longDate(new Date(x.finLe)) : "—"}${x.finPar ? " par " + x.finPar : ""}${x.finMotif ? " · " + x.finMotif : ""}`] : null].filter(Boolean)),
+      sec("Motif", h("p", { style: "white-space:pre-wrap;margin:0", text: x.motif || "—" })),
+      x.observations ? sec("Observations de l’agent", h("p", { style: "white-space:pre-wrap;margin:0", text: x.observations })) : null,
+      w && x.statut === "vigueur" ? sec("Lever ou annuler", h("p", { class: "hint", style: "margin:0", text: "Lever : ce qui reste à courir s’arrête (retenue pas encore prise, jours d’exclusion à venir). Annuler : la sanction est défaite, grade ou place dans les effectifs compris." }), field("sd-fin", "Motif", motifFin)) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(sanctionDoc(x), reopen), text: "Notification" }),
+      h("span", { class: "spacer" }),
+      w && x.statut === "vigueur" ? fin("levee", "Lever la sanction") : null, w && x.statut === "vigueur" ? fin("annulee", "Annuler la sanction") : null] });
+}
+function sanctionsListe(list, back) {
+  return h("ul", { class: "ent-list" }, list.map(x => h("li", {},
+    h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600;text-align:left", onclick: () => openSanction(x.id, back), text: `${(SANC_TYPES[x.type] || { nom: x.type }).nom} · ${x.nom || "Agent"}` }),
+      h("span", { class: "meta", text: [sancNo(x), x.at ? "le " + fmtDate(new Date(x.at)) : "", sancEffet(x), x.byNom ? "par " + x.byNom : ""].filter(Boolean).join(" · ") })),
+    chip(SANC_STAT[x.statut] || SANC_STAT.vigueur), h("span", {}))));
+}
+function renderSanctions() {
+  const box = $("#rh-sanctions"); if (!box) return;
+  const w = sanctionsWriter(), all = (S.sanctions || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const vig = all.filter(x => x.statut === "vigueur"), autres = all.filter(x => x.statut !== "vigueur");
+  fill(box, h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: `Sanctions en vigueur (${vig.length})` }), h("p", { class: "sub", text: "Prises par la Direction ou les ressources humaines, notifiées à l’agent dans son espace." })),
+      w ? h("button", { class: "btn danger small", type: "button", onclick: () => openSanctionForm(), text: "Prendre une sanction" }) : null),
+    vig.length ? sanctionsListe(vig) : h("p", { class: "muted", style: "margin:8px 0 0", text: "Aucune sanction en vigueur." })),
+    autres.length ? h("div", { class: "card", style: "margin-top:16px" }, h("div", { class: "card-head" }, h("h3", { text: `Levées et annulées (${autres.length})` })), sanctionsListe(autres.slice(0, 30))) : null);
+}
+function sanctionsSection(f, back) {
+  const list = sanctionsOf(f.id), w = sanctionsWriter() && f.actif !== false;
+  if (!list.length && !w) return null;
+  return sec("Sanctions disciplinaires", list.length ? sanctionsListe(list, back) : h("p", { class: "muted", style: "margin:0", text: "Aucune sanction." }),
+    w ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => openSanctionForm(f.id, back), text: "Prendre une sanction" }) : null);
 }
 
 /* Pointages : corrections de la Direction */
@@ -9106,7 +9291,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -9476,7 +9661,7 @@ async function showDocImage(doc, back) {
   });
   const dl = h("a", { class: "btn ghost small", href: url, download: fname + ".png", text: "Télécharger" });
   openDialog({
-    eyebrow: S.role === "agent" ? "Votre document" : "Image à poster sur Discord", title: `${capFirst(doc.kind)} ${doc.no}`, wide: true,
+    eyebrow: S.role === "agent" ? "Votre document" : doc.discord ? "Image à poster sur Discord" : "Document", title: `${capFirst(doc.kind)} ${doc.no}`, wide: true,
     body: [h("img", { class: "avis-preview", src: url, alt: `${capFirst(doc.kind)} ${doc.no}` })],
     foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour au dossier" }) : null, h("span", { class: "spacer" }),
       canAgent() && doc.discord && hookFor(doc.discord.channel) ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; if (!(await publishDoc(doc))) b.disabled = false; else b.textContent = "Publié sur Discord"; }, text: "Publier sur Discord" }) : null,
@@ -10271,6 +10456,13 @@ function describe(e) {
       if (x === "ajout") return `${v.par === "agent" ? "a signalé" : "a enregistré"} l’absence de ${v.nom || "un fonctionnaire"} (du ${v.du} au ${v.au})`;
       if (a.statut !== b.statut) return a.statut === "prise_en_compte" ? `a pris en compte l’absence de ${v.nom || "un fonctionnaire"}` : a.statut === "annulee" ? `a annulé l’absence de ${v.nom || "un fonctionnaire"}` : `a modifié l’absence de ${v.nom || "un fonctionnaire"}`;
       return `a modifié l’absence de ${v.nom || "un fonctionnaire"}`;
+    case "sanctions": {
+      const t = (SANC_TYPES[v.type] || { nom: "sanction" }).nom.toLowerCase(), no = v.ref || dossierNo("SD", e.doc_id);
+      if (x === "ajout") return `a pris une sanction contre ${v.nom || "un fonctionnaire"} : ${t} (${no})`;
+      if (x === "suppression") return `a supprimé la sanction ${no} de ${v.nom || "un fonctionnaire"}`;
+      if (a.statut !== b.statut) return a.statut === "levee" ? `a levé la sanction ${no} de ${v.nom || "un fonctionnaire"} (${t})` : a.statut === "annulee" ? `a annulé la sanction ${no} de ${v.nom || "un fonctionnaire"} (${t})` : `a remis en vigueur la sanction ${no}`;
+      return `a modifié la sanction ${no} de ${v.nom || "un fonctionnaire"}`;
+    }
     case "notesService":
       if (x === "ajout") return `a publié la note de service « ${v.titre || ""} »`;
       if (a.retiree && !b.retiree) return `a retiré la note de service « ${v.titre || ""} »`;
@@ -14150,7 +14342,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["contratsTravail", "rh", "agenda", "absences", "notesService", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
