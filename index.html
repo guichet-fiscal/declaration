@@ -19543,7 +19543,10 @@ function ouvrirDossier(spec) {
   return false;
 }
 { const m = /^#ouvrir=(.+)$/.exec(location.hash || ""); if (m) S.pendingOpen = decodeURIComponent(m[1]); }
-if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", ev => { const d = ev.data || {}; if (d.type === "ouvrir" && d.url) { const m = /#ouvrir=(.+)$/.exec(d.url); if (m) ouvrirDossier(decodeURIComponent(m[1])); else { const t = /#([a-z]+)$/.exec(d.url); if (t) showTab(t[1]); } } });
+if ("serviceWorker" in navigator) navigator.serviceWorker.addEventListener("message", ev => { const d = ev.data || {};
+  // La page vient d'être ouverte depuis le cache et une version plus récente est arrivée (sw.js).
+  if (d.type === "maj") { net.update = true; drawNetbar(); return; }
+  if (d.type === "ouvrir" && d.url) { const m = /#ouvrir=(.+)$/.exec(d.url); if (m) ouvrirDossier(decodeURIComponent(m[1])); else { const t = /#([a-z]+)$/.exec(d.url); if (t) showTab(t[1]); } } });
 
 /* ---------- Thème : clair, sombre ou comme l'appareil ---------- */
 const THEME_ICONS = {

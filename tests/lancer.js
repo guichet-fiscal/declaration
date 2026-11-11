@@ -3,6 +3,8 @@
 // Sortie 1 si un essai échoue (GitHub le signale alors en rouge).
 const fs = require("fs");
 const path = require("path");
+// Les essais du service worker ont besoin de voir ses requêtes (context.route).
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = "1";
 const { chromium } = require("playwright");
 const { serveur } = require("./outils");
 
