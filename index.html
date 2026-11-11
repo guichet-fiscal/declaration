@@ -1574,6 +1574,7 @@ table.es-payes{min-width:0;width:100%}
       <h3>Clôture des semaines</h3>
       <p class="sub">Une semaine clôturée est verrouillée : ses déclarations et le montant de ses avis ne bougent plus. Les encaissements restent possibles.</p>
       <div id="rc-clotures"><div class="empty">Chargement…</div></div>
+      <div class="paste-row" id="rc-mois" style="margin-top:12px"></div>
     </div>
     <div class="card" style="margin-top:16px">
       <h3>Relances envoyées</h3>
@@ -3817,6 +3818,7 @@ function subscribe() {
   db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
   db.doc("meta/bilan").onSnapshot(s => { S.bilanMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilan"); schedule(); }, onDbError);
   db.doc("meta/communique").onSnapshot(s => { S.communiqueMeta = s.exists ? (s.data() || null) : null; S.loaded.add("communique"); schedule(); }, onDbError);
+  db.doc("meta/bilanMois").onSnapshot(s => { S.bilanMoisMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilanMois"); schedule(); }, onDbError);
   db.doc("meta/sauvegardeAuto").onSnapshot(s => { S.sauvegardeAutoMeta = s.exists ? (s.data() || null) : null; S.loaded.add("sauvegardeAuto"); schedule(); }, onDbError);
   db.doc("meta/classement").onSnapshot(s => { S.classementMeta = s.exists ? (s.data() || null) : null; S.loaded.add("classementMeta"); schedule(); }, onDbError);
   const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
@@ -3926,6 +3928,7 @@ function render() {
   communiqueAuto();
   classementAuto();
   sauvegardeAuto();
+  bilanMoisAuto();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -12203,7 +12206,7 @@ const DISCORD_CHANNELS = [
   ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."],
   ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."],
   ["agents", "Salon des agents de la Préfecture", "Classement des heures de service et bilan du personnel, publiés le lundi. Laissez vide pour ne pas les publier."],
-  ["direction", "Salon de la Direction", "Bilan de chaque semaine, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Aussi les alertes de l’encadrement (message d’un fonctionnaire, absence signalée). Laissez vide pour ne pas le publier."],
+  ["direction", "Salon de la Direction", "Bilan de chaque semaine et de chaque mois, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Aussi les alertes de l’encadrement (message d’un fonctionnaire, absence signalée). Laissez vide pour ne pas le publier."],
   ["sauvegardes", "Salon des sauvegardes", "Sauvegarde complète du registre, chaque semaine, en fichier compressé. Réservé au staff : il contient tout le registre. Laissez vide pour utiliser le salon de la Direction."],
   ["personnel", "Salon des alertes du personnel", "Alertes aux fonctionnaires, postées par le service d’envoi : nouveau message dans leur espace (l’agent est mentionné), rendez-vous de l’agenda, notes de service, paye versée. Jamais le contenu d’un message ni d’une sanction. Laissez vide pour ne pas les publier."]
 ];
@@ -12224,13 +12227,14 @@ const DISCORD_AUTO = [
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
   ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"],
   ["bilans", "Bilan de la semaine, le lendemain de la date limite (salon de la Direction)", "direction"],
+  ["bilanMois", "Bilan du mois : impôts, dépenses, Trésor, activité et heures, une fois passée la date limite de sa dernière semaine (salon de la Direction)", "direction"],
   ["sauvegardes", "Sauvegarde complète du registre chaque semaine, en fichier compressé (salon des sauvegardes ou, à défaut, de la Direction)", "sauvegardes"],
   ["classement", "Classement des heures et bilan du personnel de la semaine passée, le lundi, dès que toutes les heures sont saisies (salon des agents)", "agents"],
   ["alertesAgents", "Alertes aux fonctionnaires : messages, agenda, notes de service, paye versée (salon des alertes du personnel)", "personnel"],
   ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["bilans", "classement", "sauvegardes", "alertesAgents", "alertesEquipe"]);
+const AUTO_DEFAUT = new Set(["bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
   return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : ch === "sauvegardes" ? w.direction || "" : "");
@@ -15255,6 +15259,7 @@ function openCloture(key) {
 function renderClotures() {
   const box = $("#rc-clotures");
   if (!S.connected || !S.loaded.has("declarations")) return;
+  renderBilansMois();
   const keys = recentKeys(12).filter(k => Date.now() > bounds(k).end.getTime());
   if (!keys.length) { fill(box, h("div", { class: "empty", text: "Aucune période terminée depuis le début du suivi." })); return; }
   fill(box, h("ul", { class: "ent-list" }, keys.map(k => {
@@ -15267,6 +15272,65 @@ function renderClotures() {
   })));
 }
 $("#btn-cloture").addEventListener("click", () => openCloture(S.dashKey || defaultKey()));
+function renderBilansMois() {
+  const box = $("#rc-mois");
+  if (!box || !S.connected || !S.loaded.has("declarations")) return;
+  const l = moisRecents(3);
+  fill(box, h("span", { class: "hint", text: "Bilan du mois en image :" }), l.map(m => h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(bilanMoisDoc(m)), text: MoisNom(m) })));
+}
+/* ---------- Bilan du mois ---------- */
+// Impôts des semaines dont le jeudi tombe dans le mois (comme la paye), dépenses imputées sur le mois
+// (crédits accordés, achats sous contrat, payes), Trésor, activité des agents, heures de service.
+function bilanMois(m) {
+  const st = startTime(), sem = semainesDuMois(m).filter(k => bounds(k).end.getTime() >= st);
+  const bs = sem.map(k => bilanPeriode(k)), tot = f => bs.reduce((t, b) => t + (Number(b[f]) || 0), 0);
+  const noms = envServices([m]); if (!noms.some(n => norm(n) === norm(payeSvc()))) noms.push(payeSvc());
+  const svc = noms.map(s => ({ s, st: envStats(s, m) })).filter(x => x.st.accorde > 0 || x.st.cap > 0).sort((a, b) => b.st.accorde - a.st.accorde || String(a.s).localeCompare(String(b.s), "fr"));
+  const hc = (heuresClassement() || []).filter(x => moisDe(x.k) === m);
+  return { m, sem, attendues: tot("attendues"), deposees: tot("deposees"), retards: tot("retards"), declare: tot("declare"), encaisse: tot("encaisse"), reste: tot("reste"),
+    svc, dep: svc.reduce((t, x) => t + x.st.accorde, 0), cap: svc.reduce((t, x) => t + (x.st.cap || 0), 0), a: activiteSemaine(m),
+    heures: hc.reduce((t, x) => t + x.h, 0), agents: new Set(hc.map(x => x.a)).size, tresor: treasury().solde, fini: Date.now() > bounds(m).end.getTime() };
+}
+const pctTxt = (a, b) => (b ? Math.round(a / b * 100) + " %" : "—");
+function bilanMoisDoc(m) {
+  const x = bilanMois(m), sems = x.sem.length ? (x.sem.length > 1 ? `semaines ${bounds(x.sem[0]).week} à ${bounds(x.sem[x.sem.length - 1]).week}` : `semaine ${bounds(x.sem[0]).week}`) : "aucune semaine suivie";
+  const auj = longDate(new Date());
+  return {
+    kind: "BILAN DU MOIS", no: m, date: "Établi le " + auj,
+    meta: [["Mois", `${MoisNom(m)} · ${sems}`], ["Déclarations", `${x.deposees} sur ${x.attendues} attendues (${pctTxt(x.deposees, x.attendues)})`],
+      ["Trésor", `${money(x.tresor)} au ${auj}`], ["Heures de service", x.heures ? `${fmtH(x.heures)} · ${x.agents} agent${plural(x.agents)}` : "—"]],
+    lines: [["Montant des avis", money(x.declare)], ["Encaissé", `${money(x.encaisse)} (${pctTxt(x.encaisse, x.declare)})`], ["Reste à recouvrer", money(x.reste), true]]
+      .concat(x.retards ? [["Déclarations hors délai", String(x.retards)]] : [])
+      .concat(x.svc.slice(0, 6).map(y => [`Dépenses · ${y.s}`, y.st.cap ? `${money(y.st.accorde)} sur ${money(y.st.cap)}` : money(y.st.accorde)]))
+      .concat(x.svc.length > 6 ? [[`Dépenses · ${x.svc.length - 6} autre${plural(x.svc.length - 6)} service${plural(x.svc.length - 6)}`, money(x.svc.slice(6).reduce((t, y) => t + y.st.accorde, 0))]] : [])
+      .concat([["Dépenses imputées sur le mois", x.cap ? `${money(x.dep)} sur ${money(x.cap)} d’enveloppes (${pctTxt(x.dep, x.cap)})` : money(x.dep), true]])
+      .concat([["Relevés de compte", String(x.a.releves)], ["Contrôles ouverts", String(x.a.controles)], ["Mouvements suspects repérés", String(x.a.suspects)]])
+      .concat(x.a.redressements ? [["Redressements mis en recouvrement", money(x.a.redressements)]] : []),
+    total: ["Encaissé moins dépensé", money(x.encaisse - x.dep)],
+    stamp: x.fini ? ["MOIS CLOS", "accent"] : ["PROVISOIRE", "muted"],
+    footer: "Impôts : déclarations des semaines dont le jeudi tombe dans le mois. Dépenses : crédits accordés aux services, achats sous contrat et payes imputés sur le mois. Préfecture de police · Direction des impôts et cotisations.",
+    discord: { channel: "direction", mentions: [], text: [`**Bilan ${deMois(m)}** · ${sems}`,
+      `🧾 Impôts : ${money(x.declare)} d’avis, ${money(x.encaisse)} encaissés (${pctTxt(x.encaisse, x.declare)}), ${money(x.reste)} à recouvrer · ${x.deposees} déclaration${plural(x.deposees)} sur ${x.attendues}${x.retards ? `, dont ${x.retards} hors délai` : ""}`,
+      `💸 Dépenses : ${money(x.dep)}${x.cap ? ` sur ${money(x.cap)} d’enveloppes (${pctTxt(x.dep, x.cap)})` : ""}${x.svc.length ? " · " + x.svc.slice(0, 4).map(y => `${y.s} ${money(y.st.accorde)}`).join(", ") : ""}`,
+      `🏦 Trésor : ${money(x.tresor)} au ${auj}`,
+      `🔎 Activité : ${x.a.releves} relevé${plural(x.a.releves)}, ${x.a.controles} contrôle${plural(x.a.controles)} ouvert${plural(x.a.controles)}, ${x.a.suspects} mouvement${plural(x.a.suspects)} suspect${plural(x.a.suspects)}${x.a.redressements ? `, ${money(x.a.redressements)} redressés` : ""}`,
+      x.heures ? `👮 Personnel : ${fmtH(x.heures)} de service, ${x.agents} agent${plural(x.agents)}` : ""].filter(Boolean).join("\n") }
+  };
+}
+// Publié une fois au salon de la Direction, par la première session de la Direction, quand la date
+// limite de la dernière semaine du mois est passée.
+async function bilanMoisAuto() {
+  if (S.bilanMoisEnCours || !writer() || !autoOn("bilanMois")) return;
+  if (!["config", "bilanMois", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "payes", "contrats", "releves", "controles", "pointages", "fonctionnaires", "rappels"].every(x => S.loaded.has(x))) return;
+  const m = moisPrec(moisKey(new Date())), b = bounds(m), sem = b ? semainesDuMois(m) : [];
+  if (!b || b.end.getTime() < startTime() || !sem.length || Date.now() <= deadline(sem[sem.length - 1]).getTime()) return;
+  if (S.bilanMoisMeta && String(S.bilanMoisMeta.mois || "") >= m) return;
+  S.bilanMoisEnCours = true;
+  try {
+    if (!(await write(() => S.db.doc("meta/bilanMois").set({ mois: m, at: nowISO(), by: S.uid || null, byNom: S.agentName || "" })))) return;
+    await publishDoc(bilanMoisDoc(m), `Bilan ${deMois(m)} :`);
+  } finally { S.bilanMoisEnCours = false; }
+}
 // Bilan de la semaine : publié une fois, par la première session de la Direction après la date limite.
 // Communiqué public des contrôles conclus pendant la semaine : redressements mis en recouvrement et
 // dossiers transmis à la justice, pour dissuader. Le nom de l'aviseur n'y figure jamais.
