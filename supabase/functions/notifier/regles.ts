@@ -352,7 +352,7 @@ export function heuresLundi(payes, foncs, maintenant, site) {
 // rows : lignes du registre (fonctionnaires, contratsTravail, entretiens). → { equipe, discord } ou null.
 const ESSAI_NB = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, quinze: 15, trente: 30 };
 export function essaiJours(txt) {
-  const t = String(txt || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const t = String(txt || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const m = /(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|quinze|trente)\s*(jours?|semaines?|mois)\b/.exec(t);
   if (!m) return null;
   const n = /\d/.test(m[1]) ? Number(m[1]) : ESSAI_NB[m[1]], j = n * (/^jour/.test(m[2]) ? 1 : /^semaine/.test(m[2]) ? 7 : 30);
