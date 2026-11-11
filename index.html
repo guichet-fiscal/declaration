@@ -1009,6 +1009,15 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 :root[data-theme="dark"] .sc-sig{color:#a9bdf5}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sc-sig{color:#a9bdf5}}
 .dag-reponse{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--rule-2);background:var(--paper);border-radius:0 8px 8px 0;font-size:13px;color:var(--ink-2);white-space:pre-wrap}
+.annu{display:grid;gap:12px;margin-top:8px}
+.annu-groupe h4{margin:4px 0 2px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.annu .ent-list li{display:flex;align-items:center;gap:10px}
+.annu .ent-list li > div{flex:1;min-width:0}
+.annu li.moi{background:var(--accent-soft);border-radius:8px;padding-left:10px;padding-right:10px}
+.annu-discord{font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;padding:6px 8px;border-radius:6px;white-space:nowrap}
+.annu-discord:hover{background:var(--accent-soft)}
+.annu-discord:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#rh-annuaire input[type=search],#annu-dlg-q{width:100%;max-width:420px}
 .es-pas-coche{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule-2);display:grid;place-items:center;font-size:12px;font-weight:700}
 .es-pas li.fait .es-pas-coche{background:var(--ok);border-color:var(--ok);color:#fff}
 .es-ag-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -1329,6 +1338,7 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="agenda" hidden><div id="rh-agenda"></div></div>
     <div data-rh-vue="absences" hidden><div id="rh-absences"></div></div>
     <div data-rh-vue="demandes" hidden><div id="rh-demandes"></div></div>
+    <div data-rh-vue="annuaire" hidden><div id="rh-annuaire"></div></div>
     <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
     <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
   </section>
@@ -6070,6 +6080,7 @@ const GUIDE_RUBRIQUES = [
   ["Notes de service", "Les consignes en vigueur, à relire quand vous voulez."],
   ["Absences", "Prévenez d’une absence ; vous voyez quand elle est prise en compte."],
   ["Demandes", "Congé, horaires, document : envoyez votre demande et suivez la réponse."],
+  ["Annuaire", "Qui fait quoi à la Préfecture, et son profil Discord pour lui écrire."],
   ["Contrat de travail", "Votre contrat, à lire et à télécharger en PDF."]];
 const accueilCle = fid => "gf-accueil-vu-" + fid;
 const accueilVu = fid => { try { return !!localStorage.getItem(accueilCle(fid)); } catch (e) { return true; } };
@@ -6366,13 +6377,18 @@ function renderEspace() {
     !E.demandes ? h("p", { class: "muted", style: "margin:8px 0 0", text: "Les demandes ouvriront dès que la Direction aura exécuté la mise à jour 36 du guichet." })
       : dagListe(E.demandes.filter(d => d.statut !== "annulee" || (d.annuleeLe && Date.now() - new Date(d.annuleeLe).getTime() < 7 * 864e5)).slice(0, 12), { vide: "Aucune demande pour l’instant.",
           actions: d => d.statut === "envoyee" ? h("button", { class: "btn ghost small", type: "button", onclick: ev => annulerDag(d, ev.currentTarget), text: "Annuler" }) : h("span", {}) }));
-  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc), h("div", { class: "es-col-d" }, cardMsg, cardDag, cardAg, cardNotes, cardAbs)));
+  // Annuaire : l'encadrement à portée de main, toute l'équipe dans une fenêtre.
+  const annu = Array.isArray(E.annuaire) ? E.annuaire : null;
+  const cardAnnu = annu ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Annuaire" }), h("p", { class: "sub", text: "Qui fait quoi à la Préfecture, et comment le joindre." })),
+      h("button", { class: "btn ghost small", type: "button", id: "es-annuaire", onclick: () => openAnnuaire(), text: `Toute l’équipe (${annu.length})` })),
+    annuaireVue(annu.filter(p => ANNU_ROLES.some(([r]) => r === p.role)))) : null;
+  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc, cardAnnu), h("div", { class: "es-col-d" }, cardMsg, cardDag, cardAg, cardNotes, cardAbs)));
   // Première ouverture sur cet appareil : le guide.
   if (!accueilVu(fid) && !S.accueilMontre && !dlg.open) { S.accueilMontre = true; setTimeout(() => { if (!dlg.open && S.tab === "espace") openAccueil(0); }, 500); }
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"], ["annuaire", "Annuaire"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
   const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length : 0;
@@ -6393,6 +6409,7 @@ function renderEncadrement() {
   else if (v === "notes") renderNotes();
   else if (v === "sanctions") renderSanctions();
   else if (v === "demandes") renderDemandesEquipe();
+  else if (v === "annuaire") fill($("#rh-annuaire"), annuaireVue(annuaireListe(), { recherche: true }));
 }
 // Messagerie : les conversations, la plus récente d'abord, et celle qui est ouverte.
 function renderMessagerie() {
@@ -6767,6 +6784,44 @@ function openDagEquipe(id) {
       h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); openAgent(d.fid); }, text: "Fiche de l’agent" }), h("span", { class: "spacer" }),
       peut ? h("button", { class: "btn ghost small", type: "button", onclick: ev => decider("refusee", ev.currentTarget), text: "Refuser" }) : null,
       peut ? h("button", { class: "btn ink small", type: "button", onclick: ev => decider("acceptee", ev.currentTarget), text: "Accepter" }) : null].filter(Boolean) });
+}
+/* ---------- Annuaire de l'équipe (mise à jour 36) ---------- */
+// Les fonctionnaires en service : l'encadrement d'abord (Direction, Inspection, RH), puis l'équipe.
+// L'espace le reçoit de la base (mon_espace) ; l'encadrement sans fiche le construit depuis le registre.
+const ANNU_ROLES = [["direction", "Direction"], ["inspecteur", "Inspection"], ["rh", "Ressources humaines"]];
+function annuaireListe() {
+  if (S.espace && Array.isArray(S.espace.annuaire)) return S.espace.annuaire;
+  const roles = new Map((S.agents || []).map(a => [a.discord_id, a.role]));
+  return foncs().filter(f => f.actif !== false).map(f => ({ id: f.id, nom: f.nom, grade: f.grade, discordId: f.discordId, role: roles.get(f.discordId) || null,
+    poste: (ctrsOf(f.id)[0] || {}).poste || null }));
+}
+function annuaireVue(liste, o) {
+  o = o || {};
+  const moi = (S.espace && S.espace.fid) || S.monFid;
+  const tri = (a, b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr");
+  const personne = p => h("li", { class: p.id === moi ? "moi" : null },
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: (p.nom || "—") + (p.id === moi ? " (vous)" : "") }),
+      h("span", { class: "meta", text: [p.grade, p.poste && norm(p.poste) !== norm(p.grade) ? p.poste : ""].filter(Boolean).join(" · ") || "—" })),
+    ANNU_ROLES.some(([r]) => r === p.role) ? chip([ANNU_ROLES.find(([r]) => r === p.role)[1], "info"]) : h("span", {}),
+    /^\d{15,21}$/.test(p.discordId || "") ? h("a", { class: "annu-discord", href: `https://discord.com/users/${p.discordId}`, target: "_blank", rel: "noopener", "aria-label": `Profil Discord de ${p.nom || "l’agent"}`, text: "Discord" }) : h("span", {}));
+  const corps = h("div", { class: "annu" });
+  const dessiner = q => {
+    const qq = norm(q || ""), l = liste.filter(p => !qq || norm(`${p.nom} ${p.grade} ${p.poste}`).includes(qq));
+    const enc = ANNU_ROLES.map(([r, t]) => [t, l.filter(p => p.role === r).sort(tri)]).filter(([, x]) => x.length);
+    const autres = l.filter(p => !ANNU_ROLES.some(([r]) => r === p.role)).sort(tri);
+    fill(corps, !l.length ? h("p", { class: "muted", style: "margin:8px 0 0", text: q ? "Personne ne correspond à cette recherche." : "L’annuaire est vide." }) : null,
+      enc.map(([t, x]) => h("div", { class: "annu-groupe" }, h("h4", { text: t }), h("ul", { class: "ent-list" }, x.map(personne)))),
+      autres.length ? h("div", { class: "annu-groupe" }, h("h4", { text: `Équipe (${autres.length})` }), h("ul", { class: "ent-list" }, autres.map(personne))) : null);
+  };
+  dessiner("");
+  if (!o.recherche) return corps;
+  const q = h("input", { type: "search", id: o.idRecherche || "annu-q", placeholder: "Chercher un nom, un grade, un poste", autocomplete: "off", "aria-label": "Chercher dans l’annuaire" });
+  q.addEventListener("input", () => dessiner(q.value));
+  return h("div", {}, h("p", { class: "sub", style: "margin:0 0 8px", text: `${liste.length} fonctionnaire${plural(liste.length)} en service. « Discord » ouvre son profil pour lui écrire.` }), q, corps);
+}
+function openAnnuaire() {
+  openDialog({ eyebrow: "Mon espace", title: "Annuaire de l’équipe", wide: true, body: [annuaireVue(annuaireListe(), { recherche: true, idRecherche: "annu-dlg-q" })],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: () => closeDialog(), text: "Fermer" })] });
 }
 // Notes de service : publiées par la Direction et les ressources humaines, lues par tous les fonctionnaires.
 function renderNotes() {
