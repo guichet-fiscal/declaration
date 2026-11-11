@@ -277,3 +277,32 @@ export function rappelsPersoChoisis(rows, t0, pas) {
     return { fid: p.fid, type: "a_agenda", msg: { title: m >= 1440 ? "Demain" : `${enAvance(m).charAt(0).toUpperCase()}${enAvance(m).slice(1)}`, body: `${p.titre || "Événement"} ${m >= 1440 ? "demain " : ""}à ${heure(p.debut)}${p.lieu ? " · " + p.lieu : ""}`, url: "#espace", tag: "perso-" + p.id } };
   });
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Lundi soir (mise à jour 36) : heures de la semaine passée pas encore saisies dans la paye, depuis
+// que la pointeuse est remplacée par la tablette. payes : lignes du registre (id = semaine) ;
+// foncs : Map fid → fiche. Rien si la paye est versée ou si chacun a ses heures.
+export const SEM_SAISIE = "2026-S46";
+export function semaineDe(t) {
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(t)).split("-").map(Number);
+  const u = new Date(Date.UTC(y, m - 1, d));
+  u.setUTCDate(u.getUTCDate() - ((u.getUTCDay() + 6) % 7) + 3); // jeudi de la semaine
+  const an = u.getUTCFullYear(), n = 1 + Math.floor((u.getTime() - Date.UTC(an, 0, 1)) / 864e5 / 7);
+  return `${an}-S${String(n).padStart(2, "0")}`;
+}
+const aDesHeures = (m) => !!m && m.heures != null && m.heures !== "" && Number.isFinite(Number(m.heures));
+export function heuresLundi(payes, foncs, maintenant, site) {
+  const k = semaineDe(maintenant - 7 * 864e5);
+  if (k < SEM_SAISIE) return null;
+  const p = ((payes || []).find((r) => r.id === k) || {}).data || {};
+  if (p.statut === "versee") return null;
+  const saisie = p.saisie || {};
+  const manque = [...(foncs || new Map())].filter(([id, f]) => f && f.actif !== false && !aDesHeures(saisie[id])).map(([id, f]) => String(f.nom || id));
+  if (!manque.length) return null;
+  const n = manque.length, s = n > 1 ? "s" : "", sem = periode(k);
+  const noms = manque.slice(0, 8).join(", ") + (n > 8 ? `, et ${n - 8} autre${n - 8 > 1 ? "s" : ""}` : "");
+  return {
+    push: { type: "delais", title: `Heures de la ${sem} à saisir`, body: `${n} agent${s} sans heures dans la paye : ${court(noms, 150)}`, url: "#payes", tag: "lundi-" + k },
+    discord: { canal: "direction", auto: "alertesEquipe", texte: `⏱️ **Heures de la ${sem} à saisir** : ${n} agent${s} n’${n > 1 ? "ont" : "a"} pas encore d’heures dans la paye (${noms}). À compléter dans Payes avant de verser :${site ? " " + site + "#payes" : ""}` },
+  };
+}

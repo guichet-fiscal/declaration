@@ -14,7 +14,7 @@
 
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
-import { evenement, delais, personnel, rappelsAgenda, rappelsPerso, rappelsChoisis, rappelsPersoChoisis, COLLECTIONS_PERSONNEL } from "./regles.ts";
+import { evenement, delais, personnel, rappelsAgenda, rappelsPerso, rappelsChoisis, rappelsPersoChoisis, heuresLundi, COLLECTIONS_PERSONNEL } from "./regles.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS = {
@@ -153,6 +153,14 @@ Deno.serve(async (req) => {
           .eq("journee", false).not("rappel_min", "is", null).gt("debut", new Date(t0 - pas).toISOString()).lte("debut", jusqua);
         for (const r of rappelsPersoChoisis(perso || [], t0, pas)) envoyes += await envoyer(c, await aboAgents([r.fid], r.type), { ...r.msg, type: r.type });
         return json({ ok: true, envoyes });
+      }
+      // Lundi soir (mise à jour 36) : heures de la semaine passée pas encore saisies dans la paye.
+      if (body.type === "lundi") {
+        const { data: py } = await db.from("registre").select("id,data").eq("collection", "payes");
+        const r = heuresLundi(py || [], await fonctionnaires(), Date.now(), SITE);
+        if (!r) return json({ ok: true, envoyes: 0 });
+        const envoyes = await envoyer(c, await destinataires(r.push.type, null), r.push);
+        return json({ ok: true, envoyes, discord: (await posterDiscord(await discordConf(), r.discord)) ? 1 : 0 });
       }
       if (COLLECTIONS_PERSONNEL.includes(body.collection)) return json({ ok: true, ...(await traiterPersonnel(c, body)) });
       let ctx = {};

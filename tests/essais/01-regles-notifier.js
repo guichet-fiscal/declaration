@@ -46,6 +46,17 @@ module.exports = {
     const perso = R.rappelsPersoChoisis([{ id: "p1", fid: "f1", titre: "Notaire", debut: "2026-11-12T19:10:00Z", rappel_min: 10, journee: false },
       { id: "p2", fid: "f1", titre: "Trop tôt", debut: "2026-11-12T19:20:00Z", rappel_min: 10, journee: false }], t0, pas);
     t.egal(perso.map((x) => x.msg.tag), ["perso-p1"], "agenda personnel : rappel 10 minutes avant, au bon passage");
+    // Lundi soir : heures de la semaine passée pas encore saisies.
+    t.egal([R.semaineDe(Date.parse("2026-11-16T19:00:00Z")), R.semaineDe(Date.parse("2026-11-15T23:30:00Z")), R.semaineDe(Date.parse("2026-11-15T22:30:00Z")), R.semaineDe(Date.parse("2027-01-01T12:00:00Z"))],
+      ["2026-S47", "2026-S47", "2026-S46", "2026-S53"], "semaine ISO comptée à Paris (lundi 0 h 30 à Paris = semaine suivante, dimanche 23 h 30 = encore la semaine)");
+    const foncsL = new Map([["f1", { nom: "Alice" }], ["f2", { nom: "Bob" }], ["f3", { nom: "Chloé", actif: false }]]);
+    const lundi = Date.parse("2026-11-16T19:00:00Z");
+    const l1 = R.heuresLundi([{ id: "2026-S46", data: { saisie: { f1: { heures: 12 }, f2: { heures: "" } } } }], foncsL, lundi, "https://x/");
+    t.ok(l1 && /Bob/.test(l1.push.body) && !/Alice|Chloé/.test(l1.push.body) && l1.push.type === "delais", "lundi : seul l'agent en service sans heures est signalé", JSON.stringify(l1));
+    t.ok(l1 && l1.discord.canal === "direction" && l1.discord.auto === "alertesEquipe" && /semaine 46/.test(l1.discord.texte), "lundi : message au salon de la Direction");
+    t.egal(R.heuresLundi([{ id: "2026-S46", data: { statut: "versee" } }], foncsL, lundi, ""), null, "lundi : rien si la paye est versée");
+    t.egal(R.heuresLundi([{ id: "2026-S46", data: { saisie: { f1: { heures: 3 }, f2: { heures: 0 } } } }], foncsL, lundi, ""), null, "lundi : rien si chacun a ses heures (0 compris)");
+    t.egal(R.heuresLundi([], foncsL, Date.parse("2026-11-09T19:00:00Z"), ""), null, "lundi : rien pour les semaines de la pointeuse");
     fs.unlinkSync(f);
   },
 };

@@ -289,4 +289,29 @@ $$;
 revoke all on function public.ecriture_permise(text, text, jsonb) from public, anon;
 grant execute on function public.ecriture_permise(text, text, jsonb) to authenticated;
 
+-- ---------------------------------------------------------------------------------------------------
+-- 7. Le lundi soir (20 h l'hiver, 21 h l'été) : la fonction notifier signale à la Direction les heures
+--    de la semaine passée pas encore saisies dans la paye (notification « Délais » et salon Direction).
+create or replace function public.notif_lundi()
+returns void
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  c public.notif_config;
+begin
+  select * into c from public.notif_config where id = 1;
+  if c.url is null then return; end if;
+  perform net.http_post(
+    url := c.url,
+    body := jsonb_build_object('type', 'lundi'),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-guichet-cle', c.secret),
+    timeout_milliseconds := 10000);
+end
+$$;
+revoke all on function public.notif_lundi() from public, anon, authenticated;
+
+select cron.unschedule(jobid) from cron.job where jobname = 'guichet-notif-lundi';
+select cron.schedule('guichet-notif-lundi', '0 19 * * 1', 'select public.notif_lundi()');
+
 commit;

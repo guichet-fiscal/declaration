@@ -4207,6 +4207,9 @@ function todoItems() {
     add(pr.length, `Demande${plural(pr.length)} de prêt`, `${money(sum(pr, x => x.montant))} demandés`, () => { S.pretFilter = "dem"; allerA("prets"); });
     // Paye de la semaine passée pas encore versée, alors que des agents ont des heures.
     const kp = semPrec(semKey(new Date()));
+    // Depuis la tablette : agents en service dont les heures de la semaine passée ne sont pas saisies.
+    const manq = heuresASaisir(kp);
+    add(manq.length ? 1 : 0, `Heures de la semaine ${(bounds(kp) || {}).week} à saisir`, `${manq.length} agent${plural(manq.length)} sans heures : ${manq.slice(0, 3).map(f => f.nom || "?").join(", ")}${manq.length > 3 ? "…" : ""}`, () => { S.payeSem = kp; allerA("payes"); });
     if (!payeVersee(payeOf(kp)) && (S.fonctionnaires || []).length) {
       const x = payeCalc(kp), n = x.lignes.filter(l => l.heures > 0).length;
       add(n ? 1 : 0, `Paye de la semaine ${(bounds(kp) || {}).week} à verser`, `${n} agent${plural(n)} · ${money(x.total)}`, () => { S.payeSem = kp; allerA("payes"); });
@@ -4677,6 +4680,14 @@ const ptNom = p => { const f = foncByDiscord(p.discordId); return (f && f.nom) |
 /* Payes versées */
 const payeOf = k => (S.payes || []).find(p => p.id === k) || null;
 const payeVersee = p => !!p && p.statut === "versee";
+// Semaine à la tablette pas encore versée : fiches en service sans heures saisies (0 compte comme saisi).
+const aHeuresSaisies = m => !!m && m.heures != null && m.heures !== "" && Number.isFinite(Number(m.heures));
+function heuresASaisir(k) {
+  const p = payeOf(k);
+  if (!semSaisie(k) || payeVersee(p)) return [];
+  const saisie = (p && p.saisie) || {};
+  return foncs().filter(f => f.actif !== false && !aHeuresSaisies(saisie[f.id]));
+}
 const payesVersees = () => (S.payes || []).filter(payeVersee);
 // Ce qu'une paye a coûté : payes et rappels versés, moins les trop-perçus retenus sur cette paye.
 const payeTotal = p => (p.lignes || []).reduce((t, l) => t + (Number(l.verse) || 0), 0) + (p.rappels || []).reduce((t, r) => t + (Number(r.verse) || 0), 0) - (p.retenues || []).reduce((t, r) => t + (Number(r.retenu) || 0), 0);
