@@ -55,6 +55,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v35_rappels_agenda.sql` : le rappel au choix de chacun (agenda personnel et rendez-vous de l'encadrement), avec le passage du service d'envoi toutes les 5 minutes
 - `supabase/v36_espace_complet.sql` : l’espace des fonctionnaires complété (signature du contrat par l’agent, demandes, entretiens et objectifs, annuaire), leurs notifications, et l’alerte du lundi soir pour les heures pas encore saisies
 - `supabase/v37_suivi.sql` : la remontée des erreurs du guichet (table privée lue par la Direction, un mois d’historique), et le nom du fonctionnaire dans le journal pour les gestes faits depuis Mon espace
+- `supabase/v38_securite.sql` : l’espace Sécurité du service de la protection (entrées dans la Préfecture, contrôles d’identité avec photo de la pièce, rapports), ses droits et l’espace privé `securite` pour les photos
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `tests/` et `.github/workflows/essais.yml` : les essais automatiques (voir « Modifier le site »)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
@@ -464,6 +465,17 @@ La date est fixée dans `index.html` (`PT_FERMETURE`, `PT_SEM_SAISIE`) et dans l
 **Prévision** : sous la paye de la semaine, la carte « Prévision » montre ce que coûterait une semaine si chaque agent actif faisait son plafond d’heures, le budget de la semaine, le rythme de la semaine en cours (ce qui est dû à ce jour, prolongé jusqu’à dimanche sans dépasser le plafond de chacun) et le mois entier au maximum. Elle prévient quand un prorata devient probable au rythme actuel, ou possible si tous faisaient le maximum ; le détail par grade se déplie.
 
 La pointeuse demande `supabase/v18_payes_pointeuse.sql` ; sans ce script, les payes fonctionnent avec des heures saisies à la main. Sur la pointeuse, chacun voit **sa paye de la semaine** (heures pointées × taux de son grade, dans la limite de 20 h et 100 000 €), qui monte à la seconde pendant le service, avec la durée du service en heures, minutes et secondes. C’est un montant brut indicatif : la paye versée tient compte aussi du budget de la semaine et des retenues. Pour les agents qui n’ont que l’accès « Pointeuse », il faut `supabase/v19_pointeuse_paye.sql`.
+
+## Espace Sécurité (service de la protection)
+
+Les fonctionnaires du service de la protection ont, en plus de **Mon espace**, un onglet **Sécurité**. L’accès se lit sur le grade de leur fiche en service : « Agent service de la protection » (ou un grade « agent de sécurité ») pour les agents ; « Responsable service de la protection », « Responsable adjoint… » (ou un grade qui commence par Directeur, Directrice, Chef ou Responsable et parle de sécurité) pour les responsables. Changer le grade sur la fiche donne ou retire l’onglet. La Direction le voit aussi ; l’Inspection et la Lecture seule n’ont pas l’onglet.
+
+- **Entrées** : chaque personne qui entre dans la Préfecture (nom, qualité, motif de la venue, personne ou service visité, heure d’arrivée, numéro et photo de la pièce d’identité, note). « Dans les locaux » liste qui est encore là, avec **Sortie** pour noter l’heure de départ ; puis les sorties récentes. Une entrée sans photo ni numéro de pièce est marquée « Pièce non vue ».
+- **Contrôles d’identité** : nom inscrit sur la pièce, date de naissance, numéro, lieu, motif (entrée dans les locaux, contrôle aléatoire, comportement suspect, autre), résultat (conforme, anomalie, faux document, refus de présenter une pièce, personne recherchée), notes et **photos de la pièce** (jusqu’à 6 : choisir un fichier, prendre une photo au téléphone, ou coller une capture avec Ctrl + V). En tapant le nom, le guichet signale si la personne a déjà été contrôlée (même nom dans n’importe quel ordre) et si un contrôle précédent avait une anomalie.
+- **Rapports** : incident, intervention, ronde, main courante ou autre, avec la date, le lieu, les personnes impliquées, le récit et des photos. Un agent modifie son rapport tant qu’il n’est pas lu ; les responsables voient « N à lire » et **Marquent comme lu**.
+- **Recherche** par nom dans les trois listes.
+
+Droits : les agents lisent tous les dossiers du service, ajoutent et modifient les entrées et les contrôles, et leurs propres rapports ; les responsables modifient aussi tous les rapports et **suppriment** (deux clics : le dossier et ses photos partent pour de bon) ; la Direction a tous les droits. Les dossiers sont dans le registre (collections `securiteEntrees`, `securiteControles`, `securiteRapports`) : ils passent au journal et dans les sauvegardes. Les photos, réduites à environ 200 Ko, sont dans l’espace privé `securite` de Supabase, lisibles seulement par le service et la Direction. Il faut `supabase/v38_securite.sql` (après les scripts 36 et 37) ; sans lui, l’onglet le dit.
 
 ## Contrats d’achat
 

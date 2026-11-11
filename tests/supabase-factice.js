@@ -106,6 +106,13 @@
         if (!r || r.data.fid !== f.id || r.data.statut !== "partage") return { data: null, error: { message: "Cet entretien n'existe plus ou ne vous concerne pas." } };
         r.data = Object.assign({}, r.data, { vuParAgentLe: iso(), commentaireAgent: args.p_commentaire || "" }); return { data: Object.assign({ id: r.id }, r.data), error: null };
       }
+      // Place dans le service de la protection (mise à jour 38), d'après le grade de la fiche.
+      if (name === "ma_protection") {
+        if (window.__sans38) return { data: null, error: { message: "Could not find the function public.ma_protection in the schema cache", code: "PGRST202" } };
+        const f = fonc(), g = (f && f.data.grade) || "";
+        if (!/service de la protection|agent de s[ée]curit[ée]|(responsable|directeur|directrice|chef).*s[ée]curit[ée]/i.test(g)) return { data: null, error: null };
+        return { data: /^(responsable|directeur|directrice|chef)/i.test(g.trim()) ? "responsable" : "agent", error: null };
+      }
       if (name === "signaler_erreur") {
         if (window.__sans37) return { data: null, error: { message: "Could not find the function public.signaler_erreur(p) in the schema cache", code: "PGRST202" } };
         const f = fonc(), x = Object.assign({}, args.p, { id: Date.now() + Math.random(), at: iso(), nom: NOM, discord: DID, role: ROLE });
@@ -129,7 +136,16 @@
     from: t => builder(t),
     channel: () => { const c = { on(...a) { listeners.push(a[2]); return c; }, subscribe(cb) { setTimeout(() => cb && cb("SUBSCRIBED"), 0); return c; }, track: async () => "ok", untrack: async () => "ok", presenceState: () => ({}), send: async () => "ok", unsubscribe: async () => "ok" }; return c; },
     removeChannel() {}, realtime: { setAuth() {} },
-    storage: { from: () => ({ download: async () => ({ error: { message: "x" } }), upload: async () => ({ error: { message: "x" } }), remove: async () => ({ error: null }) }) },
+    // Espaces de fichiers : gardés en mémoire (window.__fichiers) ; __sans38 = espace « securite » absent.
+    storage: { from: (b) => {
+      window.__fichiers = window.__fichiers || new Map();
+      const absent = () => b === "securite" && window.__sans38;
+      return {
+        upload: async (path, blob) => (absent() ? { error: { message: "Bucket not found" } } : (window.__fichiers.set(b + "/" + path, blob), { data: { path }, error: null })),
+        download: async (path) => { const f = window.__fichiers.get(b + "/" + path); return f ? { data: f, error: null } : { data: null, error: { message: "Object not found" } }; },
+        remove: async (paths) => { for (const p of paths || []) window.__fichiers.delete(b + "/" + p); return { data: null, error: null }; }
+      };
+    } },
     functions: { invoke: async () => ({ data: null, error: null }) }
   }) };
 })();

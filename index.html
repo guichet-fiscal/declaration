@@ -1024,6 +1024,15 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .guide-grille strong{font-size:14px}
 .guide-grille span{font-size:13px;line-height:1.45;color:var(--ink-2)}
 .guide-ok{margin:0;padding:10px 12px;border-radius:10px;background:var(--ok-soft);color:var(--ok);font-weight:600}
+.secu-tete{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.secu-tete input[type=search]{flex:1 1 220px;max-width:340px}
+.secu-photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.secu-photo{position:relative;width:120px;height:80px;border-radius:8px;overflow:hidden;border:1px solid var(--rule);background:var(--field)}
+.secu-photo img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.secu-photo button{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(19,27,44,.75);color:#fff;font-size:14px;line-height:1;cursor:pointer}
+.secu-ajout{display:grid;gap:6px;padding:12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
+.secu-grande{display:grid;gap:10px}.secu-grande img{max-width:100%;border-radius:8px;border:1px solid var(--rule)}
+.secu-present{border-left:3px solid var(--ok);padding-left:10px}
 .guide-liste{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .guide-liste li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;padding:11px 13px;border:1px solid var(--rule);border-radius:10px;background:var(--paper)}
 .guide-liste strong{font-size:14px}
@@ -1133,6 +1142,7 @@ table.es-payes{min-width:0;width:100%}
     <button class="tab" role="tab" type="button" id="tab-btn-dashboard" data-tab="dashboard" data-grp="accueil" aria-selected="true">Tableau de bord</button>
     <button class="tab" role="tab" type="button" id="tab-btn-pointeuse" data-tab="pointeuse" data-grp="accueil" aria-selected="false">Pointeuse</button>
     <button class="tab" role="tab" type="button" id="tab-btn-espace" data-tab="espace" data-grp="accueil" aria-selected="false" hidden>Mon espace</button>
+    <button class="tab" role="tab" type="button" id="tab-btn-securite" data-tab="securite" data-grp="accueil" aria-selected="false" hidden>Sécurité</button>
     <button class="tab" role="tab" type="button" id="tab-btn-entreprises" data-tab="entreprises" data-grp="dossiers" aria-selected="false">Entreprises</button>
     <button class="tab" role="tab" type="button" id="tab-btn-declaration" data-tab="declaration" data-grp="dossiers" aria-selected="false" data-agent>Saisir une déclaration</button>
     <button class="tab" role="tab" type="button" id="tab-btn-recouvrement" data-tab="recouvrement" data-grp="dossiers" aria-selected="false">Recouvrement</button>
@@ -1353,6 +1363,22 @@ table.es-payes{min-width:0;width:100%}
       <div class="toolbar"><button class="btn ghost" type="button" id="espace-guide">Guide</button><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
     </div>
     <div id="espace-main"></div>
+  </section>
+
+  <!-- SÉCURITÉ : service de la protection -->
+  <section class="panel" id="tab-securite" role="tabpanel" aria-labelledby="tab-btn-securite" hidden>
+    <div class="panel-head">
+      <div>
+        <h2>Sécurité</h2>
+        <p class="sub">Service de la protection : les entrées dans la Préfecture, les contrôles d’identité avec la photo de la pièce, les rapports.</p>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost" type="button" id="secu-entree">Nouvelle entrée</button>
+        <button class="btn ghost" type="button" id="secu-controle">Nouveau contrôle</button>
+        <button class="btn" type="button" id="secu-rapport">Nouveau rapport</button>
+      </div>
+    </div>
+    <div id="secu-main"></div>
   </section>
 
   <!-- SERVICES PUBLICS : PERSONNEL (ressources humaines) -->
@@ -3457,12 +3483,12 @@ function applyRole() {
   // Rôle « pointeuse » : la pointeuse et rien d'autre.
   if (S.role === "pointeuse") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "pointeuse"; }); if (S.tab !== "pointeuse") showTab("pointeuse"); }
   // Fonctionnaire sans autre accès : son espace, rien d'autre.
-  else if (S.role === "agent") { $$(".tab").forEach(b => { b.hidden = b.dataset.tab !== "espace"; }); if (S.tab !== "espace") showTab("espace"); }
+  else if (S.role === "agent") { $$(".tab").forEach(b => { b.hidden = !(b.dataset.tab === "espace" || (b.dataset.tab === "securite" && !!S.protection)); }); if (S.tab !== "espace" && !(S.tab === "securite" && S.protection)) showTab("espace"); }
   // Rôle « rh » : le personnel et ses contrats, rien d'autre (la base ne lui montre que cela).
-  else if (S.role === "rh") { $$(".tab").forEach(b => { b.hidden = !(b.dataset.tab === "personnel" || (b.dataset.tab === "espace" && S.monFid)); }); if (S.tab !== "personnel" && S.tab !== "espace") showTab("personnel"); }
+  else if (S.role === "rh") { $$(".tab").forEach(b => { b.hidden = !(b.dataset.tab === "personnel" || (b.dataset.tab === "espace" && S.monFid) || (b.dataset.tab === "securite" && !!S.protection)); }); if (S.tab !== "personnel" && S.tab !== "espace") showTab("personnel"); }
   // Pointeuse fermée : l'onglet disparaît pour tous ; les heures se saisissent dans la paye.
   else if (ptFerme()) { $("#tab-btn-pointeuse").hidden = true; if (S.tab === "pointeuse") showTab("payes"); }
-  if (S.role !== "agent" && S.role !== "pointeuse" && S.role !== "rh") $("#tab-btn-espace").hidden = !S.monFid;
+  if (S.role !== "agent" && S.role !== "pointeuse" && S.role !== "rh") { $("#tab-btn-espace").hidden = !S.monFid; $("#tab-btn-securite").hidden = !secuAcces(); }
   if (known && S.role !== "agent" && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
@@ -3755,6 +3781,7 @@ async function init() {
   if (S.tab === "journal" && S.role !== "pointeuse") loadJournal();
   if (S.tab === "reglages" && S.admin) loadKeys();
   setTimeout(guideAuto, 1200);
+  chargerProtection();
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
 }
 
@@ -3766,7 +3793,8 @@ async function initAgent(sb) {
   $$("#grp-accueil span").forEach(x => { x.textContent = "Mon espace"; });
   applyRole();
   await chargerMonEspace();
-  setInterval(() => { if (document.visibilityState === "visible") chargerMonEspace(); }, 20000);
+  await chargerProtection();
+  setInterval(() => { if (document.visibilityState !== "visible") return; chargerMonEspace(); if (S.tab === "securite") chargerSecurite(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") chargerMonEspace(); });
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
 }
@@ -3879,6 +3907,7 @@ function subscribe() {
   col("sanctions", s => { S.sanctions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("demandesAgents", s => { S.dags = s.docs.map(d => Object.assign({ id: d.id }, d.data())); majBadges(); });
   col("entretiens", s => { S.entretiens = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  for (const c of SECU_COLS) col(c, s => { S.secu = S.secu || {}; S.secu[c] = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); setTimeout(ptAlertes, 0); });
   col("sons", s => { S.sons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3894,6 +3923,7 @@ function schedule() {
   setTimeout(() => { if (raf) { cancelAnimationFrame(raf); raf = 0; render(); } }, 250);
 }
 function render() {
+  renderSecurite();
   const c = cfg();
   $$(".money[data-cur]").forEach(m => { if (m.dataset.cur !== "%") m.dataset.cur = c.devise || "€"; });
   renderOptions();
@@ -6314,7 +6344,7 @@ function openAccueil(etape) {
   let body;
   if (i === 0) body = [
     h("p", { class: "guide-intro", text: "Votre espace rassemble ce qui vous concerne à la Préfecture. Seuls vous et l’encadrement (Direction, Inspection, ressources humaines) y avez accès ; vos événements personnels, vous seul." }),
-    h("ul", { class: "guide-grille" }, GUIDE_RUBRIQUES.map(([t, d]) => h("li", {}, h("strong", { text: t }), h("span", { text: d }))))];
+    h("ul", { class: "guide-grille" }, GUIDE_RUBRIQUES.concat(S.protection ? [["Sécurité (onglet à côté)", "Service de la protection : entrées dans la Préfecture, contrôles d’identité avec la photo de la pièce, rapports."]] : []).map(([t, d]) => h("li", {}, h("strong", { text: t }), h("span", { text: d }))))];
   else if (i === 1) {
     const deja = isStandalone();
     body = [h("p", { class: "guide-intro", text: "Installé, le guichet s’ouvre d’un geste depuis l’écran d’accueil ou le bureau, sans barre du navigateur, et peut recevoir les notifications." }),
@@ -6341,6 +6371,346 @@ function openAccueil(etape) {
   // Fermé par la croix ou Échap : considéré comme vu.
   dlg.addEventListener("close", () => marquerAccueil(fid), { once: true });
 }
+/* ---------- Sécurité : service de la protection (supabase/v38_securite.sql) ---------- */
+// Les agents et les responsables du service de la protection (grade), et la Direction : registre des
+// entrées dans la Préfecture, contrôles d'identité avec la photo de la pièce, rapports. Collections du
+// registre (journal, sauvegardes) ; les photos vont dans l'espace privé « securite ». Les agents écrivent
+// les entrées et les contrôles (tous peuvent noter une sortie) et leurs propres rapports ; les responsables
+// et la Direction lisent tout, marquent les rapports comme lus et suppriment.
+const SECU_COLS = ["securiteEntrees", "securiteControles", "securiteRapports"];
+const SECU_GRADE = /service de la protection|agent de s[ée]curit[ée]|(responsable|directeur|directrice|chef).*s[ée]curit[ée]/i;
+const protectionDe = grade => (!SECU_GRADE.test(grade || "") ? null : /^(responsable|directeur|directrice|chef)/i.test(String(grade).trim()) ? "responsable" : "agent");
+const SECU_MOTIFS = { rdv: "Rendez-vous", convocation: "Convocation", depot: "Dépôt de document", livraison: "Livraison", autre: "Autre" };
+const SECU_CTRL_MOTIFS = { entree: "Entrée dans les locaux", aleatoire: "Contrôle aléatoire", suspect: "Comportement suspect", autre: "Autre" };
+const SECU_RESULTATS = { conforme: ["Conforme", "ok"], anomalie: ["Anomalie", "warn"], faux: ["Faux document", "bad"], refus: ["Refus de présenter une pièce", "bad"], recherche: ["Personne recherchée", "bad"] };
+const SECU_RAPPORTS = { incident: "Incident", intervention: "Intervention", ronde: "Ronde", main_courante: "Main courante", autre: "Autre" };
+const secuAcces = () => S.connected && (!!S.protection || S.role === "direction");
+const secuEcrit = () => secuAcces() && (!!S.protection || !S.readOnly);
+const secuResp = () => S.connected && (S.protection === "responsable" || (S.role === "direction" && !S.readOnly));
+const secuListe = c => ((S.secu && S.secu[c]) || []).slice();
+// Rôle dans le service : d'après la base (mise à jour 38), sinon d'après le grade de la fiche.
+async function chargerProtection() {
+  if (!S.sb || !S.uid) return;
+  let r;
+  try { r = await S.sb.rpc("ma_protection"); } catch (e) { r = { error: e }; }
+  if (r.error) {
+    S.secuAbsente = /ma_protection|function|fonction|schema cache|not find/i.test(r.error.message || "");
+    const f = (S.espace && S.espace.fonctionnaire) || (S.monFid && foncOf(S.monFid)) || null;
+    S.protection = f ? protectionDe(f.grade) : null;
+  } else { S.secuAbsente = false; S.protection = r.data || null; }
+  applyRole();
+  if (secuAcces() && !S.db) chargerSecurite();
+  renderSecurite();
+}
+// Sans le registre complet (Mon espace) : lecture directe des trois collections, que la base filtre.
+async function chargerSecurite() {
+  if (!S.sb || S.db || S.secuCharge) return;
+  S.secuCharge = true;
+  try {
+    const { data, error } = await S.sb.from("registre").select("collection,id,data").in("collection", SECU_COLS);
+    if (error) S.secuErr = error.message || "lecture refusée";
+    else {
+      const out = Object.fromEntries(SECU_COLS.map(c => [c, []]));
+      for (const r of data || []) if (out[r.collection]) out[r.collection].push(Object.assign({ id: r.id }, r.data));
+      S.secu = out; S.secuErr = null;
+    }
+  } catch (e) { S.secuErr = e.message || "lecture refusée"; }
+  finally { S.secuCharge = false; }
+  renderSecurite();
+}
+const secuNouvelId = c => (S.db ? S.db.collection(c).doc().id : "se" + shortId());
+async function secuEnregistrer(c, id, data) {
+  if (S.db) return write(() => S.db.doc(c + "/" + id).set(data));
+  const { error } = await S.sb.from("registre").upsert({ collection: c, id, data });
+  if (error) {
+    toast(/row-level|policy|permission/i.test(error.message || "") ? (S.secuAbsente ? "La base n’est pas prête : la Direction doit exécuter supabase/v38_securite.sql." : "Enregistrement refusé : votre grade ne donne pas accès à la sécurité.") : "L’enregistrement a échoué. Vérifiez votre connexion puis réessayez.", true);
+    signalerErreur("ecriture", error.message || "registre", { details: { collection: c, code: error.code || null } });
+    return false;
+  }
+  S.secu = S.secu || {}; S.secu[c] = secuListe(c).filter(x => x.id !== id).concat([Object.assign({ id }, data)]);
+  renderSecurite(); chargerSecurite();
+  return true;
+}
+// Deux clics : le dossier et ses photos partent pour de bon (les photos ne se restaurent pas depuis le journal).
+async function secuConfirmer(bt, c, x) {
+  if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = (x.photos || []).length ? "Confirmer : dossier et photos supprimés" : "Confirmer la suppression"; return false; }
+  bt.disabled = true;
+  const ok = await secuSupprimer(c, x);
+  if (!ok) bt.disabled = false;
+  return ok;
+}
+async function secuSupprimer(c, x) {
+  const paths = (x.photos || []).map(p => p.path).filter(Boolean);
+  const ok = S.db ? await write(() => S.db.doc(c + "/" + x.id).delete()) : !(await S.sb.from("registre").delete().eq("collection", c).eq("id", x.id)).error;
+  if (!ok) { toast("Suppression refusée.", true); return false; }
+  if (paths.length) { try { await S.sb.storage.from("securite").remove(paths); } catch (e) { /* photos laissées */ } }
+  if (S.secu && S.secu[c]) S.secu[c] = S.secu[c].filter(y => y.id !== x.id);
+  renderSecurite(); chargerSecurite();
+  return true;
+}
+// Photos : réduites comme les pièces des contrôles fiscaux, envoyées dans l'espace « securite ».
+const SECU_URLS = new Map();
+async function secuPhotoUrl(path) {
+  if (SECU_URLS.has(path)) return SECU_URLS.get(path);
+  const { data, error } = await S.sb.storage.from("securite").download(path);
+  if (error || !data) return null;
+  const u = URL.createObjectURL(data);
+  SECU_URLS.set(path, u);
+  return u;
+}
+function secuMiniature(p, retirer) {
+  const img = h("img", { alt: p.nom || "Photo", loading: "lazy" });
+  const box = h("div", { class: "secu-photo" }, img, retirer ? h("button", { type: "button", "aria-label": "Retirer la photo", onclick: retirer, text: "×" }) : null);
+  (p.url ? Promise.resolve(p.url) : secuPhotoUrl(p.path)).then(u => { if (u) img.src = u; else img.alt = "Photo indisponible"; });
+  img.addEventListener("click", () => { if (img.src) window.open(img.src, "_blank", "noopener"); });
+  return box;
+}
+// Champ photos d'un formulaire : choisir ou prendre une photo, ou coller une capture (Ctrl + V).
+let collageSecu = null;
+function secuChampPhotos(existantes, aide) {
+  const st = { garder: (existantes || []).slice(), nouvelles: [] };
+  const liste = h("div", { class: "secu-photos" });
+  const dessiner = () => fill(liste, st.garder.map(p => secuMiniature(p, () => { st.garder = st.garder.filter(x => x !== p); dessiner(); })),
+    st.nouvelles.map(n => secuMiniature({ url: n.url, nom: n.file.name }, () => { st.nouvelles = st.nouvelles.filter(x => x !== n); dessiner(); })));
+  const ajouter = files => { for (const f of files || []) if (f && /^image\//.test(f.type) && st.garder.length + st.nouvelles.length < 6) st.nouvelles.push({ file: f, url: URL.createObjectURL(f) }); dessiner(); };
+  const input = h("input", { type: "file", accept: "image/*", multiple: true });
+  input.addEventListener("change", () => { ajouter(input.files); input.value = ""; });
+  const zone = h("div", { class: "secu-ajout" }, h("span", { class: "hint", text: aide || "Photo de la carte d’identité : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Six au plus." }), input, liste);
+  collageSecu = { zone, fn: ev => { const f = imageCollee(ev.clipboardData); if (f) { ev.preventDefault(); ajouter([f]); } } };
+  dessiner();
+  return { el: zone, async envoyer(c, id) {
+    const out = st.garder.slice();
+    for (const n of st.nouvelles) {
+      let blob;
+      try { blob = await compressImage(n.file); } catch (e) { toast(`Impossible de lire « ${n.file.name} ».`, true); continue; }
+      const path = `${c}/${id}/${shortId()}.jpg`;
+      const { error } = await S.sb.storage.from("securite").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+      if (error) { toast(/bucket|not found|row-level|policy/i.test(error.message || "") ? "L’espace des photos n’est pas prêt : la Direction doit exécuter supabase/v38_securite.sql." : "Photo refusée : " + (error.message || "erreur inconnue"), true); return null; }
+      out.push({ path, nom: n.file.name || "photo.jpg", taille: blob.size, at: nowISO() });
+    }
+    return out;
+  }, retirees: () => (existantes || []).filter(p => !st.garder.includes(p)).map(p => p.path) };
+}
+const secuAuteur = () => ({ fid: S.monFid || null, agent: S.agentName || "" });
+const hhmm = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
+const quandSecu = iso => { const d = new Date(iso); if (isNaN(d)) return "—"; return jourCle(d) === jourCle(new Date()) ? "aujourd’hui à " + hhmm(iso) : fmtDateTime(d); };
+const secuDate = el => { const d = el.value ? new Date(el.value) : new Date(); return isNaN(d) ? nowISO() : d.toISOString(); };
+
+// Entrées dans la Préfecture
+function openSecuEntree(x, back) {
+  if (!secuEcrit()) return;
+  const v = x || {};
+  const nom = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom" }); nom.value = v.nom || "";
+  const qualite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : avocat, patron de Taxi G7, citoyen" }); qualite.value = v.qualite || "";
+  const motif = h("select", {}, Object.entries(SECU_MOTIFS).map(([k, t]) => h("option", { value: k, text: t }))); motif.value = v.motif || "rdv";
+  const precision = h("input", { autocomplete: "off", maxlength: "120", placeholder: "Précision (facultatif)" }); precision.value = v.precision || "";
+  const visite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : Direction des finances publiques" }); visite.value = v.visite || "";
+  const numero = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); numero.value = v.numero || "";
+  const arrivee = h("input", { type: "datetime-local" }); arrivee.value = toLocalInput(v.arrivee ? new Date(v.arrivee) : new Date());
+  const note = h("textarea", { rows: "2", maxlength: "500" }); note.value = v.note || "";
+  const photos = secuChampPhotos(v.photos, "Photo de la pièce d’identité présentée à l’entrée : choisissez ou prenez une photo, ou collez une capture (Ctrl + V).");
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Enregistrer l’entrée" });
+  go.addEventListener("click", async () => {
+    if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom de la personne."; nom.focus(); return; }
+    go.disabled = true;
+    const id = x ? x.id : secuNouvelId("securiteEntrees");
+    const ph = await photos.envoyer("securiteEntrees", id);
+    if (!ph) { go.disabled = false; return; }
+    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), qualite: qualite.value.trim(), motif: motif.value, precision: precision.value.trim(), visite: visite.value.trim(),
+      numero: numero.value.trim(), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
+    delete data.id;
+    if (await secuEnregistrer("securiteEntrees", id, data)) {
+      const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
+      toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.`); if (back) back(); else closeDialog();
+    } else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Sécurité · entrées", title: x ? "Modifier l’entrée" : "Nouvelle entrée", wide: true,
+    body: [h("div", { class: "row2" }, field("se-nom", "Personne qui entre", nom), field("se-qualite", "Qualité", qualite)),
+      h("div", { class: "row2" }, field("se-motif", "Motif de la venue", motif), field("se-precision", "Précision", precision)),
+      h("div", { class: "row2" }, field("se-visite", "Personne ou service visité", visite), field("se-arrivee", "Arrivée", arrivee)),
+      field("se-numero", "Numéro de la pièce d’identité", numero), photos.el, field("se-note", "Note", note), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+async function secuSortie(x) {
+  const data = Object.assign({}, x, { sortie: nowISO(), sortiePar: S.agentName || "" }); delete data.id;
+  if (await secuEnregistrer("securiteEntrees", x.id, data)) toast(`Sortie de ${x.nom} notée à ${hhmm(data.sortie)}.`);
+}
+function openSecuEntreeVue(id) {
+  const x = secuListe("securiteEntrees").find(y => y.id === id); if (!x) return;
+  const reopen = () => openSecuEntreeVue(id), resp = secuResp();
+  openDialog({ eyebrow: "Sécurité · entrée", title: x.nom || "Entrée", stampEl: x.sortie ? stamp(["SORTI", "muted"]) : stamp(["DANS LES LOCAUX", "ok"]), wide: true,
+    body: [kv([["Qualité", x.qualite || "—"], ["Motif", (SECU_MOTIFS[x.motif] || "—") + (x.precision ? " · " + x.precision : "")], ["Personne ou service visité", x.visite || "—"],
+      ["Arrivée", fmtDateTime(new Date(x.arrivee))], ["Sortie", x.sortie ? `${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " · notée par " + x.sortiePar : ""}` : "pas encore notée"],
+      ["Pièce d’identité", x.pieceVue ? (x.numero ? "vue · n° " + x.numero : "vue") : "non vérifiée"], ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
+      (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
+      resp ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteEntrees", x)) { toast("Entrée supprimée."); closeDialog(); } }, text: "Supprimer" }) : null,
+      h("span", { class: "spacer" }),
+      secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuEntree(x, reopen), text: "Modifier" }) : null,
+      secuEcrit() && !x.sortie ? h("button", { class: "btn small", type: "button", onclick: async () => { await secuSortie(x); closeDialog(); }, text: "Noter la sortie" }) : null] });
+}
+
+// Contrôles d'identité
+// Même personne : mêmes mots, dans n'importe quel ordre (« Jean Dupont » = « DUPONT Jean »).
+const cleNom = x => norm(x).split(" ").filter(Boolean).sort().join(" ");
+const memeSecu = (a, b) => !!cleNom(a) && cleNom(a) === cleNom(b);
+function openSecuControle(x, back) {
+  if (!secuEcrit()) return;
+  const v = x || {};
+  const nom = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom inscrits sur la pièce" }); nom.value = v.nom || "";
+  const naissance = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Ex. : 12/03/1994" }); naissance.value = v.naissance || "";
+  const numero = h("input", { autocomplete: "off", maxlength: "40" }); numero.value = v.numero || "";
+  const lieu = h("input", { autocomplete: "off", maxlength: "80" }); lieu.value = v.lieu || "Entrée de la Préfecture";
+  const motif = h("select", {}, Object.entries(SECU_CTRL_MOTIFS).map(([k, t]) => h("option", { value: k, text: t }))); motif.value = v.motif || "entree";
+  const resultat = h("select", {}, Object.entries(SECU_RESULTATS).map(([k, t]) => h("option", { value: k, text: t[0] }))); resultat.value = v.resultat || "conforme";
+  const date = h("input", { type: "datetime-local" }); date.value = toLocalInput(v.date ? new Date(v.date) : new Date());
+  const notes = h("textarea", { rows: "3", maxlength: "1500" }); notes.value = v.notes || "";
+  const photos = secuChampPhotos(v.photos);
+  const deja = h("p", { class: "hint", "aria-live": "polite" });
+  const voir = () => { const l = secuListe("securiteControles").filter(c => c.id !== v.id && memeSecu(c.nom, nom.value)); deja.hidden = !l.length; deja.textContent = l.length ? `Déjà contrôlé ${l.length} fois, dernière le ${fmtDateTime(new Date(l.sort((a, b) => String(b.date).localeCompare(String(a.date)))[0].date))}${l.some(c => c.resultat !== "conforme") ? " (avec une anomalie)" : ""}.` : ""; };
+  nom.addEventListener("input", voir); voir();
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Enregistrer le contrôle" });
+  go.addEventListener("click", async () => {
+    if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom inscrit sur la pièce."; nom.focus(); return; }
+    go.disabled = true;
+    const id = x ? x.id : secuNouvelId("securiteControles");
+    const ph = await photos.envoyer("securiteControles", id);
+    if (!ph) { go.disabled = false; return; }
+    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), naissance: naissance.value.trim(), numero: numero.value.trim(), lieu: lieu.value.trim(), motif: motif.value,
+      resultat: resultat.value, date: secuDate(date), notes: notes.value.trim(), photos: ph, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
+    delete data.id;
+    if (await secuEnregistrer("securiteControles", id, data)) {
+      const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
+      toast(x ? "Contrôle modifié." : `Contrôle de ${data.nom} enregistré.`); if (back) back(); else closeDialog();
+    } else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Sécurité · contrôles d’identité", title: x ? "Modifier le contrôle" : "Nouveau contrôle d’identité", wide: true,
+    body: [h("div", { class: "row2" }, field("sc-nom", "Nom et prénom", nom), field("sc-naissance", "Date de naissance", naissance)), deja,
+      h("div", { class: "row2" }, field("sc-numero", "Numéro de la pièce", numero), field("sc-date", "Date et heure", date)),
+      h("div", { class: "row2" }, field("sc-lieu", "Lieu", lieu), field("sc-motif", "Motif", motif)),
+      field("sc-resultat", "Résultat", resultat), photos.el, field("sc-notes", "Notes", notes), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function openSecuControleVue(id) {
+  const x = secuListe("securiteControles").find(y => y.id === id); if (!x) return;
+  const reopen = () => openSecuControleVue(id), res = SECU_RESULTATS[x.resultat] || SECU_RESULTATS.conforme;
+  const autres = secuListe("securiteControles").filter(c => c.id !== x.id && memeSecu(c.nom, x.nom)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  openDialog({ eyebrow: "Sécurité · contrôle d’identité", title: x.nom || "Contrôle", stampEl: stamp([res[0].toUpperCase(), res[1]]), wide: true,
+    body: [kv([["Date de naissance", x.naissance || "—"], ["Numéro de la pièce", x.numero || "—"], ["Date", fmtDateTime(new Date(x.date))], ["Lieu", x.lieu || "—"],
+      ["Motif", SECU_CTRL_MOTIFS[x.motif] || "—"], ["Résultat", res[0]], ["Contrôlé par", x.agent || "—"], x.notes ? ["Notes", x.notes] : null]),
+      (x.photos || []).length ? sec("Pièce d’identité", h("div", { class: "secu-grande" }, x.photos.map(p => { const img = h("img", { alt: "Pièce d’identité" }); secuPhotoUrl(p.path).then(u => { if (u) img.src = u; }); return img; })))
+        : h("p", { class: "muted", text: "Pas de photo de la pièce." }),
+      autres.length ? sec(`Autres contrôles de ${x.nom}`, h("ul", { class: "ent-list" }, autres.slice(0, 10).map(c => h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuControleVue(c.id), text: fmtDateTime(new Date(c.date)) }), h("span", { class: "meta", text: `${c.lieu || "—"} · ${c.agent || "—"}` })),
+        chip(SECU_RESULTATS[c.resultat] || SECU_RESULTATS.conforme), h("span", {}))))) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
+      secuResp() ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteControles", x)) { toast("Contrôle supprimé."); closeDialog(); } }, text: "Supprimer" }) : null,
+      h("span", { class: "spacer" }), secuEcrit() ? h("button", { class: "btn small", type: "button", onclick: () => openSecuControle(x, reopen), text: "Modifier" }) : null] });
+}
+
+// Rapports
+const rapportModifiable = x => secuResp() || (!!S.monFid && x.fid === S.monFid && !x.luLe);
+function openSecuRapport(x, back) {
+  if (!secuEcrit()) return;
+  const v = x || {};
+  const type = h("select", {}, Object.entries(SECU_RAPPORTS).map(([k, t]) => h("option", { value: k, text: t }))); type.value = v.type || "incident";
+  const titre = h("input", { autocomplete: "off", maxlength: "120", placeholder: "Ex. : Altercation à l’accueil" }); titre.value = v.titre || "";
+  const date = h("input", { type: "datetime-local" }); date.value = toLocalInput(v.date ? new Date(v.date) : new Date());
+  const lieu = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : hall d’accueil" }); lieu.value = v.lieu || "";
+  const personnes = h("input", { autocomplete: "off", maxlength: "200", placeholder: "Noms, séparés par des virgules" }); personnes.value = v.personnes || "";
+  const recit = h("textarea", { rows: "8", maxlength: "6000", placeholder: "Ce qui s’est passé, dans l’ordre : heure, faits, mesures prises, suites." }); recit.value = v.recit || "";
+  const photos = secuChampPhotos(v.photos, "Photos ou captures utiles au rapport (facultatif) : choisissez, prenez une photo, ou collez une capture (Ctrl + V).");
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Remettre le rapport" });
+  go.addEventListener("click", async () => {
+    if (titre.value.trim().length < 3) { err.textContent = "Donnez un titre au rapport."; titre.focus(); return; }
+    if (recit.value.trim().length < 10) { err.textContent = "Racontez ce qui s’est passé."; recit.focus(); return; }
+    go.disabled = true;
+    const id = x ? x.id : secuNouvelId("securiteRapports");
+    const ph = await photos.envoyer("securiteRapports", id);
+    if (!ph) { go.disabled = false; return; }
+    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { type: type.value, titre: titre.value.trim(), date: secuDate(date), lieu: lieu.value.trim(), personnes: personnes.value.trim(),
+      recit: recit.value.trim(), photos: ph, statut: (x && x.statut) || "remis", at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
+    delete data.id;
+    if (await secuEnregistrer("securiteRapports", id, data)) {
+      const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
+      toast(x ? "Rapport modifié." : "Rapport remis aux responsables de la protection."); if (back) back(); else closeDialog();
+    } else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Sécurité · rapports", title: x ? "Modifier le rapport" : "Nouveau rapport", wide: true,
+    body: [h("div", { class: "row2" }, field("sr-type", "Type", type), field("sr-date", "Date et heure", date)), field("sr-titre", "Titre", titre),
+      h("div", { class: "row2" }, field("sr-lieu", "Lieu", lieu), field("sr-personnes", "Personnes impliquées", personnes)), field("sr-recit", "Récit", recit), photos.el, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function openSecuRapportVue(id) {
+  const x = secuListe("securiteRapports").find(y => y.id === id); if (!x) return;
+  const reopen = () => openSecuRapportVue(id);
+  openDialog({ eyebrow: `Sécurité · ${(SECU_RAPPORTS[x.type] || "Rapport").toLowerCase()}`, title: x.titre || "Rapport", stampEl: x.luLe ? stamp(["LU", "ok"]) : stamp(["REMIS", "info"]), wide: true,
+    body: [kv([["Date", fmtDateTime(new Date(x.date))], ["Lieu", x.lieu || "—"], ["Personnes impliquées", x.personnes || "—"], ["Rédigé par", x.agent || "—"],
+      ["Lu", x.luLe ? `le ${fmtDateTime(new Date(x.luLe))}${x.luPar ? " par " + x.luPar : ""}` : "pas encore"]]),
+      sec("Récit", h("p", { style: "margin:0;white-space:pre-wrap", text: x.recit || "" })),
+      (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
+      secuResp() ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteRapports", x)) { toast("Rapport supprimé."); closeDialog(); } }, text: "Supprimer" }) : null,
+      h("span", { class: "spacer" }),
+      rapportModifiable(x) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuRapport(x, reopen), text: "Modifier" }) : null,
+      secuResp() && !x.luLe ? h("button", { class: "btn small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const d = Object.assign({}, x, { statut: "lu", luLe: nowISO(), luPar: S.agentName || "" }); delete d.id; if (await secuEnregistrer("securiteRapports", x.id, d)) { toast("Rapport marqué comme lu."); reopen(); } }, text: "Marquer comme lu" }) : null] });
+}
+
+// L'onglet
+function renderSecurite() {
+  const box = $("#secu-main");
+  if (!box) return;
+  const ok = secuAcces(), w = secuEcrit();
+  ["#secu-entree", "#secu-controle", "#secu-rapport"].forEach(sel => { $(sel).hidden = !w; });
+  if (!ok) { fill(box); return; }
+  if (S.secuErr && !S.db) { fill(box, h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Lecture impossible. " }), S.secuAbsente ? "La Direction doit exécuter supabase/v38_securite.sql dans Supabase." : S.secuErr))); return; }
+  const vue = ["entrees", "controles", "rapports"].includes(S.secuVue) ? S.secuVue : "entrees", q = norm(S.secuQ || "");
+  const trouve = (...t) => !q || t.some(x => norm(x).includes(q));
+  const ent = secuListe("securiteEntrees").sort((a, b) => String(b.arrivee).localeCompare(String(a.arrivee)));
+  const ctl = secuListe("securiteControles").sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const rap = secuListe("securiteRapports").sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const presents = ent.filter(x => !x.sortie), aLire = rap.filter(x => !x.luLe);
+  const seg = h("div", { class: "seg", role: "group", "aria-label": "Rubrique de la sécurité" }, [["entrees", `Entrées${presents.length ? " · " + presents.length + " dans les locaux" : ""}`], ["controles", "Contrôles d’identité"], ["rapports", `Rapports${secuResp() && aLire.length ? " · " + aLire.length + " à lire" : ""}`]].map(([k, t]) =>
+    h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.secuVue = k; renderSecurite(); }, text: t })));
+  const rech = h("input", { type: "search", placeholder: "Rechercher un nom", "aria-label": "Rechercher un nom", value: S.secuQ || "" });
+  rech.addEventListener("input", () => { S.secuQ = rech.value; clearTimeout(S.secuQt); S.secuQt = setTimeout(() => { renderSecurite(); const r = $("#secu-main input[type=search]"); if (r) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } }, 250); });
+  const notice = S.secuAbsente ? h("div", { class: "notice" }, h("div", {}, h("strong", { text: "Base pas encore prête. " }), "La Direction doit exécuter supabase/v38_securite.sql pour que les agents de la protection enregistrent et voient les photos.")) : null;
+  let corps;
+  if (vue === "entrees") {
+    const l = ent.filter(x => trouve(x.nom, x.qualite, x.visite, x.numero)), dans = l.filter(x => !x.sortie), parties = l.filter(x => x.sortie).slice(0, 100);
+    const ligne = x => h("li", { class: x.sortie ? null : "secu-present" },
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuEntreeVue(x.id), text: `${x.nom}${x.qualite ? " · " + x.qualite : ""}` }),
+        h("span", { class: "meta", text: [SECU_MOTIFS[x.motif] || "", x.visite ? "voit " + x.visite : "", "arrivé " + quandSecu(x.arrivee), x.sortie ? "sorti à " + hhmm(x.sortie) : "", x.agent].filter(Boolean).join(" · ") })),
+      chip(x.pieceVue ? ["Pièce vue", "ok"] : ["Pièce non vue", "warn"]),
+      !x.sortie && w ? h("button", { class: "btn ghost small", type: "button", onclick: () => secuSortie(x), text: "Sortie" }) : h("span", {}));
+    corps = [h("h4", { class: "mini-title", text: `Dans les locaux (${dans.length})` }),
+      dans.length ? h("ul", { class: "ent-list" }, dans.map(ligne)) : h("p", { class: "muted", text: "Personne n’est noté dans les locaux." }),
+      h("h4", { class: "mini-title", style: "margin-top:16px", text: "Sorties récentes" }),
+      parties.length ? h("ul", { class: "ent-list" }, parties.map(ligne)) : h("p", { class: "muted", text: q ? "Aucune entrée à ce nom." : "Aucune sortie notée." })];
+  } else if (vue === "controles") {
+    const l = ctl.filter(x => trouve(x.nom, x.numero, x.lieu)).slice(0, 150);
+    corps = l.length ? h("ul", { class: "ent-list" }, l.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuControleVue(x.id), text: x.nom }),
+        h("span", { class: "meta", text: [quandSecu(x.date), x.lieu, SECU_CTRL_MOTIFS[x.motif] || "", (x.photos || []).length ? `${x.photos.length} photo${plural(x.photos.length)}` : "sans photo", x.agent].filter(Boolean).join(" · ") })),
+      chip(SECU_RESULTATS[x.resultat] || SECU_RESULTATS.conforme), h("span", {}))))
+      : h("p", { class: "muted", text: q ? "Aucun contrôle à ce nom." : "Aucun contrôle d’identité enregistré." });
+  } else {
+    const l = rap.filter(x => trouve(x.titre, x.personnes, x.agent, x.lieu)).slice(0, 150);
+    corps = l.length ? h("ul", { class: "ent-list" }, l.map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuRapportVue(x.id), text: x.titre }),
+        h("span", { class: "meta", text: [SECU_RAPPORTS[x.type] || "Rapport", quandSecu(x.date), x.lieu, x.agent].filter(Boolean).join(" · ") })),
+      chip(x.luLe ? ["Lu", "ok"] : ["Remis", "info"]), h("span", {}))))
+      : h("p", { class: "muted", text: q ? "Aucun rapport trouvé." : "Aucun rapport remis." });
+  }
+  fill(box, notice, h("div", { class: "secu-tete" }, seg, rech), h("div", { class: "card" }, corps));
+}
+$("#secu-entree").addEventListener("click", () => openSecuEntree(null));
+$("#secu-controle").addEventListener("click", () => openSecuControle(null));
+$("#secu-rapport").addEventListener("click", () => openSecuRapport(null));
+
 /* ---------- Guide du guichet, selon le rôle ---------- */
 // Direction, Inspection, ressources humaines : ce que chacun peut faire, rubrique par rubrique, avec un
 // bouton pour y aller. Ouvert à la première visite (par compte et par appareil), puis par le « ? » du
@@ -6425,6 +6795,7 @@ function guidePages(role) {
         ["Effectif et contrats", "Fiches, contrats de travail, modèle de contrat ; l’agent signe dans son espace.", gPerso("effectif")],
         ["Messagerie et agenda", "Une conversation par agent ; réunions et formations avec réponse demandée.", gPerso("messages")],
         ["Demandes, entretiens et sanctions", "Répondre aux demandes, partager un compte rendu d’entretien et des objectifs, sanctionner.", gPerso("demandes")],
+        ["Sécurité", "Le service de la protection : entrées dans la Préfecture, contrôles d’identité avec la photo de la pièce, rapports à lire.", gOnglet("securite")],
         espace] },
     { titre: "Réglages et sécurité", intro: "Réservés à la Direction.",
       items: [["Calendrier, taux et barèmes", "Rythme des déclarations, délais, impôt, avantages fiscaux, recouvrement et surveillance des comptes.", gReglage("calendrier")],
@@ -10335,7 +10706,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["securiteEntrees", "securiteControles", "securiteRapports", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -11634,6 +12005,20 @@ function describe(e) {
       if (a.statut !== b.statut) return a.statut === "acceptee" ? `a accepté la demande de ${v.nom || "un fonctionnaire"} : ${v.objet || t}` : a.statut === "refusee" ? `a refusé la demande de ${v.nom || "un fonctionnaire"} : ${v.objet || t}` : a.statut === "annulee" ? `a annulé sa demande : ${v.objet || t}` : `a modifié la demande de ${v.nom || "un fonctionnaire"}`;
       return `a modifié la demande de ${v.nom || "un fonctionnaire"}`;
     }
+    case "securiteEntrees":
+      if (x === "ajout") return `a noté l’entrée de ${v.nom || "?"} dans la Préfecture`;
+      if (x === "suppression") return `a supprimé l’entrée de ${v.nom || "?"}`;
+      if (a.sortie && !b.sortie) return `a noté la sortie de ${v.nom || "?"}`;
+      return `a modifié l’entrée de ${v.nom || "?"}`;
+    case "securiteControles":
+      if (x === "ajout") return `a contrôlé l’identité de ${v.nom || "?"}${v.resultat && v.resultat !== "conforme" ? " (" + ((SECU_RESULTATS[v.resultat] || [""])[0]).toLowerCase() + ")" : ""}`;
+      if (x === "suppression") return `a supprimé le contrôle d’identité de ${v.nom || "?"}`;
+      return `a modifié le contrôle d’identité de ${v.nom || "?"}`;
+    case "securiteRapports":
+      if (x === "ajout") return `a remis un rapport : ${v.titre || "?"}`;
+      if (x === "suppression") return `a supprimé le rapport « ${v.titre || "?"} »`;
+      if (a.luLe && !b.luLe) return `a lu le rapport « ${v.titre || "?"} »`;
+      return `a modifié le rapport « ${v.titre || "?"} »`;
     case "entretiens":
       if (x === "ajout") return `a préparé un entretien avec ${v.nom || "un fonctionnaire"} (${jourTxt(v.date)})`;
       if (x === "suppression") return `a supprimé l’entretien de ${v.nom || "un fonctionnaire"} du ${jourTxt(v.date)}`;
@@ -15640,7 +16025,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["securiteEntrees", "securiteControles", "securiteRapports", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -19028,7 +19413,7 @@ function mvRow(x) {
 }
 // La fenêtre de relevé ouverte reçoit ce qui est collé (capture ou texte des mouvements).
 let collageReleve = null;
-dlg.addEventListener("paste", ev => { if (collageReleve && collageReleve.zone.isConnected) collageReleve.fn(ev); });
+dlg.addEventListener("paste", ev => { if (collageReleve && collageReleve.zone.isConnected) collageReleve.fn(ev); else if (collageSecu && collageSecu.zone.isConnected) collageSecu.fn(ev); });
 // opts : { lu (capture déjà lue, sans relecture), at (heure de la capture), entNom (entreprise proposée),
 // entDouteuse, onSaved(id) } ; utilisé par les relevés en série.
 function openReleve(e, back, image, opts) {
@@ -21346,7 +21731,8 @@ function showTab(name) {
   $$(".tab").forEach(b => { const on = b.dataset.tab === name; b.setAttribute("aria-selected", String(on)); b.tabIndex = on ? 0 : -1; });
   $$(".panel").forEach(p => { p.hidden = p.id !== "tab-" + name; });
   navSync();
-  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue", "payes", "pointeuse", "personnel", "espace"].includes(name)) schedule();
+  if (["dashboard", "entreprises", "economie", "recouvrement", "prets", "vehicules", "convocations", "contrats", "amendes", "svc", "enveloppes", "catalogue", "payes", "pointeuse", "personnel", "espace", "securite"].includes(name)) schedule();
+  if (name === "securite") { if (!S.db) chargerSecurite(); renderSecurite(); }
   if (name === "espace" && S.monFid && (!S.espace || Date.now() - (S.espaceVuLe || 0) > 15000)) { S.espaceVuLe = Date.now(); chargerMonEspace(); }
   // L'onglet choisi reste visible dans la barre, même quand elle défile.
   const rail = $("#sub-rail"), cur = tabBtn(name);
