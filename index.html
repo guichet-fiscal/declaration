@@ -1024,6 +1024,14 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .guide-grille strong{font-size:14px}
 .guide-grille span{font-size:13px;line-height:1.45;color:var(--ink-2)}
 .guide-ok{margin:0;padding:10px 12px;border-radius:10px;background:var(--ok-soft);color:var(--ok);font-weight:600}
+.guide-liste{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.guide-liste li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;padding:11px 13px;border:1px solid var(--rule);border-radius:10px;background:var(--paper)}
+.guide-liste strong{font-size:14px}
+.guide-liste span{grid-column:1;font-size:13px;line-height:1.45;color:var(--ink-2)}
+.guide-liste .btn{grid-column:2;grid-row:1 / span 2}
+.guide-role{margin:0;font-size:13px;color:var(--ink-2)}
+.guide-btn{font-weight:700;font-size:15px;line-height:1}
+@media (max-width:560px){.guide-liste li{grid-template-columns:1fr}.guide-liste .btn{grid-column:1;grid-row:auto;justify-self:start}}
 .guide-points{display:flex;gap:6px;justify-content:center;margin-top:16px}
 .guide-points span{width:7px;height:7px;border-radius:50%;background:var(--rule-2)}
 .guide-points span.on{background:var(--accent);width:20px;border-radius:4px}
@@ -1101,6 +1109,7 @@ table.es-payes{min-width:0;width:100%}
       <button class="btn ghost small" type="button" id="btn-search" aria-keyshortcuts="Control+K" title="Rechercher (Ctrl + K ou /)" hidden>Rechercher<kbd>Ctrl K</kbd></button>
       <button class="btn ghost small presence" type="button" id="presence" aria-haspopup="true" hidden>En ligne</button>
       <button class="btn ghost small theme-btn" type="button" id="notif-btn" aria-label="Notifications" title="Notifications sur cet appareil" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9z"/><path d="M10 20a2.2 2.2 0 0 0 4 0"/></svg></button>
+      <button class="btn ghost small theme-btn guide-btn" type="button" id="guide-btn" aria-label="Guide du guichet" title="Guide du guichet" hidden>?</button>
       <button class="btn ghost small theme-btn" type="button" id="theme-btn" aria-label="Thème : comme l’appareil"></button>
       <span class="role" id="role">Connexion au registre…</span>
       <button class="btn ghost small" type="button" id="logout" hidden>Se déconnecter</button>
@@ -3459,6 +3468,7 @@ function applyRole() {
   $("#logout").hidden = !S.sb || !S.uid;
   $("#btn-search").hidden = !S.connected || ["pointeuse", "rh", "agent"].includes(S.role);
   $("#notif-btn").hidden = !S.connected || !S.role || S.role === "pointeuse";
+  $("#guide-btn").hidden = !(guideRole() || (S.connected && S.role === "agent"));
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
   $$("#d-submit, #m-submit, #d-parse, #m-parse").forEach(b => { b.disabled = !ag; });
   $$("#btn-backup, #b-save").forEach(b => { b.disabled = !S.connected; });
@@ -3744,6 +3754,7 @@ async function init() {
   }
   if (S.tab === "journal" && S.role !== "pointeuse") loadJournal();
   if (S.tab === "reglages" && S.admin) loadKeys();
+  setTimeout(guideAuto, 1200);
   sb.auth.onAuthStateChange(ev => { if (ev === "SIGNED_OUT") location.replace(location.origin + location.pathname); });
 }
 
@@ -6330,6 +6341,121 @@ function openAccueil(etape) {
   // Fermé par la croix ou Échap : considéré comme vu.
   dlg.addEventListener("close", () => marquerAccueil(fid), { once: true });
 }
+/* ---------- Guide du guichet, selon le rôle ---------- */
+// Direction, Inspection, ressources humaines : ce que chacun peut faire, rubrique par rubrique, avec un
+// bouton pour y aller. Ouvert à la première visite (par compte et par appareil), puis par le « ? » du
+// bandeau. La Lecture seule n'en a pas ; un fonctionnaire a le guide de Mon espace.
+const GUIDE_ROLES = { direction: "Direction", inspecteur: "Inspection", rh: "Ressources humaines" };
+const guideRole = () => (S.connected && !S.readOnly && GUIDE_ROLES[S.role] ? S.role : null);
+const guideCle = () => `gf-guide-${S.role}-${S.uid || ""}`;
+const guideVu = () => { try { return !!localStorage.getItem(guideCle()); } catch (e) { return true; } };
+const marquerGuide = () => { try { localStorage.setItem(guideCle(), new Date().toISOString()); } catch (e) { /* sans stockage */ } };
+const gOnglet = t => () => { closeDialog(); allerA(t); };
+const gPerso = v => () => { closeDialog(); S.rhEspace = v; if (S.tab !== "personnel") allerA("personnel"); else renderPersonnel(); };
+const gReglage = sg => () => { closeDialog(); allerA("reglages"); const b = $("#set-tab-" + sg); if (b) b.click(); };
+function guidePages(role) {
+  const notif = ["Notifications sur cet appareil", "Choisissez ce que vous recevez sur ce téléphone ou cet ordinateur. À refaire sur chaque appareil.", () => { closeDialog(); openNotifs(); }, "Choisir"];
+  const espace = S.monFid ? ["Mon espace", "Comme chaque fonctionnaire : vos payes, vos heures, votre contrat, l’agenda, vos demandes et vos objectifs.", gOnglet("espace")] : null;
+  const recherche = ["Rechercher", "Ctrl + K (ou /), depuis n’importe quel onglet : une entreprise, une déclaration, un numéro de dossier.", () => { closeDialog(); $("#btn-search").click(); }, "Essayer"];
+  const capture = ["Coller une capture", "Ctrl + V n’importe où : la capture du compte d’une entreprise devient un relevé, lu tout seul.", null];
+  const bord = ["Tableau de bord", "La liste « À traiter » : ce qui attend une action, le plus urgent d’abord. Commencez votre service par là.", gOnglet("dashboard")];
+  if (role === "rh") return [
+    { titre: "Bienvenue aux ressources humaines", intro: "Vous gérez les fonctionnaires de la Préfecture dans l’onglet Personnel : fiches, contrats, suivi et dialogue. La paye, les entreprises et les réglages restent à la Direction. « Ouvrir » vous emmène à chaque rubrique ; le « ? » en haut rouvre ce guide.",
+      items: [["Tableau de bord du personnel", "Effectif, contrats à signer, demandes en attente, absents du jour, fins de période d’essai et de CDD, objectifs en retard.", gPerso("bord")],
+        ["Annuaire", "L’équipe en service, avec le grade, le poste et le profil Discord de chacun.", gPerso("annuaire")]] },
+    { titre: "Recrutement et contrats", intro: "Un nouvel agent : sa fiche, puis son contrat, puis il signe lui-même depuis son espace.",
+      items: [["Effectif", "La liste des fonctionnaires, filtrée (en service, sans contrat, à signer, signés, retirés) ; la fiche de chacun.", gPerso("effectif")],
+        ["Ajouter un fonctionnaire", "Nom, grade, compte Discord : son espace s’ouvre tout seul ; le contrat est proposé juste après.", () => { closeDialog(); allerA("personnel"); openFoncForm(null); }, "Ajouter"],
+        ["Contrats de travail", "Depuis la fiche : le contrat rempli d’après le modèle, en PDF. L’agent le lit et le signe dans son espace, ou vous enregistrez sa signature.", gPerso("effectif")],
+        ["Modèle de contrat", "Les clauses fixes, le représentant et sa signature, communs à tous les contrats.", () => { closeDialog(); allerA("personnel"); openCtrModele(); }, "Ouvrir"],
+        ["Période d’essai et fin de CDD", "Signalées une semaine avant dans le tableau de bord ; sur la fiche, « décider » : essai concluant ou prolongé.", gPerso("bord")],
+        ["Annoncer Mon espace", "Un message pour inviter chaque agent à ouvrir son espace, publié dans le salon du personnel.", () => { closeDialog(); allerA("personnel"); openAnnonceEspace(); }, "Ouvrir"]] },
+    { titre: "Suivi des agents", intro: "Tout ce que vous écrivez ou décidez arrive dans l’espace de l’agent, avec une notification.",
+      items: [["Messagerie", "Une conversation par agent ; les messages non lus d’abord.", gPerso("messages")],
+        ["Agenda", "Réunions et formations, pour tous, pour quelques agents ou pour l’encadrement, avec réponse demandée.", gPerso("agenda")],
+        ["Absences", "Celles que les agents signalent (à prendre en compte) et celles que vous enregistrez.", gPerso("absences")],
+        ["Notes de service", "Publier, épingler, retirer une consigne ; en image pour Discord.", gPerso("notes")],
+        ["Demandes", "Congés, horaires, documents : accepter ou refuser avec une réponse. Un congé accepté devient une absence.", gPerso("demandes")],
+        ["Entretiens et objectifs", "Le compte rendu, partagé ou en brouillon, et les objectifs avec leur échéance.", gPerso("entretiens")],
+        ["Sanctions", "De l’avertissement à la révocation, avec leurs effets sur la paye, le grade ou l’agenda.", gPerso("sanctions")],
+        espace, notif] }];
+  if (role === "inspecteur") return [
+    { titre: "Bienvenue à l’Inspection", intro: "Vous saisissez et vérifiez les déclarations, émettez les avis, relancez et mettez en demeure, taxez d’office, menez les contrôles jusqu’à la proposition et publiez sur Discord. La Direction garde l’encaissement, les annulations, les sanctions, la justice, la clôture des semaines, les réglages et les accès.",
+      items: [bord, recherche, capture] },
+    { titre: "Déclarations et avis", intro: "Les entreprises déclarent chaque semaine sur Discord avec les modèles ; le guichet calcule l’impôt et suit le paiement.",
+      items: [["Saisir une déclaration", "Collez le message Discord de l’entreprise : tout se remplit. Vérifiez les alertes, enregistrez, puis émettez l’avis.", gOnglet("declaration")],
+        ["Entreprises", "La fiche de chaque entreprise : déclarations, compte et relevés, contrôles, prêts, véhicules.", gOnglet("entreprises")],
+        ["Recouvrement", "Avis à émettre, relances et mises en demeure, taxation d’office des entreprises qui n’ont pas déclaré.", gOnglet("recouvrement")],
+        ["Modèles Discord", "Les messages à donner aux entreprises pour déclarer, demander un prêt ou déclarer un véhicule.", gOnglet("modeles")]] },
+    { titre: "Contrôles et surveillance", intro: "Un doute sur une entreprise : relevé de compte, puis contrôle si besoin.",
+      items: [["Surveillance des comptes", "Relevés de compte (collez la capture), relevés surprises de la semaine, mouvements suspects et sorties non vues.", gOnglet("recouvrement")],
+        ["Contrôles fiscaux", "Ouvrir un contrôle, demander des justifications, notifier la proposition ; la Direction met en recouvrement.", gOnglet("recouvrement")],
+        ["Convocations", "Convoquer une entreprise, préparer la collecte des impôts, constater une absence.", gOnglet("convocations")],
+        ["Véhicules", "Le registre des véhicules de société et les contrôles de police.", gOnglet("vehicules")],
+        ["Prêts", "Enregistrer une demande de prêt ; la Direction l’accorde.", gOnglet("prets")]] },
+    { titre: "Services publics et personnel", intro: "Ce que vous préparez, la Direction le valide.",
+      items: [["Saisir une demande", "La demande de moyens d’un service public, collée depuis Discord ; la Direction arbitre.", gOnglet("demande")],
+        ["Amendes", "Noter l’arrivée d’un versement d’amendes au Trésor ; la Direction confirme la réception.", gOnglet("amendes")],
+        ["Contrats et partenariats", "Préparer un contrat d’achat ou une convention ; la Direction signe.", gOnglet("contrats")],
+        ["Personnel", "Messagerie avec les fonctionnaires, agenda, absences et réponses à leurs demandes.", gPerso("messages")],
+        espace, notif] }];
+  return [
+    { titre: "Bienvenue à la Direction", intro: "Vous avez tous les droits : encaisser, annuler, sanctionner, transmettre à la justice, clôturer les semaines, régler le guichet et donner les accès. « Ouvrir » vous emmène à chaque rubrique ; le « ? » en haut rouvre ce guide.",
+      items: [["Tableau de bord", "La liste « À traiter » : déclarations à valider, paiements, relances, heures à saisir le lundi, échéances du personnel, erreurs remontées. Commencez par là.", gOnglet("dashboard")],
+        recherche, capture,
+        ["Journal", "Qui a fait quoi, et quand. Une erreur ? « Restaurer » remet un dossier comme avant.", gOnglet("journal")]] },
+    { titre: "Les impôts des entreprises", intro: "Les entreprises déclarent chaque semaine sur Discord avec les modèles ; le guichet calcule l’impôt, l’avis et suit le paiement.",
+      items: [["Entreprises", "La fiche de chaque entreprise : déclarations, compte et relevés, contrôles, prêts, véhicules, espace entreprise.", gOnglet("entreprises")],
+        ["Saisir une déclaration", "Collez le message Discord de l’entreprise : tout se remplit. Vérifiez les alertes, enregistrez, puis émettez l’avis.", gOnglet("declaration")],
+        ["Recouvrement", "Avis à encaisser, relances et mises en demeure, saisies, contrôles fiscaux, surveillance des comptes, clôture des semaines et bilans.", gOnglet("recouvrement")],
+        ["Convocations", "Convoquer une entreprise, organiser la collecte des impôts avec le transporteur de fonds, constater une absence.", gOnglet("convocations")],
+        ["Prêts", "Accorder un prêt, suivre ses échéances avec les avis.", gOnglet("prets")],
+        ["Véhicules", "Véhicules de société, contrôles de police, requalifications.", gOnglet("vehicules")],
+        ["Modèles Discord", "Les messages à donner aux entreprises pour déclarer, demander un prêt ou déclarer un véhicule.", gOnglet("modeles")]] },
+    { titre: "Le Trésor et les services publics", intro: "Le Trésor paie les services publics, les contrats et les payes de la Préfecture.",
+      items: [["Économie", "Le Trésor, les dotations reçues, les recettes et les dépenses.", gOnglet("economie")],
+        ["Demandes", "Les demandes de moyens des services publics : accorder, accorder en partie ou refuser.", gOnglet("svc")],
+        ["Enveloppes", "Le plafond de chaque service, mois par mois, et ce qui est déjà engagé.", gOnglet("enveloppes")],
+        ["Contrats et partenariats", "Contrats d’achat, conventions de partenariat, prestations offertes à valider.", gOnglet("contrats")],
+        ["Amendes", "Les amendes remises au Trésor par les services : confirmer la réception.", gOnglet("amendes")],
+        ["Catalogue des prix", "Les prix de référence des achats des services.", gOnglet("catalogue")]] },
+    { titre: "Le personnel de la Préfecture", intro: "Chaque fonctionnaire a son espace ; vous suivez ses heures, sa paye et sa carrière.",
+      items: [["Payes", "Chaque lundi, saisissez les heures relevées sur la tablette, puis versez la paye : bulletins, primes de présence, classement publié tout seul.", gOnglet("payes")],
+        ["Tableau de bord du personnel", "Effectif, heures de l’équipe, payes du mois, demandes, absents, fins d’essai et de CDD.", gPerso("bord")],
+        ["Effectif et contrats", "Fiches, contrats de travail, modèle de contrat ; l’agent signe dans son espace.", gPerso("effectif")],
+        ["Messagerie et agenda", "Une conversation par agent ; réunions et formations avec réponse demandée.", gPerso("messages")],
+        ["Demandes, entretiens et sanctions", "Répondre aux demandes, partager un compte rendu d’entretien et des objectifs, sanctionner.", gPerso("demandes")],
+        espace] },
+    { titre: "Réglages et sécurité", intro: "Réservés à la Direction.",
+      items: [["Calendrier, taux et barèmes", "Rythme des déclarations, délais, impôt, avantages fiscaux, recouvrement et surveillance des comptes.", gReglage("calendrier")],
+        ["Discord", "Les salons et ce qui part tout seul : bilans de la semaine et du mois, classement, sauvegarde, alertes du personnel.", gReglage("discord")],
+        ["Accès", "Donner ou retirer un rôle : Direction, Inspection, ressources humaines, Lecture seule.", gReglage("acces")],
+        ["Sauvegardes et erreurs", "Sauvegarde de la semaine sur Discord, sauvegardes de la nuit, restauration, erreurs remontées par le guichet.", gReglage("sauvegardes")],
+        notif] }];
+}
+function openGuide(etape) {
+  const role = guideRole();
+  if (!role) { if (S.role === "agent") openAccueil(0); return; }
+  const pages = guidePages(role), n = pages.length, i = Math.max(0, Math.min(n - 1, etape || 0)), pg = pages[i];
+  const points = h("div", { class: "guide-points", "aria-hidden": "true" }, Array.from({ length: n }, (_, k) => h("span", { class: k === i ? "on" : null })));
+  const fin = () => { marquerGuide(); closeDialog(); };
+  const prenom = i === 0 ? String(S.agentName || "").split(/\s+/)[0] : "";
+  openDialog({ eyebrow: `Guide du guichet · ${GUIDE_ROLES[role]} · ${i + 1} sur ${n}`, title: prenom && i === 0 ? `${pg.titre}, ${prenom}` : pg.titre, wide: true,
+    body: [h("div", { class: "guide" }, h("p", { class: "guide-intro", text: pg.intro }),
+      h("ul", { class: "guide-liste" }, pg.items.filter(Boolean).map(([t, d, go, lib]) => h("li", {}, h("strong", { text: t }), h("span", { text: d }),
+        go ? h("button", { class: "btn ghost small", type: "button", onclick: () => { marquerGuide(); go(); }, text: lib || "Ouvrir" }) : null)))), points],
+    foot: [i === 0 ? h("button", { class: "btn ghost small", type: "button", onclick: fin, text: "Passer" }) : h("button", { class: "btn ghost small", type: "button", onclick: () => openGuide(i - 1), text: "Précédent" }),
+      h("span", { class: "spacer" }),
+      i < n - 1 ? h("button", { class: "btn small", type: "button", onclick: () => openGuide(i + 1), text: "Suivant" }) : h("button", { class: "btn small", type: "button", onclick: fin, text: "Terminer" })] });
+  dlg.addEventListener("close", marquerGuide, { once: true });
+}
+// À la première visite : une fois le registre chargé, si aucune autre fenêtre n'est ouverte.
+function guideAuto() {
+  if (!guideRole() || guideVu()) return;
+  if (dlg.open) { setTimeout(guideAuto, 4000); return; }
+  openGuide(0);
+}
+$("#guide-btn").addEventListener("click", () => openGuide(0));
 // « Premiers pas » : ce qui reste à faire pour bien utiliser l'espace sur cet appareil.
 const premiersMasques = fid => { try { return !!localStorage.getItem("gf-premiers-pas-" + fid); } catch (e) { return true; } };
 async function majNotifEspace() {

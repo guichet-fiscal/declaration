@@ -31,7 +31,7 @@ const pause = (p, ms) => p.waitForTimeout(ms);
 //  o.role : direction, inspecteur, lecture, rh, agent ; o.discord, o.nom ; o.hash : onglet ;
 //  o.jeu : nom du jeu d'essai (tests/jeux) ; o.avant : code exécuté avant le faux Supabase ;
 //  o.maintenant : date ISO de l'horloge ; o.largeur / o.hauteur ; o.theme : light ou dark ;
-//  o.accueil : laisser le guide de Mon espace s'ouvrir comme à une première visite ;
+//  o.accueil : laisser le guide de Mon espace s'ouvrir comme à une première visite ; o.guide : de même pour le guide du rôle ;
 //  o.html : (texte de la page) => page modifiée ;
 //  faux salons Discord : window.__discord = { webhooks: { agents: url + "/__webhook/agents" } } dans o.avant.
 async function ouvrir(env, o) {
@@ -59,6 +59,8 @@ async function ouvrir(env, o) {
   await p.route(/\/__webhook\//, (r) => { p.webhooks.push({ url: r.request().url(), corps: (r.request().postDataBuffer() || Buffer.from("")).toString("utf8") }); r.fulfill({ status: 200, contentType: "application/json", body: "{}" }); });
   // Le guide de Mon espace s'ouvre à la première visite : les essais l'évitent, sauf o.accueil.
   if (!o.accueil) await p.addInitScript(() => { try { ["f1", "f2", "f3", "f4"].forEach((f) => localStorage.setItem("gf-accueil-vu-" + f, "essai")); } catch (e) { /* sans stockage */ } });
+  // Le guide du rôle s'ouvre lui aussi à la première visite : évité, sauf o.guide.
+  if (!o.guide) await p.addInitScript((cle) => { try { localStorage.setItem(cle, "essai"); } catch (e) { /* sans stockage */ } }, `gf-guide-${o.role}-uid-${o.discord}`);
   await p.clock.setSystemTime(new Date(o.maintenant));
   await p.goto(`${env.url}/index.html?role=${o.role}&discord=${o.discord}&nom=${encodeURIComponent(o.nom)}#${o.hash}`);
   await pause(p, 2200);

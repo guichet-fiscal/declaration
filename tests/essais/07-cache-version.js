@@ -28,6 +28,8 @@ module.exports = {
     const ctx = await env.navigateur.newContext({ viewport: { width: 1280, height: 900 }, locale: "fr-FR", timezoneId: "Europe/Paris" });
     await ctx.route(/supabase-js/, (r) => r.fulfill({ contentType: "application/javascript", body: fac }));
     await ctx.route(/^https:\/\/(fonts\.|discord|cdn\.discordapp)/, (r) => r.abort());
+    // Le guide de la Direction ne s'ouvre pas à la première visite (il couvrirait le bandeau).
+    await ctx.addInitScript(() => { try { localStorage.setItem("gf-guide-direction-uid-999999999999999999", "essai"); } catch (e) { /* sans stockage */ } });
     const p = await ctx.newPage(); p.erreurs = []; p.on("pageerror", (e) => p.erreurs.push(e.message));
     env.pages.push(p);
     const adresse = `${url}/index.html?role=direction&discord=999999999999999999&nom=Directeur%20Test`;
