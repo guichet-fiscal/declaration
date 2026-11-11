@@ -461,7 +461,8 @@ table.compact td{padding:8px 10px}
 .env-week label{font-weight:600;font-size:13px}
 .env-week select{width:auto;min-width:200px}
 .env-week .hint{flex-basis:100%}
-.env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:10px;align-items:center}
+.env-head,.env-edit{display:grid;grid-template-columns:minmax(0,1fr) 260px auto;gap:10px;align-items:center}
+.env-edit .switch{font-size:13px;white-space:nowrap}
 @media (max-width:620px){.env-head{display:none}.env-edit{grid-template-columns:minmax(0,1fr)}}
 .env-head{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-3);font-weight:650;margin-top:6px}
 .env-edit label{font-weight:500}
@@ -2083,7 +2084,8 @@ table.es-payes{min-width:0;width:100%}
             <div class="row2">
               <div class="field">
                 <label for="m-service">Service demandeur</label>
-                <input id="m-service" list="svc-options" autocomplete="off" placeholder="Ex. : Gendarmerie">
+                <input id="m-service" list="svc-options" autocomplete="off" placeholder="Ex. : Gendarmerie" aria-describedby="m-reserve">
+                <p class="hint" id="m-reserve" aria-live="polite" hidden></p>
                 <datalist id="svc-options"></datalist>
               </div>
               <div class="field">
@@ -2509,7 +2511,7 @@ table.es-payes{min-width:0;width:100%}
       <div class="set-page" id="set-page-services" data-sg="services" role="tabpanel" aria-labelledby="set-tab-services" hidden>
           <div class="card">
             <h3>Services publics</h3>
-            <p class="sub">Un service par ligne, et le rôle Discord de chacun. Les plafonds des enveloppes se règlent mois par mois dans <button class="linkbtn" type="button" id="s-env-go">Services publics → Enveloppes</button>.</p>
+            <p class="sub">Un service par ligne, et le rôle Discord de chacun. Les plafonds des enveloppes se règlent mois par mois dans <button class="linkbtn" type="button" id="s-env-go">Services publics → Enveloppes</button>. Un service « réservé à la Direction » : ses demandes, leurs décisions et ses contrats d’achat ne sont vus que par la Direction (ni l’Inspection, ni la Lecture seule), et rien n’en part sur Discord ni en notification.</p>
             <div class="set-form">
               <textarea id="s-services" rows="7" aria-label="Services publics, un par ligne"></textarea>
               <div class="env-editor" id="env-editor"></div>
@@ -2678,9 +2680,18 @@ const S = {
   exportKeys: [], keysError: null,
   setDirty: false, svcDirty: false, envDirty: false, capDirty: false, envKey: null, envReload: false, barDirty: false, editDecl: null, editDem: null
 };
+// Services réservés à la Direction (mise à jour 40 ; Réglages → Services publics) : leurs demandes, leurs
+// décisions et leurs contrats d'achat ne sont lus que par la Direction et ne partent jamais sur Discord ni
+// en notification. Hors Direction, ces services n'apparaissent nulle part (listes, enveloppes).
+const servicesReserves = () => { const l = (S.config || {}).servicesReserves; return Array.isArray(l) ? l.map(x => String(x || "").trim()).filter(Boolean) : []; };
+const estReserve = sv => !!sv && servicesReserves().some(x => norm(x) === norm(sv));
+const demReservee = dm => !!dm && estReserve(dm.service);
+const voitReserves = () => S.role === "direction";
+const sansReserves = caps => { if (voitReserves() || !caps) return caps; const o = {}; for (const [k, v] of Object.entries(caps)) if (!estReserve(k)) o[k] = v; return o; };
 const cfg = () => {
   const c = Object.assign({}, DEFAULTS, S.config || {});
   if (!Array.isArray(c.services) || !c.services.length) c.services = DEFAULTS.services.slice();
+  if (!voitReserves()) c.services = c.services.filter(x => !estReserve(x));
   if (!c.enveloppes || typeof c.enveloppes !== "object") c.enveloppes = {};
   if (!c.enveloppesSemaines || typeof c.enveloppesSemaines !== "object" || Array.isArray(c.enveloppesSemaines)) c.enveloppesSemaines = {};
   return c;
@@ -3408,10 +3419,10 @@ function envMoisTable() {
 // Un mois sans plafonds propres reprend ceux du dernier mois réglé avant lui ; avant tout mois réglé, les plafonds d'origine.
 function envCapsFor(key) {
   const m = envMoisTable(), k0 = moisDe(key || moisKey(new Date()));
-  if (k0 && m[k0] && typeof m[k0] === "object") return { caps: m[k0], from: k0, own: true };
+  if (k0 && m[k0] && typeof m[k0] === "object") return { caps: sansReserves(m[k0]), from: k0, own: true };
   const prev = Object.keys(m).filter(k => /^\d{4}-\d{2}$/.test(k) && k < k0 && m[k] && typeof m[k] === "object").sort().pop();
-  if (prev) return { caps: m[prev], from: prev, own: false };
-  return { caps: cfg().enveloppes || {}, from: null, own: false };
+  if (prev) return { caps: sansReserves(m[prev]), from: prev, own: false };
+  return { caps: sansReserves(cfg().enveloppes || {}), from: null, own: false };
 }
 function envCap(service, key) {
   const env = envCapsFor(key || moisKey(new Date())).caps || {};
@@ -3884,7 +3895,7 @@ function subscribe() {
   col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("declarations", s => { S.declarations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("decisions", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.decisions = o; });
-  col("demandes", s => { S.demandes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("demandes", s => { S.demandes = s.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(dm => voitReserves() || !demReservee(dm)); });
   col("arbitrages", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.arbitrages = o; });
   col("penalites", s => { S.penalites = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("echeanciers", s => { const o = {}; for (const d of s.docs) o[d.id] = d.data(); S.echeanciers = o; });
@@ -3903,7 +3914,7 @@ function subscribe() {
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
-  col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(c => voitReserves() || !estReserve(ctService(c))); });
   col("conventions", s => { S.conventions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("prestations", s => { S.prestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("versements", s => { S.versements = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -4475,7 +4486,7 @@ function renderSvc() {
           h("span", { class: "small-meta m-only", text: `${dmNo(dm)} · ${dm.service || "—"} · ${moisNom(demImputation(dm))}` }),
           h("span", { class: "small-meta", text: [n ? artLabel(n) : "montant global", miss ? `${miss} à chiffrer` : "", decisionPerimee(dm) ? "modifiée depuis la décision" : ""].filter(Boolean).join(" · ") })),
         h("td", { class: "c-hide", text: moisNom(demImputation(dm)) }),
-        h("td", { class: "c-meta" }, chip(URG[dm.urgence] || URG.normale)),
+        h("td", { class: "c-meta" }, chip(URG[dm.urgence] || URG.normale), demReservee(dm) ? chip(["Réservée", "muted"]) : null),
         h("td", { class: "num c-amt", "data-l": "Demandé", text: money(dm.montant) }),
         h("td", { class: "num c-hide", text: acc ? money(a.montantAccorde) : "—" }),
         h("td", { class: "c-chip" }, chip(ASTAT[st] || ASTAT.attente)),
@@ -7307,7 +7318,7 @@ function guidePages(role) {
         ["Modèles Discord", "Les messages à donner aux entreprises pour déclarer, demander un prêt ou déclarer un véhicule.", gOnglet("modeles")]] },
     { titre: "Le Trésor et les services publics", intro: "Le Trésor paie les services publics, les contrats et les payes de la Préfecture.",
       items: [["Économie", "Le Trésor, les dotations reçues, les recettes et les dépenses.", gOnglet("economie")],
-        ["Demandes", "Les demandes de moyens des services publics : accorder, accorder en partie ou refuser.", gOnglet("svc")],
+        ["Demandes", "Les demandes de moyens des services publics : accorder, accorder en partie ou refuser. Celles des services réservés (FIPN, GIGN) ne sont vues que par la Direction et ne partent jamais sur Discord.", gOnglet("svc")],
         ["Enveloppes", "Le plafond de chaque service, mois par mois, et ce qui est déjà engagé.", gOnglet("enveloppes")],
         ["Contrats et partenariats", "Contrats d’achat, conventions de partenariat, prestations offertes à valider.", gOnglet("contrats")],
         ["Amendes", "Les amendes remises au Trésor par les services : confirmer la réception.", gOnglet("amendes")],
@@ -10088,6 +10099,7 @@ function openDem(id) {
     h("div", { class: "dlg-cols" },
       sec("Demande", kv([
         ["Service", h("button", { class: "linkbtn", type: "button", onclick: () => openService(dm.service, mois), text: dm.service || "—" })],
+        demReservee(dm) ? ["Visibilité", "Direction seulement · rien sur Discord"] : null,
         dm.unite ? ["Unité", dm.unite] : null,
         ["Nature", NATURES[dm.nature] || "—"],
         ["Urgence", chip(URG[dm.urgence] || URG.normale)],
@@ -10111,7 +10123,7 @@ function openDem(id) {
   let perSel = null, cIn = null, go = null;
   // Publication de la décision (accord, accord partiel, refus) : cochée d'office si les décisions partent
   // automatiquement ; jamais pour l'accusé de réception d'une demande seulement enregistrée.
-  const pubDec = w && hookFor("services") ? h("input", { type: "checkbox", id: "dlg-pub" }) : null;
+  const pubDec = w && hookFor("services") && !demReservee(dm) ? h("input", { type: "checkbox", id: "dlg-pub" }) : null;
   if (pubDec) pubDec.checked = autoOn("decisions");
   const upd = [];
   const rowsEls = work.map(x => {
@@ -10226,7 +10238,7 @@ function openDem(id) {
     if (ok) {
       const msg = keepAt ? `Décision modifiée : ${money(m)} accordés.` : { accordee: "Crédits accordés.", partielle: "Accord partiel enregistré.", refusee: "Demande refusée.", etude: "Demande mise à l’étude." }[statut];
       toast(msg); closeDialog();
-      if (statut !== "etude" && (pubDec ? pubDec.checked : autoOn("decisions"))) publishDoc(decisionDoc(S.demandes.find(x => x.id === id) || dm), msg);
+      if (statut !== "etude" && !demReservee(dm) && (pubDec ? pubDec.checked : autoOn("decisions"))) publishDoc(decisionDoc(S.demandes.find(x => x.id === id) || dm), msg);
     }
   };
   const resetDecision = async () => {
@@ -10234,7 +10246,7 @@ function openDem(id) {
   };
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(demandeDoc(dm), reopen), text: "Accusé de réception" })];
   if (decided) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(decisionDoc(dm), reopen), text: "Décision en image" }),
-    h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(decisionText(dm), "Décision copiée : collez-la en réponse sur Discord."), text: "Copier le texte" }));
+    demReservee(dm) ? null : h("button", { class: "btn ghost small", type: "button", onclick: () => copyText(decisionText(dm), "Décision copiée : collez-la en réponse sur Discord."), text: "Copier le texte" }));
   if (w) {
     const delBtn = h("button", { class: "btn ghost small", type: "button", text: "Supprimer" });
     delBtn.addEventListener("click", () => {
@@ -10874,6 +10886,7 @@ $("#m-arts").addEventListener("click", e => {
 $("#m-art-add").addEventListener("click", () => { const r = artRow(null); $("#m-arts").append(r); updArticles(); $("input", r).focus(); });
 
 function renderDemEnv() {
+  majDemReserve();
   const card = $("#m-env-card"), svc = $("#m-service").value.trim(), k = $("#m-per").value;
   if (!svc || !k || !S.connected) { card.hidden = true; return; }
   const x = envStats(svc, k), ed = S.editDem ? S.demandes.find(d => d.id === S.editDem) : null;
@@ -10887,6 +10900,13 @@ function renderDemEnv() {
     x.cap ? h("dt", { class: "tot-dt", text: "Reste si tout est accordé" }) : null, x.cap ? h("dd", { class: "tot-dd num", style: reste < 0 ? "color:var(--bad)" : null, text: money(reste) }) : null);
 }
 ["#m-service", "#m-per"].forEach(id => $(id).addEventListener("input", renderDemEnv));
+// Service réservé à la Direction : dit tout de suite ce qu'il en est.
+function majDemReserve() {
+  const el = $("#m-reserve"), sv = $("#m-service").value.trim(); if (!el) return;
+  el.hidden = !estReserve(sv);
+  el.textContent = !estReserve(sv) ? "" : voitReserves() ? "Demande réservée à la Direction : l’Inspection ne la voit pas, et rien n’est publié sur Discord ni envoyé en notification." : `Les demandes du service ${sv} sont réservées à la Direction : elles ne se saisissent pas ici.`;
+}
+
 $("#m-per").addEventListener("change", () => { $("#m-per").dataset.touched = "1"; renderDemEnv(); });
 $("#m-date").addEventListener("input", () => { if ($("#m-per").dataset.touched) return; const v = $("#m-date").value; if (v) { moisOptions($("#m-per"), moisKey(new Date(v))); renderDemEnv(); } });
 function renderBudgetAside() {
@@ -10979,6 +10999,7 @@ $("#form-dem").addEventListener("submit", async e => {
   const rows = $$("#m-arts .art-row"), noName = rows.find(r => { const [d, , pu] = $$("input", r); return !d.value.trim() && pu.value.trim(); });
   const noQty = rows.find(r => { const [d, q] = $$("input", r); return d.value.trim() && !(Math.round(Number(q.value) || 0) > 0); });
   if (!service) { $("#m-service").setAttribute("aria-invalid", "true"); $("#m-service").focus(); err.textContent = "À compléter : le service."; return; }
+  if (estReserve(service) && !voitReserves()) { $("#m-service").setAttribute("aria-invalid", "true"); $("#m-service").focus(); err.textContent = `Les demandes du service ${service} sont réservées à la Direction : transmettez-la à la Direction, sans la saisir.`; return; }
   if (!lignes.length) { const i = $("#m-arts .art-row input"); if (i) { i.setAttribute("aria-invalid", "true"); i.focus(); } err.textContent = "Indiquez au moins un article."; return; }
   if (noName) { const i = $("input", noName); i.setAttribute("aria-invalid", "true"); i.focus(); err.textContent = "Donnez un nom à chaque article."; return; }
   if (noQty) { const i = $$("input", noQty)[1]; i.setAttribute("aria-invalid", "true"); i.focus(); err.textContent = `Indiquez la quantité de « ${$("input", noQty).value.trim()} ».`; return; }
@@ -11187,7 +11208,8 @@ $("#s-svc-save").addEventListener("click", async () => {
     if (!parseMention(v, "role")) { $("#s-svc-msg").textContent = `${i.dataset.svcM} : rôle Discord invalide. Collez l’identifiant du rôle (18 à 19 chiffres) ou <@&ID>.`; i.focus(); return; }
     ments[i.dataset.svcM] = normMention(v, "role");
   }
-  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, servicesMentions: ments, updatedAt: nowISO() })));
+  const reserves = $$("#env-editor input[data-svc-r]").filter(i => i.checked && list.includes(i.dataset.svcR)).map(i => i.dataset.svcR);
+  const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { services: list, servicesMentions: ments, servicesReserves: reserves, updatedAt: nowISO() })));
   if (ok) { S.svcDirty = false; S.envDirty = false; $("#s-svc-msg").textContent = `${list.length} services enregistrés.`; renderEnvEditor(true); }
 });
 // Un message dans le salon des services mentionne une fois chaque rôle enregistré : on voit tout de suite lequel ne sonne pas.
@@ -11253,13 +11275,17 @@ function renderBackupInfo() {
     last.textContent = `Dernière : ${m.text}.`;
   }
 }
-function buildBackup() {
+// « pourDiscord » : sans les dossiers réservés à la Direction (demandes, décisions, contrats des services
+// réservés) ; le fichier téléchargé au guichet, lui, est complet. Une restauration n'efface rien.
+function buildBackup(pourDiscord) {
   const strip = arr => Object.fromEntries(arr.map(x => { const o = Object.assign({}, x); delete o.id; return [x.id, o]; }));
+  const resDem = new Set(pourDiscord ? S.demandes.filter(demReservee).map(dm => dm.id) : []);
+  const garder = (c, x) => !pourDiscord || !((c === "demandes" && resDem.has(x.id)) || (c === "contrats" && estReserve(ctService(x))));
+  const cols = Object.fromEntries(BACKUP_COLS.map(c => [c, Array.isArray(S[c]) ? strip(S[c].filter(x => garder(c, x))) : Object.fromEntries(Object.entries(S[c] || {}).filter(([id]) => !(c === "arbitrages" && resDem.has(id))))]));
   return {
     format: "guichet-fiscal-sauvegarde", version: 1, exportedAt: nowISO(),
-    totaux: { entreprises: S.entreprises.length, declarations: S.declarations.length, demandes: S.demandes.length },
-    collections: Object.assign({ config: S.config && Object.keys(S.config).length ? { main: S.config } : {} },
-      Object.fromEntries(BACKUP_COLS.map(c => [c, Array.isArray(S[c]) ? strip(S[c]) : Object.assign({}, S[c] || {})])))
+    totaux: { entreprises: S.entreprises.length, declarations: S.declarations.length, demandes: Object.keys(cols.demandes || {}).length },
+    collections: Object.assign({ config: S.config && Object.keys(S.config).length ? { main: S.config } : {} }, cols)
   };
 }
 async function doBackup() {
@@ -11305,7 +11331,7 @@ async function sauvegardeAuto() {
   if (S.sauvegardeAutoMeta && String(S.sauvegardeAutoMeta.semaine || "") >= k) return;
   S.sauvegardeEnCours = true;
   try {
-    const b = buildBackup(), json = JSON.stringify(b);
+    const b = buildBackup(true), json = JSON.stringify(b);
     const nb = Object.values(b.collections).reduce((t, c) => t + Object.keys(c || {}).length, 0);
     const { blob, ext } = await compresser(json);
     if (!(await write(() => S.db.doc("meta/sauvegardeAuto").set({ semaine: k, at: b.exportedAt, by: S.uid || null, byNom: S.agentName || "", dossiers: nb, taille: blob.size })))) return;
@@ -11793,8 +11819,10 @@ function demandeDoc(dm) {
   };
   const tb = demArtTable(dm, false);
   if (tb) { doc.table = tb; doc.tableFirst = true; }
-  return doc;
+  return reserverDoc(doc, demReservee(dm));
 }
+// Dossier réservé à la Direction : l'image reste possible au guichet, jamais la publication sur Discord.
+function reserverDoc(doc, oui) { if (oui) { doc.reserve = true; doc.discord = null; } return doc; }
 function decisionDoc(dm) {
   const a = S.arbitrages[dm.id], st = aStatus(dm);
   const ok = st === "accordee" || st === "partielle", tb = demArtTable(dm, true);
@@ -11805,10 +11833,10 @@ function decisionDoc(dm) {
     total: ["Crédits accordés", money(ok ? a.montantAccorde : 0)], note: a && a.commentaire ? a.commentaire : "", noteTitle: "Motif de la décision",
     stamp: STAMP_ARB[st] || STAMP_ARB.attente,
     footer: ok ? `Les crédits sont imputés sur l’enveloppe ${dm.service} ${deMois(demImputation(dm))} et mis à disposition du service par la Préfecture de police, Direction des impôts et cotisations.` : "Préfecture de police · Direction des impôts et cotisations.",
-    discord: { channel: "services", mentions: [svcMention(dm.service)].filter(Boolean), text: `**Décision budgétaire ${dmNo(dm)}** · ${dm.service} · ${dm.objet} : ${(ASTAT[st] || ASTAT.attente)[0].toLowerCase()}${ok ? ", " + money(a.montantAccorde) + " accordés" : ""}.` }
+    discord: demReservee(dm) ? null : { channel: "services", mentions: [svcMention(dm.service)].filter(Boolean), text: `**Décision budgétaire ${dmNo(dm)}** · ${dm.service} · ${dm.objet} : ${(ASTAT[st] || ASTAT.attente)[0].toLowerCase()}${ok ? ", " + money(a.montantAccorde) + " accordés" : ""}.` }
   };
   if (tb) { doc.table = tb; doc.tableFirst = true; }
-  return doc;
+  return reserverDoc(doc, demReservee(dm));
 }
 function penaltyDoc(p) {
   if (p.type === "redressement") return amrDocFromPen(p);
@@ -12466,7 +12494,7 @@ function describe(e) {
         if (plus.length === 1 && !moins.length) return `a inscrit une dotation de ${money(plus[0].montant)} au Trésor${plus[0].motif ? ` (${plus[0].motif})` : ""}`;
         if (moins.length === 1 && !plus.length) return `a retiré la dotation de ${money(moins[0].montant)} du Trésor`;
       }
-      const L = { dotations: "dotations du Trésor", contratTravail: "modèle de contrat de travail", tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { dotations: "dotations du Trésor", contratTravail: "modèle de contrat de travail", tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", servicesReserves: "services réservés à la Direction", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -12632,7 +12660,7 @@ const FIELD_LABEL = {
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
   salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", delaiMiseEnDemeureJours: "Délai des mises en demeure", majorationImpaye: "Majoration pour paiement tardif", majorationOffice: "Majoration de taxation d’office", tiersDefaut: "Tiers détenteur", justiceDestinataire: "Destinataire des dossiers de justice", tiers: "Tiers détenteur", recouvre: "Recouvré", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
-  services: "Services", enveloppes: "Enveloppes", enveloppesSemaines: "Plafonds par semaine", enveloppesMois: "Plafonds par mois", convMajoration: "Majoration d’absence (collecte)", convAmende: "Amende d’absence", convIntervalle: "Minutes entre deux passages", convLieu: "Lieu des convocations", convTransporteur: "Transporteur de fonds", servicesMentions: "Mentions Discord", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
+  services: "Services", enveloppes: "Enveloppes", enveloppesSemaines: "Plafonds par semaine", enveloppesMois: "Plafonds par mois", convMajoration: "Majoration d’absence (collecte)", convAmende: "Amende d’absence", convIntervalle: "Minutes entre deux passages", convLieu: "Lieu des convocations", convTransporteur: "Transporteur de fonds", servicesMentions: "Mentions Discord", servicesReserves: "Services réservés à la Direction", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
 };
@@ -12739,14 +12767,17 @@ function renderEnvEditor(force) {
   const box = $("#env-editor");
   if (!force && (S.envDirty || box.contains(document.activeElement))) return;
   const names = S.svcDirty ? parseServices() : cfg().services;
-  const prevM = {};
-  if (S.envDirty) $$("input[data-svc-m]", box).forEach(i => { prevM[i.dataset.svcM] = i.value; });
+  const prevM = {}, prevR = {};
+  if (S.envDirty) { $$("input[data-svc-m]", box).forEach(i => { prevM[i.dataset.svcM] = i.value; }); $$("input[data-svc-r]", box).forEach(i => { prevR[i.dataset.svcR] = i.checked; }); }
   fill(box,
-    h("div", { class: "env-head" }, h("span", { text: "Service" }), h("span", { text: "Rôle Discord à mentionner" })),
+    h("div", { class: "env-head" }, h("span", { text: "Service" }), h("span", { text: "Rôle Discord à mentionner" }), h("span", { text: "Visibilité" })),
     names.map((n, i) => {
       const men = h("input", { class: "mono", id: "env-" + i, autocomplete: "off", "data-svc-m": n, placeholder: "ID du rôle", "aria-label": "Rôle Discord de " + n + (svcRoleHint(n) ? " (" + svcRoleHint(n) + ")" : "") });
       men.value = prevM[n] !== undefined ? prevM[n] : svcMention(n);
-      return h("div", { class: "env-edit" }, h("label", { for: "env-" + i }, n, svcRoleHint(n) ? h("small", { text: "Rôle " + svcRoleHint(n) }) : null), men);
+      // Réservé : demandes et contrats lus par la Direction seulement, rien sur Discord (mise à jour 40).
+      const res = h("input", { type: "checkbox", id: "env-r-" + i, "data-svc-r": n }); res.checked = prevR[n] !== undefined ? prevR[n] : estReserve(n);
+      return h("div", { class: "env-edit" }, h("label", { for: "env-" + i }, n, svcRoleHint(n) ? h("small", { text: "Rôle " + svcRoleHint(n) }) : null), men,
+        h("label", { class: "switch", for: "env-r-" + i, title: "Demandes, décisions et contrats de ce service : Direction seulement, rien sur Discord ni en notification." }, res, "Réservé à la Direction"));
     }));
 }
 $("#env-editor").addEventListener("input", () => { S.envDirty = true; $("#s-svc-msg").textContent = "Modifications non enregistrées."; });
@@ -13348,6 +13379,7 @@ function splitMessage(lines, head, foot) {
 const canvasBlob = canvas => new Promise(res => canvas.toBlob(res, "image/png"));
 const docFileName = doc => norm(doc.kind + " " + doc.no).replace(/\s+/g, "-") + ".png";
 async function publishDoc(doc, label) {
+  if (doc && doc.reserve) { toast("Dossier réservé à la Direction : rien n’est publié sur Discord."); return false; }
   const dd = doc.discord || {};
   if (!hookFor(dd.channel)) { toast("Aucun salon Discord n’est configuré pour ce document (Réglages → Discord).", true); return false; }
   let blob = null;
@@ -13360,7 +13392,7 @@ async function publishDoc(doc, label) {
   return res.ok;
 }
 async function autoPublish(kind, doc, label) {
-  if (!doc || !autoOn(kind) || !canAgent()) return false;
+  if (!doc || doc.reserve || !autoOn(kind) || !canAgent()) return false;
   return publishDoc(doc, label);
 }
 
@@ -15073,7 +15105,8 @@ function contratDoc(c) {
     footer: cadre
       ? `Le fournisseur exécute les prestations à la demande de l’acheteur. Chaque ${c.unite || "prestation"} réalisée est payée au prix ci-dessus par la Préfecture de police, sur ordre de paiement. Le marché peut être résilié en cas de manquement.`
       : "Le fournisseur livre la commande ci-dessus à l’acheteur. Le paiement intervient après la livraison constatée par la Préfecture de police, sur ordre de paiement. Toute livraison non conforme peut être refusée.",
-    discord: { channel: "entreprises", mentions: [entMention(f), svc ? svcMention(svc) : ""].filter(Boolean), text: `**${cadre ? "Marché" : "Contrat d’achat"} ${ctNo(c)}** · ${ctAcheteur(c)} · ${f.nom} · ${c.objet || CT_CATS[c.categorie] || ""}${cadre ? ` · ${money(c.prixUnitaire)} par ${c.unite || "prestation"}` : " · " + money(c.montant)}` }
+    reserve: estReserve(ctService(c)) || undefined,
+    discord: estReserve(ctService(c)) ? null : { channel: "entreprises", mentions: [entMention(f), svc ? svcMention(svc) : ""].filter(Boolean), text: `**${cadre ? "Marché" : "Contrat d’achat"} ${ctNo(c)}** · ${ctAcheteur(c)} · ${f.nom} · ${c.objet || CT_CATS[c.categorie] || ""}${cadre ? ` · ${money(c.prixUnitaire)} par ${c.unite || "prestation"}` : " · " + money(c.montant)}` }
   };
 }
 function paiementDoc(c, p) {
@@ -15091,7 +15124,8 @@ function paiementDoc(c, p) {
     footer: p.mode === "impot"
       ? "Somme due par la Préfecture de police au titre du contrat ci-dessus. Elle n’est pas versée : elle est retirée de ce que le bénéficiaire doit sur ses prochaines déclarations (impôt et cotisations), jusqu’à épuisement. Elle entre dans son chiffre d’affaires et doit figurer dans sa déclaration de la période."
       : "Somme versée par la Préfecture de police au titre du contrat ci-dessus. Elle entre dans le chiffre d’affaires du bénéficiaire et doit figurer dans sa déclaration de la période.",
-    discord: { channel: "entreprises", mentions: [entMention(f)].filter(Boolean), text: `**Ordre de paiement ${ctNo(c)}-${i}** · ${f.nom} · ${money(p.montant)} au titre du ${c.type === "cadre" ? "marché" : "contrat"} ${ctNo(c)}${p.mode === "impot" ? " · à déduire de ses impôts et cotisations" : ""}` }
+    reserve: estReserve(ctService(c)) || undefined,
+    discord: estReserve(ctService(c)) ? null : { channel: "entreprises", mentions: [entMention(f)].filter(Boolean), text: `**Ordre de paiement ${ctNo(c)}-${i}** · ${f.nom} · ${money(p.montant)} au titre du ${c.type === "cadre" ? "marché" : "contrat"} ${ctNo(c)}${p.mode === "impot" ? " · à déduire de ses impôts et cotisations" : ""}` }
   };
 }
 async function saveCt(c, patch, msg) {
@@ -16333,10 +16367,12 @@ function bilanMois(m) {
   const st = startTime(), sem = semainesDuMois(m).filter(k => bounds(k).end.getTime() >= st);
   const bs = sem.map(k => bilanPeriode(k)), tot = f => bs.reduce((t, b) => t + (Number(b[f]) || 0), 0);
   const noms = envServices([m]); if (!noms.some(n => norm(n) === norm(payeSvc()))) noms.push(payeSvc());
-  const svc = noms.map(s => ({ s, st: envStats(s, m) })).filter(x => x.st.accorde > 0 || x.st.cap > 0).sort((a, b) => b.st.accorde - a.st.accorde || String(a.s).localeCompare(String(b.s), "fr"));
+  const tous = noms.map(s => ({ s, st: envStats(s, m) })).filter(x => x.st.accorde > 0 || x.st.cap > 0).sort((a, b) => b.st.accorde - a.st.accorde || String(a.s).localeCompare(String(b.s), "fr"));
+  // Services réservés : comptés dans les totaux, jamais nommés (le bilan part sur Discord).
+  const svc = tous.filter(x => !estReserve(x.s)), res = tous.filter(x => estReserve(x.s));
   const hc = (heuresClassement() || []).filter(x => moisDe(x.k) === m);
   return { m, sem, attendues: tot("attendues"), deposees: tot("deposees"), retards: tot("retards"), declare: tot("declare"), encaisse: tot("encaisse"), reste: tot("reste"),
-    svc, dep: svc.reduce((t, x) => t + x.st.accorde, 0), cap: svc.reduce((t, x) => t + (x.st.cap || 0), 0), a: activiteSemaine(m),
+    svc, reserve: res.reduce((t, x) => t + x.st.accorde, 0), dep: tous.reduce((t, x) => t + x.st.accorde, 0), cap: tous.reduce((t, x) => t + (x.st.cap || 0), 0), a: activiteSemaine(m),
     heures: hc.reduce((t, x) => t + x.h, 0), agents: new Set(hc.map(x => x.a)).size, tresor: treasury().solde, fini: Date.now() > bounds(m).end.getTime() };
 }
 const pctTxt = (a, b) => (b ? Math.round(a / b * 100) + " %" : "—");
@@ -16350,7 +16386,7 @@ function bilanMoisDoc(m) {
     lines: [["Montant des avis", money(x.declare)], ["Encaissé", `${money(x.encaisse)} (${pctTxt(x.encaisse, x.declare)})`], ["Reste à recouvrer", money(x.reste), true]]
       .concat(x.retards ? [["Déclarations hors délai", String(x.retards)]] : [])
       .concat(x.svc.slice(0, 6).map(y => [`Dépenses · ${y.s}`, y.st.cap ? `${money(y.st.accorde)} sur ${money(y.st.cap)}` : money(y.st.accorde)]))
-      .concat(x.svc.length > 6 ? [[`Dépenses · ${x.svc.length - 6} autre${plural(x.svc.length - 6)} service${plural(x.svc.length - 6)}`, money(x.svc.slice(6).reduce((t, y) => t + y.st.accorde, 0))]] : [])
+      .concat(x.svc.length > 6 || x.reserve > 0 ? [["Autres dépenses", money(x.svc.slice(6).reduce((t, y) => t + y.st.accorde, 0) + x.reserve)]] : [])
       .concat([["Dépenses imputées sur le mois", x.cap ? `${money(x.dep)} sur ${money(x.cap)} d’enveloppes (${pctTxt(x.dep, x.cap)})` : money(x.dep), true]])
       .concat([["Relevés de compte", String(x.a.releves)], ["Contrôles ouverts", String(x.a.controles)], ["Mouvements suspects repérés", String(x.a.suspects)]])
       .concat(x.a.redressements ? [["Redressements mis en recouvrement", money(x.a.redressements)]] : []),
