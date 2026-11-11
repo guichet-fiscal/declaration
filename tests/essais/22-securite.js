@@ -94,6 +94,25 @@ module.exports = {
     await sup.click(); await pause(d, 800);
     t.ok(!(await lignes(d, "securiteRapports")).some((x) => x.id === "sr1"), "suppression confirmée");
     t.sansErreur(d);
+    // Ressources humaines : l'onglet en lecture seule.
+    // Les pages ne partagent pas leurs données : une entrée et un contrôle avec photo, mis dans le jeu.
+    const DOSSIERS_RH = RAPPORT + `window.__SEED.push({ collection: "securiteEntrees", id: "e9", data: { nom: "Jean Dupont", motif: "rdv", arrivee: "2026-11-10T18:00:00Z", sortie: null, pieceVue: true, photos: [], agent: "Alice MARTIN", at: "2026-11-10T18:00:00Z" } });
+      window.__SEED.push({ collection: "securiteControles", id: "c9", data: { nom: "Jean Dupont", resultat: "conforme", motif: "entree", lieu: "Hall", date: "2026-11-10T17:55:00Z", photos: [{ path: "securiteControles/c9/p.jpg", nom: "carte.png" }], agent: "Alice MARTIN", at: "2026-11-10T17:55:00Z" } });
+      window.__fichiers = new Map([["securite/securiteControles/c9/p.jpg", new Blob([Uint8Array.from(atob("${fs.readFileSync(carte).toString("base64")}"), c => c.charCodeAt(0))], { type: "image/png" })]]);`;
+    const rh = await ouvrir(env, { role: "rh", discord: "916695949978525766", nom: "RH Test", hash: "personnel", avant: DOSSIERS_RH });
+    await pause(rh, 600);
+    t.ok(await rh.evaluate(() => !document.querySelector("#tab-btn-securite").hidden && !!document.querySelector("#grp-accueil").offsetParent), "RH : onglet Sécurité proposé");
+    t.ok(/Sécurité/.test(await rh.locator("#grp-accueil").innerText()), "RH : le groupe s'appelle Sécurité, pas Tableau de bord");
+    await rh.locator("#grp-accueil").click(); await pause(rh, 500);
+    const trh = texte(await rh.locator("#secu-main").innerText());
+    t.ok(/Consultation seulement/.test(trh) && /Jean Dupont/.test(trh), "RH : les entrées du service, en consultation", trh.slice(0, 200));
+    t.ok(await rh.locator("#secu-entree").isHidden() && await rh.locator("#secu-controle").isHidden() && await rh.locator("#secu-rapport").isHidden(), "RH : pas de bouton d'ajout");
+    t.egal(await rh.locator("#secu-main button", { hasText: "Sortie" }).count(), 0, "RH : pas de bouton Sortie");
+    await rh.locator("#secu-main .seg button", { hasText: "Contrôles" }).click(); await pause(rh, 300);
+    await rh.locator("#secu-main .linkbtn").first().click(); await pause(rh, 400);
+    t.ok(await rh.evaluate(() => [...document.querySelectorAll("#dlg .secu-grande img")].some(i => i.src.startsWith("blob:"))), "RH : photo de la pièce visible");
+    t.ok((await rh.locator("#dlg button", { hasText: /Modifier|Supprimer|Noter son entrée/ }).count()) === 0, "RH : ni modifier, ni supprimer, ni noter d'entrée");
+    t.sansErreur(rh);
     const i = await ouvrir(env, { role: "inspecteur", discord: "333333333333333333", nom: "Inspecteur Test" });
     t.ok(await i.locator("#tab-btn-securite").isHidden(), "Inspection : pas d'onglet Sécurité");
     const x = await ouvrir(env, { role: "agent", discord: "111111111111111111", nom: "Alice", hash: "espace" });

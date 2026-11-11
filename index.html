@@ -3499,7 +3499,13 @@ function applyRole() {
   // Fonctionnaire sans autre accès : son espace, rien d'autre.
   else if (S.role === "agent") { $$(".tab").forEach(b => { b.hidden = !(b.dataset.tab === "espace" || (b.dataset.tab === "securite" && !!S.protection)); }); if (S.tab !== "espace" && !(S.tab === "securite" && S.protection)) showTab("espace"); }
   // Rôle « rh » : le personnel et ses contrats, rien d'autre (la base ne lui montre que cela).
-  else if (S.role === "rh") { $$(".tab").forEach(b => { b.hidden = !(b.dataset.tab === "personnel" || (b.dataset.tab === "espace" && S.monFid) || (b.dataset.tab === "securite" && !!S.protection)); }); if (S.tab !== "personnel" && S.tab !== "espace") showTab("personnel"); }
+  else if (S.role === "rh") {
+    $$(".tab").forEach(b => { b.hidden = !(b.dataset.tab === "personnel" || (b.dataset.tab === "espace" && S.monFid) || (b.dataset.tab === "securite" && secuAcces())); });
+    // Pas de tableau de bord pour les RH : le premier groupe porte le nom de ce qu'il contient.
+    const lg = $("#grp-accueil .lg"), sm = $("#grp-accueil .sm");
+    if (lg && sm) { lg.textContent = S.monFid ? "Mon espace et sécurité" : "Sécurité"; sm.textContent = S.monFid ? "Espace" : "Sécurité"; }
+    if (!["personnel", "espace", "securite"].includes(S.tab)) showTab("personnel");
+  }
   // Pointeuse fermée : l'onglet disparaît pour tous ; les heures se saisissent dans la paye.
   else if (ptFerme()) { $("#tab-btn-pointeuse").hidden = true; if (S.tab === "pointeuse") showTab("payes"); }
   if (S.role !== "agent" && S.role !== "pointeuse" && S.role !== "rh") { $("#tab-btn-espace").hidden = !S.monFid; $("#tab-btn-securite").hidden = !secuAcces(); }
@@ -6398,8 +6404,9 @@ const SECU_MOTIFS = { rdv: "Rendez-vous", convocation: "Convocation", depot: "D�
 const SECU_CTRL_MOTIFS = { entree: "Entrée dans les locaux", aleatoire: "Contrôle aléatoire", suspect: "Comportement suspect", autre: "Autre" };
 const SECU_RESULTATS = { conforme: ["Conforme", "ok"], anomalie: ["Anomalie", "warn"], faux: ["Faux document", "bad"], refus: ["Refus de présenter une pièce", "bad"], recherche: ["Personne recherchée", "bad"] };
 const SECU_RAPPORTS = { incident: "Incident", intervention: "Intervention", ronde: "Ronde", main_courante: "Main courante", autre: "Autre" };
-const secuAcces = () => S.connected && (!!S.protection || S.role === "direction");
-const secuEcrit = () => secuAcces() && (!!S.protection || !S.readOnly);
+// Ressources humaines : l'onglet en lecture (mise à jour 39), pour suivre le service de la protection.
+const secuAcces = () => S.connected && (!!S.protection || S.role === "direction" || S.role === "rh");
+const secuEcrit = () => S.connected && (!!S.protection || (S.role === "direction" && !S.readOnly));
 const secuResp = () => S.connected && (S.protection === "responsable" || (S.role === "direction" && !S.readOnly));
 const secuListe = c => ((S.secu && S.secu[c]) || []).slice();
 // Rôle dans le service : d'après la base (mise à jour 38), sinon d'après le grade de la fiche.
@@ -7190,7 +7197,9 @@ function renderSecurite() {
     h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.secuVue = k; renderSecurite(); }, text: t })));
   const rech = h("input", { type: "search", placeholder: "Rechercher un nom", "aria-label": "Rechercher un nom", value: S.secuQ || "" });
   rech.addEventListener("input", () => { S.secuQ = rech.value; clearTimeout(S.secuQt); S.secuQt = setTimeout(() => { renderSecurite(); const r = $("#secu-main input[type=search]"); if (r) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } }, 250); });
-  const notice = S.secuAbsente ? h("div", { class: "notice" }, h("div", {}, h("strong", { text: "Base pas encore prête. " }), "La Direction doit exécuter supabase/v38_securite.sql pour que les agents de la protection enregistrent et voient les photos.")) : null;
+  const rhSeul = S.role === "rh" && !S.protection, vide = !ent.length && !ctl.length && !rap.length;
+  const notice = S.secuAbsente ? h("div", { class: "notice" }, h("div", {}, h("strong", { text: "Base pas encore prête. " }), "La Direction doit exécuter supabase/v38_securite.sql pour que les agents de la protection enregistrent et voient les photos.")) :
+    rhSeul ? h("p", { class: "hint", style: "margin:0 0 10px", text: vide ? "Consultation seulement. Rien à afficher : si le service de la protection a déjà enregistré des dossiers, la Direction doit exécuter supabase/v39_securite_rh.sql." : "Consultation seulement : le service de la protection saisit les entrées, les contrôles et les rapports." }) : null;
   let corps;
   if (vue === "entrees") {
     const l = ent.filter(x => trouve(x.nom, x.qualite, x.visite, x.numero)), dans = l.filter(x => !x.sortie), parties = l.filter(x => x.sortie).slice(0, 100);
@@ -7261,6 +7270,7 @@ function guidePages(role) {
         ["Demandes", "Congés, horaires, documents : accepter ou refuser avec une réponse. Un congé accepté devient une absence.", gPerso("demandes")],
         ["Entretiens et objectifs", "Le compte rendu, partagé ou en brouillon, et les objectifs avec leur échéance.", gPerso("entretiens")],
         ["Sanctions", "De l’avertissement à la révocation, avec leurs effets sur la paye, le grade ou l’agenda.", gPerso("sanctions")],
+        ["Sécurité", "En lecture : les entrées dans la Préfecture, les contrôles d’identité avec la photo de la pièce, et les rapports du service de la protection.", gOnglet("securite")],
         espace, notif] }];
   if (role === "inspecteur") return [
     { titre: "Bienvenue à l’Inspection", intro: "Vous saisissez et vérifiez les déclarations, émettez les avis, relancez et mettez en demeure, taxez d’office, menez les contrôles jusqu’à la proposition et publiez sur Discord. La Direction garde l’encaissement, les annulations, les sanctions, la justice, la clôture des semaines, les réglages et les accès.",
