@@ -39,6 +39,8 @@
         if (st.op === "update") { const p = window.__perso.find(p => p.id === idf && p.fid === fid); if (p) Object.assign(p, st.payload); return ok(null); }
         if (st.op === "delete") { window.__perso = window.__perso.filter(p => !(p.id === idf && p.fid === fid)); return ok(null); }
       }
+      // Salons Discord de l'essai (window.__discord = { webhooks, auto }) : adresses servies par l'essai lui-même.
+      if (table === "parametres_prives" && st.op === "select") return ok(window.__discord ? [{ cle: "discord", valeur: window.__discord }] : []);
       if (table !== "registre") return ok(st.op === "select" ? [] : null);
       if (st.op === "select") { const all = [...rows.values()].sort((a, z) => (a.collection + a.id).localeCompare(z.collection + z.id)); const [a, z] = st.range || [0, 1e9]; return ok(all.slice(a, z + 1)); }
       if (st.op === "upsert" || st.op === "insert") { for (const r of [].concat(st.payload)) rows.set(r.collection + "/" + r.id, Object.assign({ updated_by: "moi" }, r)); return ok(null); }

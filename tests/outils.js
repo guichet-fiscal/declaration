@@ -31,7 +31,8 @@ const pause = (p, ms) => p.waitForTimeout(ms);
 //  o.role : direction, inspecteur, lecture, rh, agent ; o.discord, o.nom ; o.hash : onglet ;
 //  o.jeu : nom du jeu d'essai (tests/jeux) ; o.avant : code exécuté avant le faux Supabase ;
 //  o.maintenant : date ISO de l'horloge ; o.largeur / o.hauteur ; o.theme : light ou dark ;
-//  o.accueil : laisser le guide de Mon espace s'ouvrir comme à une première visite.
+//  o.accueil : laisser le guide de Mon espace s'ouvrir comme à une première visite ;
+//  faux salons Discord : window.__discord = { webhooks: { agents: url + "/__webhook/agents" } } dans o.avant.
 async function ouvrir(env, o) {
   o = Object.assign({ role: "direction", discord: "999999999999999999", nom: "Directeur Test", hash: "dashboard", jeu: "equipe", maintenant: "2026-11-10T20:30:00Z" }, o || {});
   const ctx = await env.navigateur.newContext({ viewport: { width: o.largeur || 1280, height: o.hauteur || 1000 }, serviceWorkers: "block", timezoneId: "Europe/Paris",
@@ -44,6 +45,9 @@ async function ouvrir(env, o) {
   const corps = (o.jeu ? jeu(o.jeu) : "window.__SEED = [];") + "\n" + (o.avant || "") + "\n" + FACTICE;
   await p.route(/supabase-js/, (r) => r.fulfill({ contentType: "application/javascript", body: corps }));
   await p.route(/^https:\/\/(fonts\.|discord|cdn\.discordapp)/, (r) => r.abort());
+  // Faux salons Discord (adresses …/__webhook/<salon>) : chaque envoi est gardé dans p.webhooks.
+  p.webhooks = [];
+  await p.route(/\/__webhook\//, (r) => { p.webhooks.push({ url: r.request().url(), corps: (r.request().postDataBuffer() || Buffer.from("")).toString("utf8") }); r.fulfill({ status: 200, contentType: "application/json", body: "{}" }); });
   // Le guide de Mon espace s'ouvre à la première visite : les essais l'évitent, sauf o.accueil.
   if (!o.accueil) await p.addInitScript(() => { try { ["f1", "f2", "f3", "f4"].forEach((f) => localStorage.setItem("gf-accueil-vu-" + f, "essai")); } catch (e) { /* sans stockage */ } });
   await p.clock.setSystemTime(new Date(o.maintenant));

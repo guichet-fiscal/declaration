@@ -3707,6 +3707,7 @@ function subscribe() {
   db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
   db.doc("meta/bilan").onSnapshot(s => { S.bilanMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilan"); schedule(); }, onDbError);
   db.doc("meta/communique").onSnapshot(s => { S.communiqueMeta = s.exists ? (s.data() || null) : null; S.loaded.add("communique"); schedule(); }, onDbError);
+  db.doc("meta/classement").onSnapshot(s => { S.classementMeta = s.exists ? (s.data() || null) : null; S.loaded.add("classementMeta"); schedule(); }, onDbError);
   const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
   col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("declarations", s => { S.declarations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3812,6 +3813,7 @@ function render() {
   if (S.pendingOpen && !dlg.open) ouvrirDossier(S.pendingOpen);
   bilanAuto();
   communiqueAuto();
+  classementAuto();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -11927,11 +11929,12 @@ const DISCORD_AUTO = [
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
   ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"],
   ["bilans", "Bilan de la semaine, le lendemain de la date limite (salon de la Direction)", "direction"],
+  ["classement", "Classement des heures et bilan du personnel de la semaine passée, le lundi, dès que toutes les heures sont saisies (salon des agents)", "agents"],
   ["alertesAgents", "Alertes aux fonctionnaires : messages, agenda, notes de service, paye versée (salon des alertes du personnel)", "personnel"],
   ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["bilans", "alertesAgents", "alertesEquipe"]);
+const AUTO_DEFAUT = new Set(["bilans", "classement", "alertesAgents", "alertesEquipe"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
   return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : "");
@@ -15011,6 +15014,49 @@ async function communiqueAuto() {
     if (!(await write(() => S.db.doc("meta/communique").set({ periode: k, at: nowISO(), publie: !!(x.red.length || x.tj.length), by: S.uid || null, byNom: S.agentName || "" })))) return;
     if (x.red.length || x.tj.length) await publishDoc(communiqueDoc(k), `Communiqué de ${periodPlain(k).toLowerCase()} :`);
   } finally { S.communiqueEnCours = false; }
+}
+// Le lundi : classement de la semaine passée et bilan du personnel, publiés une fois au salon des agents
+// par la première session de la Direction, dès que la paye est versée ou que chacun a ses heures.
+async function classementAuto() {
+  if (S.classementEnCours || !writer() || !autoOn("classement")) return;
+  if (!["config", "classementMeta", "payes", "fonctionnaires", "rappels", "pointages"].every(x => S.loaded.has(x))) return;
+  const k = semPrec(semKey(new Date())), p = payeOf(k);
+  if (!semSaisie(k) || !p || (!payeVersee(p) && heuresASaisir(k).length)) return;
+  if (S.classementMeta && String(S.classementMeta.semaine || "") >= k) return;
+  const lignes = heuresClassement();
+  if (!lignes) return;
+  const f = clsFenetre("derniere"), rang = clsRangSem(lignes, f.garde);
+  if (f.k !== k || !rang.length) return;
+  S.classementEnCours = true;
+  try {
+    if (!(await write(() => S.db.doc("meta/classement").set({ semaine: k, at: nowISO(), by: S.uid || null, byNom: S.agentName || "" })))) return;
+    const b = bilanPersonnel(k, lignes, rang), doc = classementDoc("derniere", f, rang, { record: b.record, tot: b.tot });
+    doc.discord.text = b.texte;
+    await publishDoc(doc, `Classement de ${periodPlain(k).toLowerCase()} :`);
+  } finally { S.classementEnCours = false; }
+}
+// Bilan du personnel d'une semaine finie : heures de l'équipe face au record, agents, primes, podium.
+function bilanPersonnel(k, lignes, rang) {
+  const tot = new Map(), kNow = semKey(new Date());
+  for (const x of lignes) tot.set(x.k, (tot.get(x.k) || 0) + x.h);
+  let avant = null, record = null;
+  for (const [kk, v] of tot) {
+    if (kk === kNow || !(v > 0)) continue;
+    if (!record || v > record.h) record = { k: kk, h: v };
+    if (kk !== k && (!avant || v > avant.h)) avant = { k: kk, h: v };
+  }
+  const h0 = tot.get(k) || 0, prec = tot.get(semPrec(k)) || 0, c = payeCfg(), primes = new Map();
+  for (const x of rang) { const pal = primePalier(x.h, k, c); if (pal) primes.set(pal.nom, (primes.get(pal.nom) || 0) + 1); }
+  const med = ["🥇", "🥈", "🥉"];
+  const lignesTxt = [
+    `**Bilan du personnel · ${periodPlain(k).toLowerCase()}**`,
+    `⏱️ ${fmtH(h0)} de service pour l’équipe, ${rang.length} agent${plural(rang.length)} en service${prec > 0 ? ` (${h0 >= prec ? "+" : "−"}${fmtH(Math.abs(h0 - prec))} par rapport à la semaine d’avant)` : ""}.`,
+    avant ? (h0 > avant.h ? `🏆 Record de l’équipe battu : l’ancien était de ${fmtH(avant.h)} (${periodPlain(avant.k).toLowerCase()}).` : `🎯 Record de l’équipe : ${fmtH(avant.h)} (${periodPlain(avant.k).toLowerCase()}).`) : "",
+    primes.size ? `🎖️ Primes de présence : ${[...primes].map(([n, v]) => `${v} × ${n}`).join(", ")}.` : "",
+    `Podium : ${rang.slice(0, 3).map((x, i) => `${med[i]} ${x.nom} (${fmtH(x.h)})`).join(", ")}.`,
+    "Merci à tous pour votre engagement."
+  ];
+  return { tot, record, texte: lignesTxt.filter(Boolean).join("\n") };
 }
 // Actions sensibles de la semaine, lues dans le journal : ce qui allège ce qu'une entreprise doit ou ce
 // qu'on lui reproche, et tout dossier traité par un agent lié à l'entreprise.
