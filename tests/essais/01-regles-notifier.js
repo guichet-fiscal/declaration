@@ -63,6 +63,21 @@ module.exports = {
     const sig = R.personnel({ collection: "contratsTravail", id: "ct1", action: "UPDATE", avant: { statut: "a_signer" }, apres: { nom: "Alice", statut: "signe", signeParAgent: true } }, ctx36);
     t.ok(sig && sig.equipe && sig.discord[0].canal === "direction", "contrat signé par l'agent : encadrement et salon Direction");
     t.egal(R.personnel({ collection: "contratsTravail", id: "ct1", action: "UPDATE", avant: { statut: "a_signer" }, apres: { statut: "signe" } }, ctx36), null, "contrat signé par les RH : rien");
+    // Échéances du personnel : durée d'essai lue dans le contrat, une semaine avant et le jour même.
+    t.egal(["Une semaine", "15 jours", "deux semaines", "1 mois", "Période d’essai : 3 jours renouvelable", "à voir"].map(R.essaiJours), [7, 15, 14, 30, 3, null], "durée d'essai lue dans le texte du contrat");
+    const rowsE = [
+      { collection: "fonctionnaires", id: "f1", data: { nom: "Alice" } },
+      { collection: "fonctionnaires", id: "f2", data: { nom: "Bruno" } },
+      { collection: "fonctionnaires", id: "f3", data: { nom: "Chloé", essai: { statut: "concluant" } } },
+      { collection: "contratsTravail", id: "c1", data: { fid: "f1", priseFonctions: "2026-11-10", essai: "Une semaine", at: "2026-11-10T10:00:00Z" } },
+      { collection: "contratsTravail", id: "c2", data: { fid: "f2", priseFonctions: "2026-10-01", essai: "1 mois", type: "CDD", fin: "2026-11-24", at: "2026-10-01T10:00:00Z" } },
+      { collection: "contratsTravail", id: "c3", data: { fid: "f3", priseFonctions: "2026-11-10", essai: "Une semaine", at: "2026-11-10T10:00:00Z" } },
+      { collection: "entretiens", id: "e1", data: { fid: "f1", objectifs: [{ texte: "Relevés", echeance: "2026-11-17", etat: "en_cours" }, { texte: "Fait", echeance: "2026-11-17", etat: "atteint" }] } }];
+    const h17 = Date.parse("2026-11-17T09:30:00Z");
+    const ech = R.echeancesPersonnel(rowsE, h17 - 3600e3, h17, "https://x/");
+    t.ok(ech && ech.equipe.type === "personnel" && /Fin de la période d’essai de Alice aujourd’hui/.test(ech.discord.texte) && /Fin du CDD de Bruno dans une semaine/.test(ech.discord.texte) && /Objectif de Alice à échéance aujourd’hui : Relevés/.test(ech.discord.texte), "fin d'essai le jour même, fin de CDD une semaine avant, objectif du jour", JSON.stringify(ech));
+    t.ok(ech && !/Chloé/.test(ech.discord.texte) && !/Fait/.test(ech.discord.texte), "ni essai déjà concluant, ni objectif atteint");
+    t.egal(R.echeancesPersonnel(rowsE, h17, h17 + 3600e3, ""), null, "rien en dehors de l'heure du rappel");
     // Lundi soir : heures de la semaine passée pas encore saisies.
     t.egal([R.semaineDe(Date.parse("2026-11-16T19:00:00Z")), R.semaineDe(Date.parse("2026-11-15T23:30:00Z")), R.semaineDe(Date.parse("2026-11-15T22:30:00Z")), R.semaineDe(Date.parse("2027-01-01T12:00:00Z"))],
       ["2026-S47", "2026-S47", "2026-S46", "2026-S53"], "semaine ISO comptée à Paris (lundi 0 h 30 à Paris = semaine suivante, dimanche 23 h 30 = encore la semaine)");

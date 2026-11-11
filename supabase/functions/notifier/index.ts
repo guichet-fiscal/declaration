@@ -14,7 +14,7 @@
 
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2.117.1";
-import { evenement, delais, personnel, rappelsAgenda, rappelsPerso, rappelsChoisis, rappelsPersoChoisis, heuresLundi, COLLECTIONS_PERSONNEL } from "./regles.ts";
+import { evenement, delais, personnel, rappelsAgenda, rappelsPerso, rappelsChoisis, rappelsPersoChoisis, heuresLundi, echeancesPersonnel, COLLECTIONS_PERSONNEL } from "./regles.ts";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 const CORS = {
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       if (cle !== c.secret) return json({ error: "clé refusée" }, 401);
       if (body.type === "delais") {
         const now = Date.now();
-        const { data } = await db.from("registre").select("collection,id,data").in("collection", ["config", "relances", "controles", "decisions", "declarations", "prets", "convocations", "conventions", "agenda"]);
+        const { data } = await db.from("registre").select("collection,id,data").in("collection", ["config", "relances", "controles", "decisions", "declarations", "prets", "convocations", "conventions", "agenda", "fonctionnaires", "contratsTravail", "entretiens"]);
         // Rappels d'agenda fixes d'une heure, tant que la mise à jour 35 (rappels au choix, passage de
         // 5 minutes) n'est pas exécutée ; ensuite, c'est le passage « rappels » qui s'en charge.
         let rappels = 0;
@@ -134,6 +134,12 @@ Deno.serve(async (req) => {
           const { data: perso } = await db.from("agenda_perso").select("id,fid,titre,debut,lieu,journee,rappel")
             .eq("rappel", true).eq("journee", false).gt("debut", new Date(now).toISOString()).lte("debut", new Date(now + 3600e3).toISOString());
           for (const r of rappelsPerso(perso || [], now - 3600e3, now)) rappels += await envoyer(c, await aboAgents([r.fid], r.type), { ...r.msg, type: r.type });
+        }
+        // Échéances du personnel : fin d'essai, fin de CDD, objectifs (encadrement et salon de la Direction).
+        const ech = echeancesPersonnel(data || [], now - 3600e3, now, SITE);
+        if (ech) {
+          rappels += await envoyer(c, await destinataires("personnel", null), ech.equipe);
+          await posterDiscord(await discordConf(), ech.discord);
         }
         const msg = delais(data || [], now - 3600e3, now);
         if (!msg) return json({ ok: true, envoyes: rappels });

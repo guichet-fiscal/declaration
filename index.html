@@ -4327,6 +4327,8 @@ function todoItems() {
       const x = payeCalc(kp), n = x.lignes.filter(l => l.heures > 0).length;
       add(n ? 1 : 0, `Paye de la semaine ${(bounds(kp) || {}).week} à verser`, `${n} agent${plural(n)} · ${money(x.total)}`, () => { S.payeSem = kp; allerA("payes"); });
     }
+    const echP = echeancesPersonnel().filter(x => x.type !== "objectif");
+    add(echP.length, `Fin${plural(echP.length)} de période d’essai ou de CDD`, echP.slice(0, 3).map(x => `${x.f.nom} : ${x.type === "essai" ? "essai" : "CDD"} ${x.passe ? "terminé" : x.quand}`).join(", "), () => { S.rhEspace = "bord"; allerA("personnel"); });
     if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
     add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA(ptFerme() ? "payes" : "pointeuse"));
@@ -5586,6 +5588,63 @@ const ctrOf = id => (S.contratsTravail || []).find(c => c.id === id) || null;
 const ctrNo = c => c.ref || dossierNo("CT", c.id);
 const CTR_STAT = { a_signer: ["À signer", "warn"], signe: ["Signé", "ok"] };
 const ctrJour = s => { const d = /^\d{4}-\d{2}-\d{2}$/.test(s || "") ? new Date(s + "T12:00:00") : null; return d && !isNaN(d) ? longDate(d) : ""; };
+/* ---------- Échéances du personnel : période d'essai, fin de CDD, objectifs ---------- */
+// Durée d'essai écrite dans le contrat (« Une semaine », « 15 jours », « deux semaines », « 1 mois ») en jours.
+const ESSAI_NB = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, quinze: 15, trente: 30 };
+function essaiJours(txt) {
+  const t = String(txt || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const m = /(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|quinze|trente)\s*(jours?|semaines?|mois)\b/.exec(t);
+  if (!m) return null;
+  const n = /\d/.test(m[1]) ? Number(m[1]) : ESSAI_NB[m[1]], j = n * (/^jour/.test(m[2]) ? 1 : /^semaine/.test(m[2]) ? 7 : 30);
+  return j > 0 && j <= 365 ? j : null;
+}
+const ajouterJours = (k, n) => { const d = new Date(k + "T12:00:00"); d.setDate(d.getDate() + n); return jourCle(d); };
+const ecartJours = (k, auj) => Math.round((new Date(k + "T12:00:00") - new Date(auj + "T12:00:00")) / 864e5);
+const dansTxt = (k, auj) => { const n = ecartJours(k, auj); return n === 0 ? "aujourd’hui" : n === 1 ? "demain" : n > 1 ? `dans ${n} jours` : n === -1 ? "depuis hier" : `depuis ${-n} jours`; };
+// Période d'essai : comptée depuis la prise de fonctions du premier contrat de l'agent ; la fiche garde la
+// décision de l'encadrement (f.essai : { statut: "concluant" | "prolonge", jusqua, le, par }).
+function essaiDe(f) {
+  const cs = ctrsOf(f.id), c = cs[cs.length - 1];
+  if (!c || !/^\d{4}-\d{2}-\d{2}$/.test(c.priseFonctions || "")) return null;
+  const x = f.essai || {}, j = essaiJours(c.essai);
+  if (j == null && !x.jusqua) return null;
+  return { contrat: c, duree: c.essai || "", fin: x.statut === "prolonge" && x.jusqua ? x.jusqua : ajouterJours(c.priseFonctions, j), conclu: x.statut === "concluant", prolonge: x.statut === "prolonge", decision: x.statut ? x : null };
+}
+// Ce qui arrive dans les 7 jours (ou est déjà passé sans décision) pour les agents en service.
+function echeancesPersonnel(horizon) {
+  const auj = jourCle(new Date()), lim = ajouterJours(auj, horizon == null ? 7 : horizon), out = [];
+  for (const f of foncs().filter(z => z.actif !== false)) {
+    const e = essaiDe(f);
+    if (e && !e.conclu && e.fin <= lim) out.push({ type: "essai", f, date: e.fin, passe: e.fin < auj, titre: `Fin de la période d’essai de ${f.nom}`, quand: e.fin < auj ? `terminée ${dansTxt(e.fin, auj)} : à confirmer` : dansTxt(e.fin, auj) });
+    const c = ctrsOf(f.id)[0];
+    if (c && c.type === "CDD" && c.fin && c.fin <= lim) out.push({ type: "cdd", f, date: c.fin, passe: c.fin < auj, titre: `Fin du CDD de ${f.nom}`, quand: c.fin < auj ? `terminé ${dansTxt(c.fin, auj)} : renouveler ou retirer des effectifs` : dansTxt(c.fin, auj) });
+  }
+  for (const en of S.entretiens || []) {
+    const f = foncOf(en.fid);
+    if (!f || f.actif === false) continue;
+    for (const o of en.objectifs || []) if (o.etat === "en_cours" && o.echeance && o.echeance >= auj && o.echeance <= lim)
+      out.push({ type: "objectif", f, date: o.echeance, passe: false, titre: `Objectif de ${f.nom}`, quand: `${errCourt(o.texte, 60)} · ${dansTxt(o.echeance, auj)}`, entretien: en });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+// Décision de l'encadrement sur la période d'essai, gardée sur la fiche.
+function openEssaiDecision(f, back) {
+  const e = essaiDe(f); if (!e || !rhWriter()) return;
+  const date = h("input", { type: "date", id: "es-prolonge" }); date.value = ajouterJours(e.fin, 7); date.min = ajouterJours(jourCle(new Date()), 1);
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const ecrire = async (essai, ok) => { if (await write(() => S.db.doc("fonctionnaires/" + f.id).update({ essai, modifieLe: nowISO() }))) { toast(ok); if (back) back(); else closeDialog(); } };
+  openDialog({ eyebrow: f.nom || "Agent", title: "Période d’essai", body: [
+    kv([["Durée au contrat", e.duree || "—"], ["Prise de fonctions", ctrJour(e.contrat.priseFonctions) || "—"], ["Fin", `${ctrJour(e.fin)} (${dansTxt(e.fin, jourCle(new Date()))})`],
+      e.decision ? ["Décision", `${e.conclu ? "concluante" : "prolongée"}${e.decision.par ? " · " + e.decision.par : ""}${e.decision.le ? ", le " + fmtDate(new Date(e.decision.le)) : ""}`] : null]),
+    h("p", { class: "hint", style: "margin:0", text: "Concluante : l’agent reste en poste et l’alerte s’arrête. Prolongée : la nouvelle date de fin remplace l’ancienne. Pour ne pas le garder, retirez-le des effectifs depuis sa fiche." }),
+    field("es-prolonge", "Prolonger jusqu’au", date), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => {
+        if (!date.value || date.value <= jourCle(new Date())) { err.textContent = "Choisissez une date à venir."; date.focus(); return; }
+        ecrire({ statut: "prolonge", jusqua: date.value, le: nowISO(), par: S.agentName || "" }, `Période d’essai de ${f.nom} prolongée jusqu’au ${ctrJour(date.value)}.`);
+      }, text: "Prolonger" }),
+      h("button", { class: "btn small", type: "button", onclick: () => ecrire({ statut: "concluant", le: nowISO(), par: S.agentName || "" }, `Période d’essai de ${f.nom} concluante.`), text: "Essai concluant" })] });
+}
 const ctrEtat = f => { const c = ctrsOf(f.id)[0]; return c ? (c.statut === "signe" ? "contrat signé" : "contrat à signer") : "sans contrat"; };
 
 function openCtrForm(f, ct, back) {
@@ -5982,6 +6041,11 @@ function openAgent(fid, back) {
         ["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"],
         ["Entré", f.at ? `le ${longDate(new Date(f.at))}${f.byNom ? " · fiche créée par " + f.byNom : ""}` : "—"],
         f.actif === false ? ["Retiré des effectifs", f.retireLe ? `le ${longDate(new Date(f.retireLe))}` : "oui"] : null,
+        (() => { const e = f.actif !== false && essaiDe(f); if (!e) return null; const auj = jourCle(new Date());
+          const t = e.conclu ? `concluante${e.decision.par ? " (" + e.decision.par + (e.decision.le ? ", le " + fmtDate(new Date(e.decision.le)) : "") + ")" : ""}`
+            : `${e.prolonge ? "prolongée " : ""}jusqu’au ${ctrJour(e.fin)} (${e.fin < auj ? "terminée, à confirmer" : dansTxt(e.fin, auj)})`;
+          return ["Période d’essai", w && !e.conclu ? h("span", {}, t + " · ", h("button", { class: "linkbtn", type: "button", onclick: () => openEssaiDecision(f, reopen), text: "décider" })) : t]; })(),
+        (() => { const c = ctrsOf(f.id)[0]; return f.actif !== false && c && c.type === "CDD" && c.fin ? ["Fin du CDD", `${ctrJour(c.fin)} (${c.fin < jourCle(new Date()) ? "terminé" : dansTxt(c.fin, jourCle(new Date()))})`] : null; })(),
         f.note ? ["Note", f.note] : null]),
       ctrSection(f, reopen),
       entretiensSection(f, reopen),
@@ -6981,7 +7045,10 @@ function renderBordRH() {
   // À surveiller.
   const sans = paye ? actifs.filter(f => ks.slice(-2).every(k => { const ag = parSem.get(k).agents; return !ag.has(f.discordId || "") && !ag.has("f:" + f.id); })) : [];
   const lien = (t, go) => h("button", { class: "linkbtn", type: "button", onclick: go, text: t });
+  const ech = echeancesPersonnel(), echRH = ech.filter(x => x.type !== "objectif"), echObj = ech.filter(x => x.type === "objectif");
   const veille = [
+    ...echRH.map(x => [`${x.titre} : ${x.quand}`, x.type === "essai" ? "Essai concluant, prolongé ou fin de contrat : à décider sur sa fiche." : "Nouveau contrat ou retrait des effectifs : depuis sa fiche.", () => x.type === "essai" && rhWriter() ? openEssaiDecision(x.f, () => openAgent(x.f.id)) : openAgent(x.f.id)]),
+    echObj.length ? [`${echObj.length} objectif${plural(echObj.length)} à échéance dans les 7 jours`, echObj.slice(0, 4).map(x => `${x.f.nom} : ${x.quand}`).join(", "), () => { S.rhEspace = "entretiens"; renderPersonnel(); }] : null,
     sans.length ? [`${sans.length} agent${plural(sans.length)} sans heure de service depuis deux semaines`, sans.slice(0, 6).map(f => f.nom).join(", ") + (sans.length > 6 ? "…" : ""), () => { S.rhEspace = "effectif"; renderPersonnel(); }] : null,
     absEnCours.length ? [`${absEnCours.length} absent${plural(absEnCours.length)} aujourd’hui`, absEnCours.map(a => a.nom).join(", "), () => { S.rhEspace = "absences"; renderPersonnel(); }] : null,
     dags.length ? [`${dags.length} demande${plural(dags.length)} en attente`, dags.slice(0, 4).map(d => `${d.nom} (${(DAG_TYPES[d.type] || DAG_TYPES.autre).nom.toLowerCase()})`).join(", "), () => { S.rhEspace = "demandes"; renderPersonnel(); }] : null,

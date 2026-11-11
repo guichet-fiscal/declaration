@@ -344,3 +344,48 @@ export function heuresLundi(payes, foncs, maintenant, site) {
     discord: { canal: "direction", auto: "alertesEquipe", texte: `⏱️ **Heures de la ${sem} à saisir** : ${n} agent${s} n’${n > 1 ? "ont" : "a"} pas encore d’heures dans la paye (${noms}). À compléter dans Payes avant de verser :${site ? " " + site + "#payes" : ""}` },
   };
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Échéances du personnel (passage horaire) : une semaine avant et le jour même, à 9 h UTC (10 h à Paris
+// l'hiver) : fin de période d'essai (durée lue dans le premier contrat, ou prolongation notée sur la fiche),
+// fin de CDD (dernier contrat), objectif d'entretien à échéance (le jour même). Comme au guichet.
+// rows : lignes du registre (fonctionnaires, contratsTravail, entretiens). → { equipe, discord } ou null.
+const ESSAI_NB = { un: 1, une: 1, deux: 2, trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, neuf: 9, dix: 10, quinze: 15, trente: 30 };
+export function essaiJours(txt) {
+  const t = String(txt || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const m = /(\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|quinze|trente)\s*(jours?|semaines?|mois)\b/.exec(t);
+  if (!m) return null;
+  const n = /\d/.test(m[1]) ? Number(m[1]) : ESSAI_NB[m[1]], j = n * (/^jour/.test(m[2]) ? 1 : /^semaine/.test(m[2]) ? 7 : 30);
+  return j > 0 && j <= 365 ? j : null;
+}
+const plusJours = (k, n) => { const d = new Date(k + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const JOUR_RE = /^\d{4}-\d{2}-\d{2}$/;
+export function echeancesPersonnel(rows, depuis, maintenant, site) {
+  const by = (c) => (rows || []).filter((r) => r.collection === c);
+  const foncs = new Map(by("fonctionnaires").map((r) => [r.id, r.data || {}]));
+  const ctrs = by("contratsTravail").map((r) => Object.assign({ id: r.id }, r.data || {})).sort((a, b) => String(a.at || "").localeCompare(String(b.at || "")));
+  const vers = (k) => Date.parse(k + "T09:00:00Z");
+  const dedans = (t) => Number.isFinite(t) && t > depuis && t <= maintenant;
+  const quand = (k) => (!JOUR_RE.test(k || "") ? null : dedans(vers(plusJours(k, -7))) ? "dans une semaine" : dedans(vers(k)) ? "aujourd’hui" : null);
+  const lignes = [];
+  for (const [fid, f] of foncs) {
+    if (f.actif === false) continue;
+    const cs = ctrs.filter((c) => c.fid === fid), premier = cs[0], dernier = cs[cs.length - 1], x = f.essai || {};
+    if (premier && JOUR_RE.test(premier.priseFonctions || "") && x.statut !== "concluant") {
+      const j = essaiJours(premier.essai), fin = x.statut === "prolonge" && x.jusqua ? x.jusqua : j != null ? plusJours(premier.priseFonctions, j) : null, q = quand(fin);
+      if (q) lignes.push(`fin de la période d’essai de ${f.nom || "un agent"} ${q}`);
+    }
+    if (dernier && dernier.type === "CDD" && dernier.fin) { const q = quand(dernier.fin); if (q) lignes.push(`fin du CDD de ${f.nom || "un agent"} ${q}`); }
+  }
+  for (const r of by("entretiens")) {
+    const e = r.data || {}, f = foncs.get(e.fid);
+    if (!f || f.actif === false) continue;
+    for (const o of e.objectifs || []) if (o.etat === "en_cours" && JOUR_RE.test(o.echeance || "") && dedans(vers(o.echeance))) lignes.push(`objectif de ${f.nom || e.nom || "un agent"} à échéance aujourd’hui : ${court(o.texte, 80)}`);
+  }
+  if (!lignes.length) return null;
+  const maj = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+  return {
+    equipe: { type: "personnel", title: lignes.length === 1 ? "Échéance du personnel" : `${lignes.length} échéances du personnel`, body: lignes.slice(0, 4).map(maj).join("\n") + (lignes.length > 4 ? `\n+ ${lignes.length - 4} autre${lignes.length - 4 > 1 ? "s" : ""}` : ""), url: "#personnel", tag: "ech-" + Math.floor(maintenant / 36e5) },
+    discord: { canal: "direction", auto: "alertesEquipe", texte: `📆 **Échéances du personnel**\n${lignes.map((l) => "• " + maj(l)).join("\n")}\nÀ décider sur la fiche de l’agent, dans Personnel :${site ? " " + site + "#personnel" : ""}` },
+  };
+}
