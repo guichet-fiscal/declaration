@@ -90,6 +90,7 @@ module.exports = {
     await a.locator("#sc-nom").pressSequentially("hug"); await pause(a, 300);
     await a.locator("#sc-nom").press("ArrowDown"); await a.locator("#sc-nom").press("Enter"); await pause(a, 300);
     t.ok((await val("#sc-nom")) === "LEFÈVRE Hugo" && (await val("#sc-numero")) === "GP44712290", "suggestion choisie au clavier (nom écrit comme la dernière fois)");
+    t.ok(await a.locator("#dlg .secu-dedans").isVisible() && (await a.locator("#dlg button", { hasText: "noter seulement son entrée" }).count()) === 0, "encore dans les locaux : dit, et pas d'entrée proposée");
     await a.locator("#dlg button", { hasText: "Annuler" }).click(); await pause(a, 300);
 
     // Depuis un contrôle : « Noter son entrée » ouvre l'entrée préremplie.
@@ -103,6 +104,30 @@ module.exports = {
     await a.locator("#secu-main .linkbtn", { hasText: "LEFÈVRE Hugo" }).click(); await pause(a, 300);
     await a.locator("#dlg button", { hasText: "Noter son entrée" }).click(); await pause(a, 400);
     t.ok((await val("#se-nom")) === "LEFÈVRE Hugo" && (await a.locator("#dlg .dlg-title").innerText()).includes("Nouvelle entrée"), "entrée préremplie depuis le contrôle");
+    await a.locator("#dlg button", { hasText: /^(Annuler|Retour)$/ }).click(); await pause(a, 300);
+    if (await a.locator("#dlg button", { hasText: "Fermer" }).count()) { await a.locator("#dlg button", { hasText: "Fermer" }).click(); await pause(a, 200); }
+
+    // Nouveau contrôle d'une identité déjà enregistrée : seulement son entrée, aucun contrôle de plus.
+    const nb = async (c) => (await lignes(a, c)).length;
+    const [ctl0, ent0] = [await nb("securiteControles"), await nb("securiteEntrees")];
+    await a.locator("#secu-controle").click(); await pause(a, 300);
+    if (await a.locator("#dlg .reprise button", { hasText: "Repartir de zéro" }).count()) { await a.locator("#dlg .reprise button", { hasText: "Repartir de zéro" }).click(); await pause(a, 200); }
+    await a.locator("#sc-nom").pressSequentially("hug"); await pause(a, 300);
+    await a.locator("#sc-nom").press("ArrowDown"); await a.locator("#sc-nom").press("Enter"); await pause(a, 300);
+    await a.locator("#dlg button", { hasText: "noter seulement son entrée" }).click(); await pause(a, 400);
+    t.ok((await a.locator("#dlg .dlg-title").innerText()).includes("Nouvelle entrée") && (await val("#se-nom")) === "LEFÈVRE Hugo" && (await val("#se-numero")) === "GP44712290" && (await a.locator("#dlg .secu-ajout .secu-photo").count()) === 1,
+      "identité connue : entrée ouverte avec l'identité et la photo");
+    await a.locator("#dlg button", { hasText: "Enregistrer l’entrée" }).click(); await pause(a, 1200);
+    t.ok((await nb("securiteControles")) === ctl0 && (await nb("securiteEntrees")) === ent0 + 1, "une entrée de plus, aucun contrôle de plus");
+
+    // Nouvelle entrée de quelqu'un encore dans les locaux : « Noter sa sortie d'abord ».
+    await a.locator("#secu-entree").click(); await pause(a, 300);
+    if (await a.locator("#dlg .reprise button", { hasText: "Repartir de zéro" }).count()) { await a.locator("#dlg .reprise button", { hasText: "Repartir de zéro" }).click(); await pause(a, 200); }
+    await a.locator("#se-nom").pressSequentially("hug"); await pause(a, 300);
+    await a.locator("#se-nom").press("ArrowDown"); await a.locator("#se-nom").press("Enter"); await pause(a, 300);
+    await a.locator("#dlg button", { hasText: "Noter sa sortie d’abord" }).click(); await pause(a, 900);
+    t.ok(!(await lignes(a, "securiteEntrees")).some((e) => !e.sortie && /Hugo/i.test(e.nom)), "sortie notée depuis la nouvelle entrée");
+    t.ok(await a.locator("#dlg .secu-dedans").count() === 0, "plus « dans les locaux »");
     t.sansErreur(a);
     fs.rmSync(dossier, { recursive: true, force: true });
   },

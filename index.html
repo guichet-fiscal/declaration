@@ -1046,6 +1046,8 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .secu-fiche-t{display:flex;gap:12px;align-items:center}.secu-fiche-t>div{display:grid;gap:2px}
 .secu-fiche .secu-photo{width:84px;height:56px;flex:none}
 .secu-fiche .btn{justify-self:start}
+.secu-fiche-actions{display:flex;flex-wrap:wrap;gap:8px}
+.secu-dedans{margin:0;font-size:13.5px;font-weight:600;color:var(--ok)}
 .secu-alerte{margin:0;padding:6px 10px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-weight:600;font-size:13.5px}
 input.secu-auto{background:var(--ok-soft)}
 .guide-liste{list-style:none;margin:0;padding:0;display:grid;gap:8px}
@@ -6538,6 +6540,8 @@ function secuChampPhotos(existantes, aide, opts) {
   const montrer = (txt, faible) => { etat.textContent = txt || ""; etat.hidden = !txt; etat.classList.toggle("faible", !!faible); };
   dessiner();
   return { el: zone, total, montrer,
+    fichiers: () => st.nouvelles.map(n => n.file),
+    ajouterFichiers: files => ajouter(files),
     reprendre(p) { if (p && p.path && total() < 6 && !st.reprises.some(x => x.path === p.path) && !st.garder.some(x => x.path === p.path)) { st.reprises.push({ path: p.path, nom: p.nom, taille: p.taille, reprise: true }); dessiner(); } },
     async envoyer(c, id) {
       const out = st.garder.slice(), sto = S.sb.storage.from("securite");
@@ -6635,10 +6639,14 @@ function secuIdentite(ch) {
     const p = secuPersonnes(ch.sauf).get(cleNom(ch.nom.value));
     if (!p) { fiche.hidden = true; fiche.replaceChildren(); return; }
     const manque = champs.some(k => k !== "nom" && p[k] && ch[k].value.trim() !== p[k]) || (p.photo && !ch.photos.total());
+    // Encore dans les locaux (entrée sans sortie) : dit depuis quand.
+    const dedans = secuListe("securiteEntrees").filter(e => !e.sortie && e.id !== ch.sauf && memeSecu(e.nom, p.nom)).sort((a, b) => String(b.arrivee).localeCompare(String(a.arrivee)))[0] || null;
+    const action = ch.actionConnu ? ch.actionConnu(p, dedans) : null;
     fill(fiche, h("div", { class: "secu-fiche-t" }, p.photo ? secuMiniature(p.photo) : null,
         h("div", { style: "min-width:0" }, h("strong", { text: "Déjà dans le registre" }), h("span", { class: "meta", text: secuResume(p) }), msg ? h("span", { class: "meta", text: msg }) : null)),
       p.alertes.map(a => h("p", { class: "secu-alerte", text: `${(SECU_RESULTATS[a.resultat] || SECU_RESULTATS.anomalie)[0]} au contrôle du ${fmtDateTime(new Date(a.date))}` })),
-      manque ? h("button", { class: "btn ghost small", type: "button", onclick: () => reprendre(p), text: p.photo && !ch.photos.total() ? "Reprendre son identité et la photo de sa pièce" : "Reprendre son identité" }) : null);
+      dedans ? h("p", { class: "secu-dedans", text: `Dans les locaux depuis ${quandSecu(dedans.arrivee)}${dedans.visite ? " · " + dedans.visite : ""}.` }) : null,
+      action || manque ? h("div", { class: "secu-fiche-actions" }, action, manque ? h("button", { class: "btn ghost small", type: "button", onclick: () => reprendre(p), text: p.photo && !ch.photos.total() ? "Reprendre son identité et la photo de sa pièce" : "Reprendre son identité" }) : null) : null);
     fiche.hidden = false;
   }
   ch.nom.addEventListener("input", () => majFiche());
@@ -7021,9 +7029,13 @@ function openSecuEntree(x, back, pre) {
   let ident;
   const photos = secuChampPhotos(v.photos, "Photo de la pièce d’identité : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité.",
     { lire: b => ident.lire(b), nouvelle: f => ident.nouvelle(f) });
-  ident = secuIdentite({ nom, naissance, numero, qualite, photos, sauf: v.id });
+  // Encore dans les locaux : sa sortie d'abord, plutôt qu'une seconde entrée ouverte.
+  const sortieAvant = (p, dedans) => !dedans || x ? null : h("button", { class: "btn small", type: "button", text: "Noter sa sortie d’abord", onclick: async ev => { ev.currentTarget.disabled = true; await secuSortie(dedans); ident.majFiche(); } });
+  ident = secuIdentite({ nom, naissance, numero, qualite, photos, sauf: v.id, actionConnu: sortieAvant });
   for (const p of d.photos || []) photos.reprendre(p);
-  if (pre) { [nom, naissance, numero].forEach(el => { if (el.value) { el.dataset.auto = "1"; el.classList.add("secu-auto"); } }); photos.montrer(`Identité reprise du contrôle${d.date ? " du " + quandSecu(d.date) : ""}.`); }
+  if (d.fichiers && d.fichiers.length) photos.ajouterFichiers(d.fichiers);
+  if (pre) { [nom, naissance, numero, qualite].forEach(el => { if (el.value) { el.dataset.auto = "1"; el.classList.add("secu-auto"); } }); photos.montrer(d.controle ? `Identité reprise du contrôle${d.date ? " du " + quandSecu(d.date) : ""}.` : "Identité déjà enregistrée : reprise de son dernier dossier. Vérifiez qu’elle correspond à la personne présente."); }
+  ident.majFiche();
   const err = h("p", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Enregistrer l’entrée" });
   go.addEventListener("click", async () => {
@@ -7088,7 +7100,14 @@ function openSecuControle(x, back) {
   const notes = h("textarea", { rows: "3", maxlength: "1500" }); notes.value = v.notes || "";
   let ident;
   const photos = secuChampPhotos(v.photos, null, { lire: b => ident.lire(b), nouvelle: f => ident.nouvelle(f) });
-  ident = secuIdentite({ nom, naissance, numero, photos, sauf: v.id });
+  // Identité déjà enregistrée : pas de nouveau contrôle, seulement son entrée (identité et photo reprises ;
+  // une photo ajoutée ici part avec elle). Déjà dans les locaux : rien à noter.
+  const entreeSeule = (p, dedans) => x || dedans || !(p.numero || p.photo || p.naissance) ? null
+    : h("button", { class: "btn small", type: "button", text: "Identité déjà enregistrée : noter seulement son entrée", onclick: () => {
+      const f = photos.fichiers();
+      openSecuEntree(null, back, { nom: p.nom, naissance: p.naissance, numero: p.numero, qualite: p.qualite, photos: f.length || !p.photo ? [] : [p.photo], fichiers: f });
+    } });
+  ident = secuIdentite({ nom, naissance, numero, photos, sauf: v.id, actionConnu: entreeSeule });
   // Contrôle à l'entrée : l'entrée se note ensuite, avec l'identité et la photo déjà remplies.
   const suite = h("input", { type: "checkbox", id: "sc-entree" }); suite.checked = true;
   const suiteBox = x ? null : h("div", { class: "field" }, h("label", { class: "switch", for: "sc-entree" }, suite, "Noter son entrée ensuite (identité et photo reprises)"));
@@ -7108,7 +7127,8 @@ function openSecuControle(x, back) {
     if (await secuEnregistrer("securiteControles", rid, data)) {
       const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
       toast(x ? "Contrôle modifié." : `Contrôle de ${data.nom} enregistré.`);
-      if (suiteBox && !suiteBox.hidden && suite.checked) openSecuEntree(null, null, secuPreEntree(Object.assign({ id: rid }, data)));
+      if (suiteBox && !suiteBox.hidden && suite.checked && dansLesLocaux(data.nom)) { toast(`${data.nom} est déjà dans les locaux : pas de nouvelle entrée.`); if (back) back(); else closeDialog(); }
+      else if (suiteBox && !suiteBox.hidden && suite.checked) openSecuEntree(null, null, secuPreEntree(Object.assign({ id: rid }, data)));
       else if (back) back(); else closeDialog();
     } else go.disabled = false;
   });
