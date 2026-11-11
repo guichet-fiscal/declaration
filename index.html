@@ -1018,6 +1018,10 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .annu-discord:hover{background:var(--accent-soft)}
 .annu-discord:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #rh-annuaire input[type=search],#annu-dlg-q{width:100%;max-width:420px}
+.bord-barres .es-bar{width:min(40px,70%)}
+.bord-jauge{height:8px;border-radius:4px;background:var(--rule);overflow:hidden;margin:2px 0 12px}
+.bord-jauge span{display:block;height:100%;background:var(--ok);border-radius:4px}
+.bord-jauge span.trop{background:var(--bad)}
 .es-pas-coche{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule-2);display:grid;place-items:center;font-size:12px;font-weight:700}
 .es-pas li.fait .es-pas-coche{background:var(--ok);border-color:var(--ok);color:#fff}
 .es-ag-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -1337,6 +1341,7 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="messages" hidden><div id="rh-messagerie"></div></div>
     <div data-rh-vue="agenda" hidden><div id="rh-agenda"></div></div>
     <div data-rh-vue="absences" hidden><div id="rh-absences"></div></div>
+    <div data-rh-vue="bord" hidden><div id="rh-bord"></div></div>
     <div data-rh-vue="demandes" hidden><div id="rh-demandes"></div></div>
     <div data-rh-vue="annuaire" hidden><div id="rh-annuaire"></div></div>
     <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
@@ -6388,7 +6393,7 @@ function renderEspace() {
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"], ["annuaire", "Annuaire"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"], ["annuaire", "Annuaire"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
   const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length : 0;
@@ -6409,6 +6414,7 @@ function renderEncadrement() {
   else if (v === "notes") renderNotes();
   else if (v === "sanctions") renderSanctions();
   else if (v === "demandes") renderDemandesEquipe();
+  else if (v === "bord") renderBordRH();
   else if (v === "annuaire") fill($("#rh-annuaire"), annuaireVue(annuaireListe(), { recherche: true }));
 }
 // Messagerie : les conversations, la plus récente d'abord, et celle qui est ouverte.
@@ -6784,6 +6790,62 @@ function openDagEquipe(id) {
       h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); openAgent(d.fid); }, text: "Fiche de l’agent" }), h("span", { class: "spacer" }),
       peut ? h("button", { class: "btn ghost small", type: "button", onclick: ev => decider("refusee", ev.currentTarget), text: "Refuser" }) : null,
       peut ? h("button", { class: "btn ink small", type: "button", onclick: ev => decider("acceptee", ev.currentTarget), text: "Accepter" }) : null].filter(Boolean) });
+}
+/* ---------- Tableau de bord du personnel ---------- */
+// Effectif, présence et heures des 8 dernières semaines, coût des payes face au budget du mois,
+// absences, demandes, sanctions et objectifs. Les heures et les payes ne sont lues que par la
+// Direction, l'Inspection et la Lecture seule (les RH ne lisent pas la paye).
+function renderBordRH() {
+  const box = $("#rh-bord"); if (!box) return;
+  if (!S.loaded.has("fonctionnaires")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const actifs = foncs().filter(f => f.actif !== false), auj = jourCle(new Date()), dans7 = jourCle(new Date(Date.now() + 7 * 864e5));
+  const paye = ["direction", "inspecteur", "lecture"].includes(S.role) && S.loaded.has("payes");
+  const ks = []; for (let k = semPrec(semKey(new Date())), i = 0; i < 8 && k; i++, k = semPrec(k)) ks.unshift(k);
+  const hc = paye ? heuresClassement() || [] : [];
+  const parSem = new Map(ks.map(k => [k, { h: 0, agents: new Set() }]));
+  for (const x of hc) { const s0 = parSem.get(x.k); if (s0 && x.h > 0) { s0.h += x.h; s0.agents.add(x.a); } }
+  // Semaine payée sans heures connues ailleurs (pointages effacés, par exemple) : les heures de la paye versée.
+  if (paye) for (const k of ks) { const s0 = parSem.get(k), p0 = payeOf(k); if (!s0.h && payeVersee(p0)) for (const l of p0.lignes || []) if (Number(l.heures) > 0) { s0.h += Number(l.heures); s0.agents.add(l.discordId || "f:" + l.fid); } }
+  const kDer = ks[ks.length - 1], der = parSem.get(kDer) || { h: 0, agents: new Set() };
+  const absEnCours = (S.absences || []).filter(a => a.statut !== "annulee" && a.du <= auj && a.au >= auj), absBientot = (S.absences || []).filter(a => a.statut !== "annulee" && a.du > auj && a.du <= dans7);
+  const sancs = (S.sanctions || []).filter(x => x.statut === "vigueur"), dags = dagsEnAttente();
+  const objectifs = (S.entretiens || []).flatMap(e => (e.objectifs || []).filter(o => o.etat === "en_cours").map(o => Object.assign({ fid: e.fid, nom: e.nom }, o)));
+  const m = moisDe(semKey(new Date())), c = payeCfg(), depense = paye ? payesDuMois(m).reduce((t, p) => t + payeTotal(p), 0) : 0, budget = Number(c.budgetMois) || 0;
+  const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
+  const kpis = h("div", { class: "minis" },
+    mk("Effectif", String(actifs.length), `fonctionnaire${plural(actifs.length)} en service`),
+    paye ? mk("Semaine dernière", fmtH(der.h), `${der.agents.size} agent${plural(der.agents.size)} sur ${actifs.length} en service`, der.agents.size < actifs.length / 2 ? "warn" : "") : null,
+    mk("Absents", String(absEnCours.length), absBientot.length ? `aujourd’hui · ${absBientot.length} dans les 7 jours` : "aujourd’hui", absEnCours.length ? "warn" : ""),
+    mk("Demandes", String(dags.length), dags.length ? "en attente de réponse" : "rien en attente", dags.length ? "warn" : ""),
+    mk("Sanctions", String(sancs.length), "en vigueur", sancs.length ? "bad" : ""),
+    paye ? mk("Payes du mois", money(depense), budget ? `${Math.round(depense / budget * 100)} % du budget de ${moisNom(m)} (${money(budget)})` : moisNom(m), budget && depense > budget ? "bad" : "") : null);
+  // Heures des 8 dernières semaines.
+  const maxH = Math.max(1, ...ks.map(k => parSem.get(k).h));
+  const cardH = paye ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Heures de service" }), h("p", { class: "sub", text: "Les 8 dernières semaines : total de l’équipe, et nombre d’agents qui ont fait au moins une heure." }))),
+    h("div", { class: "es-barres bord-barres", role: "img", "aria-label": ks.map(k => `semaine ${(bounds(k) || {}).week} : ${fmtH(parSem.get(k).h)}, ${parSem.get(k).agents.size} agents`).join(" ; ") },
+      ks.map(k => { const x = parSem.get(k); return h("div", { class: "es-col" }, h("span", { class: "es-val", text: `${Math.round(x.h)} h` }), h("div", { class: "es-bar", style: `height:${Math.max(1.5, x.h / maxH * 100).toFixed(1)}%` }),
+        h("span", { class: "es-lab", text: `S${(bounds(k) || {}).week} · ${x.agents.size}` })); }))) : null;
+  // Payes des 8 dernières semaines.
+  const cardP = paye ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Payes" }), h("p", { class: "sub", text: `Versé ou estimé chaque semaine. ${MoisNom(m)} : ${money(depense)} versés sur ${money(budget)}.` }))),
+    budget ? h("div", { class: "bord-jauge", role: "img", "aria-label": `${Math.round(depense / budget * 100)} % du budget du mois` }, h("span", { style: `width:${Math.min(100, depense / budget * 100).toFixed(1)}%`, class: depense > budget ? "trop" : null })) : null,
+    h("div", { class: "tbl-wrap" }, h("table", { class: "compact" }, h("thead", {}, h("tr", {}, ["Semaine", "Agents payés", "Montant", "État"].map((t, i) => h("th", { class: i === 1 || i === 2 ? "num" : null, text: t })))),
+      h("tbody", {}, ks.slice().reverse().map(k => { const p0 = payeOf(k), x = p0 ? payeCalc(k) : null; return h("tr", {}, h("td", { text: `Semaine ${(bounds(k) || {}).week}` }),
+        h("td", { class: "num", text: x ? String(x.lignes.filter(l => (Number(l.verse) || Number(l.heures) || 0) > 0).length) : "—" }), h("td", { class: "num", text: x ? money(x.total) : "—" }),
+        h("td", {}, x ? chip(x.versee ? ["Versée", "ok"] : ["À verser", "warn"]) : h("span", { class: "muted", text: "pas de paye" }))); }))))) : null;
+  // À surveiller.
+  const sans = paye ? actifs.filter(f => ks.slice(-2).every(k => { const ag = parSem.get(k).agents; return !ag.has(f.discordId || "") && !ag.has("f:" + f.id); })) : [];
+  const lien = (t, go) => h("button", { class: "linkbtn", type: "button", onclick: go, text: t });
+  const veille = [
+    sans.length ? [`${sans.length} agent${plural(sans.length)} sans heure de service depuis deux semaines`, sans.slice(0, 6).map(f => f.nom).join(", ") + (sans.length > 6 ? "…" : ""), () => { S.rhEspace = "effectif"; renderPersonnel(); }] : null,
+    absEnCours.length ? [`${absEnCours.length} absent${plural(absEnCours.length)} aujourd’hui`, absEnCours.map(a => a.nom).join(", "), () => { S.rhEspace = "absences"; renderPersonnel(); }] : null,
+    dags.length ? [`${dags.length} demande${plural(dags.length)} en attente`, dags.slice(0, 4).map(d => `${d.nom} (${(DAG_TYPES[d.type] || DAG_TYPES.autre).nom.toLowerCase()})`).join(", "), () => { S.rhEspace = "demandes"; renderPersonnel(); }] : null,
+    objectifs.filter(o => o.echeance && o.echeance < auj).length ? [`${objectifs.filter(o => o.echeance && o.echeance < auj).length} objectif${plural(objectifs.filter(o => o.echeance && o.echeance < auj).length)} en retard`, objectifs.filter(o => o.echeance && o.echeance < auj).slice(0, 4).map(o => `${o.nom} : ${o.texte}`).join(" ; "), () => { S.rhEspace = "entretiens"; renderPersonnel(); }] : null
+  ].filter(Boolean);
+  const cardV = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "À surveiller" })),
+    veille.length ? h("ul", { class: "ent-list" }, veille.map(([t, d, go]) => h("li", {}, h("div", { style: "min-width:0" }, lien(t, go), h("span", { class: "meta", text: d })), h("span", {}), h("span", {}))))
+      : h("p", { class: "muted", style: "margin:8px 0 0", text: "Rien à signaler pour l’instant." }));
+  fill(box, kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardH, cardP), h("div", { class: "es-col-d" }, cardV)),
+    !paye ? h("p", { class: "hint", text: "Heures et payes : réservées à la Direction, à l’Inspection et à la Lecture seule." }) : null);
 }
 /* ---------- Annuaire de l'équipe (mise à jour 36) ---------- */
 // Les fonctionnaires en service : l'encadrement d'abord (Direction, Inspection, RH), puis l'équipe.
