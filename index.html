@@ -11,6 +11,29 @@
 <meta name="theme-color" content="#14275a" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e1832" media="(prefers-color-scheme: dark)">
 <script>
+  // Erreurs survenues avant que le guichet ne prenne la main (supabase/v37_suivi.sql) : gardées, puis
+  // remontées par le guichet ; s'il ne démarre pas du tout, envoyées directement 8 s après le chargement.
+  (function () {
+    var file = window.__gfErr = [];
+    window.addEventListener("error", function (e) {
+      if (window.__gfPret || !e || !e.message || file.length >= 5) return;
+      file.push({ type: "demarrage", message: String(e.message).slice(0, 500), source: (e.filename || "") + ":" + (e.lineno || 0) + ":" + (e.colno || 0), pile: e.error && e.error.stack ? String(e.error.stack).slice(0, 3000) : "" });
+    });
+    window.addEventListener("load", function () {
+      setTimeout(function () {
+        if (window.__gfPret || !file.length) return;
+        try {
+          var c = window.GUICHET_CONFIG || {}, tok = "", i, k;
+          for (i = 0; i < localStorage.length; i++) { k = localStorage.key(i); if (/^sb-.*-auth-token$/.test(k)) { try { tok = JSON.parse(localStorage.getItem(k)).access_token || ""; } catch (x) { /* illisible */ } } }
+          if (!c.supabaseUrl || !c.supabaseKey || !tok) return;
+          file.forEach(function (x) {
+            x.navigateur = String(navigator.userAgent || "").slice(0, 80); x.appareil = innerWidth + "×" + innerHeight; x.version = document.lastModified || ""; x.onglet = location.hash.slice(1, 61);
+            fetch(c.supabaseUrl.replace(/\/$/, "") + "/rest/v1/rpc/signaler_erreur", { method: "POST", headers: { "Content-Type": "application/json", apikey: c.supabaseKey, Authorization: "Bearer " + tok }, body: JSON.stringify({ p: x }) }).catch(function () { /* hors ligne */ });
+          });
+        } catch (x) { /* rien à faire */ }
+      }, 8000);
+    });
+  })();
   // Thème choisi par l'agent (clair, sombre, ou comme l'appareil), appliqué avant l'affichage.
   try { var t = localStorage.getItem("guichet-theme"); if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t); } catch (e) { /* stockage indisponible : thème de l'appareil */ }
 </script>
@@ -284,6 +307,10 @@ pre.tpl{margin:12px 0 0;background:var(--field);border:1px solid var(--rule);bor
 .ent-list li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--rule-2)}
 .ent-list .meta{display:block;font-size:12.5px;color:var(--ink-3)}
 /* Fenêtre étroite : les boutons d'une ligne passent dessous au lieu de pousser la fenêtre. */
+.err-h{margin:16px 0 0;font-size:.95rem}
+.err-list .meta{display:block}
+.err-pile{margin-top:12px}.err-pile summary{cursor:pointer;color:var(--ink-2);font-size:.88rem}
+.err-pile pre{margin:8px 0 0;padding:10px 12px;max-height:240px;overflow:auto;background:var(--field);border:1px solid var(--rule);border-radius:6px;font:12px/1.45 var(--f-mono,ui-monospace,monospace);white-space:pre-wrap;word-break:break-word}
 @media (max-width:560px){.ent-list li{grid-template-columns:minmax(0,1fr) auto}.ent-list li>.row-actions{grid-column:1/-1;justify-content:flex-start}.todo-list li>.btn{display:none}}
 .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;color:var(--ink-2)}
 .switch input{width:auto;flex:none}
@@ -2506,6 +2533,14 @@ table.es-payes{min-width:0;width:100%}
             <div id="k-new"></div>
             <ul class="ent-list" id="k-list"></ul>
           </div>
+          <div class="card" id="card-erreurs" hidden>
+            <h3>Erreurs remontées</h3>
+            <p class="sub">Quand le guichet plante chez quelqu’un, il le note tout seul : ce qui s’est passé, dans quel onglet, sur quel navigateur et quel appareil. Rien de ce que la personne a tapé n’est envoyé. Un mois d’historique, visible de la Direction seulement.</p>
+            <div class="paste-row" style="margin-top:14px">
+              <button class="btn ghost" type="button" id="b-erreurs">Voir les erreurs</button>
+              <span class="hint" id="b-erreurs-n"></span>
+            </div>
+          </div>
       </div>
     </div>
   </section>
@@ -2599,6 +2634,75 @@ const cfg = () => {
   if (!c.enveloppesSemaines || typeof c.enveloppesSemaines !== "object" || Array.isArray(c.enveloppesSemaines)) c.enveloppesSemaines = {};
   return c;
 };
+/* ---------- Remontée des erreurs (supabase/v37_suivi.sql) ---------- */
+// Une erreur du guichet chez quelqu'un est notée dans la base avec son navigateur, son appareil et
+// l'onglet ouvert ; la Direction la retrouve dans Réglages → Sauvegardes et export → Erreurs remontées.
+// Au plus 20 par page ouverte, une seule fois chacune ; rien de ce que l'agent a saisi n'est envoyé.
+const ERR = { file: [], vues: new Set(), envoyees: 0, absente: false, enCours: false };
+function navigateurTxt() {
+  const u = navigator.userAgent || ""; let m;
+  if ((m = /Edg(?:A|iOS)?\/(\d+)/.exec(u))) return "Edge " + m[1];
+  if ((m = /OPR\/(\d+)/.exec(u))) return "Opera " + m[1];
+  if ((m = /SamsungBrowser\/(\d+)/.exec(u))) return "Samsung Internet " + m[1];
+  if ((m = /(?:Firefox|FxiOS)\/(\d+)/.exec(u))) return "Firefox " + m[1];
+  if ((m = /CriOS\/(\d+)/.exec(u))) return "Chrome " + m[1] + " (iOS)";
+  if ((m = /Chrome\/(\d+)/.exec(u))) return "Chrome " + m[1];
+  if ((m = /Version\/([\d.]+).*Safari/.exec(u))) return "Safari " + m[1];
+  return u.slice(0, 60) || "inconnu";
+}
+function appareilTxt() {
+  const u = navigator.userAgent || "";
+  const os = /iPhone/.test(u) ? "iPhone" : /iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? "iPad" : /Android/.test(u) ? "Android"
+    : /Windows/.test(u) ? "Windows" : /Mac OS X|Macintosh/.test(u) ? "Mac" : /CrOS/.test(u) ? "Chromebook" : /Linux/.test(u) ? "Linux" : "autre";
+  let app = false;
+  try { app = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true; } catch (e) { app = false; }
+  return `${os}${app ? " · appli installée" : ""} · ${innerWidth}×${innerHeight}`;
+}
+// Empreinte courte : regroupe les mêmes erreurs (chiffres et position dans le fichier ignorés).
+function empreinteTxt(t) { let x = 0x811c9dc5; for (let i = 0; i < t.length; i++) { x ^= t.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0; } return x.toString(16).padStart(8, "0"); }
+const ERR_BRUIT = /ResizeObserver loop|^Script error\.?$|chrome-extension:|moz-extension:|safari-(web-)?extension:|Failed to fetch|Load failed|NetworkError|network error|AbortError|The user aborted/i;
+function signalerErreur(type, message, extra) {
+  try {
+    extra = extra || {};
+    const msg = String((message && message.message) || message || "").replace(/\s+/g, " ").trim().slice(0, 500);
+    const src = String(extra.source || "").slice(0, 300);
+    if (!msg || ERR.absente || ERR_BRUIT.test(msg) || ERR_BRUIT.test(src)) return;
+    const emp = empreinteTxt(type + "|" + msg.replace(/\d+/g, "#") + "|" + src.replace(/:\d+:\d+$/, "").replace(/[?#].*$/, ""));
+    if (ERR.vues.has(emp) || ERR.envoyees + ERR.file.length >= 20) return;
+    ERR.vues.add(emp);
+    ERR.file.push({ type, message: msg, source: src, pile: String(extra.pile || "").slice(0, 3000), empreinte: emp, onglet: String(S.tab || location.hash.slice(1) || "").slice(0, 60),
+      navigateur: navigateurTxt(), appareil: appareilTxt(), version: document.lastModified || "", details: extra.details && typeof extra.details === "object" ? extra.details : null });
+    viderErreurs();
+  } catch (e) { /* jamais d'erreur en signalant une erreur */ }
+}
+async function viderErreurs() {
+  if (ERR.enCours || !S.sb || !S.uid) return;
+  ERR.enCours = true;
+  try {
+    while (ERR.file.length && !ERR.absente) {
+      const x = ERR.file.shift();
+      let r;
+      try { r = await S.sb.rpc("signaler_erreur", { p: x }); } catch (e) { r = { error: e }; }
+      if (r && r.error) {
+        // Mise à jour 37 pas encore exécutée : on n'insiste pas.
+        if (/signaler_erreur|function|fonction|schema cache|not find/i.test(r.error.message || "")) { ERR.absente = true; ERR.file.length = 0; }
+        else { ERR.file.unshift(x); break; }
+      } else ERR.envoyees++;
+    }
+  } finally { ERR.enCours = false; }
+}
+window.addEventListener("error", e => {
+  if (!e || !e.message) return;
+  signalerErreur("erreur", e.message, { source: `${e.filename || ""}:${e.lineno || 0}:${e.colno || 0}`, pile: e.error && e.error.stack });
+});
+window.addEventListener("unhandledrejection", e => {
+  const r = e && e.reason;
+  signalerErreur("promesse", (r && r.message) || r, { pile: r && r.stack });
+});
+// Le guichet a pris la main : les erreurs gardées par l'en-tête passent par ici.
+window.__gfPret = true;
+(window.__gfErr || []).forEach(x => signalerErreur(x.type || "demarrage", x.message, { source: x.source, pile: x.pile }));
+
 // writer() : la Direction. canAgent() : la Direction ou l’Inspection.
 const writer = () => S.connected && !S.readOnly && (S.admin || S.canWrite !== false);
 const canAgent = () => S.connected && !S.readOnly && (S.role === "direction" || S.role === "inspecteur");
@@ -3280,7 +3384,10 @@ async function write(fn) {
       }
       else if (code === "quota_exceeded") toast("Le registre est plein : supprimez d’anciens dossiers avant d’en ajouter.", true);
       else if (code === "revoked") { setOffline(); toast("Votre accès à ce guichet a changé. Rechargez la page.", true); }
-      else toast("L’enregistrement a échoué. Vérifiez votre connexion puis réessayez.", true);
+      else {
+        if (code !== "unavailable") signalerErreur("ecriture", (e && e.message) || String(code || "échec"), { pile: e && e.stack, details: { code: code || null } });
+        toast("L’enregistrement a échoué. Vérifiez votre connexion puis réessayez.", true);
+      }
       return false;
     }
   }
@@ -3594,6 +3701,7 @@ async function init() {
   if (location.search) { try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* adresse inchangée */ } }
   if (!session) { if (oauthError) showGate("erreur", oauthError); else showGate("login"); return; }
   S.uid = session.user.id;
+  viderErreurs();
   const { data: acces, error } = await sb.rpc("mon_acces");
   if (error) { showGate("erreur", error.message); return; }
   S.discordId = acces && acces.discord_id;
@@ -3608,7 +3716,7 @@ async function init() {
   S.canWrite = S.admin;
   const store = makeStore(sb);
   S.db = store;
-  try { await store.loadAll(); } catch (e) { showGate("erreur", e.message); return; }
+  try { await store.loadAll(); } catch (e) { signalerErreur("base", e, { pile: e && e.stack, details: { etape: "chargement du registre" } }); showGate("erreur", e.message); return; }
   hideGate();
   S.connected = true;
   subscribe();
@@ -3627,7 +3735,7 @@ async function init() {
   else if (S.role !== "direction" && S.role !== "inspecteur") setReadOnly();
   else {
     applyRole();
-    if (S.admin) loadAgents();
+    if (S.admin) { loadAgents(); $("#card-erreurs").hidden = false; compterErreurs(); setInterval(compterErreurs, 10 * 60e3); }
     else setNotice([h("div", {}, h("strong", { text: "Inspection. " }), "Vous saisissez les déclarations et les demandes, émettez les avis, placez un dossier en contrôle et relancez les entreprises. Les encaissements, annulations, pénalités, arbitrages et réglages restent à la Direction.")]);
     loadPrivate();
     chargerRappelAuto();
@@ -3700,6 +3808,7 @@ $("#form-agent").addEventListener("submit", async e => {
 
 function onDbError(e) {
   if (e && e.code === "revoked") setOffline();
+  else if (e && e.code !== "unavailable") signalerErreur("base", e.message || String(e.code || "lecture refusée"), { details: { code: e.code || null } });
 }
 function subscribe() {
   const db = S.db;
@@ -4216,6 +4325,7 @@ function todoItems() {
       const x = payeCalc(kp), n = x.lignes.filter(l => l.heures > 0).length;
       add(n ? 1 : 0, `Paye de la semaine ${(bounds(kp) || {}).week} à verser`, `${n} agent${plural(n)} · ${money(x.total)}`, () => { S.payeSem = kp; allerA("payes"); });
     }
+    if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
     add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA(ptFerme() ? "payes" : "pointeuse"));
   }
@@ -6008,7 +6118,7 @@ async function chargerMonEspace() {
   S.espaceCharge = true;
   try {
     const { data, error } = await S.sb.rpc("mon_espace");
-    if (error) S.espaceErr = /mon_espace/.test(error.message || "") ? "absente" : error.message || "erreur";
+    if (error) { S.espaceErr = /mon_espace/.test(error.message || "") ? "absente" : error.message || "erreur"; if (S.espaceErr !== "absente") signalerErreur("base", error.message || "mon_espace", { details: { etape: "Mon espace", code: error.code || null } }); }
     else if (!data) S.espaceErr = "sans-fiche";
     else { const avant = S.espace; S.espace = data; S.espaceErr = null; if (S.role === "agent") espaceVersS(data); nouveautesEspace(avant, data); await chargerPerso(); }
   } catch (e) { S.espaceErr = e.message || "erreur"; }
@@ -10123,6 +10233,83 @@ async function openNocturnes() {
     }, text: "Télécharger" })))));
 }
 $("#b-nuit").addEventListener("click", openNocturnes);
+
+/* ---------- Erreurs remontées : la liste de la Direction (supabase/v37_suivi.sql) ---------- */
+const ERR_TYPES = { erreur: "Erreur de la page", promesse: "Erreur de la page", demarrage: "Erreur au démarrage", ecriture: "Enregistrement refusé", base: "Lecture de la base refusée", discord: "Publication Discord refusée" };
+const errVu = () => { try { return localStorage.getItem("gf-erreurs-vues") || ""; } catch (e) { return ""; } };
+const errCourt = (t, n) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
+function grouperErreurs(lignes) {
+  const m = new Map();
+  for (const x of lignes) {
+    const g = m.get(x.empreinte) || { empreinte: x.empreinte, type: x.type, message: x.message, source: x.source, lignes: [], personnes: new Set(), navigateurs: new Set(), appareils: new Set() };
+    g.lignes.push(x); g.personnes.add(x.nom || x.discord || "inconnu");
+    if (x.navigateur) g.navigateurs.add(x.navigateur);
+    if (x.appareil) g.appareils.add(String(x.appareil).split(" · ")[0]);
+    m.set(x.empreinte, g);
+  }
+  return [...m.values()].sort((a, b) => String(b.lignes[0].at).localeCompare(String(a.lignes[0].at)));
+}
+function majErreursHint() {
+  const el = $("#b-erreurs-n"); if (!el) return;
+  el.textContent = S.erreursAbsente ? "Exécutez supabase/v37_suivi.sql pour les recevoir." : S.erreursNouvelles ? `${S.erreursNouvelles} nouvelle${plural(S.erreursNouvelles)} depuis votre dernière visite.` : "Rien de nouveau.";
+}
+// Nouvelles erreurs depuis la dernière ouverture de la liste : comptées pour « À traiter ».
+async function compterErreurs() {
+  if (!S.admin || !S.sb) return;
+  let q = S.sb.from("erreurs_client").select("empreinte,at").order("at", { ascending: false }).limit(200);
+  const vu = errVu();
+  if (vu) q = q.gt("at", vu);
+  let r;
+  try { r = await q; } catch (e) { r = { error: e }; }
+  S.erreursAbsente = !!r.error && tableAbsente(r.error);
+  S.erreursNouvelles = r.error ? 0 : new Set((r.data || []).map(x => x.empreinte)).size;
+  majErreursHint(); renderTodo();
+}
+async function openErreurs() {
+  if (!S.admin || !S.sb) return;
+  const box = h("div", {}, h("p", { class: "muted", text: "Chargement…" }));
+  openDialog({ eyebrow: "Réglages", title: "Erreurs remontées", wide: true,
+    body: [h("p", { style: "margin:0", text: "Les erreurs des 30 derniers jours, regroupées : les plus récentes d’abord. « Marquer comme réglée » les retire une fois le problème corrigé." }), box],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+  let r;
+  try { r = await S.sb.from("erreurs_client").select("*").order("at", { ascending: false }).limit(500); } catch (e) { r = { error: e }; }
+  if (r.error) { fill(box, h("p", { class: "err", text: tableAbsente(r.error) ? "Exécutez d’abord supabase/v37_suivi.sql dans Supabase (SQL Editor) : il crée la table où le guichet note les erreurs." : "Lecture refusée : " + (r.error.message || "erreur inconnue") })); return; }
+  const lignes = r.data || [];
+  try { localStorage.setItem("gf-erreurs-vues", lignes.length ? lignes[0].at : nowISO()); } catch (e) { /* sans stockage */ }
+  S.erreursNouvelles = 0; majErreursHint(); renderTodo();
+  const groupes = grouperErreurs(lignes);
+  if (!groupes.length) { fill(box, h("p", { class: "muted", text: "Aucune erreur remontée ces 30 derniers jours." })); return; }
+  fill(box, h("ul", { class: "ent-list err-list" }, groupes.map(g => h("li", {},
+    h("div", { style: "min-width:0" },
+      h("button", { class: "linkbtn", type: "button", onclick: () => openErreurGroupe(g), text: errCourt(g.message, 140) }),
+      h("span", { class: "meta", text: `${ERR_TYPES[g.type] || g.type} · ${g.lignes.length} fois · ${g.personnes.size} personne${plural(g.personnes.size)} · dernière le ${fmtDateTime(new Date(g.lignes[0].at))}` }),
+      h("span", { class: "meta", text: [[...g.navigateurs].slice(0, 3).join(", "), [...g.appareils].slice(0, 3).join(", ")].filter(Boolean).join(" · ") })),
+    chip([String(g.lignes.length), g.type === "demarrage" || g.personnes.size > 1 ? "bad" : "warn"]),
+    h("button", { class: "btn ghost small", type: "button", onclick: () => openErreurGroupe(g), text: "Détail" })))));
+}
+function openErreurGroupe(g) {
+  // Précisions et pile : celles de la plus récente qui en a.
+  const x0 = Object.assign({}, g.lignes[0], { details: (g.lignes.find(x => x.details) || {}).details || null, pile: (g.lignes.find(x => x.pile) || {}).pile || "" });
+  openDialog({ eyebrow: "Erreur remontée", title: ERR_TYPES[g.type] || "Erreur", wide: true, body: [
+    kv([["Message", g.message], ["Où", g.source || "—"], ["Nombre", `${g.lignes.length} fois`], ["Personnes", [...g.personnes].join(", ")],
+      ["Navigateurs", [...g.navigateurs].join(", ") || "—"], ["Appareils", [...g.appareils].join(", ") || "—"], ["Version de la page", x0.version || "—"]]),
+    h("h4", { class: "err-h", text: "Dernières fois" }),
+    h("ul", { class: "ent-list" }, g.lignes.slice(0, 20).map(x => h("li", {},
+      h("div", { style: "min-width:0" }, h("strong", { text: `${x.nom || x.discord || "Inconnu"} · ${fmtDateTime(new Date(x.at))}` }),
+        h("span", { class: "meta", text: [x.role, x.onglet ? "onglet " + x.onglet : "", x.navigateur, x.appareil].filter(Boolean).join(" · ") })),
+      h("span", {}), h("span", {})))),
+    x0.details ? h("p", { class: "muted", text: "Précisions : " + Object.entries(x0.details).filter(([, v]) => v != null && v !== "").map(([k, v]) => `${k} : ${v}`).join(", ") }) : null,
+    x0.pile ? h("details", { class: "err-pile" }, h("summary", { text: "Détail technique (pile d’appels)" }), h("pre", { text: x0.pile })) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: openErreurs, text: "Retour" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn small", type: "button", onclick: async ev => {
+        ev.currentTarget.disabled = true;
+        let r;
+        try { r = await S.sb.from("erreurs_client").delete().eq("empreinte", g.empreinte); } catch (e) { r = { error: e }; }
+        if (r.error) { toast("Effacement refusé : " + (r.error.message || "erreur inconnue"), true); ev.currentTarget.disabled = false; return; }
+        toast("Erreur marquée comme réglée."); openErreurs();
+      }, text: "Marquer comme réglée" })] });
+}
+$("#b-erreurs").addEventListener("click", openErreurs);
 function planRestore(b) {
   if (!b || b.format !== "guichet-fiscal-sauvegarde" || !b.collections || typeof b.collections !== "object") return null;
   const writes = [];
@@ -12008,7 +12195,7 @@ async function publishDoc(doc, label) {
   const res = await postDiscord(dd.channel, { content: [mentions.join(" "), dd.text].filter(Boolean).join("\n"), mentions, files: blob ? [{ blob, name: docFileName(doc) }] : [] });
   const pre = label ? label + " " : "";
   if (res.ok) toast(pre + "Publié sur Discord.");
-  else toast(pre + "Discord a refusé l’envoi : " + res.error + ".", true);
+  else { toast(pre + "Discord a refusé l’envoi : " + res.error + ".", true); signalerErreur("discord", res.error, { details: { salon: dd.channel, document: doc.kind || "" } }); }
   return res.ok;
 }
 async function autoPublish(kind, doc, label) {

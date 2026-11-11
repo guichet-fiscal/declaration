@@ -15,7 +15,7 @@
       select() { if (st.op !== "select") st.wantSelect = true; return b; },
       order() { return b; }, limit() { return b; }, single() { st.one = true; return b; }, maybeSingle() { st.one = true; return b; },
       range(a, z) { st.range = [a, z]; return b; },
-      eq(k, v) { st.filters.push([k, v]); return b; }, gte() { return b; }, lte() { return b; }, in() { return b; }, neq() { return b; },
+      eq(k, v) { st.filters.push([k, v]); return b; }, gte() { return b; }, lte() { return b; }, in() { return b; }, neq() { return b; }, gt(k, v) { st.gt = [k, v]; return b; }, not() { return b; },
       insert(p) { st.op = "insert"; st.payload = p; return b; }, upsert(p) { st.op = "upsert"; st.payload = p; return b; },
       update(p) { st.op = "update"; st.payload = p; return b; }, delete() { st.op = "delete"; return b; },
       then(res, rej) { return run().then(res, rej); }
@@ -38,6 +38,14 @@
         if (st.op === "insert") { if (!fid || st.payload.fid !== fid) return Promise.resolve({ data: null, error: { message: 'new row violates row-level security policy for table "agenda_perso"' } }); window.__perso.push(Object.assign({ id: "p" + Date.now(), cree_le: new Date().toISOString() }, st.payload)); return ok(null); }
         if (st.op === "update") { const p = window.__perso.find(p => p.id === idf && p.fid === fid); if (p) Object.assign(p, st.payload); return ok(null); }
         if (st.op === "delete") { window.__perso = window.__perso.filter(p => !(p.id === idf && p.fid === fid)); return ok(null); }
+      }
+      // Erreurs remontées (mise à jour 37) : window.__erreursRemontees ; __sans37 = table absente.
+      if (table === "erreurs_client") {
+        if (window.__sans37) return Promise.resolve({ data: null, error: { message: 'relation "public.erreurs_client" does not exist', code: "42P01" } });
+        window.__erreursRemontees = window.__erreursRemontees || [];
+        if (ROLE !== "direction") return ok(st.op === "select" ? [] : null);
+        if (st.op === "select") return ok(window.__erreursRemontees.filter(x => !st.gt || String(x.at) > String(st.gt[1])).slice().sort((a, z) => String(z.at).localeCompare(String(a.at))));
+        if (st.op === "delete") { const e = (st.filters.find(f => f[0] === "empreinte") || [])[1]; window.__erreursRemontees = window.__erreursRemontees.filter(x => x.empreinte !== e); return ok(null); }
       }
       // Salons Discord de l'essai (window.__discord = { webhooks, auto }) : adresses servies par l'essai lui-même.
       if (table === "parametres_prives" && st.op === "select") return ok(window.__discord ? [{ cle: "discord", valeur: window.__discord }] : []);
@@ -95,6 +103,12 @@
         const r = rows.get("entretiens/" + args.p_id);
         if (!r || r.data.fid !== f.id || r.data.statut !== "partage") return { data: null, error: { message: "Cet entretien n'existe plus ou ne vous concerne pas." } };
         r.data = Object.assign({}, r.data, { vuParAgentLe: iso(), commentaireAgent: args.p_commentaire || "" }); return { data: Object.assign({ id: r.id }, r.data), error: null };
+      }
+      if (name === "signaler_erreur") {
+        if (window.__sans37) return { data: null, error: { message: "Could not find the function public.signaler_erreur(p) in the schema cache", code: "PGRST202" } };
+        const f = fonc(), x = Object.assign({}, args.p, { id: Date.now() + Math.random(), at: iso(), nom: NOM, discord: DID, role: ROLE });
+        window.__erreursRemontees = (window.__erreursRemontees || []).concat([x]);
+        return { data: null, error: null };
       }
       if (name === "signer_contrat") {
         if (window.__sans36) return { data: null, error: { message: "Could not find the function public.signer_contrat(p_id, p_nom) in the schema cache" } };

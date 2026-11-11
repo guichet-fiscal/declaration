@@ -32,6 +32,7 @@ const pause = (p, ms) => p.waitForTimeout(ms);
 //  o.jeu : nom du jeu d'essai (tests/jeux) ; o.avant : code exécuté avant le faux Supabase ;
 //  o.maintenant : date ISO de l'horloge ; o.largeur / o.hauteur ; o.theme : light ou dark ;
 //  o.accueil : laisser le guide de Mon espace s'ouvrir comme à une première visite ;
+//  o.html : (texte de la page) => page modifiée ;
 //  faux salons Discord : window.__discord = { webhooks: { agents: url + "/__webhook/agents" } } dans o.avant.
 async function ouvrir(env, o) {
   o = Object.assign({ role: "direction", discord: "999999999999999999", nom: "Directeur Test", hash: "dashboard", jeu: "equipe", maintenant: "2026-11-10T20:30:00Z" }, o || {});
@@ -45,6 +46,14 @@ async function ouvrir(env, o) {
   const corps = (o.jeu ? jeu(o.jeu) : "window.__SEED = [];") + "\n" + (o.avant || "") + "\n" + FACTICE;
   await p.route(/supabase-js/, (r) => r.fulfill({ contentType: "application/javascript", body: corps }));
   await p.route(/^https:\/\/(fonts\.|discord|cdn\.discordapp)/, (r) => r.abort());
+  // Rien ne part vers la vraie base ; une erreur envoyée sans le guichet (repli de l'en-tête) est gardée.
+  p.erreursDirectes = [];
+  await p.route(/supabase\.co\//, (r) => {
+    if (/rpc\/signaler_erreur/.test(r.request().url())) { try { p.erreursDirectes.push(JSON.parse(r.request().postData() || "{}")); } catch (e) { p.erreursDirectes.push({}); } return r.fulfill({ status: 204, body: "" }); }
+    return r.abort();
+  });
+  // o.html : modifie la page servie (essais d'une page qui ne démarre pas).
+  if (o.html) await p.route(/\/index\.html/, async (r) => { const res = await r.fetch(); r.fulfill({ response: res, body: o.html(await res.text()) }); });
   // Faux salons Discord (adresses …/__webhook/<salon>) : chaque envoi est gardé dans p.webhooks.
   p.webhooks = [];
   await p.route(/\/__webhook\//, (r) => { p.webhooks.push({ url: r.request().url(), corps: (r.request().postDataBuffer() || Buffer.from("")).toString("utf8") }); r.fulfill({ status: 200, contentType: "application/json", body: "{}" }); });
