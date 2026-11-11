@@ -1022,6 +1022,12 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .bord-jauge{height:8px;border-radius:4px;background:var(--rule);overflow:hidden;margin:2px 0 12px}
 .bord-jauge span{display:block;height:100%;background:var(--ok);border-radius:4px}
 .bord-jauge span.trop{background:var(--bad)}
+.ent-texte{margin:0;white-space:pre-wrap;line-height:1.5}
+.obj-liste .meta.retard{color:var(--bad)}
+.obj-edit{display:grid;gap:8px}
+.obj-edit > .btn{justify-self:start}
+.obj-ligne{display:grid;grid-template-columns:minmax(0,1fr) 150px 130px auto;gap:6px;align-items:center}
+@media (max-width:640px){.obj-ligne{grid-template-columns:1fr 1fr auto}.obj-ligne input:first-child{grid-column:1/-1}}
 .es-pas-coche{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule-2);display:grid;place-items:center;font-size:12px;font-weight:700}
 .es-pas li.fait .es-pas-coche{background:var(--ok);border-color:var(--ok);color:#fff}
 .es-ag-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -1344,6 +1350,7 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="bord" hidden><div id="rh-bord"></div></div>
     <div data-rh-vue="demandes" hidden><div id="rh-demandes"></div></div>
     <div data-rh-vue="annuaire" hidden><div id="rh-annuaire"></div></div>
+    <div data-rh-vue="entretiens" hidden><div id="rh-entretiens"></div></div>
     <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
     <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
   </section>
@@ -5852,6 +5859,7 @@ function openAgent(fid, back) {
         f.actif === false ? ["Retiré des effectifs", f.retireLe ? `le ${longDate(new Date(f.retireLe))}` : "oui"] : null,
         f.note ? ["Note", f.note] : null]),
       ctrSection(f, reopen),
+      entretiensSection(f, reopen),
       sanctionsSection(f, reopen),
       (() => { const ab = (S.absences || []).filter(a => a.fid === fid && a.statut !== "annulee" && String(a.au) >= jourCle(new Date())); return ab.length ? sec("Absences à venir", h("ul", { class: "ent-list" }, ab.map(a => h("li", {}, h("span", { text: a.du === a.au ? jourTxt(a.du) : `du ${jourTxt(a.du)} au ${jourTxt(a.au)}${a.motif ? " · " + a.motif : ""}` }), chip(ABS_STAT[a.statut] || ABS_STAT.signalee), h("span", {}))))) : null; })()],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" }),
@@ -6041,6 +6049,8 @@ function nouveautesEspace(avant, E) {
   if (neufs.length) toast(neufs.length > 1 ? `${neufs.length} nouveaux messages de l’encadrement.` : `Nouveau message de ${neufs[0].auteur || "l’encadrement"}.`);
   const evVus = new Set((avant.agenda || []).map(e => e.id)), evNeufs = (E.agenda || []).filter(e => !evVus.has(e.id) && e.statut !== "annule");
   if (evNeufs.length) toast(evNeufs.length > 1 ? `${evNeufs.length} nouveaux rendez-vous à l’agenda.` : `Nouveau à l’agenda : ${evNeufs[0].titre}.`);
+  const entVus = new Set((avant.entretiens || []).map(e => e.id)), entNeufs = (E.entretiens || []).filter(e => !entVus.has(e.id));
+  if (avant.entretiens && entNeufs.length) toast("Nouveau compte rendu d’entretien dans votre espace.");
   const avantDag = new Map((avant.demandes || []).map(d => [d.id, d.statut]));
   (E.demandes || []).filter(d => avantDag.get(d.id) === "envoyee" && (d.statut === "acceptee" || d.statut === "refusee"))
     .forEach(d => toast(`Votre demande « ${d.objet || (DAG_TYPES[d.type] || DAG_TYPES.autre).nom} » a été ${d.statut === "acceptee" ? "acceptée" : "refusée"}.`, d.statut === "refusee"));
@@ -6086,6 +6096,7 @@ const GUIDE_RUBRIQUES = [
   ["Absences", "Prévenez d’une absence ; vous voyez quand elle est prise en compte."],
   ["Demandes", "Congé, horaires, document : envoyez votre demande et suivez la réponse."],
   ["Annuaire", "Qui fait quoi à la Préfecture, et son profil Discord pour lui écrire."],
+  ["Objectifs et entretiens", "Le compte rendu de vos entretiens et les objectifs fixés avec l’encadrement."],
   ["Contrat de travail", "Votre contrat, à lire et à télécharger en PDF."]];
 const accueilCle = fid => "gf-accueil-vu-" + fid;
 const accueilVu = fid => { try { return !!localStorage.getItem(accueilCle(fid)); } catch (e) { return true; } };
@@ -6387,13 +6398,22 @@ function renderEspace() {
   const cardAnnu = annu ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Annuaire" }), h("p", { class: "sub", text: "Qui fait quoi à la Préfecture, et comment le joindre." })),
       h("button", { class: "btn ghost small", type: "button", id: "es-annuaire", onclick: () => openAnnuaire(), text: `Toute l’équipe (${annu.length})` })),
     annuaireVue(annu.filter(p => ANNU_ROLES.some(([r]) => r === p.role)))) : null;
-  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc, cardAnnu), h("div", { class: "es-col-d" }, cardMsg, cardDag, cardAg, cardNotes, cardAbs)));
+  // Mes objectifs et mes entretiens (partagés par l'encadrement).
+  const ents = Array.isArray(E.entretiens) ? E.entretiens : [];
+  const mesObjs = ents.length ? (ents[0].objectifs || []).filter(o => o.etat !== "abandonne") : [];
+  const cardEnt = ents.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes objectifs" }), h("p", { class: "sub", text: "Fixés lors de votre dernier entretien avec l’encadrement." }))),
+    objectifsListe(mesObjs, "Pas d’objectif fixé au dernier entretien."),
+    h("ul", { class: "ent-list", style: "margin-top:10px" }, ents.slice(0, 5).map(e => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openMonEntretien(e), text: `${ENT_TYPES[e.type] || "Entretien"} du ${jourTxt(e.date)}` }),
+        h("span", { class: "meta", text: e.par ? "avec " + e.par : "" })),
+      e.vuParAgentLe ? chip(["Lu", "ok"]) : h("button", { class: "btn small", type: "button", onclick: () => openMonEntretien(e), text: "Lire" }), h("span", {}))))) : null;
+  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardEnt, cardContrat, cardSanc, cardAnnu), h("div", { class: "es-col-d" }, cardMsg, cardDag, cardAg, cardNotes, cardAbs)));
   // Première ouverture sur cet appareil : le guide.
   if (!accueilVu(fid) && !S.accueilMontre && !dlg.open) { S.accueilMontre = true; setTimeout(() => { if (!dlg.open && S.tab === "espace") openAccueil(0); }, 500); }
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"], ["annuaire", "Annuaire"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["entretiens", "Entretiens"], ["notes", "Notes de service"], ["annuaire", "Annuaire"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
   const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length : 0;
@@ -6415,6 +6435,7 @@ function renderEncadrement() {
   else if (v === "sanctions") renderSanctions();
   else if (v === "demandes") renderDemandesEquipe();
   else if (v === "bord") renderBordRH();
+  else if (v === "entretiens") renderEntretiensEquipe();
   else if (v === "annuaire") fill($("#rh-annuaire"), annuaireVue(annuaireListe(), { recherche: true }));
 }
 // Messagerie : les conversations, la plus récente d'abord, et celle qui est ouverte.
@@ -6846,6 +6867,143 @@ function renderBordRH() {
       : h("p", { class: "muted", style: "margin:8px 0 0", text: "Rien à signaler pour l’instant." }));
   fill(box, kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardH, cardP), h("div", { class: "es-col-d" }, cardV)),
     !paye ? h("p", { class: "hint", text: "Heures et payes : réservées à la Direction, à l’Inspection et à la Lecture seule." }) : null);
+}
+/* ---------- Entretiens et objectifs (mise à jour 36) ---------- */
+// Direction et RH préparent un entretien (bilan, points forts, axes de progrès, objectifs avec échéance
+// et état), puis le partagent : l'agent le lit dans son espace et indique qu'il en a pris connaissance,
+// avec un commentaire s'il veut. Brouillon : visible de l'encadrement seulement. Inspection : lecture.
+const ENT_TYPES = { suivi: "Entretien de suivi", annuel: "Entretien annuel", etape: "Point d’étape", recadrage: "Entretien de recadrage" };
+const OBJ_ETATS = { en_cours: ["En cours", "info"], atteint: ["Atteint", "ok"], non_atteint: ["Non atteint", "bad"], abandonne: ["Abandonné", "muted"] };
+const entretiensWriter = () => S.connected && !S.readOnly && (S.admin || S.role === "rh");
+const entretiensOf = fid => (S.entretiens || []).filter(e => e.fid === fid).sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.at).localeCompare(String(a.at)));
+const entEtat = e => e.statut !== "partage" ? ["Brouillon", "muted"] : e.vuParAgentLe ? ["Lu par l’agent", "ok"] : ["Partagé", "info"];
+const objEnRetard = o => o.etat === "en_cours" && o.echeance && o.echeance < jourCle(new Date());
+function objectifsListe(objs, vide) {
+  if (!objs.length) return h("p", { class: "muted", style: "margin:4px 0 0", text: vide || "Aucun objectif." });
+  return h("ul", { class: "ent-list obj-liste" }, objs.map(o => h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: o.texte || "—" }),
+      h("span", { class: "meta" + (objEnRetard(o) ? " retard" : ""), text: [o.nom ? o.nom : "", o.echeance ? `échéance ${jourTxt(o.echeance)}${objEnRetard(o) ? " (dépassée)" : ""}` : "sans échéance"].filter(Boolean).join(" · ") })),
+    chip(OBJ_ETATS[o.etat] || OBJ_ETATS.en_cours), h("span", {}))));
+}
+// Fiche d'entretien (encadrement).
+function openEntretien(id, back) {
+  const e = (S.entretiens || []).find(x => x.id === id); if (!e) { toast("Cet entretien n’existe plus.", true); return; }
+  const w = entretiensWriter(), reopen = () => openEntretien(id, back);
+  const supprimer = async bt => {
+    if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = "Confirmer la suppression"; return; }
+    bt.disabled = true;
+    if (await write(() => S.db.doc("entretiens/" + id).delete())) { toast("Entretien supprimé."); if (back) back(); else closeDialog(); } else bt.disabled = false;
+  };
+  openDialog({ eyebrow: `Entretien · ${e.nom || "Agent"}`, title: `${ENT_TYPES[e.type] || "Entretien"} du ${jourTxt(e.date)}`, wide: true, stampEl: stamp(entEtat(e)),
+    body: [kv([["Agent", e.nom || "—"], ["Mené par", e.par || "—"], ["Compte rendu", e.statut === "partage" ? `partagé avec l’agent${e.partageLe ? " le " + fmtDate(new Date(e.partageLe)) : ""}` : "brouillon, pas encore partagé"],
+        e.vuParAgentLe ? ["Lu par l’agent", `le ${fmtDate(new Date(e.vuParAgentLe))}`] : null].filter(Boolean)),
+      e.bilan ? sec("Bilan", h("p", { class: "ent-texte", text: e.bilan })) : null,
+      e.pointsForts ? sec("Points forts", h("p", { class: "ent-texte", text: e.pointsForts })) : null,
+      e.axes ? sec("Axes de progrès", h("p", { class: "ent-texte", text: e.axes })) : null,
+      sec("Objectifs", objectifsListe(e.objectifs || [])),
+      e.commentaireAgent ? sec("Commentaire de l’agent", h("p", { class: "ent-texte", text: e.commentaireAgent })) : null].filter(Boolean),
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" }),
+      w ? h("button", { class: "btn ghost small", type: "button", onclick: ev => supprimer(ev.currentTarget), text: "Supprimer" }) : null, h("span", { class: "spacer" }),
+      w ? h("button", { class: "btn small", type: "button", onclick: () => openEntretienForm(e.fid, e, reopen), text: "Modifier" }) : null].filter(Boolean) });
+}
+function openEntretienForm(fid0, e, back) {
+  if (!entretiensWriter()) return;
+  const qui = h("select", { id: "en-qui" }, foncs().filter(f => f.actif !== false || (e && f.id === e.fid)).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(f => h("option", { value: f.id, text: f.nom })));
+  if (fid0) qui.value = fid0; if (e) qui.disabled = true;
+  const date = h("input", { type: "date", id: "en-date" }); date.value = e ? e.date : jourCle(new Date());
+  const type = h("select", { id: "en-type" }, Object.entries(ENT_TYPES).map(([k, t]) => h("option", { value: k, text: t }))); type.value = e ? e.type || "suivi" : "suivi";
+  const zone = (id, v, ph) => { const t = h("textarea", { id, rows: "3", maxlength: "3000", placeholder: ph }); t.value = v || ""; return t; };
+  const bilan = zone("en-bilan", e && e.bilan, "Ce qui s’est bien passé, les difficultés, l’avis de l’agent");
+  const forts = zone("en-forts", e && e.pointsForts, "Facultatif");
+  const axes = zone("en-axes", e && e.axes, "Facultatif");
+  // Objectifs : ceux de l'entretien, ou ceux encore en cours du dernier entretien de l'agent.
+  const repris = !e ? ((entretiensOf(qui.value)[0] || {}).objectifs || []).filter(o => o.etat === "en_cours") : [];
+  let objs = (e ? e.objectifs || [] : repris).map(o => Object.assign({}, o));
+  const objBox = h("div", { class: "obj-edit" });
+  const dessinerObjs = () => fill(objBox, objs.map((o, i) => {
+    const t = h("input", { maxlength: "200", placeholder: "Ex. : faire 10 h de service par semaine", "aria-label": `Objectif ${i + 1}` }); t.value = o.texte || ""; t.addEventListener("input", () => { o.texte = t.value; });
+    const d = h("input", { type: "date", "aria-label": `Échéance de l’objectif ${i + 1}` }); d.value = o.echeance || ""; d.addEventListener("change", () => { o.echeance = d.value; });
+    const et = h("select", { "aria-label": `État de l’objectif ${i + 1}` }, Object.entries(OBJ_ETATS).map(([k, [l]]) => h("option", { value: k, text: l }))); et.value = o.etat || "en_cours"; et.addEventListener("change", () => { o.etat = et.value; });
+    return h("div", { class: "obj-ligne" }, t, d, et, h("button", { class: "icon-btn", type: "button", "aria-label": `Retirer l’objectif ${i + 1}`, onclick: () => { objs.splice(i, 1); dessinerObjs(); }, text: "×" }));
+  }), h("button", { class: "btn ghost small", type: "button", onclick: () => { objs.push({ id: "o" + Date.now().toString(36), texte: "", echeance: "", etat: "en_cours" }); dessinerObjs(); }, text: "Ajouter un objectif" }),
+    repris.length && !e ? h("p", { class: "hint", style: "margin:0", text: "Objectifs en cours repris du dernier entretien : mettez à jour leur état." }) : null);
+  dessinerObjs();
+  const partage = h("input", { type: "checkbox", id: "en-partage" }); partage.checked = e ? e.statut === "partage" : true;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: e ? "Enregistrer" : "Enregistrer l’entretien" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const f = foncOf(qui.value);
+    if (!f || !date.value) { err.textContent = "Choisissez l’agent et la date."; return; }
+    if (!bilan.value.trim() && !objs.some(o => String(o.texte || "").trim())) { err.textContent = "Écrivez au moins le bilan ou un objectif."; bilan.focus(); return; }
+    go.disabled = true;
+    const statut = partage.checked ? "partage" : "brouillon";
+    const body = { fid: f.id, nom: f.nom || "", date: date.value, type: type.value, bilan: bilan.value.trim(), pointsForts: forts.value.trim(), axes: axes.value.trim(),
+      objectifs: objs.filter(o => String(o.texte || "").trim()).map(o => ({ id: o.id || "o" + Math.random().toString(36).slice(2, 8), texte: String(o.texte).trim(), echeance: o.echeance || "", etat: o.etat || "en_cours" })),
+      statut, par: (e && e.par) || S.agentName || "", at: (e && e.at) || nowISO(), modifieLe: nowISO(),
+      partageLe: statut === "partage" ? ((e && e.partageLe) || nowISO()) : null,
+      vuParAgentLe: (e && e.vuParAgentLe) || null, commentaireAgent: (e && e.commentaireAgent) || "" };
+    const ref = e ? S.db.doc("entretiens/" + e.id) : S.db.collection("entretiens").doc();
+    if (await write(() => ref.set(body))) { toast(statut === "partage" ? `Entretien enregistré et partagé avec ${f.nom}.` : "Entretien enregistré en brouillon."); if (back) back(); else closeDialog(); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Personnel · entretien", title: e ? "Modifier l’entretien" : "Nouvel entretien", wide: true,
+    body: [field("en-qui", "Agent", qui), h("div", { class: "row2" }, field("en-date", "Date", date), field("en-type", "Type", type)),
+      field("en-bilan", "Bilan", bilan), h("div", { class: "row2" }, field("en-forts", "Points forts", forts), field("en-axes", "Axes de progrès", axes)),
+      h("div", { class: "field" }, h("label", { text: "Objectifs" }), objBox),
+      h("label", { class: "switch" }, partage, h("span", { text: "Partager le compte rendu avec l’agent (il le lira dans son espace)" })), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function entretiensSection(f, back) {
+  const list = entretiensOf(f.id), w = entretiensWriter();
+  if (!list.length && !w) return null;
+  const objs = (list[0] && list[0].objectifs || []).filter(o => o.etat === "en_cours");
+  return sec("Entretiens et objectifs",
+    list.length ? h("ul", { class: "ent-list" }, list.slice(0, 6).map(e => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openEntretien(e.id, back), text: `${ENT_TYPES[e.type] || "Entretien"} du ${jourTxt(e.date)}` }),
+        h("span", { class: "meta", text: [e.par ? "par " + e.par : "", `${(e.objectifs || []).length} objectif${plural((e.objectifs || []).length)}`].filter(Boolean).join(" · ") })),
+      chip(entEtat(e)), h("span", {})))) : h("p", { class: "muted", style: "margin:4px 0 0", text: "Pas encore d’entretien." }),
+    objs.length ? h("p", { class: "hint", style: "margin:6px 0 0", text: `Objectifs en cours : ${objs.map(o => o.texte).join(" ; ")}` }) : null,
+    w && f.actif !== false ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => openEntretienForm(f.id, null, back), text: "Nouvel entretien" }) : null);
+}
+function renderEntretiensEquipe() {
+  const box = $("#rh-entretiens"); if (!box) return;
+  if (!S.loaded.has("entretiens")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.entretiens || []).slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.at).localeCompare(String(a.at)));
+  // Objectifs en cours : ceux du dernier entretien de chaque agent.
+  const derniers = new Map(); for (const e of all) if (!derniers.has(e.fid)) derniers.set(e.fid, e);
+  const objs = [...derniers.values()].flatMap(e => (e.objectifs || []).filter(o => o.etat === "en_cours").map(o => Object.assign({ nom: e.nom }, o)))
+    .sort((a, b) => String(a.echeance || "9999").localeCompare(String(b.echeance || "9999")));
+  const actifs = foncs().filter(f => f.actif !== false), sans = actifs.filter(f => !derniers.has(f.id));
+  fill(box, h("div", { class: "card-head", style: "margin:0 0 4px" }, h("p", { class: "sub", style: "margin:0", text: "Bilan, points forts, axes de progrès et objectifs de chaque agent. Partagé, le compte rendu apparaît dans son espace." }),
+      entretiensWriter() ? h("button", { class: "btn small", type: "button", onclick: () => openEntretienForm(null, null, () => { closeDialog(); renderEntretiensEquipe(); }), text: "Nouvel entretien" }) : null),
+    h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: `Objectifs en cours (${objs.length})` })), objectifsListe(objs, "Aucun objectif en cours.")),
+    h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: `Derniers entretiens (${all.length})` })),
+      all.length ? h("ul", { class: "ent-list" }, all.slice(0, 40).map(e => h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openEntretien(e.id), text: `${e.nom || "Agent"} · ${ENT_TYPES[e.type] || "Entretien"}` }),
+          h("span", { class: "meta", text: [jourTxt(e.date), e.par ? "par " + e.par : ""].filter(Boolean).join(" · ") })),
+        chip(entEtat(e)), h("span", {})))) : h("p", { class: "muted", style: "margin:8px 0 0", text: "Aucun entretien pour l’instant." }),
+      sans.length ? h("p", { class: "hint", style: "margin:10px 0 0", text: `Sans entretien : ${sans.map(f => f.nom).join(", ")}.` }) : null));
+}
+// Côté agent : ses entretiens partagés et ses objectifs.
+function openMonEntretien(e) {
+  const com = h("textarea", { id: "me-com", rows: "3", maxlength: "1500", placeholder: "Facultatif : votre avis sur cet entretien" });
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "J’ai pris connaissance" });
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    const { error } = await S.sb.rpc("voir_entretien", { p_id: e.id, p_commentaire: com.value.trim() });
+    if (error) { go.disabled = false; err.textContent = error.message || "Impossible pour l’instant."; return; }
+    closeDialog(); toast("Merci : l’encadrement sait que vous avez lu le compte rendu."); chargerMonEspace();
+  });
+  openDialog({ eyebrow: "Mon espace · entretien", title: `${ENT_TYPES[e.type] || "Entretien"} du ${jourTxt(e.date)}`, wide: true, stampEl: e.vuParAgentLe ? stamp(["LU", "ok"]) : null,
+    body: [kv([["Mené par", e.par || "—"], e.vuParAgentLe ? ["Lu", `le ${fmtDate(new Date(e.vuParAgentLe))}`] : null].filter(Boolean)),
+      e.bilan ? sec("Bilan", h("p", { class: "ent-texte", text: e.bilan })) : null,
+      e.pointsForts ? sec("Points forts", h("p", { class: "ent-texte", text: e.pointsForts })) : null,
+      e.axes ? sec("Axes de progrès", h("p", { class: "ent-texte", text: e.axes })) : null,
+      sec("Mes objectifs", objectifsListe(e.objectifs || [])),
+      e.vuParAgentLe ? (e.commentaireAgent ? sec("Mon commentaire", h("p", { class: "ent-texte", text: e.commentaireAgent })) : null) : field("me-com", "Mon commentaire", com), err].filter(Boolean),
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }), e.vuParAgentLe ? null : go].filter(Boolean) });
 }
 /* ---------- Annuaire de l'équipe (mise à jour 36) ---------- */
 // Les fonctionnaires en service : l'encadrement d'abord (Direction, Inspection, RH), puis l'équipe.
