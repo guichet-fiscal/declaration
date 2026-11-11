@@ -1,0 +1,11 @@
+{
+  "name": "guichet-fiscal-essais",
+  "private": true,
+  "description": "Essais automatiques du guichet fiscal (faux Supabase, navigateur Chromium).",
+  "scripts": {
+    "test": "node lancer.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
