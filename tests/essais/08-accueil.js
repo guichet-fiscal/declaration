@@ -20,7 +20,8 @@ module.exports = {
     await pause(a, 5500);
     const pas = texte(await a.locator(".es-premiers").innerText().catch(() => ""));
     t.contient(pas, "Premiers pas", "carte « Premiers pas »");
-    t.egal(await a.locator(".es-pas li.fait").count(), 1, "une étape faite sur trois (le guide)");
+    t.egal(await a.locator(".es-pas li.fait").count(), 2, "étapes faites : le guide et le contrat (déjà signé)");
+    t.egal(await a.locator(".es-pas li").count(), 4, "quatre étapes : guide, installation, notifications, contrat");
     await a.locator(".es-premiers button", { hasText: "Masquer" }).click(); await pause(a, 300);
     t.egal(await a.locator(".es-premiers").count(), 0, "« Masquer » retire la carte");
     // Réouverture par le bouton Guide, sans réouverture automatique ensuite.

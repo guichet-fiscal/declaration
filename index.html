@@ -1008,6 +1008,7 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .sc-sig{font-family:"Allura",cursive;font-size:40px;line-height:1.1;color:#1c2f6b;padding:2px 4px;border-bottom:1px solid var(--rule-2);min-height:46px}
 :root[data-theme="dark"] .sc-sig{color:#a9bdf5}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sc-sig{color:#a9bdf5}}
+.dag-reponse{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--rule-2);background:var(--paper);border-radius:0 8px 8px 0;font-size:13px;color:var(--ink-2);white-space:pre-wrap}
 .es-pas-coche{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule-2);display:grid;place-items:center;font-size:12px;font-weight:700}
 .es-pas li.fait .es-pas-coche{background:var(--ok);border-color:var(--ok);color:#fff}
 .es-ag-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -1327,6 +1328,7 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="messages" hidden><div id="rh-messagerie"></div></div>
     <div data-rh-vue="agenda" hidden><div id="rh-agenda"></div></div>
     <div data-rh-vue="absences" hidden><div id="rh-absences"></div></div>
+    <div data-rh-vue="demandes" hidden><div id="rh-demandes"></div></div>
     <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
     <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
   </section>
@@ -3728,6 +3730,8 @@ function subscribe() {
   col("absences", s => { S.absences = s.docs.map(d => Object.assign({ id: d.id }, d.data())); majBadges(); });
   col("notesService", s => { S.notes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("sanctions", s => { S.sanctions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("demandesAgents", s => { S.dags = s.docs.map(d => Object.assign({ id: d.id }, d.data())); majBadges(); });
+  col("entretiens", s => { S.entretiens = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); setTimeout(ptAlertes, 0); });
   col("sons", s => { S.sons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("payes", s => { S.payes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -6022,6 +6026,9 @@ function nouveautesEspace(avant, E) {
   if (neufs.length) toast(neufs.length > 1 ? `${neufs.length} nouveaux messages de l’encadrement.` : `Nouveau message de ${neufs[0].auteur || "l’encadrement"}.`);
   const evVus = new Set((avant.agenda || []).map(e => e.id)), evNeufs = (E.agenda || []).filter(e => !evVus.has(e.id) && e.statut !== "annule");
   if (evNeufs.length) toast(evNeufs.length > 1 ? `${evNeufs.length} nouveaux rendez-vous à l’agenda.` : `Nouveau à l’agenda : ${evNeufs[0].titre}.`);
+  const avantDag = new Map((avant.demandes || []).map(d => [d.id, d.statut]));
+  (E.demandes || []).filter(d => avantDag.get(d.id) === "envoyee" && (d.statut === "acceptee" || d.statut === "refusee"))
+    .forEach(d => toast(`Votre demande « ${d.objet || (DAG_TYPES[d.type] || DAG_TYPES.autre).nom} » a été ${d.statut === "acceptee" ? "acceptée" : "refusée"}.`, d.statut === "refusee"));
 }
 // Paye estimée d'une semaine pas encore versée : heures × taux (au plus le plafond d'heures) + prime, plafonnée.
 function estimePaye(heures, k, f) {
@@ -6062,6 +6069,7 @@ const GUIDE_RUBRIQUES = [
   ["Agenda", "Réunions et formations, vos réponses, vos propres événements et vos rappels."],
   ["Notes de service", "Les consignes en vigueur, à relire quand vous voulez."],
   ["Absences", "Prévenez d’une absence ; vous voyez quand elle est prise en compte."],
+  ["Demandes", "Congé, horaires, document : envoyez votre demande et suivez la réponse."],
   ["Contrat de travail", "Votre contrat, à lire et à télécharger en PDF."]];
 const accueilCle = fid => "gf-accueil-vu-" + fid;
 const accueilVu = fid => { try { return !!localStorage.getItem(accueilCle(fid)); } catch (e) { return true; } };
@@ -6352,16 +6360,22 @@ function renderEspace() {
     h("div", { class: "row2", style: "margin-top:12px" }, field("es-abs-du", "Du", du), field("es-abs-au", "Au", au)),
     field("es-abs-motif", "Motif (facultatif)", motif),
     h("div", { class: "paste-row" }, absBt, absErr));
-  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc), h("div", { class: "es-col-d" }, cardMsg, cardAg, cardNotes, cardAbs)));
+  // Mes demandes à l'encadrement (mise à jour 36).
+  const cardDag = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes demandes" }), h("p", { class: "sub", text: "Congé, changement d’horaires, document : l’encadrement vous répond ici." })),
+      E.demandes ? h("button", { class: "btn small", type: "button", id: "es-dag-ajout", onclick: () => openDagForm(), text: "Nouvelle demande" }) : null),
+    !E.demandes ? h("p", { class: "muted", style: "margin:8px 0 0", text: "Les demandes ouvriront dès que la Direction aura exécuté la mise à jour 36 du guichet." })
+      : dagListe(E.demandes.filter(d => d.statut !== "annulee" || (d.annuleeLe && Date.now() - new Date(d.annuleeLe).getTime() < 7 * 864e5)).slice(0, 12), { vide: "Aucune demande pour l’instant.",
+          actions: d => d.statut === "envoyee" ? h("button", { class: "btn ghost small", type: "button", onclick: ev => annulerDag(d, ev.currentTarget), text: "Annuler" }) : h("span", {}) }));
+  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc), h("div", { class: "es-col-d" }, cardMsg, cardDag, cardAg, cardNotes, cardAbs)));
   // Première ouverture sur cet appareil : le guide.
   if (!accueilVu(fid) && !S.accueilMontre && !dlg.open) { S.accueilMontre = true; setTimeout(() => { if (!dlg.open && S.tab === "espace") openAccueil(0); }, 500); }
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["notes", "Notes de service"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
-  const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length : 0;
+  const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length : 0;
   if (tb) { tb.dataset.n = n ? String(n) : ""; tb.setAttribute("aria-label", n ? `Personnel, ${n} à traiter` : "Personnel"); }
   const m = S.espace ? (S.espace.messages || []).filter(x => x.de === "equipe" && !x.luAgent).length : 0;
   if (te) { te.dataset.n = m ? String(m) : ""; te.setAttribute("aria-label", m ? `Mon espace, ${m} message${plural(m)} non lu${plural(m)}` : "Mon espace"); }
@@ -6369,8 +6383,8 @@ function majBadges() {
 function renderEncadrement() {
   if (S.tab !== "personnel") return;
   let v = S.rhEspace || "effectif"; if (!RH_ESPACES.some(x => x[0] === v)) v = "effectif";
-  const nMsg = msgsNonLusEquipe().length, nAbs = absEnAttente().length;
-  const cnt = { messages: nMsg, absences: nAbs };
+  const nMsg = msgsNonLusEquipe().length, nAbs = absEnAttente().length, nDag = dagsEnAttente().length;
+  const cnt = { messages: nMsg, absences: nAbs, demandes: nDag };
   fill($("#rh-espaces"), h("div", { class: "seg", role: "group", "aria-label": "Rubriques du personnel" }, RH_ESPACES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === v), onclick: () => { S.rhEspace = k; renderPersonnel(); }, text: l }, cnt[k] ? h("span", { class: "count", text: String(cnt[k]) }) : null))));
   $$("#tab-personnel [data-rh-vue]").forEach(el => { el.hidden = el.dataset.rhVue !== v; });
   if (v === "messages") renderMessagerie();
@@ -6378,6 +6392,7 @@ function renderEncadrement() {
   else if (v === "absences") renderAbsences();
   else if (v === "notes") renderNotes();
   else if (v === "sanctions") renderSanctions();
+  else if (v === "demandes") renderDemandesEquipe();
 }
 // Messagerie : les conversations, la plus récente d'abord, et celle qui est ouverte.
 function renderMessagerie() {
@@ -6645,6 +6660,113 @@ function openAbsForm(fid0) {
   openDialog({ eyebrow: "Personnel", title: "Enregistrer une absence",
     body: [field("ab-qui", "Fonctionnaire", qui), h("div", { class: "row2" }, field("ab-du", "Du", du), field("ab-au", "Au", au)), field("ab-motif", "Motif", motif), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+/* ---------- Demandes des agents (mise à jour 36) ---------- */
+// Congé, changement d'horaires, document, autre : l'agent les fait depuis son espace, l'encadrement
+// (Direction, Inspection, RH) les accepte ou les refuse avec une réponse. Collection « demandesAgents »
+// (à ne pas confondre avec « demandes », les demandes de moyens des services publics).
+const DAG_TYPES = {
+  conge: { nom: "Congé", aide: "Indiquez le premier et le dernier jour.", exemple: "Ex. : congé de fin d’année" },
+  horaires: { nom: "Changement d’horaires", aide: "Dites quels jours et quelles heures vous conviendraient.", exemple: "Ex. : passer de 21 h – 23 h à 20 h – 22 h" },
+  document: { nom: "Document ou attestation", aide: "Précisez le document et à quoi il servira.", exemple: "Ex. : attestation d’emploi pour un dossier de logement" },
+  autre: { nom: "Autre demande", aide: "Expliquez simplement ce que vous demandez.", exemple: "Ex. : changer de service" }
+};
+const DAG_STAT = { envoyee: ["En attente", "warn"], acceptee: ["Acceptée", "ok"], refusee: ["Refusée", "bad"], annulee: ["Annulée", "muted"] };
+const dagsEnAttente = () => ENCADRANTS.includes(S.role) ? (S.dags || []).filter(d => d.statut === "envoyee") : [];
+const dagQuand = d => d.type === "conge" && d.du ? (d.du === d.au ? `le ${jourTxt(d.du)}` : `du ${jourTxt(d.du)} au ${jourTxt(d.au)}`) : "";
+// Côté agent : nouvelle demande.
+function openDagForm(type0) {
+  const type = h("select", { id: "dag-type" }, Object.entries(DAG_TYPES).map(([k, t]) => h("option", { value: k, text: t.nom }))); type.value = type0 || "conge";
+  const objet = h("input", { id: "dag-objet", maxlength: "120", autocomplete: "off" });
+  const du = h("input", { type: "date", id: "dag-du" }), au = h("input", { type: "date", id: "dag-au" });
+  du.addEventListener("change", () => { if (!au.value || au.value < du.value) au.value = du.value; });
+  const motif = h("textarea", { id: "dag-motif", rows: "4", maxlength: "1500" });
+  const aide = h("p", { class: "hint", style: "margin:0" });
+  const dates = h("div", { class: "row2" }, field("dag-du", "Premier jour", du), field("dag-au", "Dernier jour", au));
+  const sync = () => { const t = DAG_TYPES[type.value]; aide.textContent = t.aide; objet.placeholder = t.exemple; dates.hidden = type.value !== "conge"; };
+  type.addEventListener("change", sync); sync();
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Envoyer la demande" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    if (objet.value.trim().length < 3) { err.textContent = "Donnez un objet à votre demande."; objet.focus(); return; }
+    if (type.value === "conge" && (!du.value || !au.value || au.value < du.value)) { err.textContent = "Indiquez les dates du congé."; du.focus(); return; }
+    go.disabled = true;
+    const { error } = await S.sb.rpc("faire_demande", { p_type: type.value, p_objet: objet.value.trim(), p_motif: motif.value.trim(),
+      p_du: type.value === "conge" ? du.value : null, p_au: type.value === "conge" ? au.value : null });
+    if (error) { go.disabled = false; err.textContent = /faire_demande|schema cache|does not exist/i.test(error.message || "") ? "Les demandes ouvriront dès que la Direction aura exécuté supabase/v36_espace_complet.sql." : error.message || "Demande non envoyée."; return; }
+    closeDialog(); toast("Demande envoyée : vous serez prévenu de la réponse."); chargerMonEspace();
+  });
+  openDialog({ eyebrow: "Mon espace · demande à l’encadrement", title: "Nouvelle demande",
+    body: [field("dag-type", "Type de demande", type), field("dag-objet", "Objet", objet), dates, field("dag-motif", "Précisions (facultatif)", motif), aide, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+// Liste des demandes (agent ou encadrement).
+function dagListe(list, o) {
+  o = o || {};
+  if (!list.length) return h("p", { class: "muted", style: "margin:8px 0 0", text: o.vide || "Aucune demande." });
+  return h("ul", { class: "ent-list dag-liste" }, list.map(d => h("li", {},
+    h("div", { style: "min-width:0" },
+      o.equipe ? h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openDagEquipe(d.id), text: `${d.nom || "Agent"} · ${(DAG_TYPES[d.type] || DAG_TYPES.autre).nom}` })
+        : h("span", { style: "font-weight:600", text: (DAG_TYPES[d.type] || DAG_TYPES.autre).nom }),
+      h("span", { class: "meta", text: [d.objet, dagQuand(d), d.at ? "envoyée le " + fmtDate(new Date(d.at)) : ""].filter(Boolean).join(" · ") }),
+      d.reponse && d.statut !== "envoyee" ? h("span", { class: "dag-reponse", text: `Réponse${d.traiteePar ? " de " + d.traiteePar : ""} : ${d.reponse}` }) : null),
+    chip(DAG_STAT[d.statut] || DAG_STAT.envoyee),
+    o.actions ? o.actions(d) : h("span", {}))));
+}
+async function annulerDag(d, bt) {
+  if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = "Confirmer"; return; }
+  bt.disabled = true;
+  const { error } = await S.sb.rpc("annuler_demande", { p_id: d.id });
+  if (error) { bt.disabled = false; toast(error.message || "Demande non annulée.", true); return; }
+  toast("Demande annulée."); chargerMonEspace();
+}
+// Côté encadrement : la rubrique « Demandes » de Personnel.
+function renderDemandesEquipe() {
+  const box = $("#rh-demandes"); if (!box) return;
+  if (!S.loaded.has("demandesAgents")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
+  const all = (S.dags || []).slice().sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const attente = all.filter(d => d.statut === "envoyee").sort((a, b) => String(a.at).localeCompare(String(b.at))), traitees = all.filter(d => d.statut !== "envoyee");
+  const bloc = (t, l, vide) => h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: `${t} (${l.length})` })), dagListe(l, { equipe: true, vide,
+    actions: d => h("button", { class: "btn ghost small", type: "button", onclick: () => openDagEquipe(d.id), text: d.statut === "envoyee" && encadrant() ? "Répondre" : "Voir" }) }));
+  fill(box, h("p", { class: "sub", style: "margin:0 0 4px", text: "Les fonctionnaires font leurs demandes depuis leur espace. Votre réponse leur arrive par notification ; un congé accepté s’inscrit dans les absences." }),
+    bloc("En attente", attente, "Aucune demande en attente."),
+    bloc("Traitées et annulées", traitees.slice(0, 40), "Rien pour l’instant."));
+}
+function openDagEquipe(id) {
+  const d = (S.dags || []).find(x => x.id === id); if (!d) { toast("Cette demande n’existe plus.", true); return; }
+  const t = DAG_TYPES[d.type] || DAG_TYPES.autre, peut = encadrant() && d.statut === "envoyee";
+  const reponse = h("textarea", { id: "dag-rep", rows: "3", maxlength: "1000", placeholder: "Votre réponse à l’agent (obligatoire pour un refus)" });
+  const absence = h("input", { type: "checkbox", id: "dag-abs" }); absence.checked = true;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const decider = async (statut, bt) => {
+    err.textContent = "";
+    if (statut === "refusee" && reponse.value.trim().length < 3) { err.textContent = "Expliquez le refus à l’agent."; reponse.focus(); return; }
+    bt.disabled = true;
+    const maj = { statut, reponse: reponse.value.trim(), traiteePar: S.agentName || "", traiteeLe: nowISO() };
+    if (statut === "acceptee" && d.type === "conge" && absence.checked && d.du && d.au) {
+      const ref = S.db.collection("absences").doc();
+      const ok = await write(() => ref.set({ fid: d.fid, nom: d.nom || (foncOf(d.fid) || {}).nom || "", du: d.du, au: d.au, motif: `Congé accepté : ${d.objet || ""}`.trim(), statut: "prise_en_compte", par: "equipe",
+        auteur: S.agentName || "", at: nowISO(), priseEnCompteLe: nowISO(), priseEnComptePar: S.agentName || "", demande: d.id }));
+      if (!ok) { bt.disabled = false; return; }
+      maj.absence = ref.id;
+    }
+    if (await write(() => S.db.doc("demandesAgents/" + d.id).update(maj))) { toast(statut === "acceptee" ? `Demande de ${d.nom || "l’agent"} acceptée.` : `Demande de ${d.nom || "l’agent"} refusée.`); closeDialog(); }
+    else bt.disabled = false;
+  };
+  openDialog({ eyebrow: `Personnel · demande de ${d.nom || "l’agent"}`, title: `${t.nom} : ${d.objet || "—"}`, stampEl: stamp(DAG_STAT[d.statut] || DAG_STAT.envoyee),
+    body: [kv([["Agent", d.nom || "—"], ["Type", t.nom], d.type === "conge" ? ["Dates", dagQuand(d)] : null, ["Envoyée", d.at ? fmtDateTime(new Date(d.at)) : "—"],
+        d.statut !== "envoyee" && d.statut !== "annulee" ? ["Réponse", `${(DAG_STAT[d.statut] || [""])[0]}${d.traiteePar ? " par " + d.traiteePar : ""}${d.traiteeLe ? ", le " + fmtDate(new Date(d.traiteeLe)) : ""}`] : null,
+        d.statut === "annulee" ? ["Annulée", `par l’agent${d.annuleeLe ? ", le " + fmtDate(new Date(d.annuleeLe)) : ""}`] : null].filter(Boolean)),
+      d.motif ? h("p", { style: "white-space:pre-wrap;margin:0", text: d.motif }) : null,
+      d.reponse && !peut ? h("p", { class: "dag-reponse", text: d.reponse }) : null,
+      peut ? field("dag-rep", "Réponse", reponse) : null,
+      peut && d.type === "conge" ? h("label", { class: "switch" }, absence, h("span", { text: `Si j’accepte, inscrire l’absence ${dagQuand(d)}` })) : null,
+      err].filter(Boolean),
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); openAgent(d.fid); }, text: "Fiche de l’agent" }), h("span", { class: "spacer" }),
+      peut ? h("button", { class: "btn ghost small", type: "button", onclick: ev => decider("refusee", ev.currentTarget), text: "Refuser" }) : null,
+      peut ? h("button", { class: "btn ink small", type: "button", onclick: ev => decider("acceptee", ev.currentTarget), text: "Accepter" }) : null].filter(Boolean) });
 }
 // Notes de service : publiées par la Direction et les ressources humaines, lues par tous les fonctionnaires.
 function renderNotes() {
@@ -9616,7 +9738,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -10781,6 +10903,18 @@ function describe(e) {
       if (x === "ajout") return `${v.par === "agent" ? "a signalé" : "a enregistré"} l’absence de ${v.nom || "un fonctionnaire"} (du ${v.du} au ${v.au})`;
       if (a.statut !== b.statut) return a.statut === "prise_en_compte" ? `a pris en compte l’absence de ${v.nom || "un fonctionnaire"}` : a.statut === "annulee" ? `a annulé l’absence de ${v.nom || "un fonctionnaire"}` : `a modifié l’absence de ${v.nom || "un fonctionnaire"}`;
       return `a modifié l’absence de ${v.nom || "un fonctionnaire"}`;
+    case "demandesAgents": {
+      const t = (DAG_TYPES[v.type] || DAG_TYPES.autre).nom.toLowerCase();
+      if (x === "ajout") return `a fait une demande (${t}) : ${v.objet || ""}`;
+      if (a.statut !== b.statut) return a.statut === "acceptee" ? `a accepté la demande de ${v.nom || "un fonctionnaire"} : ${v.objet || t}` : a.statut === "refusee" ? `a refusé la demande de ${v.nom || "un fonctionnaire"} : ${v.objet || t}` : a.statut === "annulee" ? `a annulé sa demande : ${v.objet || t}` : `a modifié la demande de ${v.nom || "un fonctionnaire"}`;
+      return `a modifié la demande de ${v.nom || "un fonctionnaire"}`;
+    }
+    case "entretiens":
+      if (x === "ajout") return `a préparé un entretien avec ${v.nom || "un fonctionnaire"} (${jourTxt(v.date)})`;
+      if (x === "suppression") return `a supprimé l’entretien de ${v.nom || "un fonctionnaire"} du ${jourTxt(v.date)}`;
+      if (a.statut !== b.statut && a.statut === "partage") return `a partagé le compte rendu d’entretien de ${v.nom || "un fonctionnaire"}`;
+      if (a.vuParAgentLe && !b.vuParAgentLe) return `a pris connaissance de son entretien du ${jourTxt(v.date)}`;
+      return `a modifié l’entretien de ${v.nom || "un fonctionnaire"}`;
     case "sanctions": {
       const t = (SANC_TYPES[v.type] || { nom: "sanction" }).nom.toLowerCase(), no = v.ref || dossierNo("SD", e.doc_id);
       if (x === "ajout") return `a pris une sanction contre ${v.nom || "un fonctionnaire"} : ${t} (${no})`;
@@ -14674,7 +14808,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);

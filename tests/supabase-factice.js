@@ -66,10 +66,34 @@
         return { data: { fid, fonctionnaire: Object.assign({}, f.data, { id: fid }), bareme: cfg, contrats: docs("contratsTravail").filter(x => x.fid === fid), payes, rappels: docs("rappels").filter(x => x.fid === fid),
           messages: docs("messagesAgents").filter(x => x.fid === fid).sort((a, z) => String(a.at).localeCompare(String(z.at))),
           agenda: docs("agenda").filter(e => (e.audience || "tous") === "tous" || (e.audience === "agents" && (e.participants || []).includes(fid))),
-          notes: docs("notesService").filter(n => !n.retiree), absences: docs("absences").filter(a => a.fid === fid), sanctions: docs("sanctions").filter(x => x.fid === fid && x.statut !== "annulee") }, error: null };
+          notes: docs("notesService").filter(n => !n.retiree), absences: docs("absences").filter(a => a.fid === fid), sanctions: docs("sanctions").filter(x => x.fid === fid && x.statut !== "annulee"),
+          // Mise à jour 36 (absente si window.__sans36) : demandes, entretiens partagés, annuaire.
+          ...(window.__sans36 ? {} : {
+            demandes: docs("demandesAgents").filter(x => x.fid === fid).sort((a, z) => String(z.at).localeCompare(String(a.at))),
+            entretiens: docs("entretiens").filter(x => x.fid === fid && x.statut === "partage"),
+            annuaire: docs("fonctionnaires").filter(x => x.actif !== false).map(x => ({ id: x.id, nom: x.nom, grade: x.grade, discordId: x.discordId,
+              role: (window.__roles || {})[x.discordId] || null, poste: (docs("contratsTravail").find(c => c.fid === x.id) || {}).poste || null })) }) }, error: null };
       }
       if (name === "envoyer_message") { const f = fonc(); const id = "m" + Date.now(); rows.set("messagesAgents/" + id, { collection: "messagesAgents", id, data: { fid: f.id, nom: f.data.nom, discordId: DID, de: "agent", auteur: f.data.nom, texte: args.p_texte, at: iso(), luEquipe: false } }); return { data: { id }, error: null }; }
       if (name === "messages_lus") { const f = fonc(); let n = 0; for (const r of rows.values()) if (r.collection === "messagesAgents" && r.data.fid === f.id && r.data.de === "equipe" && !r.data.luAgent) { r.data = Object.assign({}, r.data, { luAgent: true }); n++; } return { data: n, error: null }; }
+      if (name === "faire_demande" || name === "annuler_demande" || name === "voir_entretien") {
+        if (window.__sans36) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache` } };
+        const f = fonc(); if (!f) return { data: null, error: { message: "Votre compte Discord n'est relié à aucune fiche de fonctionnaire." } };
+        if (name === "faire_demande") {
+          if (args.p_type === "conge" && (!args.p_du || !args.p_au || args.p_au < args.p_du)) return { data: null, error: { message: "Indiquez les dates du congé (le dernier jour après le premier)." } };
+          const id = "da" + Date.now(), data = { fid: f.id, nom: f.data.nom, type: args.p_type, objet: args.p_objet, motif: args.p_motif || "", du: args.p_du || null, au: args.p_au || null, statut: "envoyee", at: iso() };
+          rows.set("demandesAgents/" + id, { collection: "demandesAgents", id, data });
+          return { data: Object.assign({ id }, data), error: null };
+        }
+        if (name === "annuler_demande") {
+          const r = rows.get("demandesAgents/" + args.p_id);
+          if (!r || r.data.fid !== f.id || r.data.statut !== "envoyee") return { data: null, error: { message: "Cette demande n'attend plus de réponse." } };
+          r.data = Object.assign({}, r.data, { statut: "annulee", annuleePar: "agent", annuleeLe: iso() }); return { data: Object.assign({ id: r.id }, r.data), error: null };
+        }
+        const r = rows.get("entretiens/" + args.p_id);
+        if (!r || r.data.fid !== f.id || r.data.statut !== "partage") return { data: null, error: { message: "Cet entretien n'existe plus ou ne vous concerne pas." } };
+        r.data = Object.assign({}, r.data, { vuParAgentLe: iso(), commentaireAgent: args.p_commentaire || "" }); return { data: Object.assign({ id: r.id }, r.data), error: null };
+      }
       if (name === "signer_contrat") {
         if (window.__sans36) return { data: null, error: { message: "Could not find the function public.signer_contrat(p_id, p_nom) in the schema cache" } };
         const f = fonc(), r = rows.get("contratsTravail/" + args.p_id);
