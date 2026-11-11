@@ -46,6 +46,23 @@ module.exports = {
     const perso = R.rappelsPersoChoisis([{ id: "p1", fid: "f1", titre: "Notaire", debut: "2026-11-12T19:10:00Z", rappel_min: 10, journee: false },
       { id: "p2", fid: "f1", titre: "Trop tôt", debut: "2026-11-12T19:20:00Z", rappel_min: 10, journee: false }], t0, pas);
     t.egal(perso.map((x) => x.msg.tag), ["perso-p1"], "agenda personnel : rappel 10 minutes avant, au bon passage");
+    // Mise à jour 36 : demandes, entretiens, contrat signé par l'agent.
+    const ctx36 = { foncs: new Map([["f1", { nom: "Alice", discordId: "111111111111111111" }]]), site: "https://x/" };
+    const at36 = new Date().toISOString();
+    const dmd = R.personnel({ collection: "demandesAgents", id: "da1", action: "INSERT", apres: { fid: "f1", nom: "Alice", type: "conge", objet: "Repos", du: "2026-11-20", au: "2026-11-21", statut: "envoyee", at: at36 } }, ctx36);
+    t.ok(dmd && dmd.equipe && dmd.equipe.type === "personnel" && /Congé : Repos/.test(dmd.equipe.body) && dmd.discord[0].canal === "direction", "demande d'un agent : encadrement et salon Direction", JSON.stringify(dmd));
+    const rep = R.personnel({ collection: "demandesAgents", id: "da1", action: "UPDATE", avant: { fid: "f1", statut: "envoyee" }, apres: { fid: "f1", type: "conge", objet: "Repos", statut: "refusee", reponse: "Effectif trop juste" } }, ctx36);
+    t.ok(rep && rep.agents[0].type === "a_message" && rep.agents[0].msg.title === "Demande refusée" && /Effectif/.test(rep.agents[0].msg.body), "réponse : notification à l'agent");
+    t.ok(rep && rep.discord[0].canal === "personnel" && !/refus|❌/i.test(rep.discord[0].texte) && rep.discord[0].users[0] === "111111111111111111", "réponse : mention sur Discord sans dire le résultat");
+    t.egal(R.personnel({ collection: "demandesAgents", id: "da1", action: "UPDATE", avant: { statut: "envoyee" }, apres: { fid: "f1", statut: "annulee" } }, ctx36), null, "demande annulée par l'agent : rien");
+    const ent = R.personnel({ collection: "entretiens", id: "en1", action: "UPDATE", avant: { statut: "brouillon" }, apres: { fid: "f1", type: "recadrage", statut: "partage" } }, ctx36);
+    t.ok(ent && ent.agents[0].fids[0] === "f1" && !/recadrage/i.test(ent.discord[0].texte), "entretien partagé : l'agent est prévenu, sans le type sur Discord");
+    t.egal(R.personnel({ collection: "entretiens", id: "en1", action: "INSERT", apres: { fid: "f1", statut: "brouillon" } }, ctx36), null, "entretien en brouillon : rien");
+    const com = R.personnel({ collection: "entretiens", id: "en1", action: "UPDATE", avant: { statut: "partage", commentaireAgent: "" }, apres: { fid: "f1", nom: "Alice", type: "suivi", statut: "partage", commentaireAgent: "Merci" } }, ctx36);
+    t.ok(com && com.equipe && /Merci/.test(com.equipe.body), "commentaire de l'agent : l'encadrement est prévenu");
+    const sig = R.personnel({ collection: "contratsTravail", id: "ct1", action: "UPDATE", avant: { statut: "a_signer" }, apres: { nom: "Alice", statut: "signe", signeParAgent: true } }, ctx36);
+    t.ok(sig && sig.equipe && sig.discord[0].canal === "direction", "contrat signé par l'agent : encadrement et salon Direction");
+    t.egal(R.personnel({ collection: "contratsTravail", id: "ct1", action: "UPDATE", avant: { statut: "a_signer" }, apres: { statut: "signe" } }, ctx36), null, "contrat signé par les RH : rien");
     // Lundi soir : heures de la semaine passée pas encore saisies.
     t.egal([R.semaineDe(Date.parse("2026-11-16T19:00:00Z")), R.semaineDe(Date.parse("2026-11-15T23:30:00Z")), R.semaineDe(Date.parse("2026-11-15T22:30:00Z")), R.semaineDe(Date.parse("2027-01-01T12:00:00Z"))],
       ["2026-S47", "2026-S47", "2026-S46", "2026-S53"], "semaine ISO comptée à Paris (lundi 0 h 30 à Paris = semaine suivante, dimanche 23 h 30 = encore la semaine)");

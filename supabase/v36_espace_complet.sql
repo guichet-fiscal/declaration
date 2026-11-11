@@ -5,6 +5,9 @@
 -- 3. Entretiens et objectifs : l'agent les lit et indique qu'il en a pris connaissance.
 -- 4. Mon espace : demandes, entretiens partagés et annuaire de l'équipe en plus.
 -- 5-6. Droits : les RH lisent et écrivent demandes et entretiens ; l'Inspection répond aux demandes.
+-- 7. Notifications : demandes et réponses, entretiens partagés, contrats signés par l'agent.
+-- 8. Le lundi soir : alerte à la Direction pour les heures de la semaine passée pas encore saisies.
+--    (Ces deux points ont besoin de la fonction notifier redéployée.)
 --
 -- À exécuter après supabase/v35_rappels_agenda.sql. Il peut être exécuté plusieurs fois.
 
@@ -290,7 +293,30 @@ revoke all on function public.ecriture_permise(text, text, jsonb) from public, a
 grant execute on function public.ecriture_permise(text, text, jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------------------------------------
--- 7. Le lundi soir (20 h l'hiver, 21 h l'été) : la fonction notifier signale à la Direction les heures
+-- 7. Notifications (fonction notifier, mise à jour 32) : demande d'un agent et réponse de l'encadrement,
+--    compte rendu d'entretien partagé et commentaire de l'agent, contrat signé par l'agent.
+drop trigger if exists notif_personnel_ajout on public.registre;
+create trigger notif_personnel_ajout
+  after insert on public.registre
+  for each row
+  when (new.collection in ('messagesAgents', 'agenda', 'notesService', 'absences', 'demandesAgents', 'entretiens'))
+  execute function public.notif_registre();
+drop trigger if exists notif_personnel_modif on public.registre;
+create trigger notif_personnel_modif
+  after update on public.registre
+  for each row
+  when ((new.collection = 'agenda' and (new.data->>'statut' is distinct from old.data->>'statut'
+                                         or new.data->>'debut' is distinct from old.data->>'debut'))
+        or (new.collection = 'absences' and new.data->>'statut' is distinct from old.data->>'statut')
+        or (new.collection = 'demandesAgents' and new.data->>'statut' is distinct from old.data->>'statut')
+        or (new.collection = 'entretiens' and (new.data->>'statut' is distinct from old.data->>'statut'
+                                               or new.data->>'commentaireAgent' is distinct from old.data->>'commentaireAgent'))
+        or (new.collection = 'contratsTravail' and new.data->>'signeParAgent' = 'true'
+            and old.data->>'signeParAgent' is distinct from 'true'))
+  execute function public.notif_registre();
+
+-- ---------------------------------------------------------------------------------------------------
+-- 8. Le lundi soir (20 h l'hiver, 21 h l'été) : la fonction notifier signale à la Direction les heures
 --    de la semaine passée pas encore saisies dans la paye (notification « Délais » et salon Direction).
 create or replace function public.notif_lundi()
 returns void

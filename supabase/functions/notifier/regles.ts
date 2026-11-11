@@ -122,7 +122,10 @@ export function delais(rows, depuis, maintenant) {
 //    (« direction »), avec les mentions. Jamais le contenu d'un message ni d'une sanction.
 // ctx.foncs : Map fid → { nom, discordId, actif } ; ctx.site : adresse du guichet ; ctx.rolePersonnel : rôle Discord.
 export const TYPES_AGENTS = ["a_message", "a_agenda", "a_note", "a_paye", "a_absence"];
-export const COLLECTIONS_PERSONNEL = ["messagesAgents", "agenda", "notesService", "absences", "payes"];
+export const COLLECTIONS_PERSONNEL = ["messagesAgents", "agenda", "notesService", "absences", "payes", "demandesAgents", "entretiens", "contratsTravail"];
+// Demandes des agents et entretiens (mise à jour 36) : mêmes noms qu'au guichet.
+const DAG_NOMS = { conge: "Congé", horaires: "Changement d’horaires", document: "Document ou attestation", autre: "Autre demande" };
+const ENT_NOMS = { suivi: "Entretien de suivi", annuel: "Entretien annuel", etape: "Point d’étape", recadrage: "Entretien de recadrage" };
 const court = (t, n) => { const s = String(t || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
 const TZ = "Europe/Paris";
 function jour(k) {
@@ -197,6 +200,41 @@ export function personnel(e, ctx) {
       if (!ins && n.statut === "prise_en_compte" && b.statut === "signalee") { out.agents.push({ fids: [n.fid], type: "a_absence", msg: { title: "Absence prise en compte", body: `${periodeAbs(n)}${n.priseEnComptePar ? " · par " + n.priseEnComptePar : ""}`, url: "#espace", tag: "abs-" + id } }); return out; }
       if (!ins && n.statut === "annulee" && b.statut !== "annulee" && n.annuleePar !== "agent" && !n.sanction) { out.agents.push({ fids: [n.fid], type: "a_absence", msg: { title: "Absence annulée par l’encadrement", body: periodeAbs(n), url: "#espace", tag: "abs-" + id } }); return out; }
       return null;
+    }
+    case "demandesAgents": {
+      const t = DAG_NOMS[n.type] || DAG_NOMS.autre, quandD = n.type === "conge" && n.du ? " · " + periodeAbs(n) : "";
+      if (ins) {
+        if (n.statut !== "envoyee" || !recent(n.at, 2)) return null;
+        out.equipe = { type: "personnel", title: `Demande de ${n.nom || "un fonctionnaire"}`, body: `${t}${n.objet ? " : " + court(n.objet, 90) : ""}${quandD}`, url: "#personnel", tag: "dag-" + id };
+        out.discord.push({ canal: "direction", auto: "alertesEquipe", texte: `📝 **${n.nom || "Un fonctionnaire"}** a fait une demande (${t.toLowerCase()})${n.objet ? " : " + court(n.objet, 120) : ""}${quandD}. À traiter dans Personnel → Demandes :${lien("#personnel")}` });
+        return out;
+      }
+      if (b.statut !== "envoyee" || (n.statut !== "acceptee" && n.statut !== "refusee")) return null;
+      const oui = n.statut === "acceptee";
+      out.agents.push({ fids: [n.fid], type: "a_message", msg: { title: oui ? "Demande acceptée" : "Demande refusée", body: `${t}${n.objet ? " : " + court(n.objet, 70) : ""}${n.reponse ? " · " + court(n.reponse, 90) : ""}`, url: "#espace", tag: "dag-" + id } });
+      const u = did(n.fid, n);
+      if (u) out.discord.push({ canal: "personnel", auto: "alertesAgents", texte: `<@${u}> 📬 Votre demande (${t.toLowerCase()}) a reçu une réponse. Détails dans votre espace :${lien("#espace")}`, users: [u] });
+      return out;
+    }
+    case "entretiens": {
+      // Compte rendu partagé avec l'agent ; commentaire de l'agent pour l'encadrement.
+      if (n.statut === "partage" && (ins || b.statut !== "partage")) {
+        out.agents.push({ fids: [n.fid], type: "a_message", msg: { title: "Compte rendu d’entretien", body: `${ENT_NOMS[n.type] || "Entretien"} : le compte rendu et vos objectifs sont dans votre espace.`, url: "#espace", tag: "ent-" + id } });
+        const u = did(n.fid, n);
+        if (u) out.discord.push({ canal: "personnel", auto: "alertesAgents", texte: `<@${u}> 📋 Un compte rendu d’entretien vous attend dans votre espace :${lien("#espace")}`, users: [u] });
+        return out;
+      }
+      if (!ins && n.commentaireAgent && n.commentaireAgent !== b.commentaireAgent) {
+        out.equipe = { type: "personnel", title: `Commentaire de ${n.nom || "un fonctionnaire"}`, body: `Sur son ${(ENT_NOMS[n.type] || "entretien").toLowerCase()} : ${court(n.commentaireAgent, 120)}`, url: "#personnel", tag: "ent-" + id };
+        return out;
+      }
+      return null;
+    }
+    case "contratsTravail": {
+      if (ins || !n.signeParAgent || b.signeParAgent) return null;
+      out.equipe = { type: "personnel", title: "Contrat signé", body: `${n.nom || "Un fonctionnaire"} a signé son contrat de travail depuis son espace.`, url: "#personnel", tag: "ctr-" + id };
+      out.discord.push({ canal: "direction", auto: "alertesEquipe", texte: `✍️ **${n.nom || "Un fonctionnaire"}** a signé son contrat de travail depuis son espace. Personnel → Effectif :${lien("#personnel")}` });
+      return out;
     }
     case "payes": {
       if (ins || n.statut !== "versee" || b.statut === "versee") return null;
