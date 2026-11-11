@@ -1004,6 +1004,10 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .es-pas{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:6px}
 .es-pas li{display:flex;align-items:center;gap:10px;font-size:14px}
 .es-pas li.fait{color:var(--ink-2)}
+.sc-zone{display:grid;gap:12px;padding:14px;border:1px solid var(--rule);border-radius:10px;background:var(--paper)}
+.sc-sig{font-family:"Allura",cursive;font-size:40px;line-height:1.1;color:#1c2f6b;padding:2px 4px;border-bottom:1px solid var(--rule-2);min-height:46px}
+:root[data-theme="dark"] .sc-sig{color:#a9bdf5}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sc-sig{color:#a9bdf5}}
 .es-pas-coche{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule-2);display:grid;place-items:center;font-size:12px;font-weight:700}
 .es-pas li.fait .es-pas-coche{background:var(--ok);border-color:var(--ok);color:#fff}
 .es-ag-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
@@ -6121,8 +6125,57 @@ function cartePremiersPas(fid) {
       ok ? h("span", { text: t }) : h("button", { class: "linkbtn", type: "button", onclick: go, text: t }),
       h("span", { class: "sr-only", text: ok ? "fait" : "à faire" })))));
 }
-// Étapes ajoutées par d'autres rubriques (signature du contrat…).
-function premiersPasEnPlus() { return []; }
+// Étapes ajoutées par d'autres rubriques : la signature du contrat de travail.
+function premiersPasEnPlus() {
+  const ct = ((S.espace && S.espace.contrats) || [])[0];
+  return ct ? [["Lire et signer mon contrat de travail", ct.statut === "signe", () => openSignerContrat(ct)]] : [];
+}
+// Signature du contrat par l'agent (mise à jour 36) : il le lit, coche son accord et tape son nom.
+const nomSimple = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]+/gi, " ").trim().toLowerCase();
+function openSignerContrat(ct) {
+  if (ct.statut === "signe") { toast("Ce contrat est déjà signé."); return; }
+  const pages = h("div", { class: "ct-pages", "aria-label": "Votre contrat" }, h("p", { class: "muted", style: "margin:0", text: "Préparation du contrat…" }));
+  ctrPages(ct).then(cs => fill(pages, cs.map((c, i) => { c.className = "ct-page"; c.setAttribute("role", "img"); c.setAttribute("aria-label", `Page ${i + 1} sur ${cs.length}`); return c; })))
+    .catch(() => fill(pages, h("p", { class: "err", text: "Aperçu impossible dans ce navigateur : téléchargez le PDF pour le lire." })));
+  const accord = h("input", { type: "checkbox", id: "sc-accord" });
+  const nom = h("input", { id: "sc-nom", autocomplete: "name", placeholder: ct.nom || "Prénom NOM" });
+  const apercu = h("div", { class: "sc-sig", "aria-hidden": "true" });
+  const majApercu = () => { apercu.textContent = nom.value.trim(); apercu.hidden = !nom.value.trim(); };
+  nom.addEventListener("input", majApercu); majApercu();
+  ctrPoliceSignature().catch(() => {});
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Signer mon contrat" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    if (!accord.checked) { err.textContent = "Cochez la case pour dire que vous avez lu le contrat et l’acceptez."; accord.focus(); return; }
+    if (nomSimple(nom.value) !== nomSimple(ct.nom)) { err.textContent = `Tapez votre nom tel qu’il figure sur le contrat : ${ct.nom}.`; nom.focus(); return; }
+    go.disabled = true;
+    const { data, error } = await S.sb.rpc("signer_contrat", { p_id: ct.id, p_nom: nom.value.trim() });
+    if (error) {
+      go.disabled = false;
+      err.textContent = /signer_contrat|schema cache|does not exist/i.test(error.message || "") ? "La signature en ligne ouvrira dès que la Direction aura exécuté supabase/v36_espace_complet.sql. En attendant, signez-le auprès des ressources humaines." : error.message || "Signature impossible.";
+      return;
+    }
+    const signe = Object.assign({}, ct, data || { statut: "signe", salarieSigneLe: jourCle(new Date()) });
+    if (S.espace && S.espace.contrats) S.espace.contrats = S.espace.contrats.map(x => x.id === ct.id ? signe : x);
+    openDialog({ eyebrow: "Contrat de travail", title: "Contrat signé", stampEl: stamp(["SIGNÉ", "ok"]),
+      body: [h("p", { style: "margin:0", text: `Merci. Votre contrat ${ctrNo(signe)} est signé le ${ctrJour(signe.salarieSigneLe)} ; l’encadrement en est informé. Gardez-en une copie.` })],
+      foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }),
+        h("button", { class: "btn ink small", type: "button", onclick: ev => ctrTelecharger(signe, ev.currentTarget), text: "Télécharger le contrat signé" })] });
+    renderEspace(); chargerMonEspace();
+  });
+  openDialog({ eyebrow: "Mon contrat de travail", title: `${ctrNo(ct)} · ${ct.type === "CDD" ? "CDD" : "CDI"} · ${ct.poste || "—"}`, wide: true,
+    body: [kv([["Salarié", ct.nom || "—"], ["Poste", `${ct.poste || "—"}${ct.service ? " · " + ct.service : ""}`], ["Rémunération", `${money(ct.taux)} de l’heure · ${String(ct.heures || "").replace(".", ",")} h par semaine`],
+        ["Prise de fonctions", ctrJour(ct.priseFonctions) || "—"], ct.type === "CDD" && ct.fin ? ["Fin du contrat", ctrJour(ct.fin)] : null].filter(Boolean)),
+      h("p", { class: "hint", style: "margin:0", text: "Lisez votre contrat en entier ci-dessous (ou en PDF). En le signant, la mention « Lu et approuvé », votre nom et la date du jour y sont ajoutés, et il ne peut plus être modifié." }),
+      pages,
+      h("div", { class: "sc-zone" },
+        h("label", { class: "switch" }, accord, h("span", { text: "J’ai lu mon contrat de travail et j’en accepte les termes." })),
+        field("sc-nom", "Votre nom, pour signer", nom), apercu),
+      err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Plus tard" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(ct, ev.currentTarget), text: "PDF" }), h("span", { class: "spacer" }), go] });
+}
 // Annonce de Mon espace dans le salon Discord des alertes du personnel (Direction).
 function openAnnonceEspace() {
   const role = S.discord && S.discord.mentionPersonnel ? S.discord.mentionPersonnel : "";
@@ -6201,8 +6254,8 @@ function renderEspace() {
   const cardContrat = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Mon contrat de travail" })),
     (E.contrats || []).length ? h("ul", { class: "ent-list" }, E.contrats.map(x => h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${ctrNo(x)} · ${x.type === "CDD" ? "CDD" : "CDI"} · ${x.poste || "—"}` }),
-        h("span", { class: "meta", text: [x.priseFonctions ? "prise de fonctions le " + ctrJour(x.priseFonctions) : "", x.statut === "signe" ? "signé le " + ctrJour(x.salarieSigneLe) : "à signer auprès des ressources humaines"].filter(Boolean).join(" · ") })),
-      chip(CTR_STAT[x.statut] || CTR_STAT.a_signer),
+        h("span", { class: "meta", text: [x.priseFonctions ? "prise de fonctions le " + ctrJour(x.priseFonctions) : "", x.statut === "signe" ? "signé le " + ctrJour(x.salarieSigneLe) : "à lire et à signer ici"].filter(Boolean).join(" · ") })),
+      x.statut === "signe" ? chip(CTR_STAT.signe) : h("button", { class: "btn small", type: "button", onclick: () => openSignerContrat(x), text: "Lire et signer" }),
       h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(x, ev.currentTarget), text: "PDF" }))))
       : h("p", { class: "muted", style: "margin:8px 0 0", text: "Pas encore de contrat de travail : les ressources humaines vous l’établiront." }));
   // Mes sanctions (notifiées par l'encadrement)

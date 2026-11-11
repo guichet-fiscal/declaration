@@ -70,6 +70,14 @@
       }
       if (name === "envoyer_message") { const f = fonc(); const id = "m" + Date.now(); rows.set("messagesAgents/" + id, { collection: "messagesAgents", id, data: { fid: f.id, nom: f.data.nom, discordId: DID, de: "agent", auteur: f.data.nom, texte: args.p_texte, at: iso(), luEquipe: false } }); return { data: { id }, error: null }; }
       if (name === "messages_lus") { const f = fonc(); let n = 0; for (const r of rows.values()) if (r.collection === "messagesAgents" && r.data.fid === f.id && r.data.de === "equipe" && !r.data.luAgent) { r.data = Object.assign({}, r.data, { luAgent: true }); n++; } return { data: n, error: null }; }
+      if (name === "signer_contrat") {
+        if (window.__sans36) return { data: null, error: { message: "Could not find the function public.signer_contrat(p_id, p_nom) in the schema cache" } };
+        const f = fonc(), r = rows.get("contratsTravail/" + args.p_id);
+        if (!f || !r || r.data.fid !== f.id) return { data: null, error: { message: "Ce contrat n'est pas le vôtre ou n'existe plus." } };
+        if (r.data.statut === "signe") return { data: null, error: { message: "Ce contrat est déjà signé." } };
+        r.data = Object.assign({}, r.data, { statut: "signe", salarieSigneLe: iso().slice(0, 10), signeEnregistrePar: "l’agent, depuis son espace", signeParAgent: true, signatureNom: args.p_nom, signeA: iso() });
+        return { data: Object.assign({ id: r.id }, r.data), error: null };
+      }
       if (name === "repondre_agenda") { const f = fonc(); const r = rows.get("agenda/" + args.p_id); r.data = Object.assign({}, r.data, { reponses: Object.assign({}, r.data.reponses || {}, { [f.id]: { r: args.p_reponse, nom: f.data.nom, at: iso() } }) }); return { data: {}, error: null }; }
       if (name === "signaler_absence") { const f = fonc(); if (args.p_au < args.p_du) return { data: null, error: { message: "Dates d'absence invalides : la fin doit suivre le début." } }; const id = "ab" + Date.now(); rows.set("absences/" + id, { collection: "absences", id, data: { fid: f.id, nom: f.data.nom, du: args.p_du, au: args.p_au, motif: args.p_motif, statut: "signalee", par: "agent", auteur: f.data.nom, at: iso() } }); return { data: { id }, error: null }; }
       if (name === "annuler_absence") { const r = rows.get("absences/" + args.p_id); r.data = Object.assign({}, r.data, { statut: "annulee" }); return { data: true, error: null }; }
