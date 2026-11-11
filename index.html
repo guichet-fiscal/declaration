@@ -11286,8 +11286,22 @@ async function loadJournal() {
   renderJournal();
 }
 const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", rescrits: "RF", signalements: "SG", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); if (e.collection === "alertes" && /^mv-/.test(String(e.doc_id))) return ""; return p ? dossierNo(p, e.doc_id) : ""; };
-// Auteur d'une ligne du journal : l'agent, ou l'envoi automatique de la base.
-const jWho = e => e.auteur || ((e.apres || e.avant || {}).auto ? "Envoi automatique" : e.collection === "depots" || e.collection === "signalements" ? "Espace entreprise" : "Sans nom");
+// Auteur d'une ligne du journal : l'agent (nom des accès), sinon le fonctionnaire dont la fiche porte ce
+// compte Discord (gestes faits depuis Mon espace), sinon l'envoi automatique, l'espace entreprise, ou une
+// modification faite directement dans la base (script SQL), qui n'a pas de compte.
+function jWho(e) {
+  if (e.auteur) return e.auteur;
+  const did = e.discord_id || "";
+  if (did) {
+    const ag = (S.agents || []).find(a => a.discord_id === did && a.nom), f = (S.fonctionnaires || []).find(x => x.discordId === did && x.nom);
+    if (ag || f) return (ag || f).nom;
+    return "Compte Discord " + did.slice(-4);
+  }
+  const v = e.apres || e.avant || {};
+  if (v.auto) return "Envoi automatique";
+  if (e.collection === "depots" || e.collection === "signalements") return "Espace entreprise";
+  return "Base de données (script)";
+}
 function describe(e) {
   const a = e.apres || {}, b = e.avant || {}, x = e.action, v = x === "suppression" ? b : a;
   switch (e.collection) {

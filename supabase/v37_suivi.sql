@@ -1,10 +1,14 @@
--- Guichet fiscal : mise à jour 37 (remontée des erreurs)
+-- Guichet fiscal : mise à jour 37 (remontée des erreurs, auteurs du journal)
 --
 -- Quand le guichet plante chez quelqu'un (page, enregistrement refusé, lecture de la base, publication
 -- Discord), il note l'erreur ici avec le navigateur, l'appareil et l'onglet ouvert. La Direction la
 -- retrouve dans Réglages → Sauvegardes et export → Erreurs remontées, et « Marquer comme réglée » l'efface.
 -- Rien de ce que la personne a tapé n'est envoyé ; un mois d'historique ; 50 erreurs par personne et
 -- par heure au plus.
+--
+-- Journal : les gestes faits par un fonctionnaire depuis Mon espace (message, absence, réponse à l'agenda,
+-- demande…) portent désormais son nom, celui de sa fiche, au lieu de « Sans nom » ; les lignes déjà
+-- écrites sont complétées.
 --
 -- À exécuter après supabase/v36_espace_complet.sql. Il peut être exécuté plusieurs fois.
 
@@ -83,5 +87,34 @@ end
 $$;
 revoke all on function public.signaler_erreur(jsonb) from public, anon;
 grant execute on function public.signaler_erreur(jsonb) to authenticated;
+
+-- Journal : nom de l'auteur ---------------------------------------------------------------------------
+-- Celui des accès (agents) ; à défaut, celui de la fiche de fonctionnaire qui porte ce compte Discord.
+create or replace function public.journal_auteur(out v_discord text, out v_nom text)
+language sql stable security definer
+set search_path = ''
+as $$
+  select i.provider_id,
+         coalesce(nullif(a.nom, ''),
+                  (select r.data->>'nom' from public.registre r
+                    where r.collection = 'fonctionnaires' and r.data->>'discordId' = i.provider_id
+                    order by (r.data->>'actif' is distinct from 'false') desc
+                    limit 1))
+  from auth.identities i
+  left join public.agents a on a.discord_id = i.provider_id
+  where i.user_id = auth.uid() and i.provider = 'discord'
+  limit 1
+$$;
+revoke all on function public.journal_auteur() from public, anon, authenticated;
+
+-- Lignes déjà écrites sans nom alors que le compte Discord est connu.
+update public.journal j
+   set auteur = coalesce(
+         (select nullif(a.nom, '') from public.agents a where a.discord_id = j.discord_id),
+         (select r.data->>'nom' from public.registre r
+           where r.collection = 'fonctionnaires' and r.data->>'discordId' = j.discord_id
+           order by (r.data->>'actif' is distinct from 'false') desc
+           limit 1))
+ where coalesce(j.auteur, '') = '' and j.discord_id is not null;
 
 commit;

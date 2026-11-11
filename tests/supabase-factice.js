@@ -47,6 +47,8 @@
         if (st.op === "select") return ok(window.__erreursRemontees.filter(x => !st.gt || String(x.at) > String(st.gt[1])).slice().sort((a, z) => String(z.at).localeCompare(String(a.at))));
         if (st.op === "delete") { const e = (st.filters.find(f => f[0] === "empreinte") || [])[1]; window.__erreursRemontees = window.__erreursRemontees.filter(x => x.empreinte !== e); return ok(null); }
       }
+      // Journal de l'essai : window.__journal (lignes de la table journal).
+      if (table === "journal" && st.op === "select") return ok((window.__journal || []).slice());
       // Salons Discord de l'essai (window.__discord = { webhooks, auto }) : adresses servies par l'essai lui-même.
       if (table === "parametres_prives" && st.op === "select") return ok(window.__discord ? [{ cle: "discord", valeur: window.__discord }] : []);
       if (table !== "registre") return ok(st.op === "select" ? [] : null);

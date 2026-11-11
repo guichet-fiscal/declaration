@@ -54,7 +54,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v34_agenda_perso.sql` : l'agenda personnel de chaque fonctionnaire (visible de lui seul), avec le rappel une heure avant
 - `supabase/v35_rappels_agenda.sql` : le rappel au choix de chacun (agenda personnel et rendez-vous de l'encadrement), avec le passage du service d'envoi toutes les 5 minutes
 - `supabase/v36_espace_complet.sql` : l’espace des fonctionnaires complété (signature du contrat par l’agent, demandes, entretiens et objectifs, annuaire), leurs notifications, et l’alerte du lundi soir pour les heures pas encore saisies
-- `supabase/v37_suivi.sql` : la remontée des erreurs du guichet (table privée lue par la Direction, un mois d’historique)
+- `supabase/v37_suivi.sql` : la remontée des erreurs du guichet (table privée lue par la Direction, un mois d’historique), et le nom du fonctionnaire dans le journal pour les gestes faits depuis Mon espace
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `tests/` et `.github/workflows/essais.yml` : les essais automatiques (voir « Modifier le site »)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
@@ -570,7 +570,7 @@ L’application s’ouvre vite : la page et `config.js` viennent de l’appareil
 
 ## Restaurer depuis le journal
 
-Dans le **Journal**, chaque action encore réversible porte un bouton : **Restaurer** remet le dossier tel qu’il était avant une modification ou une suppression, **Annuler** retire un dossier ajouté par erreur. Le site montre ce qui va changer avant de confirmer, et propose de restaurer en même temps les dossiers supprimés avec lui (l’avis d’une déclaration supprimée, par exemple). La restauration est elle-même inscrite au journal. Réservé à la Direction.
+Dans le **Journal**, chaque ligne dit qui a agi : l’agent (nom donné dans Réglages → Accès), le fonctionnaire pour ce qu’il fait depuis Mon espace (nom de sa fiche ; les lignes d’avant `supabase/v37_suivi.sql` sont complétées par le script), « Envoi automatique », « Espace entreprise », ou « Base de données (script) » pour une modification faite directement dans Supabase. Chaque action encore réversible porte un bouton : **Restaurer** remet le dossier tel qu’il était avant une modification ou une suppression, **Annuler** retire un dossier ajouté par erreur. Le site montre ce qui va changer avant de confirmer, et propose de restaurer en même temps les dossiers supprimés avec lui (l’avis d’une déclaration supprimée, par exemple). La restauration est elle-même inscrite au journal. Réservé à la Direction.
 
 ## Continuité et sauvegardes
 
