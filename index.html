@@ -989,6 +989,23 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 /* Mon espace */
 .es-col-g,.es-col-d{display:grid;gap:16px;align-content:start;min-width:0}
 .es-col-g > .card,.es-col-d > .card{margin-top:0}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.guide{display:grid;gap:14px}
+.guide-intro{margin:0;font-size:15px;line-height:1.55;color:var(--ink);max-width:62ch}
+.guide-grille{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.guide-grille li{display:grid;gap:3px;padding:11px 13px;border:1px solid var(--rule);border-radius:10px;background:var(--paper)}
+.guide-grille strong{font-size:14px}
+.guide-grille span{font-size:13px;line-height:1.45;color:var(--ink-2)}
+.guide-ok{margin:0;padding:10px 12px;border-radius:10px;background:var(--ok-soft);color:var(--ok);font-weight:600}
+.guide-points{display:flex;gap:6px;justify-content:center;margin-top:16px}
+.guide-points span{width:7px;height:7px;border-radius:50%;background:var(--rule-2)}
+.guide-points span.on{background:var(--accent);width:20px;border-radius:4px}
+.es-premiers .card-head{align-items:flex-start}
+.es-pas{list-style:none;margin:2px 0 0;padding:0;display:grid;gap:6px}
+.es-pas li{display:flex;align-items:center;gap:10px;font-size:14px}
+.es-pas li.fait{color:var(--ink-2)}
+.es-pas-coche{flex:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--rule-2);display:grid;place-items:center;font-size:12px;font-weight:700}
+.es-pas li.fait .es-pas-coche{background:var(--ok);border-color:var(--ok);color:#fff}
 .es-ag-outils{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .es-rappel{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--rule)}
 .es-rappel label{font-size:13px;font-weight:600;color:var(--ink-2)}
@@ -1273,7 +1290,7 @@ table.es-payes{min-width:0;width:100%}
         <h2 id="espace-nom">Mon espace</h2>
         <p class="sub" id="espace-sub">Votre fiche, vos payes et vos heures, vos échanges avec l’encadrement.</p>
       </div>
-      <div class="toolbar"><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
+      <div class="toolbar"><button class="btn ghost" type="button" id="espace-guide">Guide</button><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
     </div>
     <div id="espace-main"></div>
   </section>
@@ -1286,6 +1303,7 @@ table.es-payes{min-width:0;width:100%}
         <p class="sub">Les fonctionnaires, leurs contrats de travail, la messagerie, l’agenda, les absences et les notes de service. Chaque fonctionnaire retrouve ce qui le concerne dans son espace.</p>
       </div>
       <div class="toolbar">
+        <button class="btn ghost" type="button" id="rh-annonce" hidden>Annoncer Mon espace</button>
         <button class="btn ghost" type="button" id="rh-modele" hidden>Modèle de contrat</button>
         <button class="btn" type="button" id="rh-new" hidden>Ajouter un fonctionnaire</button>
       </div>
@@ -5768,7 +5786,7 @@ function renderPersonnel() {
   renderEncadrement();
   if ((S.rhEspace || "effectif") !== "effectif") return;
   const w = rhWriter();
-  $("#rh-new").hidden = !w; $("#rh-modele").hidden = !w;
+  $("#rh-new").hidden = !w; $("#rh-modele").hidden = !w; $("#rh-annonce").hidden = !(canAgent() && writer());
   if (!S.connected || !S.loaded.has("fonctionnaires")) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
   const tous = foncs().slice().sort((a, b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr"));
   const actifs = tous.filter(f => f.actif !== false), retires = tous.filter(f => f.actif === false);
@@ -5820,6 +5838,7 @@ function openAgent(fid, back) {
       w ? h("button", { class: "btn small", type: "button", onclick: () => openFoncForm(f, null, reopen), text: f.actif === false ? "Modifier ou réintégrer" : "Modifier ou retirer des effectifs" }) : null] });
 }
 $("#rh-new").addEventListener("click", () => openFoncForm(null));
+$("#rh-annonce").addEventListener("click", () => openAnnonceEspace());
 $("#rh-modele").addEventListener("click", () => openCtrModele());
 $("#rh-q").addEventListener("input", () => renderPersonnel());
 
@@ -6028,6 +6047,113 @@ function espaceSemaines(E) {
   return out.sort((a, b) => b.k.localeCompare(a.k));
 }
 let espaceLuEnvoye = 0;
+/* ---------- Accueil de Mon espace ---------- */
+// À la première ouverture, un guide en trois pages : ce qu'on trouve dans l'espace, installer
+// l'application, activer les notifications. Réouvrable par le bouton « Guide ». Vu une fois par
+// agent et par appareil (localStorage) ; sans stockage, il ne s'ouvre pas tout seul.
+const GUIDE_RUBRIQUES = [
+  ["Payes et bulletins", "Chaque semaine versée, avec son bulletin ; l’estimation des semaines pas encore versées."],
+  ["Heures de service", "Vos 12 dernières semaines et les paliers de la prime de présence."],
+  ["Conversation", "Écrivez à l’encadrement ; sa réponse arrive au même endroit."],
+  ["Agenda", "Réunions et formations, vos réponses, vos propres événements et vos rappels."],
+  ["Notes de service", "Les consignes en vigueur, à relire quand vous voulez."],
+  ["Absences", "Prévenez d’une absence ; vous voyez quand elle est prise en compte."],
+  ["Contrat de travail", "Votre contrat, à lire et à télécharger en PDF."]];
+const accueilCle = fid => "gf-accueil-vu-" + fid;
+const accueilVu = fid => { try { return !!localStorage.getItem(accueilCle(fid)); } catch (e) { return true; } };
+const marquerAccueil = fid => { try { if (fid) localStorage.setItem(accueilCle(fid), new Date().toISOString()); } catch (e) { /* sans stockage */ } };
+function openAccueil(etape) {
+  const fid = (S.espace && S.espace.fid) || S.monFid, f = (S.espace && S.espace.fonctionnaire) || {};
+  const prenom = String(f.nom || "").split(/\s+/)[0] || "";
+  const n = 3, i = Math.max(0, Math.min(n - 1, etape || 0));
+  const points = h("div", { class: "guide-points", "aria-hidden": "true" }, Array.from({ length: n }, (_, k) => h("span", { class: k === i ? "on" : null })));
+  const fin = () => { marquerAccueil(fid); closeDialog(); renderEspace(); };
+  let body;
+  if (i === 0) body = [
+    h("p", { class: "guide-intro", text: "Votre espace rassemble ce qui vous concerne à la Préfecture. Seuls vous et l’encadrement (Direction, Inspection, ressources humaines) y avez accès ; vos événements personnels, vous seul." }),
+    h("ul", { class: "guide-grille" }, GUIDE_RUBRIQUES.map(([t, d]) => h("li", {}, h("strong", { text: t }), h("span", { text: d }))))];
+  else if (i === 1) {
+    const deja = isStandalone();
+    body = [h("p", { class: "guide-intro", text: "Installé, le guichet s’ouvre d’un geste depuis l’écran d’accueil ou le bureau, sans barre du navigateur, et peut recevoir les notifications." }),
+      deja ? h("p", { class: "guide-ok", text: "C’est fait : vous utilisez déjà l’application." })
+      : installPrompt ? h("div", {}, h("button", { class: "btn ink", type: "button", onclick: async () => { await $("#btn-install").click(); }, text: "Installer le guichet" }))
+      : isIOS() ? h("ol", { class: "steps" },
+          h("li", {}, h("span", { text: "Ouvrez le guichet dans Safari." })),
+          h("li", {}, h("span", {}, "Touchez ", h("strong", { text: "Partager" }), " (le carré avec une flèche vers le haut).")),
+          h("li", {}, h("span", {}, "Choisissez ", h("strong", { text: "Sur l’écran d’accueil" }), ", puis ", h("strong", { text: "Ajouter" }), ".")),
+          h("li", {}, h("span", { text: "Ouvrez le guichet depuis sa nouvelle icône et reconnectez-vous avec Discord." })))
+      : h("p", {}, "Dans Chrome ou Edge : l’icône d’installation au bout de la barre d’adresse, ou le menu ", h("strong", { text: "⋮" }), " puis ", h("strong", { text: "Installer le guichet" }), ". Sur Android : menu ", h("strong", { text: "⋮" }), " puis ", h("strong", { text: "Ajouter à l’écran d’accueil" }), ".")];
+  } else {
+    const iosSansAppli = isIOS() && !isStandalone();
+    body = [h("p", { class: "guide-intro", text: "Message de l’encadrement, rendez-vous et rappels, note de service, absence, paye versée : choisissez ce que vous recevez sur cet appareil. Vous serez aussi mentionné dans le salon Discord des alertes du personnel." }),
+      iosSansAppli ? h("p", { class: "hint", text: "Sur iPhone et iPad, Apple ne permet les notifications qu’au guichet installé : faites d’abord l’étape précédente, puis rouvrez ce guide depuis l’application (bouton « Guide »)." })
+      : h("div", {}, h("button", { class: "btn ink", type: "button", onclick: () => { marquerAccueil(fid); openNotifs(); }, text: "Choisir mes notifications" })),
+      h("p", { class: "hint", text: "Réglage par appareil : refaites-le sur votre téléphone et sur votre ordinateur. Le bouton « Notifications sur cet appareil », en haut de votre espace, y ramène." })];
+  }
+  openDialog({ eyebrow: `Mon espace · ${i + 1} sur ${n}`, title: i === 0 ? (prenom ? `Bienvenue, ${prenom}` : "Bienvenue dans votre espace") : i === 1 ? "Installez le guichet" : "Soyez prévenu",
+    body: [h("div", { class: "guide" }, body), points],
+    foot: [i === 0 ? h("button", { class: "btn ghost small", type: "button", onclick: fin, text: "Passer" }) : h("button", { class: "btn ghost small", type: "button", onclick: () => openAccueil(i - 1), text: "Précédent" }),
+      h("span", { class: "spacer" }),
+      i < n - 1 ? h("button", { class: "btn small", type: "button", onclick: () => openAccueil(i + 1), text: "Suivant" }) : h("button", { class: "btn small", type: "button", onclick: fin, text: "Terminer" })] });
+  // Fermé par la croix ou Échap : considéré comme vu.
+  dlg.addEventListener("close", () => marquerAccueil(fid), { once: true });
+}
+// « Premiers pas » : ce qui reste à faire pour bien utiliser l'espace sur cet appareil.
+const premiersMasques = fid => { try { return !!localStorage.getItem("gf-premiers-pas-" + fid); } catch (e) { return true; } };
+async function majNotifEspace() {
+  try { const st = await notifEtat(); S.espaceNotifOn = !!(st && st.sub && st.perm === "granted"); } catch (e) { S.espaceNotifOn = false; }
+  S.espaceNotifVu = true; renderEspace();
+}
+function cartePremiersPas(fid) {
+  if (premiersMasques(fid)) return null;
+  if (!S.espaceNotifVu) { majNotifEspace(); return null; }
+  const items = [
+    ["Lire le guide de l’espace", accueilVu(fid), () => openAccueil(0)],
+    ["Installer le guichet sur cet appareil", isStandalone(), () => openAccueil(1)],
+    ["Activer les notifications sur cet appareil", !!S.espaceNotifOn, () => openAccueil(2)]];
+  items.push(...premiersPasEnPlus(fid));
+  if (items.every(x => x[1])) return null;
+  const faits = items.filter(x => x[1]).length;
+  return h("div", { class: "card es-premiers" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Premiers pas" }), h("p", { class: "sub", text: `${faits} sur ${items.length} : quelques réglages pour ne rien manquer.` })),
+      h("button", { class: "btn ghost small", type: "button", onclick: () => { try { localStorage.setItem("gf-premiers-pas-" + fid, "1"); } catch (e) { /* sans stockage */ } renderEspace(); }, text: "Masquer" })),
+    h("ul", { class: "es-pas" }, items.map(([t, ok, go]) => h("li", { class: ok ? "fait" : null },
+      h("span", { class: "es-pas-coche", "aria-hidden": "true", text: ok ? "✓" : "" }),
+      ok ? h("span", { text: t }) : h("button", { class: "linkbtn", type: "button", onclick: go, text: t }),
+      h("span", { class: "sr-only", text: ok ? "fait" : "à faire" })))));
+}
+// Étapes ajoutées par d'autres rubriques (signature du contrat…).
+function premiersPasEnPlus() { return []; }
+// Annonce de Mon espace dans le salon Discord des alertes du personnel (Direction).
+function openAnnonceEspace() {
+  const role = S.discord && S.discord.mentionPersonnel ? S.discord.mentionPersonnel : "";
+  const site = new URL("./", location.href).href;
+  const texte = h("textarea", { id: "an-texte", rows: "11", maxlength: "1900" });
+  texte.value = `${role ? role + " " : ""}📣 **Mon espace est ouvert à tous les fonctionnaires**
+
+Connectez-vous au guichet avec Discord : ${site}
+Vous y trouvez vos payes et bulletins, vos heures de service, votre contrat, une conversation privée avec l’encadrement, l’agenda (réunions, formations, vos propres événements et rappels), les notes de service et vos absences.
+
+Pour ne rien manquer :
+1. Installez le guichet sur votre téléphone (sur iPhone : Safari → Partager → Sur l’écran d’accueil).
+2. Ouvrez « Mon espace » et suivez le guide.
+3. Activez les notifications sur chaque appareil.
+
+Une question ? Écrivez-nous directement depuis votre espace.`;
+  const err = h("span", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Publier dans le salon du personnel" });
+  go.addEventListener("click", async () => {
+    err.textContent = ""; go.disabled = true;
+    const r = await postDiscord("personnel", { content: texte.value, mentions: role ? [role] : [] });
+    if (!r.ok) { go.disabled = false; err.textContent = r.error || "Publication impossible."; return; }
+    closeDialog(); toast("Annonce publiée dans le salon des alertes du personnel.");
+  });
+  openDialog({ eyebrow: "Personnel · Discord", title: "Annoncer Mon espace", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: hookFor("personnel") ? "Le texte part dans le salon des alertes du personnel, au nom de la Préfecture. Modifiez-le si besoin ; vous pouvez aussi le copier pour le poster vous-même." : "Aucun salon des alertes du personnel n’est réglé (Réglages → Discord) : copiez le texte pour le poster vous-même." }),
+      field("an-texte", "Message", texte), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ghost small", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(texte.value); toast("Texte copié."); } catch (e) { texte.select(); toast("Sélectionné : copiez avec Ctrl+C.", true); } }, text: "Copier" }),
+      hookFor("personnel") ? go : null].filter(Boolean) });
+}
 function renderEspace() {
   const box = $("#espace-main");
   if (!box || S.tab !== "espace") return;
@@ -6173,7 +6299,9 @@ function renderEspace() {
     h("div", { class: "row2", style: "margin-top:12px" }, field("es-abs-du", "Du", du), field("es-abs-au", "Au", au)),
     field("es-abs-motif", "Motif (facultatif)", motif),
     h("div", { class: "paste-row" }, absBt, absErr));
-  fill(box, kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc), h("div", { class: "es-col-d" }, cardMsg, cardAg, cardNotes, cardAbs)));
+  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardContrat, cardSanc), h("div", { class: "es-col-d" }, cardMsg, cardAg, cardNotes, cardAbs)));
+  // Première ouverture sur cet appareil : le guide.
+  if (!accueilVu(fid) && !S.accueilMontre && !dlg.open) { S.accueilMontre = true; setTimeout(() => { if (!dlg.open && S.tab === "espace") openAccueil(0); }, 500); }
 }
 
 /* Encadrement : vues de l'onglet Personnel */
@@ -19517,6 +19645,7 @@ async function openNotifs() {
 }
 $("#notif-btn").addEventListener("click", openNotifs);
 $("#espace-notifs").addEventListener("click", openNotifs);
+$("#espace-guide").addEventListener("click", () => openAccueil(0));
 
 // Un clic sur une notification ouvre le dossier : « #ouvrir=collection/id ».
 function ouvrirDossier(spec) {

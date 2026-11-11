@@ -30,7 +30,8 @@ const pause = (p, ms) => p.waitForTimeout(ms);
 // Ouvre le guichet pour un rôle et un compte Discord donnés.
 //  o.role : direction, inspecteur, lecture, rh, agent ; o.discord, o.nom ; o.hash : onglet ;
 //  o.jeu : nom du jeu d'essai (tests/jeux) ; o.avant : code exécuté avant le faux Supabase ;
-//  o.maintenant : date ISO de l'horloge ; o.largeur / o.hauteur ; o.theme : light ou dark.
+//  o.maintenant : date ISO de l'horloge ; o.largeur / o.hauteur ; o.theme : light ou dark ;
+//  o.accueil : laisser le guide de Mon espace s'ouvrir comme à une première visite.
 async function ouvrir(env, o) {
   o = Object.assign({ role: "direction", discord: "999999999999999999", nom: "Directeur Test", hash: "dashboard", jeu: "equipe", maintenant: "2026-11-10T20:30:00Z" }, o || {});
   const ctx = await env.navigateur.newContext({ viewport: { width: o.largeur || 1280, height: o.hauteur || 1000 }, serviceWorkers: "block", timezoneId: "Europe/Paris",
@@ -43,6 +44,8 @@ async function ouvrir(env, o) {
   const corps = (o.jeu ? jeu(o.jeu) : "window.__SEED = [];") + "\n" + (o.avant || "") + "\n" + FACTICE;
   await p.route(/supabase-js/, (r) => r.fulfill({ contentType: "application/javascript", body: corps }));
   await p.route(/^https:\/\/(fonts\.|discord|cdn\.discordapp)/, (r) => r.abort());
+  // Le guide de Mon espace s'ouvre à la première visite : les essais l'évitent, sauf o.accueil.
+  if (!o.accueil) await p.addInitScript(() => { try { ["f1", "f2", "f3", "f4"].forEach((f) => localStorage.setItem("gf-accueil-vu-" + f, "essai")); } catch (e) { /* sans stockage */ } });
   await p.clock.setSystemTime(new Date(o.maintenant));
   await p.goto(`${env.url}/index.html?role=${o.role}&discord=${o.discord}&nom=${encodeURIComponent(o.nom)}#${o.hash}`);
   await pause(p, 2200);

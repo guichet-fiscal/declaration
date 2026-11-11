@@ -1,3 +1,4 @@
 tests/node_modules
 tests/sorties/
 tests/package-lock.json
+.tmp-*
