@@ -58,6 +58,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v38_securite.sql` : l’espace Sécurité du service de la protection (entrées dans la Préfecture, contrôles d’identité avec photo de la pièce, rapports), ses droits et l’espace privé `securite` pour les photos
 - `supabase/v39_securite_rh.sql` : l’onglet Sécurité en lecture pour les ressources humaines (dossiers et photos)
 - `supabase/v40_demandes_reservees.sql` : les services réservés à la Direction (FIPN, GIGN) : leurs demandes, décisions et contrats d’achat lus et saisis par la Direction seulement, ni notification, ni export Google Sheets, journal réservé
+- `supabase/v41_photos_profil.sql` : la photo de profil de chaque fonctionnaire (espace privé `profils`, `ma_photo_profil`, `photos_profils`)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `tests/` et `.github/workflows/essais.yml` : les essais automatiques (voir « Modifier le site »)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
@@ -469,6 +470,10 @@ La date est fixée dans `index.html` (`PT_FERMETURE`, `PT_SEM_SAISIE`) et dans l
 **Prévision** : sous la paye de la semaine, la carte « Prévision » montre ce que coûterait une semaine si chaque agent actif faisait son plafond d’heures, le budget de la semaine, le rythme de la semaine en cours (ce qui est dû à ce jour, prolongé jusqu’à dimanche sans dépasser le plafond de chacun) et le mois entier au maximum. Elle prévient quand un prorata devient probable au rythme actuel, ou possible si tous faisaient le maximum ; le détail par grade se déplie.
 
 La pointeuse demande `supabase/v18_payes_pointeuse.sql` ; sans ce script, les payes fonctionnent avec des heures saisies à la main. Sur la pointeuse, chacun voit **sa paye de la semaine** (heures pointées × taux de son grade, dans la limite de 20 h et 100 000 €), qui monte à la seconde pendant le service, avec la durée du service en heures, minutes et secondes. C’est un montant brut indicatif : la paye versée tient compte aussi du budget de la semaine et des retenues. Pour les agents qui n’ont que l’accès « Pointeuse », il faut `supabase/v19_pointeuse_paye.sql`.
+
+## Photos de profil
+
+Chaque fonctionnaire peut avoir une photo de profil. Il la met lui-même dans **Mon espace** en touchant la pastille à côté de son nom (un « + » tant qu’il n’en a pas) ; la Direction et les ressources humaines la mettent depuis sa fiche (**Ajouter une photo** / **Changer la photo**). Une photo, une photo prise au téléphone ou une capture collée (Ctrl + V) : elle est recadrée en carré (320 px, un peu vers le haut pour un portrait). **Retirer la photo** l’efface. Elle s’affiche dans Mon espace, sur la fiche, dans l’effectif, l’annuaire et la messagerie ; sans photo, les initiales sur une couleur tirée du nom. Photos dans l’espace privé `profils` de Supabase, lisibles par toute personne qui a un accès au guichet ; il faut `supabase/v41_photos_profil.sql`.
 
 ## Espace Sécurité (service de la protection)
 

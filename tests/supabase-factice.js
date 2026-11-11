@@ -113,6 +113,14 @@
         if (!/service de la protection|agent de s[ée]curit[ée]|(responsable|directeur|directrice|chef).*s[ée]curit[ée]/i.test(g)) return { data: null, error: null };
         return { data: /^(responsable|directeur|directrice|chef)/i.test(g.trim()) ? "responsable" : "agent", error: null };
       }
+      // Photos de profil (mise à jour 41 ; absente si window.__sans41).
+      if (name === "ma_photo_profil" || name === "photos_profils") {
+        if (window.__sans41) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
+        if (name === "photos_profils") return { data: Object.fromEntries(docs("fonctionnaires").filter(x => x.actif !== false && x.photoAt).map(x => [x.id, x.photoAt])), error: null };
+        const f = fonc(); if (!f) return { data: null, error: { message: "Votre compte Discord n'est relié à aucune fiche de fonctionnaire en service." } };
+        const at = args.p_presente ? iso() : null; f.data = Object.assign({}, f.data); if (at) f.data.photoAt = at; else delete f.data.photoAt;
+        return { data: at, error: null };
+      }
       if (name === "signaler_erreur") {
         if (window.__sans37) return { data: null, error: { message: "Could not find the function public.signaler_erreur(p) in the schema cache", code: "PGRST202" } };
         const f = fonc(), x = Object.assign({}, args.p, { id: Date.now() + Math.random(), at: iso(), nom: NOM, discord: DID, role: ROLE });

@@ -1071,6 +1071,20 @@ input.secu-auto{background:var(--ok-soft)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sc-sig{color:#a9bdf5}}
 .dag-reponse{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--rule-2);background:var(--paper);border-radius:0 8px 8px 0;font-size:13px;color:var(--ink-2);white-space:pre-wrap}
 .annu{display:grid;gap:12px;margin-top:8px}
+.avatar{--av:36px;--av-h:210;width:var(--av);height:var(--av);flex:none;border-radius:50%;display:inline-grid;place-items:center;overflow:hidden;
+  background:color-mix(in srgb,hsl(var(--av-h) 55% 52%) 22%,var(--sheet)) center/cover no-repeat;color:color-mix(in srgb,hsl(var(--av-h) 60% 34%) 75%,var(--ink));
+  font-weight:650;font-size:calc(var(--av) * .38);line-height:1;letter-spacing:.02em;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 10%,transparent)}
+.avatar.photo>span{visibility:hidden}
+.av-ligne{display:flex;align-items:center;gap:10px;min-width:0}.av-ligne>div{min-width:0}
+.conv-n{display:flex;align-items:center;gap:8px;min-width:0}.conv-n>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.es-ident{display:flex;align-items:center;gap:14px;min-width:0}
+.avatar-btn{appearance:none;border:0;padding:0;background:none;border-radius:50%;cursor:pointer;position:relative;flex:none}
+.avatar-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.avatar-btn.vide::after{content:"+";position:absolute;right:-2px;bottom:-2px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font:700 15px/20px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px var(--paper)}
+.profil-tete{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.profil-zone{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center}
+.profil-outils{display:grid;gap:10px;min-width:0}
+@media (max-width:520px){.profil-zone{grid-template-columns:1fr;justify-items:center}}
 .annu-groupe h4{margin:4px 0 2px;font-size:12.5px;font-weight:600;color:var(--ink-2)}
 .annu .ent-list li{display:flex;align-items:center;gap:10px}
 .annu .ent-list li > div{flex:1;min-width:0}
@@ -1373,9 +1387,12 @@ table.es-payes{min-width:0;width:100%}
   <!-- MON ESPACE : la page de chaque fonctionnaire -->
   <section class="panel" id="tab-espace" role="tabpanel" aria-labelledby="tab-btn-espace" hidden>
     <div class="panel-head">
-      <div>
-        <h2 id="espace-nom">Mon espace</h2>
-        <p class="sub" id="espace-sub">Votre fiche, vos payes et vos heures, vos échanges avec l’encadrement.</p>
+      <div class="es-ident">
+        <button class="avatar-btn" type="button" id="espace-avatar" hidden></button>
+        <div>
+          <h2 id="espace-nom">Mon espace</h2>
+          <p class="sub" id="espace-sub">Votre fiche, vos payes et vos heures, vos échanges avec l’encadrement.</p>
+        </div>
       </div>
       <div class="toolbar"><button class="btn ghost" type="button" id="espace-guide">Guide</button><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
     </div>
@@ -6103,11 +6120,100 @@ function renderPersonnel() {
       : et === "a_signer" ? h("button", { class: "btn ghost small", type: "button", onclick: () => openCtr(c.id), text: "Ouvrir le contrat" })
       : h("button", { class: "btn ghost small", type: "button", onclick: ev => ctrTelecharger(c, ev.currentTarget), text: "PDF" });
     return h("li", {},
-      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openAgent(f.id), text: f.nom || "Sans nom" }),
-        h("span", { class: "meta", text: [f.grade || "sans grade", taux ? money(taux) + "/h" : "pas de taux au barème", f.at ? "entré le " + fmtDate(new Date(f.at)) : "", f.actif === false && f.retireLe ? "retiré le " + fmtDate(new Date(f.retireLe)) : "", c ? ctrNo(c) : "", (() => { const n = sanctionsOf(f.id).filter(x => x.statut === "vigueur").length; return n ? `${n} sanction${plural(n)} en vigueur` : ""; })()].filter(Boolean).join(" · ") })),
+      h("div", { class: "av-ligne" }, avatar(f.id, f.nom, 34), h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openAgent(f.id), text: f.nom || "Sans nom" }),
+        h("span", { class: "meta", text: [f.grade || "sans grade", taux ? money(taux) + "/h" : "pas de taux au barème", f.at ? "entré le " + fmtDate(new Date(f.at)) : "", f.actif === false && f.retireLe ? "retiré le " + fmtDate(new Date(f.retireLe)) : "", c ? ctrNo(c) : "", (() => { const n = sanctionsOf(f.id).filter(x => x.statut === "vigueur").length; return n ? `${n} sanction${plural(n)} en vigueur` : ""; })()].filter(Boolean).join(" · ") }))),
       f.actif === false ? chip(["Retiré", "muted"]) : et === "aucun" ? chip(["Sans contrat", "bad"]) : chip(CTR_STAT[et]),
       act);
   })));
+}
+/* ---------- Photos de profil (supabase/v41_photos_profil.sql) ---------- */
+// Une photo carrée par fiche, dans l'espace privé « profils » (<identifiant de la fiche>.jpg) ; la fiche
+// porte sa date (photoAt), qui fait recharger la nouvelle. Sans photo : les initiales sur une couleur tirée
+// du nom. Le fonctionnaire met la sienne depuis Mon espace ; la Direction et les RH depuis sa fiche.
+const PROFIL_URLS = new Map();
+let collageProfil = null;
+function photoProfilAt(fid) {
+  if (!fid) return "";
+  if (S.espace && S.espace.fid === fid && S.espace.fonctionnaire) return S.espace.fonctionnaire.photoAt || "";
+  const f = (S.fonctionnaires || []).find(x => x.id === fid);
+  return (f && f.photoAt) || (S.photosProfils || {})[fid] || "";
+}
+function photoProfilUrl(fid, at) {
+  const k = fid + "@" + at;
+  if (!PROFIL_URLS.has(k)) PROFIL_URLS.set(k, (async () => {
+    try { const { data } = await S.sb.storage.from("profils").download(fid + ".jpg"); return data ? URL.createObjectURL(data) : null; } catch (e) { return null; }
+  })());
+  return PROFIL_URLS.get(k);
+}
+const initiales = nom => String(nom || "").replace(/^[^|]*\|\s*/, "").split(/[\s-]+/).filter(w => /\p{L}/u.test(w)).slice(0, 2).map(w => w.match(/\p{L}/u)[0].toUpperCase()).join("") || "?";
+const teinte = nom => { let x = 0; for (const c of String(nom || "")) x = (x * 31 + c.codePointAt(0)) % 360; return x; };
+function avatar(fid, nom, taille) {
+  const at = photoProfilAt(fid);
+  const el = h("span", { class: "avatar", style: `--av:${taille || 36}px;--av-h:${teinte(nom)}`, "aria-hidden": "true" }, h("span", { text: initiales(nom) }));
+  if (at && S.sb) photoProfilUrl(fid, at).then(u => { if (u) { el.style.backgroundImage = `url("${u}")`; el.classList.add("photo"); } });
+  return el;
+}
+const peutPhotoProfil = fid => !!fid && (rhWriter() || fid === S.monFid || (S.espace && S.espace.fid === fid));
+// Recadrée en carré de 320 px (un peu vers le haut d'un portrait : le visage), JPEG.
+async function carreProfil(file) {
+  const src = await toileDe(file), c = Math.min(src.width, src.height);
+  const sx = (src.width - c) / 2, sy = src.height > src.width ? (src.height - c) * 0.2 : 0;
+  const o = document.createElement("canvas"); o.width = o.height = 320;
+  const g = o.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(src, sx, sy, c, c, 0, 0, 320, 320);
+  return await new Promise((ok, ko) => o.toBlob(b => (b ? ok(b) : ko(new Error("image"))), "image/jpeg", 0.86));
+}
+// Mon espace (pas de registre) : la fiche se met à jour par ma_photo_profil ; Direction et RH écrivent la fiche.
+async function noterPhotoProfil(fid, presente) {
+  if (rhWriter() && S.db) {
+    const at = presente ? nowISO() : null;
+    const ok = await write(() => S.db.doc("fonctionnaires/" + fid).update({ photoAt: at }));
+    return ok ? { at } : null;
+  }
+  const { data, error } = await S.sb.rpc("ma_photo_profil", { p_presente: !!presente });
+  if (error) { toast(/ma_photo_profil|schema cache/i.test(error.message || "") ? "Photos de profil pas encore prêtes : la Direction doit exécuter supabase/v41_photos_profil.sql." : "Photo refusée : " + (error.message || "erreur inconnue"), true); return null; }
+  if (S.espace && S.espace.fonctionnaire && S.espace.fid === fid) S.espace.fonctionnaire.photoAt = data || null;
+  return { at: data || null };
+}
+function openPhotoProfil(fid, nom, apres) {
+  if (!peutPhotoProfil(fid)) return;
+  const at = photoProfilAt(fid), moi = fid === S.monFid || (S.espace && S.espace.fid === fid);
+  let blob = null;
+  const apercu = h("span", { class: "avatar profil-apercu", style: `--av:168px;--av-h:${teinte(nom)}` }, h("span", { text: initiales(nom) }));
+  if (at) photoProfilUrl(fid, at).then(u => { if (u && !blob) { apercu.style.backgroundImage = `url("${u}")`; apercu.classList.add("photo"); } });
+  const msg = h("p", { class: "hint", "aria-live": "polite", style: "margin:0" });
+  const go = h("button", { class: "btn small", type: "button", disabled: true, text: "Enregistrer la photo" });
+  const prendre = async f => {
+    if (!f || !/^image\//.test(f.type)) { msg.textContent = "Choisissez une image : une photo ou une capture d’écran."; return; }
+    try { blob = await carreProfil(f); } catch (e) { msg.textContent = "Impossible de lire cette image."; return; }
+    apercu.style.backgroundImage = `url("${URL.createObjectURL(blob)}")`; apercu.classList.add("photo");
+    go.disabled = false; msg.textContent = "Recadrée en carré. Enregistrez pour la garder.";
+  };
+  const input = h("input", { type: "file", accept: "image/*", "aria-label": "Choisir une photo" });
+  input.addEventListener("change", () => prendre(input.files && input.files[0]));
+  const zone = h("div", { class: "profil-zone" }, apercu, h("div", { class: "profil-outils" },
+    h("p", { class: "hint", style: "margin:0", text: "Choisissez une photo, prenez-en une au téléphone, ou collez une capture (Ctrl + V). Elle est recadrée en carré et visible par l’équipe du guichet." }), input, msg));
+  zone.addEventListener("dragover", ev => ev.preventDefault());
+  zone.addEventListener("drop", ev => { ev.preventDefault(); prendre(ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]); });
+  collageProfil = { zone, fn: ev => { const f = imageCollee(ev.clipboardData); if (f) { ev.preventDefault(); prendre(f); } } };
+  const fini = texte => { toast(texte); closeDialog(); if (apres) apres(); schedule(); };
+  go.addEventListener("click", async () => {
+    if (!blob) return;
+    go.disabled = true; msg.textContent = "Envoi…";
+    const { error } = await S.sb.storage.from("profils").upload(fid + ".jpg", blob, { contentType: "image/jpeg", upsert: true });
+    if (error) { go.disabled = false; msg.textContent = /bucket|not found|row-level|policy/i.test(error.message || "") ? "L’espace des photos n’est pas prêt : la Direction doit exécuter supabase/v41_photos_profil.sql." : "Photo refusée : " + (error.message || "erreur inconnue"); return; }
+    if (await noterPhotoProfil(fid, true)) fini(moi ? "Votre photo de profil est enregistrée." : `Photo de ${nom || "l’agent"} enregistrée.`); else go.disabled = false;
+  });
+  const retirer = at ? h("button", { class: "btn ghost small", type: "button", text: "Retirer la photo", onclick: async ev => {
+    ev.currentTarget.disabled = true;
+    try { await S.sb.storage.from("profils").remove([fid + ".jpg"]); } catch (e) { /* la fiche n'en parle plus */ }
+    if (await noterPhotoProfil(fid, false)) fini("Photo retirée."); else ev.currentTarget.disabled = false;
+  } }) : null;
+  openDialog({ eyebrow: moi ? "Mon espace" : "Personnel de la Préfecture", title: moi ? "Ma photo de profil" : `Photo de ${nom || "l’agent"}`, body: [zone],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), retirer, h("span", { class: "spacer" }), go] });
+}
+async function chargerPhotosProfils() {
+  if (!S.sb) return;
+  try { const { data, error } = await S.sb.rpc("photos_profils"); if (!error && data && typeof data === "object") { S.photosProfils = data; schedule(); } } catch (e) { /* sans photos */ }
 }
 // Fiche RH d'un fonctionnaire : identité, grade, contrats ; la paye reste dans l'onglet Payes.
 function openAgent(fid, back) {
@@ -6115,6 +6221,7 @@ function openAgent(fid, back) {
   const w = rhWriter(), reopen = () => openAgent(fid, back), taux = gradeTaux(f.grade);
   openDialog({ eyebrow: "Personnel de la Préfecture", title: f.nom || "Sans nom", stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : null,
     body: [
+      h("div", { class: "profil-tete" }, avatar(f.id, f.nom, 72), peutPhotoProfil(f.id) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openPhotoProfil(f.id, f.nom, reopen), text: f.photoAt ? "Changer la photo" : "Ajouter une photo" }) : null),
       kv([["Grade", f.grade || "—"], ["Taux horaire", taux ? `${money(taux)} de l’heure` : "pas dans le barème"],
         ["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"],
         ["Entré", f.at ? `le ${longDate(new Date(f.at))}${f.byNom ? " · fiche créée par " + f.byNom : ""}` : "—"],
@@ -6264,7 +6371,11 @@ async function chargerMonEspace() {
     const { data, error } = await S.sb.rpc("mon_espace");
     if (error) { S.espaceErr = /mon_espace/.test(error.message || "") ? "absente" : error.message || "erreur"; if (S.espaceErr !== "absente") signalerErreur("base", error.message || "mon_espace", { details: { etape: "Mon espace", code: error.code || null } }); }
     else if (!data) S.espaceErr = "sans-fiche";
-    else { const avant = S.espace; S.espace = data; S.espaceErr = null; if (S.role === "agent") espaceVersS(data); nouveautesEspace(avant, data); await chargerPerso(); }
+    else {
+      const avant = S.espace; S.espace = data; S.espaceErr = null; if (S.role === "agent") espaceVersS(data); nouveautesEspace(avant, data); await chargerPerso();
+      // Photos de l'équipe pour l'annuaire (un fonctionnaire ne lit pas les fiches) : toutes les 5 minutes.
+      if (S.role === "agent" && Date.now() - (S.photosVuLe || 0) > 300e3) { S.photosVuLe = Date.now(); chargerPhotosProfils(); }
+    }
   } catch (e) { S.espaceErr = e.message || "erreur"; }
   finally { S.espaceCharge = false; }
   renderEspace(); majBadges();
@@ -7498,6 +7609,14 @@ function renderEspace() {
   const kNow = semKey(new Date()), kPrec = semPrec(kNow), mNow = moisKey(new Date());
   const ct = (E.contrats || [])[0], taux = gradeTaux(f.grade);
   $("#espace-nom").textContent = f.nom || "Mon espace";
+  const avBtn = $("#espace-avatar");
+  if (avBtn) {
+    const cle = fid + "@" + (f.photoAt || "");
+    if (avBtn.dataset.cle !== cle) { fill(avBtn, avatar(fid, f.nom, 56)); avBtn.dataset.cle = cle; }
+    avBtn.hidden = false; avBtn.title = f.photoAt ? "Changer ma photo de profil" : "Ajouter ma photo de profil";
+    avBtn.setAttribute("aria-label", avBtn.title); avBtn.classList.toggle("vide", !f.photoAt);
+    avBtn.onclick = () => openPhotoProfil(fid, f.nom, () => { avBtn.dataset.cle = ""; renderEspace(); });
+  }
   $("#espace-sub").textContent = [f.grade || "sans grade", taux ? `${money(taux)} de l’heure` : "", f.at ? `à la Préfecture depuis le ${longDate(new Date(f.at))}` : ""].filter(Boolean).join(" · ");
   // Chiffres clés
   const derniere = sem.find(x => x.versee && x.paye), prec = sem.find(x => x.k === kPrec), duMois = sem.filter(x => x.versee && moisDe(x.k) === mNow);
@@ -7695,7 +7814,7 @@ function renderMessagerie() {
   const choix = h("select", { "aria-label": "Écrire à un fonctionnaire" }, h("option", { value: "", text: "Écrire à un fonctionnaire…" }), actifs.map(f => h("option", { value: f.id, text: f.nom + (f.discordId ? "" : " (sans Discord)") })));
   choix.addEventListener("change", () => { if (choix.value) { S.filFid = choix.value; renderMessagerie(); } });
   const liste = h("ul", { class: "conv-list" }, convs.map(x => h("li", {}, h("button", { type: "button", class: "conv" + (x.fid === fid ? " on" : ""), onclick: () => { S.filFid = x.fid; renderMessagerie(); } },
-    h("span", { class: "conv-n", text: (foncOf(x.fid) || {}).nom || x.nom || "Agent" }), x.nl ? h("span", { class: "conv-badge", text: String(x.nl) }) : null,
+    h("span", { class: "conv-n" }, avatar(x.fid, (foncOf(x.fid) || {}).nom || x.nom, 24), h("span", { text: (foncOf(x.fid) || {}).nom || x.nom || "Agent" })), x.nl ? h("span", { class: "conv-badge", text: String(x.nl) }) : null,
     h("span", { class: "conv-x", text: `${x.der.de === "equipe" ? (x.der.auteur || "Encadrement") + " : " : ""}${x.der.texte}` }), h("span", { class: "conv-t", text: quandMsg(x.der.at) })))));
   fill(box, h("div", { class: "msg-grid" },
     h("div", { class: "card msg-list" }, h("div", { class: "card-head" }, h("h3", { text: "Conversations" })), choix,
@@ -8266,7 +8385,7 @@ function annuaireVue(liste, o) {
   o = o || {};
   const moi = (S.espace && S.espace.fid) || S.monFid;
   const tri = (a, b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr");
-  const personne = p => h("li", { class: p.id === moi ? "moi" : null },
+  const personne = p => h("li", { class: p.id === moi ? "moi" : null }, avatar(p.id, p.nom, 34),
     h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: (p.nom || "—") + (p.id === moi ? " (vous)" : "") }),
       h("span", { class: "meta", text: [p.grade, p.poste && norm(p.poste) !== norm(p.grade) ? p.poste : ""].filter(Boolean).join(" · ") || "—" })),
     ANNU_ROLES.some(([r]) => r === p.role) ? chip([ANNU_ROLES.find(([r]) => r === p.role)[1], "info"]) : h("span", {}),
@@ -19992,7 +20111,7 @@ function mvRow(x) {
 }
 // La fenêtre de relevé ouverte reçoit ce qui est collé (capture ou texte des mouvements).
 let collageReleve = null;
-dlg.addEventListener("paste", ev => { if (collageReleve && collageReleve.zone.isConnected) collageReleve.fn(ev); else if (collageSecu && collageSecu.zone.isConnected) collageSecu.fn(ev); });
+dlg.addEventListener("paste", ev => { if (collageReleve && collageReleve.zone.isConnected) collageReleve.fn(ev); else if (collageSecu && collageSecu.zone.isConnected) collageSecu.fn(ev); else if (collageProfil && collageProfil.zone.isConnected) collageProfil.fn(ev); });
 // opts : { lu (capture déjà lue, sans relecture), at (heure de la capture), entNom (entreprise proposée),
 // entDouteuse, onSaved(id) } ; utilisé par les relevés en série.
 function openReleve(e, back, image, opts) {
@@ -21737,8 +21856,9 @@ function stashDialog() {
   if (!dlg.open || !dlg._dirty || !dlg._key) return false;
   const collage = collageReleve && collageReleve.zone && dlg.contains(collageReleve.zone) ? collageReleve : null;
   const secu = collageSecu && collageSecu.zone && dlg.contains(collageSecu.zone) ? collageSecu : null;
+  const profil = collageProfil && collageProfil.zone && dlg.contains(collageProfil.zone) ? collageProfil : null;
   dlgStash.delete(dlg._key);
-  dlgStash.set(dlg._key, { nodes: [...dlg.childNodes], wide: dlg.classList.contains("wide"), live: dlg._live, openedAt: dlg._openedAt, at: Date.now(), collage, secu });
+  dlgStash.set(dlg._key, { nodes: [...dlg.childNodes], wide: dlg.classList.contains("wide"), live: dlg._live, openedAt: dlg._openedAt, at: Date.now(), collage, secu, profil });
   while (dlgStash.size > STASH_MAX) dlgStash.delete(dlgStash.keys().next().value);
   return true;
 }
@@ -21772,6 +21892,7 @@ function reprendreFenetre(key) {
   dlg._live = s.live; dlg._openedAt = s.openedAt; dlg._dirty = true; dlg._key = key;
   if (s.collage) collageReleve = s.collage;
   if (s.secu) collageSecu = s.secu;
+  if (s.profil) collageProfil = s.profil;
   if (dlg._live) drawDlgPeers();
   setView();
   toast("Saisie reprise là où vous l’aviez laissée.");
