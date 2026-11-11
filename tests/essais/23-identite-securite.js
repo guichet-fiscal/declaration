@@ -17,6 +17,10 @@ const DOSSIERS = `
 const LECTEUR = `window.__lectures = 0; window.Tesseract = { createWorker: async () => ({ setParameters: async () => {}, recognize: async () => { window.__lectures++; return { data: { text: window.__texteCarte || "" } }; } }) };`;
 const CNI = "CARTE NATIONALE D'IDENTITÉ / IDENTITY CARD\\nNOM / Surname\\nROUSSEAU\\nPrénoms / Given names\\nCamille, Anne\\nSEXE / Sex NATIONALITÉ / Nationality DATE DE NAISS. / Date of birth\\nF FRA 17 05 1992\\nN° DU DOCUMENT / Document No\\nK7PL2WQ93\\nIDFRAK7PL2WQ938<<<<<<<<<<<<<<<\\n9205174F3308036FRA<<<<<<<<<<<4\\nROUSSEAU<<CAMILLE<ANNE<<<<<<<<";
 
+// Textes lus par le lecteur sur de vraies cartes du serveur (grande capture, puis petite).
+const VRAIE = "RÉPUBLIQUE FRANÇAISE\\nCARTE NATIONALE D'IDENTITÉ / IDENTITY CARD\\nNOM / Surname\\nPOISSONNIERS\\nPRÉNOMS / Given names\\nAntoine\\nSEXE / Sex\\nNATIONALITÉ / NofiondATE DE NAISS. / Date of birth\\nM\\nFrançais\\n04 11 2002\\nTAILLE / Height N° DU DOCUMENT / Document No.\\n182cm XJRNLDV2B\\nW";
+const PETITE = "ME VOLIQUE FRANÇAISE\\nLEHM ANN\\nViktor\\nM\\nFrançais\\n09 05 19057\\n185 cm PA4CTIAEPW";
+
 module.exports = {
   nom: "Sécurité : identité préremplie et lecture de la pièce",
   async lancer(env, t) {
@@ -72,6 +76,15 @@ module.exports = {
     await a.evaluate(() => { window.__texteCarte = "@@ ### ~~"; });
     await a.locator("#dlg button", { hasText: "Lire la pièce" }).click(); await pause(a, 600);
     t.contient(texte(await a.locator("#dlg .secu-etat").innerText()), "Rien de lisible", "photo illisible : le dire");
+    // Texte lu sur une vraie carte du serveur : numéro sur la ligne de la taille, sous deux intitulés.
+    await a.evaluate((x) => { window.__texteCarte = x; }, VRAIE.replace(/\\n/g, "\n"));
+    await a.locator("#dlg button", { hasText: "Lire la pièce" }).click(); await pause(a, 600);
+    t.ok((await val("#sc-numero")) === "XJRNLDV2B" && (await val("#sc-naissance")) === "04/11/2002", "carte du serveur : numéro et date lus", JSON.stringify([await val("#sc-numero"), await val("#sc-naissance")]));
+    // Petite capture : date mal lue (« 19057 ») prise pour un numéro, à ne pas faire.
+    await a.evaluate((x) => { window.__texteCarte = x; }, PETITE.replace(/\\n/g, "\n"));
+    await a.locator("#sc-numero").fill(""); await a.locator("#sc-naissance").fill("");
+    await a.locator("#dlg button", { hasText: "Lire la pièce" }).click(); await pause(a, 600);
+    t.ok((await val("#sc-numero")) !== "090519057", "date mal lue jamais prise pour un numéro", await val("#sc-numero"));
     // Au clavier : flèche bas puis Entrée.
     await a.locator("#sc-nom").fill("");
     await a.locator("#sc-nom").pressSequentially("hug"); await pause(a, 300);

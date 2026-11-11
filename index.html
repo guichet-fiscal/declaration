@@ -6704,18 +6704,39 @@ function lireMrz(lignes) {
 }
 
 const PIECE_ETIQ = [
+  ["autre", /^(?:n\s*[°º*'’o]?\.?\s*)?can(?![\p{L}])/iu],
   ["prenom", /^(?:pr[ée]nom(?:s|\s*\(s\))?|given\s+names?|first\s+names?)(?![\p{L}])/iu],
   ["nom", /^(?:nom(?:\s+(?:de\s+(?:famille|naissance)|d['’]\s*usage))?|surname|last\s+name|family\s+name)(?![\p{L}])/iu],
   ["naissance", /^(?:date\s+de\s+naiss(?:ance|\.)?|n[ée]{1,2}\s*(?:\(\s*e\s*\))?\s+le|date\s+of\s+birth|birth\s+date|naissance)(?![\p{L}])/iu],
-  ["numero", /^(?:(?:n\s*[°ºo]\.?|num[ée]ro)(?:\s+(?:du\s+document|de\s+(?:la\s+)?(?:carte|pi[èe]ce)|d['’]\s*identit[ée]|d['’]\s*identification))?|(?:document|card|id)\s+(?:no\.?|number)|identifiant)(?![\p{L}])/iu],
+  ["numero", /^(?:(?:n\s*[°º*'’o]\.?|num[ée]ro)(?:\s+(?:du\s+document|de\s+(?:la\s+)?(?:carte|pi[èe]ce)|d['’]\s*identit[ée]|d['’]\s*identification))?|(?:document|card|id)\s+(?:no\.?|number)|identifiant|du\s+document)(?![\p{L}])/iu],
   ["autre", /^(?:sexe|sex|nationalit[ée]|nationality|lieu\s+de\s+naissance|place\s+of\s+birth|taille|height|date\s+d['’]\s*(?:expir|d[ée]livr)\S*|expiry\s+date|date\s+of\s+(?:expiry|issue)|adresse|address|signature|valable|profession|groupe\s+sanguin)(?![\p{L}])/iu]
 ];
 // Plusieurs intitulés sur une ligne (« Nom : DUPONT Prénom : Jean ») : coupée devant chacun.
-const PIECE_COUPE = /\s(?=(?:nom|pr[ée]noms?|sexe|n[ée]{1,2}\s*(?:\(\s*e\s*\))?\s+le|date\s+de\s+naiss\S*|n\s*[°º]|num[ée]ro|taille|nationalit[ée]|lieu\s+de\s+naissance)\b[^:\n]{0,28}[:;])/iu;
+const PIECE_COUPE = /\s(?=(?:nom|pr[ée]noms?|sexe|n[ée]{1,2}\s*(?:\(\s*e\s*\))?\s+le|date\s+de\s+naiss\S*|n\s*[°º]|num[ée]ro|taille|nationalit[ée]|lieu\s+de\s+naissance)(?![\p{L}])[^:\n]{0,28}[:;])/iu;
+const PIECE_ANGLAIS = /^\s*\/\s*(?:surname|given\s+names?|first\s+names?|sex|nationality|date\s+of\s+(?:birth|expiry|issue)|place\s+of\s+birth|document\s+n(?:o|umber)|card\s+n(?:o|umber)|expiry\s+date|height|address|signature|can)\.?/i;
+// Numéro de la pièce : un mot de 6 à 14 lettres et chiffres (« GP-4471-2290 » et « 4829 1734 » joints),
+// qui n'est ni un intitulé ni une date.
+const PIECE_PAS_NUM = /^(?:NOM|SURNAME|PRENOMS?|GIVEN|NAMES?|SEXE|NATIONALITE|NATIONALITY|NAISSANCE|BIRTH|LIEU|PLACE|DOCUMENT|NUMBER|NUMERO|EXPIR|EXPIRY|CARTE|CARD|NATIONALE|IDENTITE|IDENTITY|REPUBLIQUE|FRANCAISE|TAILLE|HEIGHT|SIGNATURE|DELIVRANCE|VALABLE|PREFECTURE|NATIONALITY)$/;
+const pieceDateCompacte = m => { const a = /^(\d{2})(\d{2})(\d{4})$/.exec(m), b = /^(\d{4})(\d{2})(\d{2})$/.exec(m); return !!((a && +a[1] <= 31 && +a[2] <= 12 && +a[3] >= 1900) || (b && +b[1] >= 1900 && +b[2] <= 12 && +b[3] <= 31)); };
+function pieceNumeros(s, joindre) {
+  const t = String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/(?<=[A-Z0-9])[-.‐–](?=[A-Z0-9])/g, "");
+  if (/</.test(t)) return [];
+  const mots = t.split(/[^A-Z0-9]+/).filter(Boolean);
+  if (joindre && mots.length > 1 && mots.every(x => /^\d{2,6}$/.test(x)) && !pieceDate(mots.join(" ")) && !/^\d{1,2} \d{1,2} \d{3,5}$/.test(mots.join(" "))) { const j = mots.join(""); if (j.length >= 6 && j.length <= 14) return [j]; }
+  return mots.filter(m => m.length >= 6 && m.length <= 14 && !PIECE_PAS_NUM.test(m) && !(/^\d+$/.test(m) && pieceDateCompacte(m)));
+}
+// Près de l'intitulé, un mot en lettres seules est accepté (chiffres lus comme des lettres, corrigés ensuite).
+const pieceNoteNum = (m, pres) => pres + (m.length === 9 ? 3 : 0) + (/\d/.test(m) && /[A-Z]/.test(m) ? 4 : /^\d+$/.test(m) ? 1 : pres ? 0 : -50);
+function pieceChoixNumero(liste) { let best = null; for (const [m, pres] of liste) { const n = pieceNoteNum(m, pres); if (n >= 4 && (!best || n > best[1])) best = [m, n]; } return best ? best[0] : ""; }
 function pieceEtiquette(l) {
   for (const [k, re] of PIECE_ETIQ) {
     const m = re.exec(l); if (!m) continue;
-    let v = l.slice(m[0].length).replace(/^\s*\/\s*(?:[A-Za-z]+\.?\s*){1,3}?(?=[:;|\-–—]|\s{2,}|$)/, "").replace(/^\s*[:;|\-–—.]+\s*/, "").trim();
+    let v = l.slice(m[0].length).replace(PIECE_ANGLAIS, "");
+    // Intitulé anglais mal lu (« Sumame ») : après la barre, quelques mots en minuscules ne sont pas une valeur.
+    if (/^\s*\//.test(v) && /[a-z]/.test(v) && v.trim().split(/\s+/).length <= 4 && !/\d/.test(v)) v = "";
+    v = v.replace(/^\s*[:;|\-–—.]+\s*/, "").trim();
+    // « N° DU DOCUMENT / Document No  DATE D'EXPIR. / Expiry date » : la valeur est sur la ligne suivante.
+    if (v && PIECE_ETIQ.some(([, re]) => re.test(v))) v = "";
     return { k, v };
   }
   return null;
@@ -6731,13 +6752,16 @@ function lirePieceTexte(texte) {
     const e = pieceEtiquette(lignes[i]); if (!e || e.k === "autre" || lu[e.k]) continue;
     let v = e.v;
     if (!v) for (let j = i + 1; j < Math.min(lignes.length, i + 3); j++) { if (pieceEtiquette(lignes[j])) continue; v = lignes[j]; break; }
-    if (!v) continue;
+    if (!v && e.k !== "numero") continue;
     if (e.k === "nom" || e.k === "prenom") { v = pieceNomPropre(e.k === "prenom" ? v.split(/[,;]/)[0] : v); if (v.length >= 2) lu[e.k] = v; }
     else if (e.k === "naissance") { const d = pieceDate(v); if (d) lu.naissance = d; }
     else if (e.k === "numero") {
-      const t = v.toUpperCase().replace(/(?<=[A-Z0-9])[-.‐–](?=[A-Z0-9])/g, "").replace(/[^A-Z0-9 ]/g, " ").trim(), mots = t.split(/\s+/).filter(Boolean);
-      const n = mots.every(x => /^\d+$/.test(x)) ? mots.join("") : (mots.filter(x => x.length >= 4 && /\d/.test(x)).sort((a, b) => b.length - a.length)[0] || "");
-      if (n.length >= 4 && n.length <= 20) lu.numero = n;
+      // Sur la ligne de l'intitulé, sinon les deux lignes suivantes (plusieurs colonnes), sinon celle d'avant.
+      const autour = [[e.v, 12]];
+      for (let j = i + 1, n = 0; j < lignes.length && n < 2; j++) { if (pieceEtiquette(lignes[j])) continue; autour.push([lignes[j], 10]); n++; }
+      if (i > 0 && !pieceEtiquette(lignes[i - 1])) autour.push([lignes[i - 1], 5]);
+      const n = pieceChoixNumero(autour.flatMap(([l, p]) => pieceNumeros(l, true).map(m => [m, p])));
+      if (n) lu.numero = n;
     }
   }
   if (lu.nom || lu.prenom || lu.numero || lu.naissance) r.source = "etiquettes";
@@ -6748,6 +6772,8 @@ function lirePieceTexte(texte) {
     if (!lu.naissance && mrz.naissance) lu.naissance = mrz.naissance;
     if (!lu.numero && mrz.numero) lu.numero = mrz.numero;
   }
+  // Sans intitulé : un mot de lettres et de chiffres mêlés (format de la carte de 2021 : 9 signes).
+  if (!lu.numero) { const n = pieceChoixNumero(brutes.flatMap(l => pieceNumeros(l).map(m => [m, 0]))); if (n) { lu.numero = n; r.source = r.source || "numero"; } }
   // Sans intitulé : la date la plus ancienne et plausible (les dates de délivrance et d'expiration sont récentes).
   if (!lu.naissance) {
     const max = (new Date().getFullYear() - 10) * 10000 + 1231;
@@ -6760,35 +6786,201 @@ function lirePieceTexte(texte) {
   r.naissance = lu.naissance || ""; r.numero = lu.numero || "";
   return r;
 }
-// Photo de la pièce → image pour le lecteur : 1 800 px de large environ, niveaux de gris contrastés
-// (2 % des pixels les plus sombres et les plus clairs écartés), inversée si le fond est sombre.
-async function pieceToile(blob) {
-  const src = await toileDe(blob);
-  const k = Math.max(0.35, Math.min(3, 1800 / src.width));
+// Photo de la pièce → image pour le lecteur : 1 800 px de large environ, en niveaux de gris, fond blanc et
+// texte noir. Fond sombre : inversée d'abord. Le fond (la valeur la plus fréquente, la médiane) devient
+// blanc et le texte le plus foncé noir ; un fond uni avec peu de texte reste lisible.
+function pieceToile(src) {
+  const k = Math.max(0.35, Math.min(4, 1800 / src.width));
   const c = document.createElement("canvas"); c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
   const g = c.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(src, 0, 0, c.width, c.height);
   const im = g.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, lum = new Uint8ClampedArray(n), hist = new Uint32Array(256);
-  let somme = 0;
-  for (let i = 0, j = 0; i < d.length; i += 4, j++) { lum[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; hist[lum[j]]++; somme += lum[j]; }
-  let lo = 0, hi = 255;
-  for (let v = 0, a = 0; v < 256; v++) { a += hist[v]; if (a >= n * 0.02) { lo = v; break; } }
-  for (let v = 255, a = 0; v >= 0; v--) { a += hist[v]; if (a >= n * 0.02) { hi = v; break; } }
-  const e = Math.max(1, hi - lo), inverser = somme / n < 110;
-  for (let i = 0, j = 0; i < d.length; i += 4, j++) { let v = Math.max(0, Math.min(255, (lum[j] - lo) * 255 / e)); if (inverser) v = 255 - v; d[i] = d[i + 1] = d[i + 2] = v; }
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) { lum[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; hist[lum[j]]++; }
+  const centile = (q, inv) => { let a = 0; for (let v = 0; v < 256; v++) { a += hist[inv ? 255 - v : v]; if (a >= n * q) return inv ? 255 - v : v; } return inv ? 0 : 255; };
+  const inverser = centile(0.5) < 110;
+  // Après inversion éventuelle : fond = médiane, encre = les 0,3 % les plus foncés.
+  const fond = inverser ? 255 - centile(0.5) : centile(0.5), encre = inverser ? 255 - centile(0.003, true) : centile(0.003);
+  const e = fond - encre;
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+    let v = inverser ? 255 - lum[j] : lum[j];
+    if (e >= 40) v = Math.max(0, Math.min(255, (v - encre) * 255 / e));
+    d[i] = d[i + 1] = d[i + 2] = v;
+  }
   g.putImageData(im, 0, 0);
   return c;
 }
 // Lit la pièce : mise en page automatique, puis, si rien d'utile n'en sort, texte épars (carte posée
-// sur une capture d'écran du jeu).
+// sur une capture d'écran du jeu). Carte du serveur reconnue (lireCarteRF) : chaque champ est relu à sa
+// place, ce qui reste sûr sur une petite capture. Sinon, le numéro est relu signe par signe (relireNumero).
 async function lirePiece(blob, suivi) {
   const w = await ocrWorker(suivi);
-  const c = await pieceToile(blob);
-  const lire = async psm => { await w.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: "" }); return (await w.recognize(c)).data.text || ""; };
-  const t1 = await lire(3), r1 = lirePieceTexte(t1);
-  if (r1.nom && (r1.naissance || r1.numero)) return Object.assign(r1, { texte: t1 });
-  const t2 = await lire(11), r2 = lirePieceTexte(t2);
+  const src = await toileDe(blob), c = pieceToile(src);
+  const lire = async psm => {
+    await w.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: "" });
+    const d = (await w.recognize(c, {}, { text: true, blocks: true })).data, mots = [];
+    for (const b of d.blocks || []) for (const pa of b.paragraphs || []) for (const li of pa.lines || []) for (const m of li.words || []) mots.push({ t: String(m.text || "").toUpperCase().replace(/[^A-Z0-9]/g, ""), brut: String(m.text || ""), conf: m.confidence, bbox: m.bbox });
+    return { texte: d.text || "", mots };
+  };
   const score = r => (r.nom ? 2 : 0) + (r.naissance ? 1 : 0) + (r.numero ? 1 : 0);
-  return score(r2) > score(r1) ? Object.assign(r2, { texte: t2 }) : Object.assign(r1, { texte: t1 });
+  let l = await lire(3), r = lirePieceTexte(l.texte), autre = null;
+  if (!(r.nom && r.naissance && r.numero)) { autre = await lire(11); const r2 = lirePieceTexte(autre.texte); if (score(r2) > score(r)) { [l, autre] = [autre, l]; r = r2; } }
+  const k = c.width / src.width, cadre = carteRF(src, k, l.mots) || (autre && carteRF(src, k, autre.mots));
+  if (cadre) {
+    const g = await lireCarteRF(w, src, cadre);
+    if (g) {
+      if (g.nom) r.nom = g.nom;
+      if (g.naissance) r.naissance = g.naissance;
+      if (g.numero) r.numero = g.numero;
+      r.source = (r.source ? r.source + "+" : "") + "carte";
+      return Object.assign(r, { texte: l.texte });
+    }
+  }
+  if (r.numero) {
+    const m = l.mots.find(x => x.t === r.numero);
+    if (m) { try { const n = await relireNumero(w, c, m); if (n) r.numero = n; } catch (e) { /* lecture du mot gardée */ } }
+  }
+  return Object.assign(r, { texte: l.texte });
+}
+
+// Carte d'identité du serveur (recto façon carte de 2021 : drapeau, « RÉPUBLIQUE FRANÇAISE », photo à
+// gauche). Places mesurées sur de vraies captures, en part de la carte : gauche, haut, droite, bas.
+const CARTE_RF = {
+  nom: [0.355, 0.19, 0.83, 0.335, "ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ-' "],
+  prenom: [0.355, 0.40, 0.70, 0.475, ""],
+  naissance: [0.715, 0.525, 0.965, 0.61, "0123456789 "],
+  numero: [0.51, 0.655, 0.87, 0.74, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"]
+};
+// Repères du bandeau (mot, gauche, droite, haut, bas, en part de la carte ; null : hauteur variable selon
+// que l'accent est lu ou non). Ensemble, ils donnent la place et la taille de la carte dans la capture.
+// Sans repère, la carte n'est pas celle du serveur.
+const CARTE_RF_REPERES = [["REPUBLIQUE", 0.195, 0.506, null, null, 2], ["FRANCAISE", 0.525, 0.802, null, null, 2], ["NATIONALE", 0.300, 0.433, 0.137, 0.164, 1],
+  ["IDENTITY", 0.601, 0.708, 0.137, 0.163, 1], ["CARD", 0.717, 0.780, 0.137, 0.163, 0], ["CARTE", 0.216, 0.290, 0.137, 0.164, 0]];
+const ecartMots = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j); for (let i = 1; i <= a.length; i++) { let p = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; } } return d[b.length]; };
+function carteRF(src, k, mots) {
+  // Repères trouvés (en capitales, comme le bandeau : « Français », la nationalité, n'en est pas un).
+  const vus = [];
+  for (const [mot, g, dr, h, b, tol] of CARTE_RF_REPERES) {
+    const m = mots.find(x => x.brut && !/\p{Ll}/u.test(x.brut) && ecartMots(x.brut.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z]/g, ""), mot) <= tol);
+    if (m) vus.push({ g, dr, h, b, x0: m.bbox.x0 / k, x1: m.bbox.x1 / k, y0: m.bbox.y0 / k, y1: m.bbox.y1 / k, accent: /É|É/.test(m.brut) });
+  }
+  const ajuster = l => {
+    // Droite des moindres carrés : x = X + u × W.
+    const px = l.flatMap(a => [[a.g, a.x0], [a.dr, a.x1]]);
+    const mu = px.reduce((s, p) => s + p[0], 0) / px.length, mx = px.reduce((s, p) => s + p[1], 0) / px.length, vu = px.reduce((s, p) => s + (p[0] - mu) ** 2, 0);
+    if (vu <= 0) return null;
+    const W = px.reduce((s, p) => s + (p[0] - mu) * (p[1] - mx), 0) / vu;
+    return { W, X: mx - mu * W };
+  };
+  let l = vus, f = l.length ? ajuster(l) : null;
+  if (!f) return null;
+  // Un repère qui ne tombe pas à sa place (mot de la capture autour de la carte) est écarté.
+  const bons = l.filter(a => Math.abs(a.x0 - (f.X + a.g * f.W)) < 0.04 * f.W && Math.abs(a.x1 - (f.X + a.dr * f.W)) < 0.04 * f.W);
+  if (bons.length && bons.length < l.length) { l = bons; f = ajuster(l); if (!f) return null; }
+  const { W, X } = f, H = W / 1.6;
+  // Hauteur : les repères sans accent d'abord ; « RÉPUBLIQUE » et « FRANÇAISE » seuls, à peu près (haut des
+  // capitales, ou de l'accent s'il est lu).
+  const nets = l.filter(a => a.h !== null), ys = nets.length ? nets.flatMap(a => [a.y0 - a.h * H, a.y1 - a.b * H]) : l.map(a => a.y0 - (a.accent ? 0.025 : 0.045) * H);
+  const Y = ys.reduce((s, y) => s + y, 0) / ys.length;
+  if (W < 120 || X < -0.08 * W || Y < -0.12 * H || X + W > src.width + 0.08 * W || Y + H > src.height + 0.12 * H) return null;
+  // Carte recadrée : toute l'image.
+  if (Math.abs(W - src.width) < 0.1 * src.width && Math.abs(X) < 0.05 * W && Math.abs(Y) < 0.08 * H) return { x: 0, y: 0, w: src.width, h: src.height };
+  return { x: X, y: Y, w: W, h: H };
+}
+// Un champ de la carte : découpé, agrandi (texte de 70 px de haut environ), fond blanc, lu sur une ligne.
+async function lireChampRF(w, src, cadre, [g, h, d, b, liste], haut) {
+  const X = Math.max(0, Math.round(cadre.x + g * cadre.w)), Y = Math.max(0, Math.round(cadre.y + h * cadre.h));
+  const W = Math.min(src.width - X, Math.round((d - g) * cadre.w)), H = Math.min(src.height - Y, Math.round((b - h) * cadre.h));
+  if (W < 4 || H < 4) return { t: "", conf: 0, img: null };
+  const s = haut / H, o = document.createElement("canvas"); o.width = Math.max(1, Math.round(W * s)); o.height = Math.max(1, Math.round(H * s));
+  const go = o.getContext("2d", { willReadFrequently: true }); go.imageSmoothingQuality = "high"; go.drawImage(src, X, Y, W, H, 0, 0, o.width, o.height);
+  const im = go.getImageData(0, 0, o.width, o.height), px = im.data, n = px.length / 4, lum = new Float32Array(n), hist = new Uint32Array(256);
+  for (let i = 0, j = 0; i < px.length; i += 4, j++) { lum[j] = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; hist[Math.round(lum[j])]++; }
+  const centile = q => { let a = 0; for (let v = 0; v < 256; v++) { a += hist[v]; if (a >= n * q) return v; } return 255; };
+  const fond = centile(0.6), encre = centile(0.02), e = Math.max(1, fond - encre);
+  for (let i = 0, j = 0; i < px.length; i += 4, j++) px[i] = px[i + 1] = px[i + 2] = Math.max(0, Math.min(255, (lum[j] - encre) * 255 / e));
+  go.putImageData(im, 0, 0);
+  const img = document.createElement("canvas"); img.width = o.width + 40; img.height = o.height + 40;
+  const gi = img.getContext("2d", { willReadFrequently: true }); gi.fillStyle = "#fff"; gi.fillRect(0, 0, img.width, img.height); gi.drawImage(o, 20, 20);
+  await w.setParameters({ tessedit_pageseg_mode: "7", tessedit_char_whitelist: liste });
+  const r = (await w.recognize(img)).data;
+  return { t: String(r.text || "").replace(/\s+/g, " ").trim(), conf: Number(r.confidence) || 0, img };
+}
+// Date lue sans espaces ni barres (« 09051957 »), ou année mal lue (« 1057 » pour 1957).
+function pieceDateRF(t) {
+  const d = pieceDate(t); if (d && pieceAge(d) <= (new Date().getFullYear() - 10) * 10000 + 1231 && pieceAge(d) >= 19000101) return d;
+  const c = String(t || "").replace(/\D/g, "");
+  if (c.length !== 8) return "";
+  let a = c.slice(4); if (+a < 1900 && a[0] === "1") a = "19" + a.slice(2);
+  const r = pieceDate(`${c.slice(0, 2)}/${c.slice(2, 4)}/${a}`);
+  return r && pieceAge(r) >= 19000101 && pieceAge(r) <= (new Date().getFullYear() - 10) * 10000 + 1231 ? r : "";
+}
+// Chaque champ est lu à trois tailles ; la valeur la plus souvent lue l'emporte (à égalité, la plus sûre).
+// Un décalage d'un demi-pixel suffit sinon à changer un chiffre d'une petite capture.
+async function voteChampRF(w, src, cadre, zone, valider, prefere) {
+  const lus = [];
+  for (const haut of [64, 70, 80]) { const r = await lireChampRF(w, src, cadre, zone, haut), v = valider(r); if (v) lus.push({ v, conf: r.conf, img: r.img }); }
+  if (!lus.length) return null;
+  const n = v => lus.filter(x => x.v === v).length;
+  const p = v => (prefere && prefere(v) ? 1 : 0);
+  return lus.sort((a, b) => p(b.v) - p(a.v) || n(b.v) - n(a.v) || b.conf - a.conf)[0];
+}
+async function lireCarteRF(w, src, cadre) {
+  // Le nom de famille, en capitales, est le contrôle : sans lui, ce n'est pas la carte du serveur.
+  const nom = await voteChampRF(w, src, cadre, CARTE_RF.nom, r => { const n = pieceNomPropre(r.t).toUpperCase(); return r.conf >= 70 && n.replace(/[^\p{L}]/gu, "").length >= 2 ? n : ""; });
+  if (!nom) return null;
+  const out = { nom: nom.v };
+  const pre = await voteChampRF(w, src, cadre, CARTE_RF.prenom, r => { const p = pieceNomPropre(r.t).split(" ")[0] || ""; return r.conf >= 60 && /^\p{Lu}\p{Ll}+(?:-\p{Lu}\p{Ll}+)*$/u.test(p) ? p : ""; });
+  if (pre) out.nom = `${pre.v} ${nom.v}`;
+  const nai = await voteChampRF(w, src, cadre, CARTE_RF.naissance, r => pieceDateRF(r.t));
+  if (nai) out.naissance = nai.v;
+  // Numéro : 9 signes sur les cartes vues ; ni I, ni O, ni Q (comme sur la carte de 2021) : lus, ce sont 1 et 0.
+  const mots = t => t.toUpperCase().split(/[^A-Z0-9]+/).filter(x => x.length >= 6 && x.length <= 12);
+  const num = await voteChampRF(w, src, cadre, CARTE_RF.numero, r => { const l = mots(r.t); return l.find(x => x.length === 9) || l.sort((a, b) => b.length - a.length)[0] || ""; }, v => v.length === 9);
+  if (num) {
+    let n = num.v;
+    if (num.conf < 92 && num.img) { try { const r = await relireNumero(w, num.img, { t: n, bbox: { x0: 0, y0: 0, x1: num.img.width, y1: num.img.height } }, true); if (r) n = r; } catch (e) { /* mot gardé */ } }
+    out.numero = n.replace(/I/g, "1").replace(/[OQ]/g, "0");
+  }
+  return out;
+}
+// Confusions entre lettre et chiffre que la lecture signe par signe peut corriger.
+// Seules celles vues sur les captures : un chiffre lu comme une lettre au milieu de lettres.
+const PIECE_PAIRES = { I: "1", O: "0", Q: "0", A: "4" };
+// Relit le numéro signe par signe : lu d'un bloc, le lecteur prend volontiers un 4 pour un A ou un 1 pour
+// un I au milieu de lettres. Le mot est découpé aux colonnes sans encre ; chaque signe est lu seul, parmi
+// les lettres et les chiffres. Seules les confusions connues (PIECE_PAIRES) sont corrigées ; découpe
+// douteuse : le mot reste tel qu'il a été lu. « champ » : image déjà découpée et agrandie (carte du serveur).
+async function relireNumero(w, c, m, champ) {
+  const { x0, y0, x1, y1 } = m.bbox, hh = y1 - y0, pad = champ ? 0 : Math.max(2, Math.round(hh * 0.12));
+  const X = Math.max(0, x0 - pad), Y = Math.max(0, y0 - pad), W = Math.min(c.width - X, x1 - x0 + 2 * pad), H = Math.min(c.height - Y, hh + 2 * pad);
+  if (W < 6 || H < 6) return null;
+  const px = c.getContext("2d", { willReadFrequently: true }).getImageData(X, Y, W, H).data, seg = [], seuil = champ ? 110 : 128, large = champ ? 3 : 2;
+  let deb = -1;
+  for (let x = 0; x <= W; x++) {
+    let encre = false;
+    if (x < W) for (let y = 0; y < H; y++) if (px[(y * W + x) * 4] < seuil) { encre = true; break; }
+    if (encre && deb < 0) deb = x;
+    else if (!encre && deb >= 0) { if (x - deb >= large) seg.push([deb, x]); deb = -1; }
+  }
+  // Autant de signes que de caractères lus, sinon deux lettres collées ou une coupée : rien n'est changé.
+  if (seg.length !== m.t.length || seg.length < 6 || seg.length > 14) return null;
+  const k = champ ? 1 : 3, mg = champ ? 20 : Math.round(H * 0.5);
+  let out = "";
+  for (let i = 0; i < seg.length; i++) {
+    const avant = m.t[i], [a, z] = seg[i];
+    if (!PIECE_PAIRES[avant]) { out += avant; continue; }
+    const o = document.createElement("canvas");
+    o.width = (z - a + 2 * mg) * k; o.height = (champ ? H : H + 2 * mg) * k;
+    const g = o.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, o.width, o.height); g.imageSmoothingQuality = "high";
+    g.drawImage(c, X + a, Y, z - a, H, mg * k, champ ? 0 : mg * k, (z - a) * k, H * k);
+    let ch = "";
+    for (const psm of [8, 10]) {
+      await w.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" });
+      const t = String((await w.recognize(o)).data.text || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+      if (t.length === 1) { ch = t; break; }
+    }
+    out += ch && PIECE_PAIRES[avant] === ch ? ch : avant;
+  }
+  return out;
 }
 const secuAuteur = () => ({ fid: S.monFid || null, agent: S.agentName || "" });
 const hhmm = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
