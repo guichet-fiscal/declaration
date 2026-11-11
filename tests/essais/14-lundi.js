@@ -10,7 +10,8 @@ module.exports = {
     const todo = texte(await d.locator("#todo-card").innerText().catch(() => ""));
     t.contient(todo, "Heures de la semaine 46 à saisir", "la Direction voit les heures à saisir");
     t.contient(todo, "Directeur Test", "avec le nom de l'agent sans heures");
-    t.ok(!/Alice|Bruno/.test(todo.split("à saisir")[1] || ""), "les agents déjà saisis n'y sont pas");
+    const ligne = texte(await d.locator("#todo li", { hasText: "Heures de la semaine 46" }).innerText());
+    t.ok(!/Alice|Bruno/.test(ligne), "les agents déjà saisis n'y sont pas", ligne);
     await d.locator("#todo .linkbtn", { hasText: "Heures de la semaine 46" }).click(); await pause(d, 600);
     t.ok(await d.locator("#tab-payes").isVisible(), "le lien ouvre les payes");
     t.sansErreur(d);
