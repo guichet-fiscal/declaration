@@ -2517,7 +2517,7 @@ table.es-payes{min-width:0;width:100%}
             </div>
             <div class="restore">
               <label for="b-file">Restaurer depuis un fichier de sauvegarde</label>
-              <input id="b-file" type="file" accept=".json,application/json">
+              <input id="b-file" type="file" accept=".json,.gz,application/json,application/gzip">
               <span class="hint">Les dossiers du fichier remplacent ceux qui portent le même numéro. Les dossiers absents du fichier sont conservés.</span>
               <span id="b-msg" class="err" aria-live="polite"></span>
             </div>
@@ -3816,6 +3816,7 @@ function subscribe() {
   db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
   db.doc("meta/bilan").onSnapshot(s => { S.bilanMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilan"); schedule(); }, onDbError);
   db.doc("meta/communique").onSnapshot(s => { S.communiqueMeta = s.exists ? (s.data() || null) : null; S.loaded.add("communique"); schedule(); }, onDbError);
+  db.doc("meta/sauvegardeAuto").onSnapshot(s => { S.sauvegardeAutoMeta = s.exists ? (s.data() || null) : null; S.loaded.add("sauvegardeAuto"); schedule(); }, onDbError);
   db.doc("meta/classement").onSnapshot(s => { S.classementMeta = s.exists ? (s.data() || null) : null; S.loaded.add("classementMeta"); schedule(); }, onDbError);
   const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
   col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -3923,6 +3924,7 @@ function render() {
   bilanAuto();
   communiqueAuto();
   classementAuto();
+  sauvegardeAuto();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -10190,6 +10192,45 @@ async function doBackup() {
     else copyText(json, "Sauvegarde copiée : collez-la dans un fichier texte nommé " + filename + ".");
   }
 }
+// Fichier compressé (gzip) quand le navigateur sait le faire : 5 à 10 fois plus petit.
+async function compresser(texte) {
+  if (typeof CompressionStream !== "function") return { blob: new Blob([texte], { type: "application/json" }), ext: ".json" };
+  const flux = new Blob([texte]).stream().pipeThrough(new CompressionStream("gzip"));
+  return { blob: await new Response(flux).blob(), ext: ".json.gz" };
+}
+async function decompresser(buf) {
+  const o = new Uint8Array(buf);
+  if (!(o[0] === 0x1f && o[1] === 0x8b)) return new TextDecoder().decode(o);
+  if (typeof DecompressionStream !== "function") throw new Error("Ce navigateur ne sait pas ouvrir un fichier compressé : essayez avec Chrome, Edge, Firefox ou Safari à jour.");
+  return await new Response(new Blob([o]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+}
+// Chaque semaine, la première session de la Direction publie une sauvegarde complète du registre dans
+// le salon des sauvegardes (à défaut, de la Direction) : une copie hors de la base, sans y penser.
+const DISCORD_MAX = 9.5 * 1048576;
+async function sauvegardeAuto() {
+  if (S.sauvegardeEnCours || !writer() || !autoOn("sauvegardes")) return;
+  if (!["config", "sauvegardeAuto"].concat(BACKUP_COLS).every(n => S.loaded.has(n))) return;
+  const k = semKey(new Date());
+  if (S.sauvegardeAutoMeta && String(S.sauvegardeAutoMeta.semaine || "") >= k) return;
+  S.sauvegardeEnCours = true;
+  try {
+    const b = buildBackup(), json = JSON.stringify(b);
+    const nb = Object.values(b.collections).reduce((t, c) => t + Object.keys(c || {}).length, 0);
+    const { blob, ext } = await compresser(json);
+    if (!(await write(() => S.db.doc("meta/sauvegardeAuto").set({ semaine: k, at: b.exportedAt, by: S.uid || null, byNom: S.agentName || "", dossiers: nb, taille: blob.size })))) return;
+    const d = new Date(), nom = `guichet-fiscal-sauvegarde-${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}${ext}`;
+    const tete = `💾 **Sauvegarde du registre** · ${periodPlain(k).toLowerCase()} : ${nb} dossiers (${b.totaux.entreprises} entreprises, ${b.totaux.declarations} déclarations, ${b.totaux.demandes} demandes)`;
+    if (blob.size > DISCORD_MAX) {
+      await postDiscord("sauvegardes", { content: `${tete}. Le fichier (${fmtSize(blob.size)}) dépasse la limite de Discord : téléchargez-la au guichet (Réglages → Sauvegardes et export).` });
+      signalerErreur("sauvegarde", "Sauvegarde trop lourde pour Discord", { details: { taille: blob.size } });
+      return;
+    }
+    const res = await postDiscord("sauvegardes", { content: `${tete}, ${fmtSize(blob.size)}. Pour la restaurer : Réglages → Sauvegardes et export → « Restaurer depuis un fichier de sauvegarde », avec ce fichier tel quel.`, files: [{ blob, name: nom }] });
+    if (res.ok) {
+      try { await S.db.doc("meta/sauvegarde").set({ at: b.exportedAt, by: S.uid || null, auto: true, entreprises: b.totaux.entreprises, declarations: b.totaux.declarations, demandes: b.totaux.demandes }); } catch (e) { /* le fichier est publié */ }
+    } else signalerErreur("discord", res.error, { details: { salon: "sauvegardes", document: "sauvegarde de la semaine" } });
+  } finally { S.sauvegardeEnCours = false; }
+}
 $("#btn-backup").addEventListener("click", doBackup);
 $("#b-save").addEventListener("click", doBackup);
 
@@ -10235,7 +10276,7 @@ async function openNocturnes() {
 $("#b-nuit").addEventListener("click", openNocturnes);
 
 /* ---------- Erreurs remontées : la liste de la Direction (supabase/v37_suivi.sql) ---------- */
-const ERR_TYPES = { erreur: "Erreur de la page", promesse: "Erreur de la page", demarrage: "Erreur au démarrage", ecriture: "Enregistrement refusé", base: "Lecture de la base refusée", discord: "Publication Discord refusée" };
+const ERR_TYPES = { erreur: "Erreur de la page", promesse: "Erreur de la page", demarrage: "Erreur au démarrage", ecriture: "Enregistrement refusé", base: "Lecture de la base refusée", discord: "Publication Discord refusée", sauvegarde: "Sauvegarde de la semaine" };
 const errVu = () => { try { return localStorage.getItem("gf-erreurs-vues") || ""; } catch (e) { return ""; } };
 const errCourt = (t, n) => { const x = String(t || "").replace(/\s+/g, " ").trim(); return x.length > n ? x.slice(0, n - 1) + "…" : x; };
 function grouperErreurs(lignes) {
@@ -10327,12 +10368,11 @@ $("#b-file").addEventListener("change", e => {
   const msg = $("#b-msg");
   msg.textContent = "";
   if (!f || !writer()) return;
-  const r = new FileReader();
-  r.onerror = () => { msg.textContent = "Impossible de lire ce fichier."; };
-  r.onload = () => {
+  // Fichier .json, ou .json.gz publié par la sauvegarde de la semaine.
+  f.arrayBuffer().then(decompresser, err => { throw new Error("Impossible de lire ce fichier."); }).then(texteFichier => {
     input.value = "";
     let data = null;
-    try { data = JSON.parse(String(r.result)); } catch (err) { data = null; }
+    try { data = JSON.parse(texteFichier); } catch (err) { data = null; }
     const writes = planRestore(data);
     if (!writes) { msg.textContent = "Ce fichier n’est pas une sauvegarde du guichet fiscal."; return; }
     if (!writes.length) { msg.textContent = "Cette sauvegarde est vide : rien à restaurer."; return; }
@@ -10340,7 +10380,7 @@ $("#b-file").addEventListener("change", e => {
     const ed = data.exportedAt ? new Date(data.exportedAt) : null;
     const when = ed && !isNaN(ed) ? `${fmtDate(ed)} à ${ed.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : "date inconnue";
     const progress = h("p", { class: "progress", id: "restore-progress", text: "" });
-    const go = h("button", { class: "btn ink small", type: "button", text: `Restaurer ${writes.length} éléments` });
+    const go = h("button", { class: "btn ink small", type: "button", text: `Restaurer ${writes.length} élément${plural(writes.length)}` });
     const cancel = h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" });
     go.addEventListener("click", async () => {
       go.disabled = true; cancel.disabled = true;
@@ -10382,8 +10422,7 @@ $("#b-file").addEventListener("change", e => {
         progress],
       foot: [cancel, go]
     });
-  };
-  r.readAsText(f);
+  }).catch(err => { input.value = ""; msg.textContent = (err && err.message) || "Impossible de lire ce fichier."; });
 });
 
 /* ---------- Documents en image (avis, décisions, pénalités) ---------- */
@@ -12095,8 +12134,9 @@ const DISCORD_CHANNELS = [
   ["relances", "Salon des relances", "Rappels, relances et mises en demeure. Laissez vide pour utiliser le salon des entreprises."],
   ["justice", "Salon de la justice", "Dossiers transmis à la justice, avec le PDF complet."],
   ["police", "Salon de la police", "Véhicules de société : certificats, registre des plaques, requalifications. Laissez vide pour utiliser le salon des entreprises."],
-  ["agents", "Salon des agents de la Préfecture", "Classement des heures de service, publié depuis la pointeuse. Laissez vide pour ne pas le publier."],
+  ["agents", "Salon des agents de la Préfecture", "Classement des heures de service et bilan du personnel, publiés le lundi. Laissez vide pour ne pas les publier."],
   ["direction", "Salon de la Direction", "Bilan de chaque semaine, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Aussi les alertes de l’encadrement (message d’un fonctionnaire, absence signalée). Laissez vide pour ne pas le publier."],
+  ["sauvegardes", "Salon des sauvegardes", "Sauvegarde complète du registre, chaque semaine, en fichier compressé. Réservé au staff : il contient tout le registre. Laissez vide pour utiliser le salon de la Direction."],
   ["personnel", "Salon des alertes du personnel", "Alertes aux fonctionnaires, postées par le service d’envoi : nouveau message dans leur espace (l’agent est mentionné), rendez-vous de l’agenda, notes de service, paye versée. Jamais le contenu d’un message ni d’une sanction. Laissez vide pour ne pas les publier."]
 ];
 const DISCORD_AUTO = [
@@ -12116,15 +12156,16 @@ const DISCORD_AUTO = [
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
   ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"],
   ["bilans", "Bilan de la semaine, le lendemain de la date limite (salon de la Direction)", "direction"],
+  ["sauvegardes", "Sauvegarde complète du registre chaque semaine, en fichier compressé (salon des sauvegardes ou, à défaut, de la Direction)", "sauvegardes"],
   ["classement", "Classement des heures et bilan du personnel de la semaine passée, le lundi, dès que toutes les heures sont saisies (salon des agents)", "agents"],
   ["alertesAgents", "Alertes aux fonctionnaires : messages, agenda, notes de service, paye versée (salon des alertes du personnel)", "personnel"],
   ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["bilans", "classement", "alertesAgents", "alertesEquipe"]);
+const AUTO_DEFAUT = new Set(["bilans", "classement", "sauvegardes", "alertesAgents", "alertesEquipe"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
-  return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : "");
+  return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : ch === "sauvegardes" ? w.direction || "" : "");
 }
 const autoOn = k => { const a = (S.discord && S.discord.auto) || {}; const def = DISCORD_AUTO.find(x => x[0] === k); return (k in a ? !!a[k] : AUTO_DEFAUT.has(k)) && !!def && !!hookFor(def[2]); };
 
