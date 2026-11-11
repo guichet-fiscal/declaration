@@ -43,8 +43,14 @@ module.exports = {
       await a.locator("#sc-nom").fill(nom);
       await a.locator("#sc-resultat").selectOption(res);
       await a.locator("#dlg input[type=file]").setInputFiles(carte); await pause(a, 200);
-      if (res === "faux") t.contient(texte(await a.locator("#dlg").innerText()), "Déjà contrôlé 1 fois", "même personne déjà contrôlée");
+      if (res === "faux") t.contient(texte(await a.locator("#dlg .secu-fiche").innerText()), "1 contrôle", "même personne déjà contrôlée");
       await a.locator("#dlg button", { hasText: "Enregistrer le contrôle" }).click(); await pause(a, 1000);
+      if (res === "conforme") {
+        // Contrôle à l'entrée : la fenêtre de l'entrée s'ouvre avec l'identité et la photo reprises.
+        t.ok((await a.locator("#dlg .dlg-title").first().innerText()).includes("Nouvelle entrée") && (await a.locator("#se-nom").inputValue()) === "Jean Dupont" && (await a.locator("#dlg .secu-ajout .secu-photo").count()) === 1,
+          "contrôle à l'entrée : entrée préremplie avec la photo");
+        await a.locator("#dlg button", { hasText: "Annuler" }).click(); await pause(a, 300);
+      }
     }
     await a.locator("#secu-main .seg button", { hasText: "Contrôles" }).click(); await pause(a, 300);
     txt = texte(await a.locator("#secu-main").innerText());

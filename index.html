@@ -1033,6 +1033,20 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .secu-ajout{display:grid;gap:6px;padding:12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
 .secu-grande{display:grid;gap:10px}.secu-grande img{max-width:100%;border-radius:8px;border:1px solid var(--rule)}
 .secu-present{border-left:3px solid var(--ok);padding-left:10px}
+.secu-ajout-l{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.secu-ajout-l input[type=file]{flex:1 1 200px;min-width:0}
+.secu-etat{margin:0;font-size:13px;line-height:1.45;color:var(--ok)}.secu-etat.faible{color:var(--warn)}
+.secu-nom{position:relative}
+.secu-sugg{position:absolute;left:0;right:0;top:100%;z-index:6;margin-top:4px;display:grid;padding:4px;border:1px solid var(--rule);border-radius:10px;background:var(--sheet);box-shadow:0 10px 28px rgba(19,27,44,.18);max-height:300px;overflow:auto}
+.secu-sugg-l{display:grid;gap:2px;text-align:left;padding:8px 10px;border:0;border-radius:7px;background:none;color:var(--ink);font:inherit;cursor:pointer}
+.secu-sugg-l:hover,.secu-sugg-l[aria-selected=true]{background:var(--paper)}
+.secu-sugg-n{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.secu-fiche{display:grid;gap:8px;padding:10px 12px;border:1px solid var(--rule);border-left:3px solid var(--info, var(--ink-3));border-radius:10px;background:var(--paper)}
+.secu-fiche-t{display:flex;gap:12px;align-items:center}.secu-fiche-t>div{display:grid;gap:2px}
+.secu-fiche .secu-photo{width:84px;height:56px;flex:none}
+.secu-fiche .btn{justify-self:start}
+.secu-alerte{margin:0;padding:6px 10px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-weight:600;font-size:13.5px}
+input.secu-auto{background:var(--ok-soft)}
 .guide-liste{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .guide-liste li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;padding:11px 13px;border:1px solid var(--rule);border-radius:10px;background:var(--paper)}
 .guide-liste strong{font-size:14px}
@@ -6344,7 +6358,7 @@ function openAccueil(etape) {
   let body;
   if (i === 0) body = [
     h("p", { class: "guide-intro", text: "Votre espace rassemble ce qui vous concerne à la Préfecture. Seuls vous et l’encadrement (Direction, Inspection, ressources humaines) y avez accès ; vos événements personnels, vous seul." }),
-    h("ul", { class: "guide-grille" }, GUIDE_RUBRIQUES.concat(S.protection ? [["Sécurité (onglet à côté)", "Service de la protection : entrées dans la Préfecture, contrôles d’identité avec la photo de la pièce, rapports."]] : []).map(([t, d]) => h("li", {}, h("strong", { text: t }), h("span", { text: d }))))];
+    h("ul", { class: "guide-grille" }, GUIDE_RUBRIQUES.concat(S.protection ? [["Sécurité (onglet à côté)", "Service de la protection : entrées dans la Préfecture, contrôles d’identité, rapports. Tapez deux lettres d’un nom pour reprendre l’identité d’une personne déjà venue ; pour une nouvelle, ajoutez la photo de sa pièce : elle est lue et remplit l’identité."]] : []).map(([t, d]) => h("li", {}, h("strong", { text: t }), h("span", { text: d }))))];
   else if (i === 1) {
     const deja = isStandalone();
     body = [h("p", { class: "guide-intro", text: "Installé, le guichet s’ouvre d’un geste depuis l’écran d’accueil ou le bureau, sans barre du navigateur, et peut recevoir les notifications." }),
@@ -6428,6 +6442,7 @@ async function secuEnregistrer(c, id, data) {
     return false;
   }
   S.secu = S.secu || {}; S.secu[c] = secuListe(c).filter(x => x.id !== id).concat([Object.assign({ id }, data)]);
+  if (S.apresEcriture) S.apresEcriture();
   renderSecurite(); chargerSecurite();
   return true;
 }
@@ -6466,70 +6481,364 @@ function secuMiniature(p, retirer) {
   return box;
 }
 // Champ photos d'un formulaire : choisir ou prendre une photo, ou coller une capture (Ctrl + V).
+// Une photo reprise d'un autre dossier (même personne) est copiée à l'enregistrement : chaque dossier
+// garde la sienne, et supprimer l'un n'efface pas la photo de l'autre. « Lire la pièce » remplit
+// l'identité d'après la photo (opts.lire).
 let collageSecu = null;
-function secuChampPhotos(existantes, aide) {
-  const st = { garder: (existantes || []).slice(), nouvelles: [] };
+function secuChampPhotos(existantes, aide, opts) {
+  opts = opts || {};
+  const st = { garder: (existantes || []).slice(), nouvelles: [], reprises: [] };
+  const total = () => st.garder.length + st.nouvelles.length + st.reprises.length;
   const liste = h("div", { class: "secu-photos" });
-  const dessiner = () => fill(liste, st.garder.map(p => secuMiniature(p, () => { st.garder = st.garder.filter(x => x !== p); dessiner(); })),
-    st.nouvelles.map(n => secuMiniature({ url: n.url, nom: n.file.name }, () => { st.nouvelles = st.nouvelles.filter(x => x !== n); dessiner(); })));
-  const ajouter = files => { for (const f of files || []) if (f && /^image\//.test(f.type) && st.garder.length + st.nouvelles.length < 6) st.nouvelles.push({ file: f, url: URL.createObjectURL(f) }); dessiner(); };
+  const etat = h("p", { class: "secu-etat", "aria-live": "polite", hidden: true });
+  const lireBt = opts.lire ? h("button", { class: "btn ghost small", type: "button", hidden: true, text: "Lire la pièce" }) : null;
+  const dessiner = () => {
+    fill(liste, st.garder.map(p => secuMiniature(p, () => { st.garder = st.garder.filter(x => x !== p); dessiner(); })),
+      st.reprises.map(p => secuMiniature(p, () => { st.reprises = st.reprises.filter(x => x !== p); dessiner(); })),
+      st.nouvelles.map(n => secuMiniature({ url: n.url, nom: n.file.name }, () => { st.nouvelles = st.nouvelles.filter(x => x !== n); dessiner(); })));
+    if (lireBt) lireBt.hidden = !total();
+  };
+  const ajouter = files => {
+    let derniere = null;
+    for (const f of files || []) if (f && /^image\//.test(f.type) && total() < 6) { st.nouvelles.push({ file: f, url: URL.createObjectURL(f) }); derniere = f; }
+    dessiner();
+    if (derniere && opts.nouvelle) opts.nouvelle(derniere);
+  };
+  // Photo à lire : la dernière ajoutée, sinon la première du dossier ou reprise.
+  const aLire = async () => {
+    if (st.nouvelles.length) return st.nouvelles[st.nouvelles.length - 1].file;
+    const p = st.reprises[0] || st.garder[0]; if (!p) return null;
+    const { data } = await S.sb.storage.from("securite").download(p.path);
+    return data || null;
+  };
+  if (lireBt) lireBt.addEventListener("click", async () => { lireBt.disabled = true; try { const b = await aLire(); if (b) await opts.lire(b); else montrer("Photo indisponible.", true); } finally { lireBt.disabled = false; } });
   const input = h("input", { type: "file", accept: "image/*", multiple: true });
   input.addEventListener("change", () => { ajouter(input.files); input.value = ""; });
-  const zone = h("div", { class: "secu-ajout" }, h("span", { class: "hint", text: aide || "Photo de la carte d’identité : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Six au plus." }), input, liste);
+  const zone = h("div", { class: "secu-ajout" }, h("span", { class: "hint", text: aide || "Photo de la carte d’identité : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité. Six photos au plus." }),
+    h("div", { class: "secu-ajout-l" }, input, lireBt), liste, etat);
   collageSecu = { zone, fn: ev => { const f = imageCollee(ev.clipboardData); if (f) { ev.preventDefault(); ajouter([f]); } } };
+  const montrer = (txt, faible) => { etat.textContent = txt || ""; etat.hidden = !txt; etat.classList.toggle("faible", !!faible); };
   dessiner();
-  return { el: zone, async envoyer(c, id) {
-    const out = st.garder.slice();
-    for (const n of st.nouvelles) {
-      let blob;
-      try { blob = await compressImage(n.file); } catch (e) { toast(`Impossible de lire « ${n.file.name} ».`, true); continue; }
-      const path = `${c}/${id}/${shortId()}.jpg`;
-      const { error } = await S.sb.storage.from("securite").upload(path, blob, { contentType: "image/jpeg", upsert: false });
-      if (error) { toast(/bucket|not found|row-level|policy/i.test(error.message || "") ? "L’espace des photos n’est pas prêt : la Direction doit exécuter supabase/v38_securite.sql." : "Photo refusée : " + (error.message || "erreur inconnue"), true); return null; }
-      out.push({ path, nom: n.file.name || "photo.jpg", taille: blob.size, at: nowISO() });
+  return { el: zone, total, montrer,
+    reprendre(p) { if (p && p.path && total() < 6 && !st.reprises.some(x => x.path === p.path) && !st.garder.some(x => x.path === p.path)) { st.reprises.push({ path: p.path, nom: p.nom, taille: p.taille, reprise: true }); dessiner(); } },
+    async envoyer(c, id) {
+      const out = st.garder.slice(), sto = S.sb.storage.from("securite");
+      for (const r of st.reprises) {
+        const path = `${c}/${id}/${shortId()}.jpg`;
+        let ok = false;
+        try { ok = !(await sto.copy(r.path, path)).error; } catch (e) { ok = false; }
+        if (!ok) { try { const d = await sto.download(r.path); if (d.data) ok = !(await sto.upload(path, d.data, { contentType: "image/jpeg", upsert: false })).error; } catch (e) { ok = false; } }
+        if (ok) out.push({ path, nom: r.nom || "piece.jpg", taille: r.taille || null, at: nowISO(), copieDe: r.path });
+        else toast("La photo reprise n’a pas pu être copiée : le dossier est enregistré sans elle.", true);
+      }
+      for (const n of st.nouvelles) {
+        let blob;
+        try { blob = await compressImage(n.file); } catch (e) { toast(`Impossible de lire « ${n.file.name} ».`, true); continue; }
+        const path = `${c}/${id}/${shortId()}.jpg`;
+        const { error } = await sto.upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        if (error) { toast(/bucket|not found|row-level|policy/i.test(error.message || "") ? "L’espace des photos n’est pas prêt : la Direction doit exécuter supabase/v38_securite.sql." : "Photo refusée : " + (error.message || "erreur inconnue"), true); return null; }
+        out.push({ path, nom: n.file.name || "photo.jpg", taille: blob.size, at: nowISO() });
+      }
+      return out;
+    }, retirees: () => (existantes || []).filter(p => !st.garder.includes(p)).map(p => p.path) };
+}
+
+// Identité préremplie. Les personnes déjà passées (entrées et contrôles) sont proposées dès qu'on tape
+// deux lettres de leur nom : les choisir reprend leur date de naissance, le numéro et la photo de leur
+// pièce, et rappelle leurs contrôles qui n'étaient pas conformes. Pour une nouvelle personne, la photo
+// de la pièce est lue (même lecteur que les relevés de compte) et remplit les champs encore vides.
+function secuPersonnes(sauf) {
+  const m = new Map();
+  const ajouter = (x, entree) => {
+    if (sauf && x.id === sauf) return;
+    const k = cleNom(x.nom); if (!k) return;
+    const t = String((entree ? x.arrivee : x.date) || x.at || "");
+    let p = m.get(k);
+    if (!p) m.set(k, p = { cle: k, nom: x.nom, t: "", entrees: 0, controles: 0, alertes: [], dates: {} });
+    if (entree) p.entrees++; else p.controles++;
+    if (t >= p.t) { p.t = t; p.nom = x.nom; }
+    const val = { naissance: x.naissance, numero: x.numero, qualite: entree ? x.qualite : "", photo: (x.photos || []).find(ph => ph && ph.path) };
+    for (const [c, v] of Object.entries(val)) if (v && t >= (p.dates[c] || "")) { p[c] = v; p.dates[c] = t; }
+    if (!entree && x.resultat && x.resultat !== "conforme") p.alertes.push({ resultat: x.resultat, date: x.date });
+  };
+  secuListe("securiteEntrees").forEach(x => ajouter(x, true));
+  secuListe("securiteControles").forEach(x => ajouter(x, false));
+  return m;
+}
+function secuChercher(q, sauf) {
+  const mots = norm(q).split(" ").filter(Boolean); if (!mots.length) return [];
+  return [...secuPersonnes(sauf).values()].filter(p => { const w = norm(p.nom).split(" "); return mots.every(x => w.some(y => y.startsWith(x))); })
+    .sort((a, b) => b.t.localeCompare(a.t)).slice(0, 6);
+}
+const secuResume = p => [p.naissance ? "né(e) le " + p.naissance : "", p.numero ? "pièce n° " + p.numero : "",
+  p.entrees ? `${p.entrees} venue${plural(p.entrees)}` : "", p.controles ? `${p.controles} contrôle${plural(p.controles)}` : "", p.t ? "dernière fois " + quandSecu(p.t) : ""].filter(Boolean).join(" · ");
+const SECU_CHAMPS = { nom: "nom", naissance: "date de naissance", numero: "numéro de la pièce", qualite: "qualité" };
+// Liste de suggestions sous le champ du nom (flèches, Entrée, Échap).
+function secuSuggestions(input, sauf, choisir) {
+  const liste = h("div", { class: "secu-sugg", role: "listbox", "aria-label": "Personnes déjà enregistrées", hidden: true });
+  let items = [], actif = -1;
+  const fermer = () => { liste.hidden = true; actif = -1; input.setAttribute("aria-expanded", "false"); };
+  const marquer = () => [...liste.children].forEach((b, i) => b.setAttribute("aria-selected", String(i === actif)));
+  const prendre = p => { fermer(); choisir(p); };
+  const maj = () => {
+    items = norm(input.value).length >= 2 ? secuChercher(input.value, sauf) : [];
+    if (items.length === 1 && items[0].cle === cleNom(input.value)) items = [];
+    fill(liste, items.map(p => h("button", { type: "button", class: "secu-sugg-l", role: "option", onmousedown: ev => ev.preventDefault(), onclick: () => prendre(p) },
+      h("span", { class: "secu-sugg-n" }, h("strong", { text: p.nom }), p.alertes.length ? chip(SECU_RESULTATS[p.alertes[p.alertes.length - 1].resultat] || SECU_RESULTATS.anomalie) : null),
+      h("span", { class: "meta", text: secuResume(p) }))));
+    actif = -1; liste.hidden = !items.length; input.setAttribute("aria-expanded", String(!!items.length));
+  };
+  input.setAttribute("role", "combobox"); input.setAttribute("aria-autocomplete", "list"); input.setAttribute("aria-expanded", "false");
+  input.addEventListener("input", maj);
+  input.addEventListener("blur", () => setTimeout(fermer, 150));
+  input.addEventListener("keydown", ev => {
+    if (liste.hidden || !items.length) return;
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); actif = (actif + (ev.key === "ArrowDown" ? 1 : items.length - 1)) % items.length; marquer(); }
+    else if (ev.key === "Enter" && actif >= 0) { ev.preventDefault(); prendre(items[actif]); }
+    else if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fermer(); }
+  });
+  return liste;
+}
+// Relie les champs d'identité d'un formulaire : suggestions, rappel de la personne connue, lecture de la
+// pièce. Un champ rempli tout seul est teinté jusqu'à ce que l'agent le retouche ; la lecture ne remplace
+// jamais ce que l'agent a tapé.
+function secuIdentite(ch) {
+  const champs = Object.keys(SECU_CHAMPS).filter(k => ch[k]);
+  const fiche = h("div", { class: "secu-fiche", "aria-live": "polite", hidden: true });
+  const marquer = (k, v) => { ch[k].value = v; ch[k].dataset.auto = "1"; ch[k].classList.add("secu-auto"); };
+  champs.forEach(k => ch[k].addEventListener("input", () => { delete ch[k].dataset.auto; ch[k].classList.remove("secu-auto"); }));
+  const libre = k => !ch[k].value.trim() || ch[k].dataset.auto === "1";
+  const reprendre = p => {
+    for (const k of champs) { const v = k === "nom" ? p.nom : p[k]; if (v) marquer(k, v); }
+    if (p.photo && !ch.photos.total()) ch.photos.reprendre(p.photo);
+    majFiche("Identité reprise de son dernier dossier : vérifiez qu’elle correspond à la pièce présentée.");
+  };
+  function majFiche(msg) {
+    const p = secuPersonnes(ch.sauf).get(cleNom(ch.nom.value));
+    if (!p) { fiche.hidden = true; fiche.replaceChildren(); return; }
+    const manque = champs.some(k => k !== "nom" && p[k] && ch[k].value.trim() !== p[k]) || (p.photo && !ch.photos.total());
+    fill(fiche, h("div", { class: "secu-fiche-t" }, p.photo ? secuMiniature(p.photo) : null,
+        h("div", { style: "min-width:0" }, h("strong", { text: "Déjà dans le registre" }), h("span", { class: "meta", text: secuResume(p) }), msg ? h("span", { class: "meta", text: msg }) : null)),
+      p.alertes.map(a => h("p", { class: "secu-alerte", text: `${(SECU_RESULTATS[a.resultat] || SECU_RESULTATS.anomalie)[0]} au contrôle du ${fmtDateTime(new Date(a.date))}` })),
+      manque ? h("button", { class: "btn ghost small", type: "button", onclick: () => reprendre(p), text: p.photo && !ch.photos.total() ? "Reprendre son identité et la photo de sa pièce" : "Reprendre son identité" }) : null);
+    fiche.hidden = false;
+  }
+  ch.nom.addEventListener("input", () => majFiche());
+  const sugg = secuSuggestions(ch.nom, ch.sauf, reprendre);
+  async function lire(blob) {
+    ch.photos.montrer("Lecture de la pièce…");
+    let r;
+    try {
+      r = await lirePiece(blob, m => {
+        if (m && m.status === "recognizing text") ch.photos.montrer(`Lecture de la pièce… ${Math.round((m.progress || 0) * 100)} %`);
+        else if (m && /load|init/i.test(m.status || "")) ch.photos.montrer("Préparation du lecteur (quelques secondes la première fois)…");
+      });
+    } catch (e) { ch.photos.montrer((e && e.message) || "La lecture a échoué : remplissez l’identité à la main.", true); return; }
+    const lu = champs.filter(k => k !== "qualite" && r[k]);
+    if (!lu.length) { ch.photos.montrer("Rien de lisible sur cette photo : remplissez l’identité à la main.", true); return; }
+    const faits = lu.filter(k => libre(k));
+    faits.forEach(k => marquer(k, r[k]));
+    const vu = lu.map(k => (k === "nom" ? r.nom : k === "naissance" ? "né(e) le " + r.naissance : "n° " + r.numero)).join(", ");
+    const ecart = lu.filter(k => !faits.includes(k) && (k === "nom" ? !memeSecu(ch.nom.value, r.nom) : norm(ch[k].value) !== norm(r[k])));
+    ch.photos.montrer(`Lu sur la pièce : ${vu}. ` + (ecart.length ? `Différent de ce qui est tapé (${ecart.map(k => SECU_CHAMPS[k]).join(", ")}) : vérifiez la pièce.` : faits.length ? "Vérifiez avant d’enregistrer." : "Conforme à ce qui est tapé."), !!ecart.length);
+    majFiche();
+  }
+  const nouvelle = f => { if (libre("nom")) lire(f); };
+  majFiche();
+  return { fiche, sugg, lire, nouvelle, reprendre, majFiche };
+}
+// Lecture de la pièce d'identité : texte reconnu → identité.
+// Bande MRZ d'abord (carte de 2021 [3 × 30], ancienne carte [2 × 36], passeport [2 × 44]),
+// sinon les intitulés de la carte (Nom, Prénom(s), Né(e) le / Date de naissance, N°…).
+const PIECE_MOIS = { janv: 1, jan: 1, fevr: 2, fev: 2, feb: 2, mars: 3, mar: 3, avr: 4, apr: 4, mai: 5, may: 5, juin: 6, jun: 6, juil: 7, jul: 7, aout: 8, aug: 8, sept: 9, sep: 9, oct: 10, nov: 11, dec: 12 };
+const pieceMot = s => String(s || "").toLowerCase().replace(/(^|[\s'’-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase());
+const pieceNomPropre = s => String(s || "").replace(/[^\p{L}\s'’-]/gu, " ").replace(/\s+/g, " ").trim();
+// Une date lue (12/03/1994, 12.03.94, 12 mars 1994, 1994-03-12) → « 12/03/1994 », sinon "".
+function pieceDate(s) {
+  const t = String(s || "").replace(/(?<=\d)[Oo]|[Oo](?=\d)/g, "0").replace(/(?<=\d)[Il|]|[Il|](?=\d)/g, "1");
+  const an = y => (y < 100 ? (y > (new Date().getFullYear() % 100) ? 1900 + y : 2000 + y) : y);
+  const ok = (j, m, a) => j >= 1 && j <= 31 && m >= 1 && m <= 12 && a >= 1900 && a <= 2100 ? `${String(j).padStart(2, "0")}/${String(m).padStart(2, "0")}/${a}` : "";
+  let m = /(\d{4})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{1,2})/.exec(t);
+  if (m) { const r = ok(+m[3], +m[2], +m[1]); if (r) return r; }
+  m = /(\d{1,2})\s*[/.\- ]\s*(\d{1,2})\s*[/.\- ]\s*(\d{4}|\d{2})(?!\d)/.exec(t);
+  if (m) { const r = ok(+m[1], +m[2], an(+m[3])); if (r) return r; }
+  m = /(\d{1,2})(?:er)?\s+([a-zA-Zéûô]{3,9})\.?\s+(\d{4})/.exec(t);
+  if (m) { const k = Object.keys(PIECE_MOIS).find(x => m[2].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").startsWith(x)); if (k) return ok(+m[1], PIECE_MOIS[k], +m[3]); }
+  return "";
+}
+const pieceDates = t => { const out = []; for (const l of String(t || "").split(/\n/)) { let reste = l; for (let i = 0; i < 4; i++) { const d = pieceDate(reste); if (!d) break; out.push(d); const p = reste.search(/\d{1,4}\s*[-/. ]\s*\d{1,2}|\d{1,2}(?:er)?\s+[a-zA-Zéûô]{3,9}\.?\s+\d{4}/); reste = reste.slice(p + 6); } } return out; };
+const pieceAge = d => { const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(d); return m ? +m[3] * 10000 + +m[2] * 100 + +m[1] : 0; };
+
+function lireMrz(lignes) {
+  // Lignes de la bande : 28 signes au moins, presque tous majuscules, chiffres et « < » ; la ligne qui
+  // suit une ligne de la bande en fait partie même sans « < » (ancienne carte).
+  const propre = l => l.replace(/[«‹＜]/g, "<").replace(/\s+/g, "");
+  const part = l => { const p = propre(l); return p.length ? (p.match(/[A-Z0-9<]/g) || []).length / p.length : 0; };
+  const L = [];
+  lignes.forEach((l, i) => {
+    const p = propre(l), avec = /</.test(p) && p.length >= 28 && part(l) >= 0.85, apres = L.length && L.i === i - 1 && p.length >= 28 && part(l) >= 0.9 && !/[a-z]/.test(p);
+    if (avec || apres) { L.push(p.toUpperCase().replace(/[^A-Z0-9<]/g, "<")); L.i = i; }
+  });
+  if (!L.length) return null;
+  const chif = s => s.replace(/[OQD]/g, "0").replace(/[IL]/g, "1").replace(/Z/g, "2").replace(/S/g, "5").replace(/B/g, "8").replace(/G/g, "6");
+  const date = s => { const m = /^(\d{2})(\d{2})(\d{2})$/.exec(chif(s)); if (!m) return ""; const y = +m[1], a = y > (new Date().getFullYear() % 100) ? 1900 + y : 2000 + y; return +m[2] >= 1 && +m[2] <= 12 && +m[3] >= 1 && +m[3] <= 31 ? `${m[3]}/${m[2]}/${a}` : ""; };
+  const mots = s => s.split("<").filter(Boolean);
+  const r = { nom: "", prenom: "", naissance: "", numero: "" };
+  for (let i = 0; i < L.length; i++) {
+    const l = L[i], suiv = L[i + 1] || "";
+    let m;
+    if ((m = /^P[A-Z<][A-Z<]{3}([A-Z<]+)$/.exec(l))) { // passeport, ligne 1 : NOM<<PRENOMS
+      const [s, g] = m[1].split(/<<+/); r.nom = mots(s).join(" "); r.prenom = mots(g || "")[0] || "";
+      if ((m = /^([A-Z0-9<]{9})[0-9A-Z][A-Z<]{3}([0-9A-Z]{6})/.exec(suiv))) { r.numero = m[1].replace(/</g, ""); r.naissance = date(m[2]); }
+    } else if (/^ID[A-Z<]{3}/.test(l) && (m = /^([A-Z0-9]{12})[0-9A-Z]([A-Z<]{14})([0-9A-Z]{6})[0-9A-Z][MF<]/.exec(suiv))) { // ancienne carte
+      r.nom = mots(l.slice(5, 30)).join(" "); r.prenom = mots(m[2])[0] || ""; r.numero = m[1]; r.naissance = date(m[3]);
+    } else if ((m = /^I[A-Z<][A-Z<]{3}([A-Z0-9<]{9})/.exec(l)) && !r.numero) { // carte de 2021, ligne 1 : numéro
+      r.numero = m[1].replace(/</g, "");
+    } else if ((m = /^([0-9OQDILZSBG]{6})[0-9A-Z][MF<][0-9OQDILZSBG]{6}/.exec(l)) && !r.naissance) { // ligne 2 : naissance, sexe, expiration
+      r.naissance = date(m[1]);
+    } else if (/^[A-Z]+(<[A-Z]+)*<<[A-Z]+(<[A-Z]+)*<*$/.test(l) && !r.nom) { // ligne 3 : NOM<<PRENOMS
+      const [s, g] = l.split(/<<+/); r.nom = mots(s).join(" "); r.prenom = mots(g || "")[0] || "";
     }
-    return out;
-  }, retirees: () => (existantes || []).filter(p => !st.garder.includes(p)).map(p => p.path) };
+  }
+  return r.nom || r.numero || r.naissance ? r : null;
+}
+
+const PIECE_ETIQ = [
+  ["prenom", /^(?:pr[ée]nom(?:s|\s*\(s\))?|given\s+names?|first\s+names?)(?![\p{L}])/iu],
+  ["nom", /^(?:nom(?:\s+(?:de\s+(?:famille|naissance)|d['’]\s*usage))?|surname|last\s+name|family\s+name)(?![\p{L}])/iu],
+  ["naissance", /^(?:date\s+de\s+naiss(?:ance|\.)?|n[ée]{1,2}\s*(?:\(\s*e\s*\))?\s+le|date\s+of\s+birth|birth\s+date|naissance)(?![\p{L}])/iu],
+  ["numero", /^(?:(?:n\s*[°ºo]\.?|num[ée]ro)(?:\s+(?:du\s+document|de\s+(?:la\s+)?(?:carte|pi[èe]ce)|d['’]\s*identit[ée]|d['’]\s*identification))?|(?:document|card|id)\s+(?:no\.?|number)|identifiant)(?![\p{L}])/iu],
+  ["autre", /^(?:sexe|sex|nationalit[ée]|nationality|lieu\s+de\s+naissance|place\s+of\s+birth|taille|height|date\s+d['’]\s*(?:expir|d[ée]livr)\S*|expiry\s+date|date\s+of\s+(?:expiry|issue)|adresse|address|signature|valable|profession|groupe\s+sanguin)(?![\p{L}])/iu]
+];
+// Plusieurs intitulés sur une ligne (« Nom : DUPONT Prénom : Jean ») : coupée devant chacun.
+const PIECE_COUPE = /\s(?=(?:nom|pr[ée]noms?|sexe|n[ée]{1,2}\s*(?:\(\s*e\s*\))?\s+le|date\s+de\s+naiss\S*|n\s*[°º]|num[ée]ro|taille|nationalit[ée]|lieu\s+de\s+naissance)\b[^:\n]{0,28}[:;])/iu;
+function pieceEtiquette(l) {
+  for (const [k, re] of PIECE_ETIQ) {
+    const m = re.exec(l); if (!m) continue;
+    let v = l.slice(m[0].length).replace(/^\s*\/\s*(?:[A-Za-z]+\.?\s*){1,3}?(?=[:;|\-–—]|\s{2,}|$)/, "").replace(/^\s*[:;|\-–—.]+\s*/, "").trim();
+    return { k, v };
+  }
+  return null;
+}
+function lirePieceTexte(texte) {
+  const brutes = String(texte || "").split(/\r?\n/).map(l => l.replace(/[ \t]+/g, " ").trim()).filter(Boolean);
+  const r = { nom: "", naissance: "", numero: "", source: "" };
+  const mrz = lireMrz(brutes);
+  const lignes = [];
+  for (const l of brutes) { let reste = l; for (let i = 0; i < 6; i++) { const p = reste.slice(1).search(PIECE_COUPE); if (p < 0) break; lignes.push(reste.slice(0, p + 1).trim()); reste = reste.slice(p + 2); } lignes.push(reste.trim()); }
+  const lu = {};
+  for (let i = 0; i < lignes.length; i++) {
+    const e = pieceEtiquette(lignes[i]); if (!e || e.k === "autre" || lu[e.k]) continue;
+    let v = e.v;
+    if (!v) for (let j = i + 1; j < Math.min(lignes.length, i + 3); j++) { if (pieceEtiquette(lignes[j])) continue; v = lignes[j]; break; }
+    if (!v) continue;
+    if (e.k === "nom" || e.k === "prenom") { v = pieceNomPropre(e.k === "prenom" ? v.split(/[,;]/)[0] : v); if (v.length >= 2) lu[e.k] = v; }
+    else if (e.k === "naissance") { const d = pieceDate(v); if (d) lu.naissance = d; }
+    else if (e.k === "numero") {
+      const t = v.toUpperCase().replace(/(?<=[A-Z0-9])[-.‐–](?=[A-Z0-9])/g, "").replace(/[^A-Z0-9 ]/g, " ").trim(), mots = t.split(/\s+/).filter(Boolean);
+      const n = mots.every(x => /^\d+$/.test(x)) ? mots.join("") : (mots.filter(x => x.length >= 4 && /\d/.test(x)).sort((a, b) => b.length - a.length)[0] || "");
+      if (n.length >= 4 && n.length <= 20) lu.numero = n;
+    }
+  }
+  if (lu.nom || lu.prenom || lu.numero || lu.naissance) r.source = "etiquettes";
+  if (mrz) {
+    r.source = r.source ? r.source + "+mrz" : "mrz";
+    if (!lu.nom && mrz.nom) lu.nom = mrz.nom;
+    if (!lu.prenom && mrz.prenom) lu.prenom = mrz.prenom;
+    if (!lu.naissance && mrz.naissance) lu.naissance = mrz.naissance;
+    if (!lu.numero && mrz.numero) lu.numero = mrz.numero;
+  }
+  // Sans intitulé : la date la plus ancienne et plausible (les dates de délivrance et d'expiration sont récentes).
+  if (!lu.naissance) {
+    const max = (new Date().getFullYear() - 10) * 10000 + 1231;
+    const d = pieceDates(brutes.join("\n")).filter(x => pieceAge(x) && pieceAge(x) <= max).sort((a, b) => pieceAge(a) - pieceAge(b))[0];
+    if (d) { lu.naissance = d; r.source = r.source || "date"; }
+  }
+  const prenom = lu.prenom ? pieceMot(lu.prenom.split(" ")[0]) : "";
+  const nom = lu.nom ? (prenom ? lu.nom.toUpperCase() : lu.nom) : "";
+  r.nom = [prenom, nom].filter(Boolean).join(" ");
+  r.naissance = lu.naissance || ""; r.numero = lu.numero || "";
+  return r;
+}
+// Photo de la pièce → image pour le lecteur : 1 800 px de large environ, niveaux de gris contrastés
+// (2 % des pixels les plus sombres et les plus clairs écartés), inversée si le fond est sombre.
+async function pieceToile(blob) {
+  const src = await toileDe(blob);
+  const k = Math.max(0.35, Math.min(3, 1800 / src.width));
+  const c = document.createElement("canvas"); c.width = Math.round(src.width * k); c.height = Math.round(src.height * k);
+  const g = c.getContext("2d", { willReadFrequently: true }); g.imageSmoothingQuality = "high"; g.drawImage(src, 0, 0, c.width, c.height);
+  const im = g.getImageData(0, 0, c.width, c.height), d = im.data, n = d.length / 4, lum = new Uint8ClampedArray(n), hist = new Uint32Array(256);
+  let somme = 0;
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) { lum[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; hist[lum[j]]++; somme += lum[j]; }
+  let lo = 0, hi = 255;
+  for (let v = 0, a = 0; v < 256; v++) { a += hist[v]; if (a >= n * 0.02) { lo = v; break; } }
+  for (let v = 255, a = 0; v >= 0; v--) { a += hist[v]; if (a >= n * 0.02) { hi = v; break; } }
+  const e = Math.max(1, hi - lo), inverser = somme / n < 110;
+  for (let i = 0, j = 0; i < d.length; i += 4, j++) { let v = Math.max(0, Math.min(255, (lum[j] - lo) * 255 / e)); if (inverser) v = 255 - v; d[i] = d[i + 1] = d[i + 2] = v; }
+  g.putImageData(im, 0, 0);
+  return c;
+}
+// Lit la pièce : mise en page automatique, puis, si rien d'utile n'en sort, texte épars (carte posée
+// sur une capture d'écran du jeu).
+async function lirePiece(blob, suivi) {
+  const w = await ocrWorker(suivi);
+  const c = await pieceToile(blob);
+  const lire = async psm => { await w.setParameters({ tessedit_pageseg_mode: String(psm), tessedit_char_whitelist: "" }); return (await w.recognize(c)).data.text || ""; };
+  const t1 = await lire(3), r1 = lirePieceTexte(t1);
+  if (r1.nom && (r1.naissance || r1.numero)) return Object.assign(r1, { texte: t1 });
+  const t2 = await lire(11), r2 = lirePieceTexte(t2);
+  const score = r => (r.nom ? 2 : 0) + (r.naissance ? 1 : 0) + (r.numero ? 1 : 0);
+  return score(r2) > score(r1) ? Object.assign(r2, { texte: t2 }) : Object.assign(r1, { texte: t1 });
 }
 const secuAuteur = () => ({ fid: S.monFid || null, agent: S.agentName || "" });
 const hhmm = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }); };
 const quandSecu = iso => { const d = new Date(iso); if (isNaN(d)) return "—"; return jourCle(d) === jourCle(new Date()) ? "aujourd’hui à " + hhmm(iso) : fmtDateTime(d); };
 const secuDate = el => { const d = el.value ? new Date(el.value) : new Date(); return isNaN(d) ? nowISO() : d.toISOString(); };
 
-// Entrées dans la Préfecture
-function openSecuEntree(x, back) {
+// Entrées dans la Préfecture. « pre » : identité reprise d'un contrôle (nom, naissance, numéro, photos).
+function openSecuEntree(x, back, pre) {
   if (!secuEcrit()) return;
-  const v = x || {};
-  const nom = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom" }); nom.value = v.nom || "";
-  const qualite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : avocat, patron de Taxi G7, citoyen" }); qualite.value = v.qualite || "";
+  const v = x || {}, d = pre || {};
+  const nom = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom" }); nom.value = v.nom || d.nom || "";
+  const qualite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : avocat, patron de Taxi G7, citoyen" }); qualite.value = v.qualite || d.qualite || "";
+  const naissance = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Ex. : 12/03/1994" }); naissance.value = v.naissance || d.naissance || "";
   const motif = h("select", {}, Object.entries(SECU_MOTIFS).map(([k, t]) => h("option", { value: k, text: t }))); motif.value = v.motif || "rdv";
   const precision = h("input", { autocomplete: "off", maxlength: "120", placeholder: "Précision (facultatif)" }); precision.value = v.precision || "";
   const visite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : Direction des finances publiques" }); visite.value = v.visite || "";
-  const numero = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); numero.value = v.numero || "";
+  const numero = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); numero.value = v.numero || d.numero || "";
   const arrivee = h("input", { type: "datetime-local" }); arrivee.value = toLocalInput(v.arrivee ? new Date(v.arrivee) : new Date());
   const note = h("textarea", { rows: "2", maxlength: "500" }); note.value = v.note || "";
-  const photos = secuChampPhotos(v.photos, "Photo de la pièce d’identité présentée à l’entrée : choisissez ou prenez une photo, ou collez une capture (Ctrl + V).");
+  let ident;
+  const photos = secuChampPhotos(v.photos, "Photo de la pièce d’identité : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité.",
+    { lire: b => ident.lire(b), nouvelle: f => ident.nouvelle(f) });
+  ident = secuIdentite({ nom, naissance, numero, qualite, photos, sauf: v.id });
+  for (const p of d.photos || []) photos.reprendre(p);
+  if (pre) { [nom, naissance, numero].forEach(el => { if (el.value) { el.dataset.auto = "1"; el.classList.add("secu-auto"); } }); photos.montrer(`Identité reprise du contrôle${d.date ? " du " + quandSecu(d.date) : ""}.`); }
   const err = h("p", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Enregistrer l’entrée" });
   go.addEventListener("click", async () => {
     if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom de la personne."; nom.focus(); return; }
     go.disabled = true;
-    const id = x ? x.id : secuNouvelId("securiteEntrees");
-    const ph = await photos.envoyer("securiteEntrees", id);
+    const rid = x ? x.id : secuNouvelId("securiteEntrees");
+    const ph = await photos.envoyer("securiteEntrees", rid);
     if (!ph) { go.disabled = false; return; }
-    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), qualite: qualite.value.trim(), motif: motif.value, precision: precision.value.trim(), visite: visite.value.trim(),
-      numero: numero.value.trim(), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
+    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), qualite: qualite.value.trim(), naissance: naissance.value.trim(), motif: motif.value, precision: precision.value.trim(), visite: visite.value.trim(),
+      numero: numero.value.trim(), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null },
+      !x && d.controle ? { controle: d.controle } : {});
     delete data.id;
-    if (await secuEnregistrer("securiteEntrees", id, data)) {
+    if (await secuEnregistrer("securiteEntrees", rid, data)) {
       const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
       toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.`); if (back) back(); else closeDialog();
     } else go.disabled = false;
   });
   openDialog({ eyebrow: "Sécurité · entrées", title: x ? "Modifier l’entrée" : "Nouvelle entrée", wide: true,
-    body: [h("div", { class: "row2" }, field("se-nom", "Personne qui entre", nom), field("se-qualite", "Qualité", qualite)),
+    body: [h("div", { class: "row2" }, h("div", { class: "field secu-nom" }, h("label", { for: "se-nom", text: "Personne qui entre" }), Object.assign(nom, { id: "se-nom" }), ident.sugg), field("se-qualite", "Qualité", qualite)),
+      ident.fiche,
+      h("div", { class: "row2" }, field("se-naissance", "Date de naissance", naissance), field("se-numero", "Numéro de la pièce d’identité", numero)),
+      photos.el,
       h("div", { class: "row2" }, field("se-motif", "Motif de la venue", motif), field("se-precision", "Précision", precision)),
       h("div", { class: "row2" }, field("se-visite", "Personne ou service visité", visite), field("se-arrivee", "Arrivée", arrivee)),
-      field("se-numero", "Numéro de la pièce d’identité", numero), photos.el, field("se-note", "Note", note), err],
+      field("se-note", "Note", note), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 async function secuSortie(x) {
@@ -6542,6 +6851,7 @@ function openSecuEntreeVue(id) {
   openDialog({ eyebrow: "Sécurité · entrée", title: x.nom || "Entrée", stampEl: x.sortie ? stamp(["SORTI", "muted"]) : stamp(["DANS LES LOCAUX", "ok"]), wide: true,
     body: [kv([["Qualité", x.qualite || "—"], ["Motif", (SECU_MOTIFS[x.motif] || "—") + (x.precision ? " · " + x.precision : "")], ["Personne ou service visité", x.visite || "—"],
       ["Arrivée", fmtDateTime(new Date(x.arrivee))], ["Sortie", x.sortie ? `${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " · notée par " + x.sortiePar : ""}` : "pas encore notée"],
+      x.naissance ? ["Date de naissance", x.naissance] : null,
       ["Pièce d’identité", x.pieceVue ? (x.numero ? "vue · n° " + x.numero : "vue") : "non vérifiée"], ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
       (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
@@ -6566,33 +6876,42 @@ function openSecuControle(x, back) {
   const resultat = h("select", {}, Object.entries(SECU_RESULTATS).map(([k, t]) => h("option", { value: k, text: t[0] }))); resultat.value = v.resultat || "conforme";
   const date = h("input", { type: "datetime-local" }); date.value = toLocalInput(v.date ? new Date(v.date) : new Date());
   const notes = h("textarea", { rows: "3", maxlength: "1500" }); notes.value = v.notes || "";
-  const photos = secuChampPhotos(v.photos);
-  const deja = h("p", { class: "hint", "aria-live": "polite" });
-  const voir = () => { const l = secuListe("securiteControles").filter(c => c.id !== v.id && memeSecu(c.nom, nom.value)); deja.hidden = !l.length; deja.textContent = l.length ? `Déjà contrôlé ${l.length} fois, dernière le ${fmtDateTime(new Date(l.sort((a, b) => String(b.date).localeCompare(String(a.date)))[0].date))}${l.some(c => c.resultat !== "conforme") ? " (avec une anomalie)" : ""}.` : ""; };
-  nom.addEventListener("input", voir); voir();
+  let ident;
+  const photos = secuChampPhotos(v.photos, null, { lire: b => ident.lire(b), nouvelle: f => ident.nouvelle(f) });
+  ident = secuIdentite({ nom, naissance, numero, photos, sauf: v.id });
+  // Contrôle à l'entrée : l'entrée se note ensuite, avec l'identité et la photo déjà remplies.
+  const suite = h("input", { type: "checkbox", id: "sc-entree" }); suite.checked = true;
+  const suiteBox = x ? null : h("div", { class: "field" }, h("label", { class: "switch", for: "sc-entree" }, suite, "Noter son entrée ensuite (identité et photo reprises)"));
+  const majSuite = () => { if (suiteBox) suiteBox.hidden = motif.value !== "entree" || ["refus", "faux", "recherche"].includes(resultat.value); };
+  motif.addEventListener("change", majSuite); resultat.addEventListener("change", majSuite); majSuite();
   const err = h("p", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Enregistrer le contrôle" });
   go.addEventListener("click", async () => {
     if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom inscrit sur la pièce."; nom.focus(); return; }
     go.disabled = true;
-    const id = x ? x.id : secuNouvelId("securiteControles");
-    const ph = await photos.envoyer("securiteControles", id);
+    const rid = x ? x.id : secuNouvelId("securiteControles");
+    const ph = await photos.envoyer("securiteControles", rid);
     if (!ph) { go.disabled = false; return; }
     const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), naissance: naissance.value.trim(), numero: numero.value.trim(), lieu: lieu.value.trim(), motif: motif.value,
       resultat: resultat.value, date: secuDate(date), notes: notes.value.trim(), photos: ph, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
     delete data.id;
-    if (await secuEnregistrer("securiteControles", id, data)) {
+    if (await secuEnregistrer("securiteControles", rid, data)) {
       const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
-      toast(x ? "Contrôle modifié." : `Contrôle de ${data.nom} enregistré.`); if (back) back(); else closeDialog();
+      toast(x ? "Contrôle modifié." : `Contrôle de ${data.nom} enregistré.`);
+      if (suiteBox && !suiteBox.hidden && suite.checked) openSecuEntree(null, null, secuPreEntree(Object.assign({ id: rid }, data)));
+      else if (back) back(); else closeDialog();
     } else go.disabled = false;
   });
   openDialog({ eyebrow: "Sécurité · contrôles d’identité", title: x ? "Modifier le contrôle" : "Nouveau contrôle d’identité", wide: true,
-    body: [h("div", { class: "row2" }, field("sc-nom", "Nom et prénom", nom), field("sc-naissance", "Date de naissance", naissance)), deja,
+    body: [h("div", { class: "row2" }, h("div", { class: "field secu-nom" }, h("label", { for: "sc-nom", text: "Nom et prénom" }), Object.assign(nom, { id: "sc-nom" }), ident.sugg), field("sc-naissance", "Date de naissance", naissance)),
+      ident.fiche,
       h("div", { class: "row2" }, field("sc-numero", "Numéro de la pièce", numero), field("sc-date", "Date et heure", date)),
+      photos.el,
       h("div", { class: "row2" }, field("sc-lieu", "Lieu", lieu), field("sc-motif", "Motif", motif)),
-      field("sc-resultat", "Résultat", resultat), photos.el, field("sc-notes", "Notes", notes), err],
+      field("sc-resultat", "Résultat", resultat), suiteBox, field("sc-notes", "Notes", notes), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
 }
+const secuPreEntree = c => ({ nom: c.nom, naissance: c.naissance, numero: c.numero, photos: (c.photos || []).slice(0, 2), date: c.date, controle: c.id });
 function openSecuControleVue(id) {
   const x = secuListe("securiteControles").find(y => y.id === id); if (!x) return;
   const reopen = () => openSecuControleVue(id), res = SECU_RESULTATS[x.resultat] || SECU_RESULTATS.conforme;
@@ -6607,8 +6926,10 @@ function openSecuControleVue(id) {
         chip(SECU_RESULTATS[c.resultat] || SECU_RESULTATS.conforme), h("span", {}))))) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
       secuResp() ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteControles", x)) { toast("Contrôle supprimé."); closeDialog(); } }, text: "Supprimer" }) : null,
-      h("span", { class: "spacer" }), secuEcrit() ? h("button", { class: "btn small", type: "button", onclick: () => openSecuControle(x, reopen), text: "Modifier" }) : null] });
+      h("span", { class: "spacer" }), secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuControle(x, reopen), text: "Modifier" }) : null,
+      secuEcrit() && !dansLesLocaux(x.nom) ? h("button", { class: "btn small", type: "button", onclick: () => openSecuEntree(null, reopen, secuPreEntree(x)), text: "Noter son entrée" }) : null] });
 }
+const dansLesLocaux = nom => secuListe("securiteEntrees").some(e => !e.sortie && memeSecu(e.nom, nom));
 
 // Rapports
 const rapportModifiable = x => secuResp() || (!!S.monFid && x.fid === S.monFid && !x.luLe);
@@ -6795,7 +7116,7 @@ function guidePages(role) {
         ["Effectif et contrats", "Fiches, contrats de travail, modèle de contrat ; l’agent signe dans son espace.", gPerso("effectif")],
         ["Messagerie et agenda", "Une conversation par agent ; réunions et formations avec réponse demandée.", gPerso("messages")],
         ["Demandes, entretiens et sanctions", "Répondre aux demandes, partager un compte rendu d’entretien et des objectifs, sanctionner.", gPerso("demandes")],
-        ["Sécurité", "Le service de la protection : entrées dans la Préfecture, contrôles d’identité avec la photo de la pièce, rapports à lire.", gOnglet("securite")],
+        ["Sécurité", "Le service de la protection : entrées dans la Préfecture, contrôles d’identité avec la photo de la pièce (lue pour remplir l’identité), rapports à lire.", gOnglet("securite")],
         espace] },
     { titre: "Réglages et sécurité", intro: "Réservés à la Direction.",
       items: [["Calendrier, taux et barèmes", "Rythme des déclarations, délais, impôt, avantages fiscaux, recouvrement et surveillance des comptes.", gReglage("calendrier")],
@@ -21157,8 +21478,9 @@ const ilYa = at => { const m = Math.round((Date.now() - at) / 6e4); return m < 1
 function stashDialog() {
   if (!dlg.open || !dlg._dirty || !dlg._key) return false;
   const collage = collageReleve && collageReleve.zone && dlg.contains(collageReleve.zone) ? collageReleve : null;
+  const secu = collageSecu && collageSecu.zone && dlg.contains(collageSecu.zone) ? collageSecu : null;
   dlgStash.delete(dlg._key);
-  dlgStash.set(dlg._key, { nodes: [...dlg.childNodes], wide: dlg.classList.contains("wide"), live: dlg._live, openedAt: dlg._openedAt, at: Date.now(), collage });
+  dlgStash.set(dlg._key, { nodes: [...dlg.childNodes], wide: dlg.classList.contains("wide"), live: dlg._live, openedAt: dlg._openedAt, at: Date.now(), collage, secu });
   while (dlgStash.size > STASH_MAX) dlgStash.delete(dlgStash.keys().next().value);
   return true;
 }
@@ -21191,6 +21513,7 @@ function reprendreFenetre(key) {
   dlg.classList.toggle("wide", s.wide);
   dlg._live = s.live; dlg._openedAt = s.openedAt; dlg._dirty = true; dlg._key = key;
   if (s.collage) collageReleve = s.collage;
+  if (s.secu) collageSecu = s.secu;
   if (dlg._live) drawDlgPeers();
   setView();
   toast("Saisie reprise là où vous l’aviez laissée.");

@@ -143,7 +143,8 @@
       return {
         upload: async (path, blob) => (absent() ? { error: { message: "Bucket not found" } } : (window.__fichiers.set(b + "/" + path, blob), { data: { path }, error: null })),
         download: async (path) => { const f = window.__fichiers.get(b + "/" + path); return f ? { data: f, error: null } : { data: null, error: { message: "Object not found" } }; },
-        remove: async (paths) => { for (const p of paths || []) window.__fichiers.delete(b + "/" + p); return { data: null, error: null }; }
+        remove: async (paths) => { for (const p of paths || []) window.__fichiers.delete(b + "/" + p); return { data: null, error: null }; },
+        copy: async (de, vers) => { const f = window.__fichiers.get(b + "/" + de); if (!f || absent()) return { data: null, error: { message: "Object not found" } }; window.__fichiers.set(b + "/" + vers, f); return { data: { path: vers }, error: null }; }
       };
     } },
     functions: { invoke: async () => ({ data: null, error: null }) }
