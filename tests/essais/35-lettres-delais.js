@@ -29,7 +29,7 @@ module.exports = {
 
     // 2. La Direction : dossier suspendu, réponse dans « À faire » ; accorde.
     const DEM = `window.__SEED.push({ collection: "delais", id: "dl1", data: { entrepriseId: "e1", entrepriseNom: "Taxi G7", decls: ["de12026-S44"], mode: "plusieurs", nb: 3, motif: "Gros achat de véhicules cette semaine.", statut: "attente", enLigne: true, at: "2026-11-10T19:00:00Z" } });
-      window.__SEED.find(r => r.id === "r1").data.accuseLe = "2026-11-08T12:00:00Z";`;
+      window.__SEED.find(r => r.collection === "relances" && r.id === "r1").data.accuseLe = "2026-11-08T12:00:00Z";`;
     const d = await ouvrir(env, { hash: "dashboard", avant: SEED + DEM });
     await pause(d, 800);
     t.contient(texte(await d.locator("#todo").innerText()), "Demande de délai de paiement", "À traiter : la demande");

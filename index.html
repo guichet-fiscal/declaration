@@ -1141,6 +1141,16 @@ button.ts-p{cursor:pointer}
 .pret-cap.ok strong{color:var(--ok)}.pret-cap.warn strong{color:var(--warn)}.pret-cap.bad strong{color:var(--bad)}
 .d-releves{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:10px 12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
 .d-releves p{margin:0;flex:1 1 320px;font-size:13.5px;line-height:1.45}.d-releves .meta{display:block}
+.chrono-f{margin:0 0 10px}
+.chrono{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--rule);display:grid;gap:2px}
+.chrono-j{margin:12px 0 4px -14px;padding-left:14px;font-size:12px;font-weight:700;color:var(--ink-2)}
+.chrono-j::first-letter{text-transform:uppercase}
+.chrono-j:first-child{margin-top:0}
+.chrono-e{position:relative;display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;padding:6px 0;font-size:13.5px}
+.chrono-e::before{content:"";position:absolute;left:-20px;top:12px;width:10px;height:10px;border-radius:50%;background:var(--sheet);border:2px solid var(--ink-3)}
+.chrono-e.ok::before{border-color:var(--ok);background:var(--ok)}.chrono-e.warn::before{border-color:var(--warn)}.chrono-e.bad::before{border-color:var(--bad);background:var(--bad)}.chrono-e.muted::before{border-color:var(--rule)}
+.chrono-h{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);padding-top:2px}
+.chrono-e .meta{display:block;font-size:12.5px}
 .cr-jour+.cr-jour{margin-top:10px}
 .ent-list li.cr-pris{border-left:3px solid var(--info);padding-left:10px}
 .pt-cr{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
@@ -12932,6 +12942,98 @@ function liensSection(e, back) {
     h("div", { style: "min-width:0" }, x && x.id ? h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x), text: t }) : h("span", { style: "font-weight:600", text: t }), h("span", { class: "meta", text: m })),
     c ? chip(c) : h("span", {}), act ? h("span", { class: "row-actions" }, act) : h("span", {})))));
 }
+/* ---------- Chronologie de l'entreprise ---------- */
+// Tout son dossier sur un seul fil, le plus récent en haut : déclarations, avis, paiements, lettres
+// (et leur lecture), délais, pénalités, relevés, contrôles, saisies, justice, prêts, véhicules,
+// convocations, attestations. Un clic ouvre la pièce quand elle a sa fenêtre.
+const CHRONO_TYPES = { decl: "Déclarations et avis", pay: "Paiements", lettre: "Lettres", ctrl: "Contrôles et poursuites", compte: "Compte", autre: "Autres" };
+function chronoEvenements(e) {
+  const ev = [], add = (t, type, quoi, detail, tone, open) => { if (t && !isNaN(new Date(t))) ev.push({ t: new Date(t).toISOString(), i: ev.length, type, quoi, detail: detail || "", tone: tone || "", open }); };
+  add(e.createdAt, "autre", "Inscrite au registre", [e.secteur, e.patron ? "patron : " + e.patron : ""].filter(Boolean).join(" · "));
+  for (const d of declsOf(e)) {
+    const dec = S.decisions[d.id] || {}, no = dossierNo("DF", d.id), o = () => openDecl(d.id);
+    add(d.createdAt, "decl", d.taxationOffice ? `Imposition d’office · ${periodPlain(d.periode)}` : `Déclaration · ${periodPlain(d.periode)}`, `${no} · chiffre d’affaires ${money(Number(d.ca) || 0)}${d.enLigne ? " · déposée en ligne" : ""}`, d.taxationOffice ? "warn" : "", o);
+    if (dec.statut === "rejetee") add(dec.at, "decl", `Déclaration rejetée · ${periodPlain(d.periode)}`, dec.motif || no, "bad", o);
+    else if (dec.at && (dec.statut === "validee" || dec.statut === "payee")) add(dec.at, "decl", `Avis émis · ${periodPlain(d.periode)}`, `${no} · ${money(dMontant(d))}`, "", o);
+    if (dec.statut === "payee") add(dec.paidAt, "pay", `Avis payé · ${periodPlain(d.periode)}`, `${no} · ${money(dMontant(d))}${dec.paidByNom ? " · encaissé par " + dec.paidByNom : ""}`, "ok", o);
+    const ec = echOf(d);
+    if (ec) {
+      add(ec.createdAt, "pay", `Paiement en ${ec.echeances.length} fois accordé`, `${no} · ${money(ec.total)}`, "", o);
+      ec.echeances.filter(x => x.payee).forEach(x => add(x.paidAt, "pay", `Échéance ${x.n}/${ec.echeances.length} payée`, `${no} · ${money(Number(x.montant) || 0)}`, "ok", o));
+    }
+  }
+  for (const p of pensOf(e)) {
+    const no = dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id);
+    add(p.createdAt, "decl", p.type === "redressement" ? "Redressement fiscal" : p.type === "majoration" ? "Majoration" : p.type === "defaut" ? "Défaut de déclaration sanctionné" : "Pénalité", `${no} · ${money(Number(p.montant) || 0)}${p.motif ? " · " + p.motif : ""}`, "warn");
+    if (p.statut === "payee") add(p.paidAt, "pay", "Pénalité payée", `${no} · ${money(Number(p.montant) || 0)}`, "ok");
+    if (p.statut === "annulee") add(p.annuleeLe, "decl", "Pénalité annulée", no, "muted");
+  }
+  for (const r of relancesOf(e)) {
+    const o = () => showDocImage(relanceDoc(r), () => openFiche(e));
+    add(r.at, "lettre", rlLabel(r) + (r.auto ? " (automatique)" : ""), `${rlNo(r)} · ${r.type === "paiement" ? money(r.montant) : semainesTxt(r.periodes || [])} · à régler avant le ${jourHeure(r.echeance)}${r.byNom && !r.auto ? " · " + r.byNom : ""}`, isMed(r) ? "bad" : "warn", o);
+    (r.rappels || []).forEach(x => add(x.at, "lettre", `${rlLabel(r)} renvoyée`, `${rlNo(r)}${x.byNom ? " · " + x.byNom : ""}`, "", o));
+    if (r.vueLe) add(r.vueLe, "lettre", "Lettre ouverte par l’entreprise", rlNo(r), "muted", o);
+    if (r.accuseLe) add(r.accuseLe, "lettre", "Lettre lue par l’entreprise (« J’ai pris connaissance »)", rlNo(r), "ok", o);
+  }
+  for (const dl of (S.delais || []).filter(x => sameEnt(x, e))) {
+    add(dl.at, "pay", "Demande de délai de paiement", `${delaiTxt(dl)} · « ${dl.motif || ""} »`, "", () => openDelai(dl.id));
+    if (dl.decideLe) add(dl.decideLe, "pay", dl.statut === "accordee" ? "Délai de paiement accordé" : "Délai de paiement refusé", dl.reponse || delaiTxt(dl), dl.statut === "accordee" ? "ok" : "bad", () => openDelai(dl.id));
+  }
+  for (const r of relevesOf(e)) add(r.at, "compte", "Relevé de compte", `solde ${money(Number(r.montant) || 0)}${(r.mouvements || []).length ? ` · ${r.mouvements.length} mouvement${plural(r.mouvements.length)}` : ""}${r.agent ? " · " + r.agent : ""}`, "");
+  for (const c of ctrlsOf(e)) {
+    const o = () => openControle(c.id), no = dossierNo("CF", c.id);
+    add(c.ouvertLe || c.at, "ctrl", "Contrôle fiscal ouvert", no, "warn", o);
+    if (c.proposeLe) add(c.proposeLe, "ctrl", "Proposition de rectification notifiée", no, "warn", o);
+    if (c.recouvreLe) add(c.recouvreLe, "ctrl", "Contrôle mis en recouvrement", no, "bad", o);
+    if (c.closLe) add(c.closLe, "ctrl", "Contrôle clos", `${no} · ${(CSTAT[c.statut] || [""])[0]}`, "muted", o);
+  }
+  for (const s of saisiesOf(e)) {
+    const o = () => openSaisieDetail(s.id), no = dossierNo("SA", s.id);
+    add(s.at, "ctrl", `${SAISIE_TYPES[s.type] || "Saisie"} notifiée`, `${no} · ${money(Number(s.montant) || 0)}${s.tiers ? " · " + s.tiers : ""}`, "bad", o);
+    if (s.executeeLe) add(s.executeeLe, "ctrl", "Saisie exécutée", no, "bad", o);
+    if (s.leveeLe) add(s.leveeLe, "ctrl", "Saisie levée", no, "muted", o);
+  }
+  for (const t of S.transmissions.filter(x => sameEnt(x, e))) add(t.at, "ctrl", "Dossier transmis à la justice", `${dossierNo("TJ", t.id)} · ${money(Number(t.montant) || 0)}`, "bad", () => openTransmission(t.id));
+  for (const p of pretsOf(e)) {
+    const o = () => openPret(p.id);
+    add(p.demandeLe || p.at, "autre", "Demande de prêt", `${pretNo(p)} · ${money(Number(p.montant) || 0)}`, "", o);
+    if (p.verseLe) add(p.verseLe, "pay", "Prêt versé", `${pretNo(p)} · ${money(Number(p.montant) || 0)}`, "", o);
+    (p.echeances || []).filter(x => x.payee).forEach(x => add(x.paidAt, "pay", `Échéance de prêt ${x.n}/${p.echeances.length} payée`, `${pretNo(p)} · ${money(Number(x.montant) || 0)}`, "ok", o));
+  }
+  for (const v of (S.vehicules || []).filter(x => sameEnt(x, e))) add(v.achatLe || v.createdAt, "autre", "Véhicule acheté", [v.plaque, v.modele, Number(v.prix) ? money(Number(v.prix)) : ""].filter(Boolean).join(" · "), "");
+  for (const c of convsOf(e)) add(c.date, "autre", `Convocation · ${c.motif || ""}`, [c.lieu, c.statut].filter(Boolean).join(" · "), "");
+  for (const a of attsOf(e)) { add(a.at, "autre", "Attestation de régularité délivrée", dossierNo("AT", a.id), "ok"); if (a.revoqueeLe) add(a.revoqueeLe, "autre", "Attestation révoquée", dossierNo("AT", a.id), "bad"); }
+  for (const c of (S.creneaux || []).filter(x => x.entrepriseId === e.id && x.reserveLe)) add(c.reserveLe, "pay", "Rendez-vous de paiement réservé", `${jourHeure(c.debut)}${c.objet ? " · " + c.objet : ""}`, "");
+  // Le plus récent en haut ; à la même heure, le dernier noté d'abord (l'avis au-dessus de sa déclaration).
+  return ev.sort((a, b) => b.t.localeCompare(a.t) || b.i - a.i);
+}
+function chronoSection(e) {
+  if (!e.id) return null;
+  const tout = chronoEvenements(e);
+  if (!tout.length) return null;
+  const filtre = h("div", { class: "seg chrono-f", role: "group", "aria-label": "Filtrer la chronologie" });
+  const liste = h("ol", { class: "chrono", id: "chrono-l" });
+  let f = "", n = 40;
+  const dessiner = () => {
+    const l = tout.filter(x => !f || x.type === f);
+    $$("button", filtre).forEach(b => b.setAttribute("aria-pressed", String(b.dataset.f === f)));
+    let jour = "";
+    const items = [];
+    for (const x of l.slice(0, n)) {
+      const k = jourCle(new Date(x.t));
+      if (k !== jour) { jour = k; items.push(h("li", { class: "chrono-j", text: jourTxt(k) })); }
+      items.push(h("li", { class: "chrono-e " + x.tone },
+        h("span", { class: "chrono-h", text: hhmm(x.t) }),
+        h("div", { style: "min-width:0" }, x.open ? h("button", { class: "linkbtn", type: "button", onclick: x.open, text: x.quoi }) : h("strong", { text: x.quoi }), x.detail ? h("span", { class: "meta", text: x.detail }) : null)));
+    }
+    fill(liste, items);
+    plus.hidden = l.length <= n; plus.textContent = `Afficher plus (${l.length - n})`;
+  };
+  const plus = h("button", { class: "btn ghost small", type: "button", onclick: () => { n += 60; dessiner(); } });
+  fill(filtre, [["", "Tout"], ...Object.entries(CHRONO_TYPES)].filter(([k]) => !k || tout.some(x => x.type === k)).map(([k, l]) => h("button", { type: "button", "data-f": k, "aria-pressed": "false", onclick: () => { f = k; n = 40; dessiner(); } }, l)));
+  dessiner();
+  return sec(`Chronologie (${tout.length})`, filtre, liste, plus);
+}
 function openFiche(e, opts) {
   opts = opts || {};
   if (e && e.id) noterConsultation("entreprises", e.id, e.nom);
@@ -13046,7 +13148,8 @@ function openFiche(e, opts) {
     })(),
       rescritsSection(e, reopen),
       convocationsSection(e)]],
-    ["autres", "Autres dossiers", null, [espaceSection(e), contratsSection(e), conventionsSection(e), pretsSection(e), vehiculesSection(e)]]
+    ["autres", "Autres dossiers", null, [espaceSection(e), contratsSection(e), conventionsSection(e), pretsSection(e), vehiculesSection(e)]],
+    ["chrono", "Chronologie", null, [chronoSection(e)]]
   ].map(([k, l, n, kids]) => [k, l, n, kids.filter(Boolean)]).filter(([k, , , kids]) => kids.length);
   if (!panels.some(([k]) => k === etat.tab)) etat.tab = "situation";
   const tabs = h("div", { class: "seg set-tabs fiche-tabs", role: "tablist", "aria-label": "Rubriques de la fiche" },
