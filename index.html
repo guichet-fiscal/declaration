@@ -11,6 +11,77 @@
 <meta name="theme-color" content="#14275a" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e1832" media="(prefers-color-scheme: dark)">
 <script>
+  // Heure de Paris. Le guichet compte à l'heure du serveur, celle de Paris. Un navigateur réglé sur un autre
+  // fuseau, ou qui cache le sien (LibreWolf, Firefox avec « resistFingerprinting », Tor Browser : toujours
+  // UTC), décalait d'une heure ou plus les heures saisies et affichées : une permanence ouverte à 21 h 30
+  // était enregistrée à 22 h 30. Dans ce cas seulement, Date calcule l'heure locale à Paris : jours et
+  // heures (getHours…), réglages (setHours…), dates écrites sans fuseau (« 2026-11-12T21:30 ») et affichages
+  // (toLocale…String). Les dates gardées (toISOString, UTC) ne changent pas.
+  (function () {
+    var TZ = "Europe/Paris", N = window.Date, ici = "", fmt;
+    try { ici = new Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { /* inconnu */ }
+    if (ici === TZ) return;
+    try { fmt = new Intl.DateTimeFormat("en-US", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric" }); } catch (e) { return; }
+    var NP = N.prototype, get = NP.getTime, cache = new Map();
+    // Écart de Paris sur l'UTC à l'instant t, en ms ; le changement d'heure tombe toujours sur une heure UTC pleine.
+    function off(t) {
+      if (!isFinite(t)) return 0;
+      var k = Math.floor(t / 36e5), o = cache.get(k);
+      if (o !== undefined) return o;
+      var p = {};
+      fmt.formatToParts(new N(k * 36e5)).forEach(function (x) { p[x.type] = Number(x.value); });
+      o = N.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second) - k * 36e5;
+      if (!isFinite(o)) o = 0;
+      if (cache.size > 5000) cache.clear();
+      cache.set(k, o);
+      return o;
+    }
+    // Heure de Paris « murale » (comptée comme si elle était UTC) → instant.
+    function versUTC(w) { return isFinite(w) ? w - off(w - off(w)) : NaN; }
+    var ISO = /^\s*(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:[.,](\d+))?)?\s*$/;
+    function lire(s) {
+      var m = ISO.exec(s);
+      if (m) return versUTC(N.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0), Number(((m[7] || "0") + "00").slice(0, 3))));
+      var t = N.parse(s);
+      // Date seule (UTC) ou fuseau écrit : rien à changer. Sinon, lue à l'heure du navigateur : ramenée à Paris.
+      if (!isFinite(t) || /^\s*\d{4}-\d{2}(-\d{2})?\s*$/.test(s) || /Z\s*$|[+-]\d{2}:?\d{2}\s*$|GMT|UTC/i.test(s)) return t;
+      return versUTC(t - new N(t).getTimezoneOffset() * 6e4);
+    }
+    function D() {
+      var a = arguments, t;
+      if (!new.target) return new D().toString();
+      if (a.length === 1) t = typeof a[0] === "string" ? lire(a[0]) : a[0] instanceof N ? get.call(a[0]) : a[0];
+      else if (a.length > 1) {
+        var w = N.UTC(+a[0], +a[1], a.length > 2 ? +a[2] : 1, a.length > 3 ? +a[3] : 0, a.length > 4 ? +a[4] : 0, a.length > 5 ? +a[5] : 0, a.length > 6 ? +a[6] : 0);
+        t = versUTC(w);
+      }
+      var o = a.length ? Reflect.construct(N, [t], new.target) : Reflect.construct(N, [], new.target);
+      if (Object.getPrototypeOf(o) !== new.target.prototype) Object.setPrototypeOf(o, new.target.prototype);
+      return o;
+    }
+    var P = D.prototype = Object.create(NP, { constructor: { value: D, writable: true, configurable: true } });
+    Object.setPrototypeOf(D, N);
+    D.parse = function (s) { return lire(String(s)); };
+    ["FullYear", "Month", "Date", "Day", "Hours", "Minutes", "Seconds", "Milliseconds"].forEach(function (n) {
+      P["get" + n] = function () { var t = get.call(this); return isFinite(t) ? NP["getUTC" + n].call(new N(t + off(t))) : NaN; };
+      if (n === "Day") return;
+      P["set" + n] = function () {
+        var t = get.call(this);
+        if (!isFinite(t)) { if (n !== "FullYear") return NaN; t = 0; }
+        var w = new N(t + off(t));
+        NP["setUTC" + n].apply(w, arguments);
+        return NP.setTime.call(this, versUTC(get.call(w)));
+      };
+    });
+    P.getTimezoneOffset = function () { var t = get.call(this); return isFinite(t) ? -off(t) / 6e4 : NaN; };
+    ["toLocaleString", "toLocaleDateString", "toLocaleTimeString"].forEach(function (n) {
+      P[n] = function (loc, opt) { var o = Object.assign({}, opt || {}); if (!o.timeZone) o.timeZone = TZ; return NP[n].call(this, loc, o); };
+    });
+    window.Date = D;
+    window.__gfFuseau = ici || "inconnu";
+  })();
+</script>
+<script>
   // Erreurs survenues avant que le guichet ne prenne la main (supabase/v37_suivi.sql) : gardées, puis
   // remontées par le guichet ; s'il ne démarre pas du tout, envoyées directement 8 s après le chargement.
   (function () {
@@ -20307,7 +20378,19 @@ function decalagesTablette() {
   const c = blc(), l = Array.isArray(c.decalages) && c.decalages.length ? c.decalages : [{ depuis: null, h: Number(c.decalageTablette) || 0 }];
   return l.map(x => ({ depuis: x.depuis || null, h: Number(x.h) || 0 })).sort((a, b) => String(a.depuis || "").localeCompare(String(b.depuis || "")));
 }
+// Heure de Paris (12 nov. 2026) : l'« avance de la tablette » mesurée depuis le 21 oct. (2 h, puis 1 h au
+// changement d'heure) venait du navigateur de la Direction, réglé sur UTC : c'est l'écart entre Paris et UTC.
+// La tablette est à l'heure de Paris. Depuis que le guichet lit toutes les heures à l'heure de Paris (voir
+// l'en-tête de la page), l'avance est de 0 h, sauf avance réglée plus tard avec une date ; les relevés
+// enregistrés depuis portent « heureParis » et ne suivent que ces réglages-là.
+const HEURE_PARIS = Date.parse("2026-11-12T21:30:00Z");
+function avanceApres(t) {
+  let h = null;
+  for (const x of decalagesTablette()) { const d = x.depuis ? Date.parse(x.depuis) : NaN; if (d >= HEURE_PARIS && d <= t) h = x.h; }
+  return h;
+}
 function decalageA(t) {
+  if (t >= HEURE_PARIS) { const h = avanceApres(t); return h == null ? 0 : h; }
   const l = decalagesTablette();
   let h = l[0].h;
   for (const x of l) if (!x.depuis || new Date(x.depuis).getTime() <= t) h = x.h;
@@ -20333,6 +20416,10 @@ const DECALAGE_ANCIEN_H = 2;
 const decalerMvts = (l, ms) => (Array.isArray(l) ? l.map(m => { const t = new Date(m && m.t).getTime(); return Number.isFinite(t) ? Object.assign({}, m, { t: new Date(t + ms).toISOString() }) : m; }) : l);
 function normaliserReleve(r) {
   if (!r || (r.lecture !== "capture" && r.lecture !== "texte")) return r;
+  if (r.heureParis) {
+    const eff = avanceApres(new Date(r.at).getTime()) ?? 0, h0 = Number(r.decalageH) || 0;
+    return eff === h0 ? r : Object.assign({}, r, { decalageH: eff, decalageInitialH: h0, mouvements: decalerMvts(r.mouvements, (h0 - eff) * 36e5) });
+  }
   let out = r;
   if (r.decalageH == null) {
     const D = DECALAGE_ANCIEN_H * 36e5;
@@ -21598,7 +21685,7 @@ async function enregistrerReleve(o) {
   const blob = o.blob, fichier = blob ? (blob instanceof File && blob.name ? blob : new File([blob], "capture.png", { type: blob.type || "image/png" })) : null;
   const preuve = (fichier ? await uploadProof(`releves/${ref.id}`, fichier) : null) || linkProof(o.url);
   const r = { entrepriseId: x.id || null, entrepriseNom: x.nom, montant: Math.round(Number(o.solde)), at: new Date(T).toISOString(), agent: S.agentName || "", by: S.uid || null, preuve, note: String(o.note || "").trim(), createdAt: nowISO(),
-    mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? o.lecture || "capture" : "saisie", decalageH: o.decUsed != null ? o.decUsed : decalageA(T) };
+    mouvements: list.map(mm => ({ t: new Date(mm.t).toISOString(), libelle: mm.libelle, montant: mm.montant })), lecture: list.length ? o.lecture || "capture" : "saisie", decalageH: o.decUsed != null ? o.decUsed : decalageA(T), heureParis: true };
   if (o.rib) r.rib = o.rib;
   if (o.serie) r.serie = true;
   if (!(await write(() => ref.set(r)))) return null;
@@ -22277,7 +22364,8 @@ function renderBlSettings(force) {
   $("#bl-dec").value = String(curH);
   $("#bl-dec-dep").value = ""; delete $("#bl-dec-dep").dataset.iso;
   $("#bl-dec-hint").textContent = "Les heures des mouvements lues sur une capture sont ramenées à l’heure de Paris, avec l’avance en vigueur au moment de la capture."
-    + (hist.length > 1 ? " Historique : " + hist.map((x, i) => `${x.h} h${x.depuis ? " à partir du " + fmtDateTime(new Date(x.depuis)) : i === 0 ? " au départ" : ""}`).join(", puis ") + "." : "");
+    + (hist.length > 1 ? " Historique : " + hist.map((x, i) => `${x.h} h${x.depuis ? " à partir du " + fmtDateTime(new Date(x.depuis)) : i === 0 ? " au départ" : ""}`).join(", puis ") + "." : "")
+    + (Date.now() >= HEURE_PARIS ? ` Depuis le ${fmtDateTime(new Date(HEURE_PARIS))}, le guichet lit toutes les heures à l’heure de Paris, quel que soit le navigateur : l’avance passée venait d’un navigateur réglé sur UTC ; elle est de 0 h, sauf réglage daté plus récent.` : "");
   const ma = mesureAvance();
   fill($("#bl-mesure"), ma.suggestion != null
     ? [h("strong", { text: "Avance à vérifier. " }), `${ma.futurs >= 2 ? `${ma.futurs} relevés récents montrent un mouvement plus récent que leur capture` : `Sur les ${ma.n} derniers relevés, aucun mouvement n’est à moins de ${Math.floor(ma.minGap)} minutes de sa capture`} : la tablette semble avancer de ${ma.suggestion} h, et non de ${ma.cur} h${ma.depuis ? `, depuis le ${fmtDateTime(new Date(ma.depuis))}` : ""}. Regardez l’heure de la tablette en jeu, puis corrigez. Les relevés déjà faits depuis cette date seront recalés tout seuls. `,

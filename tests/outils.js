@@ -30,13 +30,13 @@ const pause = (p, ms) => p.waitForTimeout(ms);
 // Ouvre le guichet pour un rôle et un compte Discord donnés.
 //  o.role : direction, inspecteur, lecture, rh, agent ; o.discord, o.nom ; o.hash : onglet ;
 //  o.jeu : nom du jeu d'essai (tests/jeux) ; o.avant : code exécuté avant le faux Supabase ;
-//  o.maintenant : date ISO de l'horloge ; o.largeur / o.hauteur ; o.theme : light ou dark ;
+//  o.maintenant : date ISO de l'horloge ; o.fuseau : fuseau du navigateur (Europe/Paris, ou GF_FUSEAU) ; o.largeur / o.hauteur ; o.theme : light ou dark ;
 //  o.accueil : laisser le guide de Mon espace s'ouvrir comme à une première visite ; o.guide : de même pour le guide du rôle ;
 //  o.html : (texte de la page) => page modifiée ;
 //  faux salons Discord : window.__discord = { webhooks: { agents: url + "/__webhook/agents" } } dans o.avant.
 async function ouvrir(env, o) {
   o = Object.assign({ role: "direction", discord: "999999999999999999", nom: "Directeur Test", hash: "dashboard", jeu: "equipe", maintenant: "2026-11-10T20:30:00Z" }, o || {});
-  const ctx = await env.navigateur.newContext({ viewport: { width: o.largeur || 1280, height: o.hauteur || 1000 }, serviceWorkers: "block", timezoneId: "Europe/Paris",
+  const ctx = await env.navigateur.newContext({ viewport: { width: o.largeur || 1280, height: o.hauteur || 1000 }, serviceWorkers: "block", timezoneId: o.fuseau || process.env.GF_FUSEAU || "Europe/Paris",
     locale: "fr-FR", acceptDownloads: true, colorScheme: o.theme || "light" });
   const p = await ctx.newPage();
   p.setDefaultTimeout(8000);
