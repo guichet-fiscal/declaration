@@ -47,6 +47,11 @@
         if (st.op === "select") return ok(window.__erreursRemontees.filter(x => !st.gt || String(x.at) > String(st.gt[1])).slice().sort((a, z) => String(z.at).localeCompare(String(a.at))));
         if (st.op === "delete") { const e = (st.filters.find(f => f[0] === "empreinte") || [])[1]; window.__erreursRemontees = window.__erreursRemontees.filter(x => x.empreinte !== e); return ok(null); }
       }
+      // Consultations (mise à jour 44) : window.__consultations ; __sans44 = table absente.
+      if (table === "consultations") {
+        if (window.__sans44) return Promise.resolve({ data: null, error: { message: 'relation "public.consultations" does not exist', code: "42P01" } });
+        return ok(ROLE === "direction" ? (window.__consultations || []).slice().sort((x, y) => String(y.at).localeCompare(String(x.at))) : []);
+      }
       // Journal de l'essai : window.__journal (lignes de la table journal).
       if (table === "journal" && st.op === "select") return ok((window.__journal || []).slice());
       // Salons Discord de l'essai (window.__discord = { webhooks, auto }) : adresses servies par l'essai lui-même.
@@ -135,6 +140,12 @@
         if (ouverts().filter(x => x.data.entrepriseId === e.id && new Date(x.data.debut).getTime() > Date.now()).length >= 2) return { data: null, error: { message: "Vous avez déjà deux rendez-vous à venir : annulez-en un d'abord." } };
         r.data = Object.assign({}, r.data, { entrepriseId: e.id, entrepriseNom: e.data.nom, objet: args.p_objet, reserveLe: iso() });
         return { data: { id: r.id }, error: null };
+      }
+      if (name === "noter_consultation") {
+        if (window.__sans44) return { data: null, error: { message: "Could not find the function public.noter_consultation in the schema cache", code: "PGRST202" } };
+        window.__consultations = window.__consultations || [];
+        window.__consultations.push({ at: iso(), nom: NOM, discord: DID, role: ROLE, collection: args.p_collection, doc_id: args.p_doc, libelle: args.p_libelle });
+        return { data: null, error: null };
       }
       if (name === "annoncer_visiteur") {
         const r = rows.get("securiteAttendus/" + args.p_attendu); if (!r || r.data.statut !== "arrive" || r.data.annonceLe || !r.data.hoteFid) return { data: false, error: null };

@@ -1107,6 +1107,7 @@ button.ts-p{cursor:pointer}
 .ts-p.accent{background:var(--accent-soft);color:var(--accent)}
 .ts td.num{text-align:right;white-space:nowrap}
 .dv-ex{display:grid;gap:6px}
+.cs-jour+.cs-jour{margin-top:10px}#cs-liste{margin-top:8px}
 #dv-card:empty{display:none}
 .pret-cap{display:grid;gap:3px;margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--rule);border-left:4px solid var(--ok);background:var(--paper);font-size:13.5px;line-height:1.45}
 .pret-cap.warn{border-left-color:var(--warn)}.pret-cap.bad{border-left-color:var(--bad)}
@@ -1947,6 +1948,7 @@ table.es-payes{min-width:0;width:100%}
         <p class="sub">Chaque saisie, décision et modification est inscrite automatiquement par la base de données, avec son auteur. Personne ne peut modifier ni effacer ce journal depuis le site.</p>
       </div>
       <div class="toolbar">
+        <button class="btn ghost" type="button" id="j-consult" hidden>Consultations</button>
         <button class="btn ghost" type="button" id="j-refresh">Actualiser</button>
       </div>
     </div>
@@ -3604,6 +3606,7 @@ function applyRole() {
   // Pointeuse fermée : l'onglet disparaît pour tous ; les heures se saisissent dans la paye.
   else if (ptFerme()) { $("#tab-btn-pointeuse").hidden = true; if (S.tab === "pointeuse") showTab("payes"); }
   if (S.role !== "agent" && S.role !== "pointeuse" && S.role !== "rh") { $("#tab-btn-espace").hidden = !S.monFid; $("#tab-btn-securite").hidden = !secuAcces(); }
+  $("#j-consult").hidden = S.role !== "direction";
   if (known && S.role !== "agent" && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
@@ -3916,6 +3919,43 @@ async function initAgent(sb) {
 // L'encadrement qui a une fiche : son espace se recharge quand il le regarde.
 setInterval(() => { if (S.role !== "agent" && S.monFid && S.tab === "espace" && document.visibilityState === "visible") chargerMonEspace(); }, 30000);
 
+/* ---------- Journal des consultations (supabase/v44_consultations.sql) ---------- */
+// Qui a ouvert quel dossier sensible : noté par la base à l'ouverture (une ligne par personne et par
+// dossier toutes les 10 minutes) ; lu par la Direction seule (Journal → Consultations).
+const CONSULT_LIB = { entreprises: "la fiche de l’entreprise", declarations: "la déclaration", controles: "le contrôle fiscal", demandes: "la demande réservée",
+  fonctionnaires: "la fiche RH de", securiteEntrees: "l’entrée de", securiteControles: "le contrôle d’identité de", securiteSignalements: "le signalement de" };
+const CONSULT_ROLES = { direction: "Direction", inspecteur: "Inspection", lecture: "Lecture seule", rh: "RH", protection: "protection", agent: "fonctionnaire" };
+function noterConsultation(collection, id, libelle) {
+  if (!S.sb || !S.uid || !id || S.consultAbsente) return;
+  const k = collection + "/" + id, t = Date.now(); S.consultVues = S.consultVues || new Map();
+  if (t - (S.consultVues.get(k) || 0) < 10 * 60e3) return;
+  S.consultVues.set(k, t);
+  Promise.resolve(S.sb.rpc("noter_consultation", { p_collection: collection, p_doc: String(id), p_libelle: String(libelle || "").slice(0, 200) }))
+    .then(r => { if (r && r.error && /noter_consultation|schema cache|not find/i.test(r.error.message || "")) S.consultAbsente = true; }, () => {});
+}
+async function openConsultations() {
+  if (S.role !== "direction") return;
+  let r;
+  try { r = await S.sb.from("consultations").select("at,nom,discord,role,collection,doc_id,libelle").order("at", { ascending: false }).limit(800); } catch (e) { r = { error: e }; }
+  if (r.error) { openDialog({ eyebrow: "Journal", title: "Consultations", body: [h("p", { class: "err", text: /consultations|does not exist|schema cache/i.test(r.error.message || "") ? "Exécutez d’abord supabase/v44_consultations.sql dans Supabase : il crée le journal des consultations." : "Lecture refusée : " + (r.error.message || "erreur inconnue") })] }); return; }
+  const tout = r.data || [];
+  const q = h("input", { type: "search", id: "cs-q", placeholder: "Une personne, une entreprise, un nom", autocomplete: "off", "aria-label": "Rechercher dans les consultations" });
+  const type = h("select", { id: "cs-type", "aria-label": "Type de dossier" }, h("option", { value: "", text: "Tous les dossiers" }), Object.entries(CONSULT_LIB).map(([k, l]) => h("option", { value: k, text: l.replace(/^(la |le |l’)/, "").replace(/ de$/, "") })));
+  const corps = h("div", { id: "cs-liste" });
+  const dessiner = () => {
+    const qq = norm(q.value), l = tout.filter(x => (!type.value || x.collection === type.value) && (!qq || norm(`${x.nom} ${x.libelle} ${x.discord}`).includes(qq)));
+    const jours = new Map(); for (const x of l.slice(0, 400)) { const k = jourCle(new Date(x.at)); if (!jours.has(k)) jours.set(k, []); jours.get(k).push(x); }
+    fill(corps, l.length ? [...jours.entries()].map(([k, xs]) => h("div", { class: "cs-jour" }, h("h4", { class: "mini-title", text: `${jourTxt(k)} (${xs.length})` }),
+      h("ul", { class: "ent-list" }, xs.map(x => h("li", {},
+        h("div", { style: "min-width:0" }, h("span", {}, h("strong", { text: x.nom || x.discord || "?" }), ` a ouvert ${CONSULT_LIB[x.collection] || x.collection} `, h("strong", { text: x.libelle || x.doc_id })),
+          h("span", { class: "meta", text: [hhmm(x.at), CONSULT_ROLES[x.role] || x.role].filter(Boolean).join(" · ") })), h("span", {}), h("span", {})))))) : h("p", { class: "muted", text: tout.length ? "Aucune consultation ne correspond." : "Aucune consultation notée pour l’instant." }));
+  };
+  q.addEventListener("input", dessiner); type.addEventListener("change", dessiner); dessiner();
+  openDialog({ eyebrow: "Journal", title: "Consultations des dossiers sensibles", wide: true,
+    body: [h("p", { class: "sub", style: "margin:0", text: `Qui a ouvert quoi, noté par la base : fiches d’entreprise, déclarations, contrôles fiscaux, demandes réservées, fiches RH, dossiers de la sécurité. Une ligne par personne et par dossier toutes les 10 minutes ; 90 jours gardés. ${tout.length} ligne${plural(tout.length)} chargée${plural(tout.length)}.` }),
+      h("div", { class: "search-row" }, q, type), corps],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
 /* ---------- Double validation des gestes sensibles ---------- */
 // Annuler une pénalité, supprimer une déclaration, retirer une entreprise, accorder un prêt d'au moins
 // le seuil : un membre de la Direction le demande, un autre le valide (À traiter → « Gestes à valider »).
@@ -6485,6 +6525,7 @@ async function openCarte(fid, back) {
 // Fiche RH d'un fonctionnaire : identité, grade, contrats ; la paye reste dans l'onglet Payes.
 function openAgent(fid, back) {
   const f = foncOf(fid); if (!f) return;
+  noterConsultation("fonctionnaires", fid, f.nom);
   const w = rhWriter(), reopen = () => openAgent(fid, back), taux = gradeTaux(f.grade);
   openDialog({ eyebrow: "Personnel de la Préfecture", title: f.nom || "Sans nom", stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : null,
     body: [
@@ -7462,6 +7503,7 @@ async function secuSortie(x) {
 }
 function openSecuEntreeVue(id) {
   const x = secuListe("securiteEntrees").find(y => y.id === id); if (!x) return;
+  noterConsultation("securiteEntrees", id, x.nom);
   const reopen = () => openSecuEntreeVue(id), resp = secuResp();
   openDialog({ eyebrow: "Sécurité · entrée", title: x.nom || "Entrée", stampEl: x.sortie ? stamp(["SORTI", "muted"]) : stamp(["DANS LES LOCAUX", "ok"]), wide: true,
     body: [kv([["Qualité", x.qualite || "—"], ["Motif", (SECU_MOTIFS[x.motif] || "—") + (x.precision ? " · " + x.precision : "")], ["Personne ou service visité", x.visite || "—"],
@@ -7538,6 +7580,7 @@ function openSecuControle(x, back) {
 const secuPreEntree = c => ({ nom: c.nom, naissance: c.naissance, numero: c.numero, photos: (c.photos || []).slice(0, 2), date: c.date, controle: c.id });
 function openSecuControleVue(id) {
   const x = secuListe("securiteControles").find(y => y.id === id); if (!x) return;
+  noterConsultation("securiteControles", id, x.nom);
   const reopen = () => openSecuControleVue(id), res = SECU_RESULTATS[x.resultat] || SECU_RESULTATS.conforme;
   const autres = secuListe("securiteControles").filter(c => c.id !== x.id && memeSecu(c.nom, x.nom)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   openDialog({ eyebrow: "Sécurité · contrôle d’identité", title: x.nom || "Contrôle", stampEl: stamp([res[0].toUpperCase(), res[1]]), wide: true,
@@ -7617,6 +7660,7 @@ function openSecuSignal(x, pre, back) {
 }
 function openSecuSignalVue(id) {
   const x = secuListe("securiteSignalements").find(y => y.id === id); if (!x) return;
+  noterConsultation("securiteSignalements", id, x.nom);
   const reopen = () => openSecuSignalVue(id), resp = secuResp(), m = SECU_SIGNAL[x.motif] || SECU_SIGNAL.autre, actif = signalActif(x);
   const vus = secuListe("securiteEntrees").filter(e => memeSecu(e.nom, x.nom) || (numPiece(x.numero).length >= 5 && numPiece(e.numero) === numPiece(x.numero))).sort((a, b) => String(b.arrivee).localeCompare(String(a.arrivee)));
   const basculer = async ev => {
@@ -10597,6 +10641,7 @@ function avisText(d) {
 function openDecl(id) {
   const d = S.declarations.find(x => x.id === id);
   if (!d) return;
+  noterConsultation("declarations", id, `${d.entrepriseNom || "?"} · ${periodPlain(d.periode)}`);
   const dec = S.decisions[id] || null, st = dStatus(d);
   const registered = d.entrepriseId && S.entreprises.some(e => e.id === d.entrepriseId);
   const w = writer();
@@ -10888,6 +10933,7 @@ const qxp = (q, pu) => `${NF.format(Number(q) || 0)} × ${pu == null ? "prix à 
 function openDem(id) {
   const dm = S.demandes.find(x => x.id === id);
   if (!dm) return;
+  if (demReservee(dm)) noterConsultation("demandes", id, `${dm.service} · ${dm.objet || "demande"}`);
   const a = S.arbitrages[id] || null, st = aStatus(dm), w = writer(), ag = canAgent(), t = treasury(), reopen = () => openDem(id);
   const legacy = !demDetaillee(dm), work = demRowsFor(dm), stale = decisionPerimee(dm);
   const granted = st === "accordee" || st === "partielle", decided = granted || st === "refusee";
@@ -12851,6 +12897,7 @@ function liensSection(e, back) {
 }
 function openFiche(e, opts) {
   opts = opts || {};
+  if (e && e.id) noterConsultation("entreprises", e.id, e.nom);
   const sm = entSummary(e, lastClosedKey());
   const w = writer();
   const reopen = () => openFiche(S.entreprises.find(x => x.id === e.id) || e);
@@ -18398,6 +18445,7 @@ async function addPieces(c, files, legende) {
 function openControle(id) {
   const c0 = S.controles.find(x => x.id === id);
   if (!c0) return;
+  noterConsultation("controles", id, `${c0.entrepriseNom || "?"} · contrôle ${dossierNo("CF", id)}`);
   const ag = canAgent(), dir = writer();
   // Déclaration attendue saisie entre-temps (par exemple depuis une page restée sur l'ancienne version) : elle rejoint le contrôle.
   if (ag && c0.statut === "ouvert" && (c0.attente || []).length) {
@@ -22582,6 +22630,7 @@ async function openNotifs() {
 $("#notif-btn").addEventListener("click", openNotifs);
 $("#espace-notifs").addEventListener("click", openNotifs);
 $("#espace-guide").addEventListener("click", () => openAccueil(0));
+$("#j-consult").addEventListener("click", () => openConsultations());
 $("#espace-carte").addEventListener("click", () => { const fid = (S.espace && S.espace.fid) || S.monFid; if (fid) openCarte(fid); else toast("Votre compte n’est relié à aucune fiche de fonctionnaire.", true); });
 
 // Un clic sur une notification ouvre le dossier : « #ouvrir=collection/id ».

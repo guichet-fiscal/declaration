@@ -61,6 +61,7 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v41_photos_profil.sql` : la photo de profil de chaque fonctionnaire (espace privé `profils`, `ma_photo_profil`, `photos_profils`)
 - `supabase/v42_signalements_attendus.sql` : sécurité, personnes signalées et visiteurs attendus (collections `securiteSignalements`, `securiteAttendus`, `annoncer_visiteur`)
 - `supabase/v43_creneaux_paiement.sql` : créneaux de paiement réservés depuis l’espace entreprise (`creneaux_entreprise`, `reserver_creneau`, `annuler_creneau`)
+- `supabase/v44_consultations.sql` : journal des consultations des dossiers sensibles (table `consultations`, `noter_consultation`), lu par la Direction
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `tests/` et `.github/workflows/essais.yml` : les essais automatiques (voir « Modifier le site »)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
@@ -611,6 +612,10 @@ Le guichet s’installe sur un ordinateur ou un téléphone et s’ouvre alors d
 - **iPhone et iPad** : dans Safari, **Partager → Sur l’écran d’accueil**. Le bouton **Installer l’appli** rappelle la marche à suivre. L’application garde sa propre session : il faut s’y connecter une première fois avec Discord.
 
 L’application s’ouvre vite : la page et `config.js` viennent de l’appareil, et sont vérifiés en même temps sur le réseau. Si une nouvelle version est en ligne, un bandeau le signale aussitôt, avec un bouton **Recharger** (le même bandeau apparaît quand une page reste ouverte longtemps). Un autre bandeau prévient quand internet est coupé ; le registre se remet à jour dès le retour du réseau. Les données du registre, les pièces des contrôles et les adresses Discord ne sont jamais gardées par l’application : seuls la page et ses fichiers (icônes, polices) le sont.
+
+## Journal des consultations
+
+Avec `supabase/v44_consultations.sql`, la base note **qui ouvre quel dossier sensible** : la fiche d’une entreprise, une déclaration, un contrôle fiscal, une demande d’un service réservé (FIPN, GIGN), la fiche RH d’un fonctionnaire, une entrée, un contrôle d’identité ou une personne signalée de la sécurité. Une ligne par personne et par dossier toutes les 10 minutes au plus ; 90 jours gardés. Seule la Direction le lit : **Journal → Consultations** (recherche par personne ou par dossier, filtre par type, jour par jour). Personne ne l’écrit ni ne l’efface depuis le site.
 
 ## Restaurer depuis le journal
 
