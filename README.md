@@ -61,8 +61,8 @@ Les entreprises et les services publics déposent leurs déclarations et leurs d
 - `supabase/v41_photos_profil.sql` : la photo de profil de chaque fonctionnaire (espace privé `profils`, `ma_photo_profil`, `photos_profils`)
 - `supabase/v42_signalements_attendus.sql` : sécurité, personnes signalées et visiteurs attendus (collections `securiteSignalements`, `securiteAttendus`, `annoncer_visiteur`)
 - `supabase/v43_creneaux_paiement.sql` : créneaux de paiement réservés depuis l’espace entreprise (`creneaux_entreprise`, `reserver_creneau`, `annuler_creneau`)
-- `supabase/v45_signalements_agents.sql` : tout agent de la protection signale une personne (et modifie les siens)
 - `supabase/v44_consultations.sql` : journal des consultations des dossiers sensibles (table `consultations`, `noter_consultation`), lu par la Direction
+- `supabase/v45_signalements_agents.sql` : tout agent de la protection signale une personne (et modifie les siens)
 - `supabase/functions/notifier/` : le service d’envoi des notifications (Supabase Edge Function)
 - `tests/` et `.github/workflows/essais.yml` : les essais automatiques (voir « Modifier le site »)
 - `google-sheets/export.gs` : le script à coller dans une feuille Google Sheets pour le suivi des admins
