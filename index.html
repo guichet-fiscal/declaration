@@ -1106,6 +1106,8 @@ button.ts-p{cursor:pointer}
 .ts-p.warn{background:var(--warn-soft);color:var(--warn);font-weight:600}
 .ts-p.accent{background:var(--accent-soft);color:var(--accent)}
 .ts td.num{text-align:right;white-space:nowrap}
+.dv-ex{display:grid;gap:6px}
+#dv-card:empty{display:none}
 .pret-cap{display:grid;gap:3px;margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--rule);border-left:4px solid var(--ok);background:var(--paper);font-size:13.5px;line-height:1.45}
 .pret-cap.warn{border-left-color:var(--warn)}.pret-cap.bad{border-left-color:var(--bad)}
 .pret-cap.ok strong{color:var(--ok)}.pret-cap.warn strong{color:var(--warn)}.pret-cap.bad strong{color:var(--bad)}
@@ -2626,6 +2628,7 @@ table.es-payes{min-width:0;width:100%}
             <span id="a-msg" class="err" aria-live="polite"></span>
             <ul class="ent-list" id="agent-list"></ul>
           </div>
+          <div class="card" id="dv-card"></div>
           <div class="card">
             <h3>Qui peut faire quoi</h3>
             <ul class="access">
@@ -3913,13 +3916,113 @@ async function initAgent(sb) {
 // L'encadrement qui a une fiche : son espace se recharge quand il le regarde.
 setInterval(() => { if (S.role !== "agent" && S.monFid && S.tab === "espace" && document.visibilityState === "visible") chargerMonEspace(); }, 30000);
 
+/* ---------- Double validation des gestes sensibles ---------- */
+// Annuler une pénalité, supprimer une déclaration, retirer une entreprise, accorder un prêt d'au moins
+// le seuil : un membre de la Direction le demande, un autre le valide (À traiter → « Gestes à valider »).
+// Les comptes exemptés agissent seuls. Réglages → Accès. Demandes dans la collection « validations » ;
+// c'est un contrôle du guichet (la base ne l'impose pas).
+const DV_DEF = { actif: true, seuil: 500000, exemptes: ["1008447342413873212"] };
+const DV_ACTIONS = { penalite_annulee: "Annuler une pénalité", declaration_supprimee: "Supprimer une déclaration", entreprise_retiree: "Retirer une entreprise", pret_accorde: "Accorder et verser un prêt" };
+const dvCfg = () => { const c = Object.assign({}, DV_DEF, (S.config || {}).doubleValidation || {}); c.exemptes = Array.isArray(c.exemptes) ? c.exemptes.map(String) : []; c.seuil = Number(c.seuil) > 0 ? Number(c.seuil) : DV_DEF.seuil; return c; };
+const dvExempt = () => dvCfg().exemptes.includes(String(S.discordId || ""));
+const dvRequis = () => S.role === "direction" && !S.readOnly && dvCfg().actif !== false && !dvExempt();
+const dvAttente = () => (S.validations || []).filter(v => v.statut === "attente").sort((a, b) => String(a.at).localeCompare(String(b.at)));
+const dvMienne = v => (v.demandeParUid && v.demandeParUid === S.uid) || (v.demandeParDiscord && v.demandeParDiscord === S.discordId);
+const dvEnAttente = (action, id) => dvAttente().find(v => v.action === action && v.cible && v.cible.id === id) || null;
+async function dvDemander(action, libelle, cible, payload) {
+  const deja = dvEnAttente(action, cible.id);
+  if (deja) { toast("Ce geste attend déjà la validation d’un autre membre de la Direction."); return true; }
+  const ok = await write(() => S.db.collection("validations").doc().set({ action, libelle, cible, payload: payload || {}, statut: "attente",
+    demandePar: S.agentName || "", demandeParUid: S.uid || null, demandeParDiscord: S.discordId || null, at: nowISO() }));
+  if (ok) toast("Demande enregistrée : un autre membre de la Direction doit la valider (À traiter).");
+  return ok;
+}
+// Le geste lui-même, fait par celui qui valide.
+async function dvExecuter(v) {
+  const c = v.cible || {}, p = v.payload || {};
+  if (v.action === "penalite_annulee") {
+    const pen = (S.penalites || []).find(x => x.id === c.id);
+    if (!pen || pen.statut !== "due") return "La pénalité n’est plus à payer : rien à annuler.";
+    return (await setPenaltyStatus(pen, "annulee", { valide: true })) ? null : "Annulation refusée.";
+  }
+  if (v.action === "declaration_supprimee") {
+    if (!S.declarations.some(d => d.id === c.id)) return "La déclaration n’existe plus.";
+    return (await write(async () => { await S.db.doc("declarations/" + c.id).delete(); await S.db.doc("decisions/" + c.id).delete(); })) ? null : "Suppression refusée.";
+  }
+  if (v.action === "entreprise_retiree") {
+    if (!S.entreprises.some(e => e.id === c.id)) return "L’entreprise n’est plus au registre.";
+    if (!(await write(() => S.db.doc("entreprises/" + c.id).delete()))) return "Retrait refusé.";
+    for (const id of p.relances || []) await write(() => S.db.doc("relances/" + id).delete());
+    return null;
+  }
+  if (v.action === "pret_accorde") {
+    const cur = (S.prets || []).find(x => x.id === c.id);
+    if (!cur || cur.statut !== "demande") return "Le prêt n’est plus une demande : rien à verser.";
+    if ((Number(cur.montant) || 0) > treasury().solde) return `Le Trésor ne dispose que de ${money(treasury().solde)}.`;
+    const body = Object.assign({}, cur, { statut: "en_cours", at: nowISO(), verseLe: nowISO(), verseParNom: S.agentName || "", accordDemandePar: v.demandePar || "",
+      justifAvant: cur.justifRequis ? new Date(Date.now() + (Number(cur.justifJours) || 7) * 864e5).toISOString() : null });
+    delete body.id;
+    if (!(await write(() => S.db.doc("prets/" + c.id).set(body)))) return "Versement refusé.";
+    const p2 = (S.prets || []).find(x => x.id === c.id) || Object.assign({ id: c.id }, body);
+    autoPublish("prets", conventionDoc(p2), "Convention publiée.");
+    return null;
+  }
+  return "Geste inconnu.";
+}
+async function dvDecider(v, oui, bt) {
+  bt.disabled = true;
+  if (oui) {
+    const err = await dvExecuter(v);
+    if (err) { toast(err, true); await write(() => S.db.doc("validations/" + v.id).update({ statut: "caduque", decideLe: nowISO(), decidePar: S.agentName || "", motif: err })); openValidations(); return; }
+  }
+  if (await write(() => S.db.doc("validations/" + v.id).update({ statut: oui ? "validee" : "refusee", decideLe: nowISO(), decidePar: S.agentName || "", decideParUid: S.uid || null })))
+    toast(oui ? `Validé : ${v.libelle}.` : "Demande refusée : rien n’a été fait.");
+  openValidations();
+}
+function openValidations() {
+  const l = dvAttente(), autres = l.filter(v => !dvMienne(v)), miennes = l.filter(dvMienne);
+  const ligne = v => h("li", {},
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: v.libelle || DV_ACTIONS[v.action] || "Geste" }),
+      h("span", { class: "meta", text: `${DV_ACTIONS[v.action] || ""} · demandé par ${v.demandePar || "?"} ${quandSecu(v.at)}` })),
+    chip(["En attente", "warn"]),
+    dvMienne(v) ? h("button", { class: "btn ghost small", type: "button", text: "Retirer ma demande", onclick: async ev => { ev.currentTarget.disabled = true; if (await write(() => S.db.doc("validations/" + v.id).update({ statut: "retiree", decideLe: nowISO() }))) { toast("Demande retirée."); openValidations(); } } })
+      : h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", text: "Refuser", onclick: ev => dvDecider(v, false, ev.currentTarget) }),
+        h("button", { class: "btn small", type: "button", text: "Valider", onclick: ev => dvDecider(v, true, ev.currentTarget) })));
+  openDialog({ eyebrow: "Direction", title: "Gestes à valider", wide: true,
+    body: [h("p", { class: "sub", style: "margin:0", text: "Un geste sensible demandé par un membre de la Direction se fait quand un autre le valide. « Valider » fait le geste à votre nom." }),
+      autres.length ? h("ul", { class: "ent-list", id: "dv-autres" }, autres.map(ligne)) : h("p", { class: "muted", text: "Rien à valider." }),
+      miennes.length ? sec("Vos demandes en attente", h("ul", { class: "ent-list", id: "dv-miennes" }, miennes.map(ligne))) : null],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
+function renderDV() {
+  const box = $("#dv-card"); if (!box) return;
+  const c = dvCfg(), w = writer() && S.role === "direction";
+  const actif = h("input", { type: "checkbox", id: "dv-actif" }); actif.checked = c.actif !== false; actif.disabled = !w;
+  const seuil = h("input", { id: "dv-seuil", type: "number", min: "0", step: "10000", inputmode: "numeric" }); seuil.value = String(c.seuil); seuil.disabled = !w;
+  const dirs = (S.agents || []).filter(a => a.role === "direction");
+  const ids = new Set(c.exemptes.concat(dirs.map(a => String(a.discord_id))));
+  const coches = [...ids].map(id => { const a = dirs.find(x => String(x.discord_id) === id); const cb = h("input", { type: "checkbox", value: id, "data-dv-ex": id }); cb.checked = c.exemptes.includes(id); cb.disabled = !w;
+    return h("label", { class: "switch" }, cb, h("span", { text: a ? `${a.nom || "Sans nom"}${id === S.discordId ? " (vous)" : ""}` : `Compte ${id}${a ? "" : " (hors liste des accès)"}` })); });
+  const go = h("button", { class: "btn small", type: "button", text: "Enregistrer", disabled: !w, onclick: async ev => {
+    ev.currentTarget.disabled = true;
+    const v = { actif: actif.checked, seuil: Math.max(0, Math.round(Number(seuil.value) || 0)) || DV_DEF.seuil, exemptes: $$("#dv-card input[data-dv-ex]").filter(i => i.checked).map(i => i.value) };
+    if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { doubleValidation: v, updatedAt: nowISO() })))) toast("Double validation enregistrée.");
+    ev.currentTarget.disabled = false;
+  } });
+  fill(box, h("h3", { text: "Double validation" }),
+    h("p", { class: "sub", text: `Annuler une pénalité, supprimer une déclaration, retirer une entreprise ou accorder un prêt d’au moins ${money(c.seuil)} : un membre de la Direction le demande, un autre le valide. Les comptes cochés plus bas agissent seuls.` }),
+    h("label", { class: "switch", for: "dv-actif" }, actif, "Demander une seconde validation"),
+    h("div", { class: "field", style: "margin-top:10px" }, h("label", { for: "dv-seuil", text: "Prêt à partir de" }), h("div", { class: "money", "data-cur": "€" }, seuil)),
+    h("div", { class: "field" }, h("span", { class: "lbl", text: "Agissent seuls" }), h("div", { class: "dv-ex" }, coches)),
+    h("div", { style: "display:flex;justify-content:flex-end" }, go));
+}
 /* ---------- Gestion des accès ---------- */
 async function loadAgents() {
   if (!S.sb || !S.admin) return;
   const { data, error } = await S.sb.from("agents").select("discord_id,nom,role,ajoute_le").order("nom");
   if (error) { $("#a-msg").textContent = "Impossible de charger la liste des accès."; return; }
   S.agents = data || [];
-  renderAgents();
+  renderAgents(); renderDV();
 }
 function renderAgents() {
   const list = $("#agent-list");
@@ -3995,6 +4098,7 @@ function subscribe() {
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("validations", s => { S.validations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("creneaux", s => { S.creneaux = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(c => voitReserves() || !estReserve(ctService(c))); });
   col("conventions", s => { S.conventions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -4488,6 +4592,12 @@ function todoItems() {
     const echP = echeancesPersonnel().filter(x => x.type !== "objectif");
     add(echP.length, `Fin${plural(echP.length)} de période d’essai ou de CDD`, echP.slice(0, 3).map(x => `${x.f.nom} : ${x.type === "essai" ? "essai" : "CDD"} ${x.passe ? "terminé" : x.quand}`).join(", "), () => { S.rhEspace = "bord"; allerA("personnel"); });
     if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
+    if (S.role === "direction") {
+      const dv = dvAttente(), aMoi = dv.filter(v => !dvMienne(v));
+      add(aMoi.length, `Geste${plural(aMoi.length)} sensible${plural(aMoi.length)} à valider`, aMoi.slice(0, 2).map(v => `${v.libelle} (${v.demandePar || "?"})`).join(" ; "), openValidations, "bad");
+      const mes = dv.filter(dvMienne);
+      add(mes.length, `Demande${plural(mes.length)} en attente d’un second membre de la Direction`, mes.slice(0, 2).map(v => v.libelle).join(" ; "), openValidations, "info");
+    }
     const cj = creneauxDuJour();
     add(cj.length, `Rendez-vous de paiement aujourd’hui`, cj.slice(0, 3).map(c => `${hhmm(c.debut)} ${c.entrepriseNom || "?"}`).join(", "), () => allerA("convocations"), "info");
     const so = secuOubliees();
@@ -10611,15 +10721,16 @@ function openDecl(id) {
   if (st === "payee") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittanceDeclDoc(d), () => openDecl(id)), text: "Quittance" }));
   if (ag && !locked && !(dec && dec.remplaceePar) && (w || (st !== "payee" && st !== "rejetee"))) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => startEditDecl(d), text: "Modifier" }));
   if (w && !locked) {
-    const delBtn = h("button", { class: "btn danger small", type: "button", text: "Supprimer la saisie" });
+    const delBtn = h("button", { class: "btn danger small", type: "button", text: dvEnAttente("declaration_supprimee", id) ? "Suppression à valider" : "Supprimer la saisie", disabled: !!dvEnAttente("declaration_supprimee", id) });
     delBtn.addEventListener("click", () => {
       const f = $(".dlg-foot", dlg);
       f.replaceChildren(h("span", { text: "Supprimer définitivement cette déclaration ?" }), h("span", { class: "spacer" }),
         h("button", { class: "btn ghost small", type: "button", onclick: () => openDecl(id), text: "Annuler" }),
         h("button", { class: "btn danger small", type: "button", onclick: async () => {
+          if (dvRequis()) { if (await dvDemander("declaration_supprimee", `Supprimer la déclaration ${dossierNo("DF", id)} de ${d.entrepriseNom || "?"} (${periodPlain(d.periode).toLowerCase()})`, { collection: "declarations", id })) closeDialog(); return; }
           const ok = await write(async () => { await S.db.doc("declarations/" + id).delete(); await S.db.doc("decisions/" + id).delete(); });
           if (ok) { closeDialog(); toast("Déclaration supprimée."); }
-        }, text: "Supprimer" }));
+        }, text: dvRequis() ? "Demander la suppression" : "Supprimer" }));
     });
     foot.push(delBtn);
   }
@@ -11848,6 +11959,7 @@ function renderSettings() {
         foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }),
           h("button", { class: "btn danger small", type: "button", onclick: async ev => {
             const b = ev.currentTarget; b.disabled = true;
+            if (dvRequis()) { if (await dvDemander("entreprise_retiree", `Retirer l’entreprise ${e.nom} du registre`, { collection: "entreprises", id: e.id }, { relances: rls.length && cbR.checked ? rls.map(r => r.id) : [] })) closeDialog(); else b.disabled = false; return; }
             if (!(await write(() => S.db.doc("entreprises/" + e.id).delete()))) { b.disabled = false; return; }
             let n = 0;
             if (rls.length && cbR.checked) for (const r of rls) if (await write(() => S.db.doc("relances/" + r.id).delete())) n++;
@@ -11939,7 +12051,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["validations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -12546,7 +12658,8 @@ async function addPenalty(e, motif, montant, declId, extra) {
   if (ok) { const p = S.penalites.find(x => x.id === ref.id); if (p) autoPublish("penalites", penaltyDoc(p), "Pénalité infligée."); }
   return ok ? ref.id : null;
 }
-async function setPenaltyStatus(p, statut) {
+async function setPenaltyStatus(p, statut, o) {
+  if (statut === "annulee" && p.statut === "due" && !(o && o.valide) && dvRequis()) { await dvDemander("penalite_annulee", `Annuler la pénalité ${dossierNo("PN", p.id)} de ${p.entrepriseNom || "?"} (${money(p.montant)})`, { collection: "penalites", id: p.id }); return false; }
   const body = Object.assign({}, p);
   delete body.id;
   body.statut = statut;
@@ -12781,7 +12894,7 @@ function openFiche(e, opts) {
       p.statut === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(quittancePenDoc(p), reopen), text: "Quittance" }) : null,
       w && p.statut === "due" && p.type !== "redressement" ? h("button", { class: "btn ghost small", type: "button", onclick: () => editPenalty(p, reopen), text: "Modifier" }) : null,
       w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "payee")) reopen(); }, text: "Encaisser" }) : null,
-      w && p.statut === "due" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "annulee")) reopen(); }, text: "Annuler" }) : null,
+      w && p.statut === "due" ? (dvEnAttente("penalite_annulee", p.id) ? h("button", { class: "btn ghost small", type: "button", disabled: true, text: "Annulation à valider" }) : h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "annulee")) reopen(); else if (dvEnAttente("penalite_annulee", p.id)) reopen(); }, text: "Annuler" })) : null,
       w && p.statut === "payee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "due")) reopen(); }, text: "Annuler l’encaissement" }) : null,
       w && p.statut === "annulee" ? h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await setPenaltyStatus(p, "due")) reopen(); }, text: "Rétablir" }) : null)));
   const pens = sm.pens.length
@@ -13258,6 +13371,10 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le rapport « ${v.titre || "?"} »`;
       if (a.luLe && !b.luLe) return `a lu le rapport « ${v.titre || "?"} »`;
       return `a modifié le rapport « ${v.titre || "?"} »`;
+    case "validations":
+      if (x === "ajout") return `a demandé une seconde validation : ${v.libelle || "geste sensible"}`;
+      if (a.statut !== b.statut) return a.statut === "validee" ? `a validé : ${v.libelle || "geste sensible"} (demandé par ${v.demandePar || "?"})` : a.statut === "refusee" ? `a refusé : ${v.libelle || "geste sensible"} (demandé par ${v.demandePar || "?"})` : a.statut === "retiree" ? `a retiré sa demande : ${v.libelle || ""}` : `a classé la demande : ${v.libelle || ""}`;
+      return `a modifié la demande de validation : ${v.libelle || ""}`;
     case "creneaux":
       if (x === "ajout") return `a ouvert un créneau de paiement (${v.debut ? fmtDateTime(new Date(v.debut)) : "—"})`;
       if (x === "suppression") return `a supprimé un créneau de paiement (${v.debut ? fmtDateTime(new Date(v.debut)) : "—"})`;
@@ -19599,6 +19716,9 @@ function openPretForm(e, demande) {
     const p = plan();
     if (!(p.cap > 0)) { err.textContent = "Indiquez le montant prêté."; mt.focus(); return; }
     if (grant && p.cap > treasury().solde) { err.textContent = `Le Trésor ne dispose que de ${money(treasury().solde)} : réduisez le montant.`; return; }
+    // Gros prêt : enregistré comme demande, versé quand un autre membre de la Direction valide.
+    const aValider = grant && p.cap >= dvCfg().seuil && dvRequis();
+    if (aValider) grant = false;
     const cur = demande ? pretNow(demande.id) : null;
     if (demande && (!cur || cur.statut !== "demande")) { pretChanged(cur); return; }
     const btn = ev.currentTarget; btn.disabled = true;
@@ -19611,6 +19731,7 @@ function openPretForm(e, demande) {
     else body.statut = "demande";
     if (!(await write(() => ref.set(body)))) { btn.disabled = false; return; }
     const p2 = (S.prets || []).find(x => x.id === ref.id) || Object.assign({ id: ref.id }, body);
+    if (aValider) { await dvDemander("pret_accorde", `Accorder et verser le prêt ${pretNo(p2)} : ${money(p2.montant)} à ${p2.entrepriseNom}`, { collection: "prets", id: ref.id }); openPret(ref.id); return; }
     toast(grant ? `Prêt ${pretNo(p2)} accordé : ${money(p2.montant)} versés.` : `Demande de prêt ${pretNo(p2)} enregistrée.`);
     if (grant) { autoPublish("prets", conventionDoc(p2), "Convention publiée."); showDocImage(conventionDoc(p2), () => openPret(ref.id)); }
     else openPret(ref.id);

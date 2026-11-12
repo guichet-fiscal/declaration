@@ -269,6 +269,8 @@ Les joueurs n’ont pas besoin d’accès : ils déclarent sur Discord.
 
 Si plus personne n’a le rôle Direction, un propriétaire du projet Supabase peut le redonner dans **Table Editor → agents → Insert row**.
 
+**Double validation** (Réglages → Accès) : annuler une pénalité, supprimer une déclaration, retirer une entreprise du registre, accorder et verser un prêt d’au moins 500 000 € (seuil réglable) : quand un membre de la Direction le fait, le geste n’est pas fait tout de suite. Une demande part ; un **autre** membre de la Direction la voit dans « À traiter » (**Gestes sensibles à valider**) et **Valide** (le geste se fait à son nom) ou **Refuse**. Le demandeur voit sa demande en attente et peut la **retirer** ; le bouton du dossier indique « … à valider ». Un gros prêt est enregistré comme demande, versé à la validation. Les comptes cochés « Agissent seuls » (le Directeur FP par défaut) font ces gestes sans validation. Le réglage s’éteint d’une case. C’est un contrôle du guichet : la base ne l’impose pas. Demandes dans la collection `validations` (journal et sauvegardes).
+
 ## Espace entreprise
 
 Chaque entreprise peut recevoir un **lien personnel**, sans compte ni connexion Discord. Son patron y voit ce qui la concerne, et rien d’autre : les déclarations à déposer et leur date limite, ce qu’elle doit (avis, pénalités, échéances de prêt), ses déclarations et leurs avis (en image, avec la quittance une fois payés), les rappels et relances reçus, son exonération, ses convocations (à venir et du dernier mois, en image) et son attestation de régularité en cours de validité, à télécharger (avec `supabase/v22_espace_convocations.sql`). Un avis suspendu par un contrôle s’affiche « En cours d’examen », sans dire lequel.
