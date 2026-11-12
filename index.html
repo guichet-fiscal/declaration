@@ -5476,7 +5476,8 @@ function renderPrevision(k0) {
       item("Une semaine au maximum", money(x.maxSem), `${x.agents} agent${plural(x.agents)} × ${x.plafondHeures} h, ${money(payeCfg().payeMax)} au plus chacun`),
       item("Budget de la semaine", money(b.dispo), b.limite === "lisse" ? `${money(b.reste)} restants sur ${b.n} semaine${plural(b.n)}` : b.limite === "enveloppe" ? "limité par l’enveloppe" : "fixé à la main"),
       x.enCours ? item("Au rythme actuel", x.proj != null ? "≈ " + money(x.proj) : money(x.du), x.proj != null ? `${money(x.du)} dus à ce jour, prolongés jusqu’à dimanche` : "dus à ce jour (trop tôt pour prolonger)", x.coefProj < 1 ? "neg" : "") : null,
-      item(`${MoisNom(b.mois)} au maximum`, money(x.moisMax), depasse > 0 ? `${money(depasse)} au-delà des ${money(b.budgetMois)}` : `dans les ${money(b.budgetMois)} du budget`, depasse > 0 ? "neg" : "")),
+      // Montant dû si chacun faisait le maximum chaque semaine restante ; le prorata ramène ce qui est versé au budget.
+      item(`${MoisNom(b.mois)} au maximum, avant prorata`, money(x.moisMax), depasse > 0 ? `versé au plus ${money(b.budgetMois)} : ${money(depasse)} ne seraient pas payés (prorata)` : `dans les ${money(b.budgetMois)} du budget`, depasse > 0 ? "neg" : "")),
     note,
     h("details", { style: "margin-top:10px" }, h("summary", { text: "Détail par grade" }),
       h("div", { class: "tbl-wrap", style: "margin-top:6px" }, h("table", { class: "compact" },
