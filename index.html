@@ -1086,6 +1086,38 @@ input.secu-auto{background:var(--ok-soft)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sc-sig{color:#a9bdf5}}
 .dag-reponse{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--rule-2);background:var(--paper);border-radius:0 8px 8px 0;font-size:13px;color:var(--ink-2);white-space:pre-wrap}
 .annu{display:grid;gap:12px;margin-top:8px}
+.ts-wrap{overflow-x:auto;margin-top:8px;-webkit-overflow-scrolling:touch}
+.ts{border-collapse:separate;border-spacing:0;width:100%;min-width:860px;font-size:13px;table-layout:fixed}
+.ts th,.ts td{border-bottom:1px solid var(--rule);padding:6px;vertical-align:top;text-align:left}
+.ts thead th{position:sticky;top:0;background:var(--sheet);font-weight:600;color:var(--ink-2);text-align:center}
+.ts thead th span{display:block;font-size:11.5px;text-transform:capitalize}.ts thead th strong{font-size:16px;color:var(--ink)}
+.ts thead th:first-child,.ts tbody th{text-align:left;width:190px}
+.ts thead th.num{width:76px;text-align:right}
+.ts-tous th,.ts-tous td{background:var(--paper)}
+.ts .ts-auj,.ts .ts-tous .ts-auj{background:var(--accent-soft)}
+.ts thead th.ts-auj strong{color:var(--accent)}
+.ts td.ts-abs{background:repeating-linear-gradient(135deg,var(--warn-soft) 0 6px,transparent 6px 12px)}
+.ts td.ts-auj.ts-abs{background:repeating-linear-gradient(135deg,var(--warn-soft) 0 6px,var(--accent-soft) 6px 12px)}
+.ts-nom{display:flex;align-items:center;gap:8px;border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;text-align:left}
+.ts-nom:hover span:last-child{text-decoration:underline}
+.ts-p{display:block;width:100%;margin:0 0 4px;padding:3px 6px;border:0;border-radius:6px;font:inherit;font-size:12px;line-height:1.3;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default}
+button.ts-p{cursor:pointer}
+.ts-p.info{background:var(--info-soft, var(--accent-soft));color:var(--info, var(--accent))}
+.ts-p.warn{background:var(--warn-soft);color:var(--warn);font-weight:600}
+.ts-p.accent{background:var(--accent-soft);color:var(--accent)}
+.ts td.num{text-align:right;white-space:nowrap}
+.orga-l{list-style:none;margin:0;padding:0 0 0 18px;position:relative;display:grid;gap:10px}
+.orga-l::before{content:"";position:absolute;left:5px;top:18px;bottom:18px;width:2px;background:var(--rule)}
+.orga-niv{position:relative;display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:6px 16px;align-items:center;padding:10px 12px;border:1px solid var(--rule);border-radius:12px;background:var(--sheet)}
+.orga-niv::before{content:"";position:absolute;left:-18px;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--paper)}
+.orga-niv:first-child{border-color:var(--accent)}
+.orga-t{display:grid;gap:2px}.orga-t strong{font-size:14px;line-height:1.3}
+.orga-gens{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.orga-p{display:flex;align-items:center;gap:10px;padding:6px 12px 6px 6px;border:1px solid transparent;border-radius:999px;background:var(--paper);font:inherit;color:inherit;text-align:left;max-width:100%}
+button.orga-p{cursor:pointer}button.orga-p:hover{border-color:var(--rule);background:var(--field)}
+.orga-p.moi{background:var(--accent-soft)}
+.orga-n{display:grid;gap:1px;min-width:0}.orga-n strong{font-size:13.5px;font-weight:600}.orga-n .meta{font-size:12px}
+@media (max-width:640px){.orga-niv{grid-template-columns:1fr}}
 .carte-pro{display:block;width:100%;max-width:640px;margin:0 auto;border-radius:18px;box-shadow:0 10px 30px rgba(19,27,44,.22)}
 .avatar{--av:36px;--av-h:210;width:var(--av);height:var(--av);flex:none;border-radius:50%;display:inline-grid;place-items:center;overflow:hidden;
   background:color-mix(in srgb,hsl(var(--av-h) 55% 52%) 22%,var(--sheet)) center/cover no-repeat;color:color-mix(in srgb,hsl(var(--av-h) 60% 34%) 75%,var(--ink));
@@ -1463,6 +1495,8 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="bord" hidden><div id="rh-bord"></div></div>
     <div data-rh-vue="demandes" hidden><div id="rh-demandes"></div></div>
     <div data-rh-vue="annuaire" hidden><div id="rh-annuaire"></div></div>
+    <div data-rh-vue="organigramme" hidden><div id="rh-organigramme"></div></div>
+    <div data-rh-vue="service" hidden><div id="rh-service"></div></div>
     <div data-rh-vue="entretiens" hidden><div id="rh-entretiens"></div></div>
     <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
     <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
@@ -8179,7 +8213,8 @@ function renderEspace() {
   // Annuaire : l'encadrement à portée de main, toute l'équipe dans une fenêtre.
   const annu = Array.isArray(E.annuaire) ? E.annuaire : null;
   const cardAnnu = annu ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Annuaire" }), h("p", { class: "sub", text: "Qui fait quoi à la Préfecture, et comment le joindre." })),
-      h("button", { class: "btn ghost small", type: "button", id: "es-annuaire", onclick: () => openAnnuaire(), text: `Toute l’équipe (${annu.length})` })),
+      h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", id: "es-orga", onclick: () => openDialog({ eyebrow: "Mon espace", title: "Organigramme de la Préfecture", wide: true, body: [organigrammeVue(annu)], foot: [h("span", { class: "spacer" }), h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" })] }), text: "Organigramme" }),
+        h("button", { class: "btn ghost small", type: "button", id: "es-annuaire", onclick: () => openAnnuaire(), text: `Toute l’équipe (${annu.length})` }))),
     annuaireVue(annu.filter(p => ANNU_ROLES.some(([r]) => r === p.role)))) : null;
   // Mes objectifs et mes entretiens (partagés par l'encadrement).
   const ents = Array.isArray(E.entretiens) ? E.entretiens : [];
@@ -8196,7 +8231,7 @@ function renderEspace() {
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["entretiens", "Entretiens"], ["notes", "Notes de service"], ["annuaire", "Annuaire"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["service", "Tableau de service"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["entretiens", "Entretiens"], ["notes", "Notes de service"], ["annuaire", "Annuaire"], ["organigramme", "Organigramme"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
   const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length : 0;
@@ -8220,6 +8255,49 @@ function renderEncadrement() {
   else if (v === "bord") renderBordRH();
   else if (v === "entretiens") renderEntretiensEquipe();
   else if (v === "annuaire") fill($("#rh-annuaire"), annuaireVue(annuaireListe(), { recherche: true }));
+  else if (v === "service") renderTableauService();
+  else if (v === "organigramme") fill($("#rh-organigramme"), organigrammeVue(annuaireListe(), { ouvrir: fid => openAgent(fid) }));
+}
+// Tableau de service : la semaine de chaque fonctionnaire en un coup d'œil (absences, rendez-vous où il
+// est invité, entretiens), aujourd'hui en évidence ; les rendez-vous de toute l'équipe en tête ; les heures
+// saisies de la semaine (Direction, Inspection). Semaine précédente / suivante.
+function renderTableauService() {
+  const box = $("#rh-service"); if (!box) return;
+  const k = S.svcSem || semKey(new Date()), b = bounds(k);
+  if (!b) { S.svcSem = null; return; }
+  const jours = [...Array(7)].map((_, i) => new Date(b.start.getFullYear(), b.start.getMonth(), b.start.getDate() + i));
+  const cles = jours.map(jourCle), auj = jourCle(new Date());
+  const evs = (S.agenda || []).filter(e => e.statut !== "annule");
+  const evJour = (e, c) => { const d = agJour(e.debut), f = e.fin ? agJour(e.fin) : d; return d <= c && f >= c; };
+  const tous = evs.filter(e => (e.audience || "tous") !== "agents");
+  const absDe = (fid, c) => (S.absences || []).find(a => a.fid === fid && a.statut !== "annulee" && a.du <= c && a.au >= c);
+  const entDe = (fid, c) => (S.entretiens || []).filter(x => x.fid === fid && String(x.date || "").slice(0, 10) === c);
+  const heures = S.role !== "rh" ? (() => { try { return new Map(payeCalc(k).lignes.map(l => [l.fid, l.heures])); } catch (e) { return null; } })() : null;
+  const gens = foncs().filter(f => f.actif !== false).sort((x, y) => String(x.nom || "").localeCompare(String(y.nom || ""), "fr"));
+  const pastille = (t, tone, titre) => h("span", { class: "ts-p " + tone, title: titre || t, text: t });
+  const entete = h("tr", {}, h("th", { scope: "col", text: "Fonctionnaire" }),
+    jours.map((d, i) => h("th", { scope: "col", class: cles[i] === auj ? "ts-auj" : null }, h("span", { text: d.toLocaleDateString("fr-FR", { weekday: "short" }) }), h("strong", { text: String(d.getDate()) }))),
+    heures ? h("th", { scope: "col", class: "num", text: "Heures" }) : null);
+  const ligneTous = h("tr", { class: "ts-tous" }, h("th", { scope: "row", text: "Toute l’équipe" }),
+    cles.map(c => h("td", { class: c === auj ? "ts-auj" : null }, tous.filter(e => evJour(e, c)).map(e => h("button", { type: "button", class: "ts-p info", onclick: () => openEvenement(e), title: `${e.titre} · ${agQuand(e)}`, text: `${e.journee ? "" : agHeure(e.debut) + " "}${e.titre}` })))),
+    heures ? h("td", {}) : null);
+  const lignes = gens.map(f => h("tr", {},
+    h("th", { scope: "row" }, h("button", { type: "button", class: "ts-nom", onclick: () => openAgent(f.id) }, avatar(f.id, f.nom, 26), h("span", { text: f.nom || "—" }))),
+    cles.map(c => {
+      const a = absDe(f.id, c), ev = evs.filter(e => e.audience === "agents" && (e.participants || []).includes(f.id) && evJour(e, c)), en = entDe(f.id, c);
+      return h("td", { class: [c === auj ? "ts-auj" : "", a ? "ts-abs" : ""].filter(Boolean).join(" ") || null },
+        a ? pastille("Absent", "warn", `Absent${a.motif ? " : " + a.motif : ""} (du ${a.du} au ${a.au})`) : null,
+        ev.map(e => h("button", { type: "button", class: "ts-p info", onclick: () => openEvenement(e), title: `${e.titre} · ${agQuand(e)}`, text: `${e.journee ? "" : agHeure(e.debut) + " "}${e.titre}` })),
+        en.map(x => pastille("Entretien", "accent", `Entretien${x.objet ? " : " + x.objet : ""}`)));
+    }),
+    heures ? h("td", { class: "num mono", text: heures.has(f.id) ? fmtH(heures.get(f.id)) : "—" }) : null));
+  const nav = (t, d) => h("button", { class: "btn ghost small", type: "button", text: t, onclick: () => { const x = new Date(b.start); x.setDate(x.getDate() + d); S.svcSem = semKey(x); renderTableauService(); } });
+  const absN = gens.filter(f => cles.some(c => absDe(f.id, c))).length;
+  fill(box, h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("div", {}, h("h3", { text: `Semaine ${b.week} · du ${jours[0].toLocaleDateString("fr-FR", { day: "numeric", month: "long" })} au ${jours[6].toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` }),
+        h("p", { class: "sub", text: `${gens.length} fonctionnaire${plural(gens.length)} en service · ${absN} absent${plural(absN)} au moins un jour · ${tous.filter(e => cles.some(c => evJour(e, c))).length} rendez-vous d’équipe` })),
+      h("div", { class: "row-actions" }, nav("Semaine précédente", -7), k !== semKey(new Date()) ? h("button", { class: "btn ghost small", type: "button", text: "Cette semaine", onclick: () => { S.svcSem = null; renderTableauService(); } }) : null, nav("Semaine suivante", 7))),
+    h("div", { class: "ts-wrap" }, h("table", { class: "ts", id: "ts-table" }, h("thead", {}, entete), h("tbody", {}, ligneTous, lignes)))));
 }
 // Messagerie : les conversations, la plus récente d'abord, et celle qui est ouverte.
 function renderMessagerie() {
@@ -8810,6 +8888,32 @@ function annuaireListe() {
   const roles = new Map((S.agents || []).map(a => [a.discord_id, a.role]));
   return foncs().filter(f => f.actif !== false).map(f => ({ id: f.id, nom: f.nom, grade: f.grade, discordId: f.discordId, role: roles.get(f.discordId) || null,
     poste: (ctrsOf(f.id)[0] || {}).poste || null }));
+}
+// Organigramme : un niveau par taux du barème (le plus haut en premier ; les grades de même taux
+// ensemble), chaque fonctionnaire avec sa photo. Grade hors barème : en tête s'il dirige (Directeur, Chef,
+// Responsable…), sinon en bas. L'encadrement ouvre la fiche d'un clic.
+function organigrammeVue(liste, o) {
+  o = o || {};
+  const moi = (S.espace && S.espace.fid) || S.monFid;
+  const poids = g => { const t = gradeTaux(g); return t ? t : /^(pr[ée]fet|directeur|directrice|chef|responsable|secr[ée]taire g)/i.test(String(g || "").trim()) ? 1e7 : g ? -1 : -2; };
+  const niv = new Map();
+  for (const p of liste) {
+    const w = poids(p.grade), k = w === 1e7 ? "d:" + norm(p.grade) : w < 0 ? "x:" + w : "t:" + w;
+    if (!niv.has(k)) niv.set(k, { w, grades: new Set(), l: [] });
+    const n = niv.get(k); n.l.push(p); n.grades.add(p.grade || "Sans grade");
+  }
+  const niveaux = [...niv.values()].sort((a, b) => b.w - a.w);
+  const carte = (p, n) => {
+    const ouvrir = o.ouvrir ? () => o.ouvrir(p.id) : null;
+    const corps = [avatar(p.id, p.nom, 44), h("span", { class: "orga-n" }, h("strong", { text: (p.nom || "—") + (p.id === moi ? " (vous)" : "") }),
+      h("span", { class: "meta", text: [n.grades.size > 1 ? p.grade : "", p.poste && norm(p.poste) !== norm(p.grade) ? p.poste : ""].filter(Boolean).join(" · ") || (ANNU_ROLES.find(([r]) => r === p.role) || [, ""])[1] }))];
+    return h("li", {}, ouvrir ? h("button", { type: "button", class: "orga-p" + (p.id === moi ? " moi" : ""), onclick: ouvrir, title: "Ouvrir la fiche" }, corps) : h("div", { class: "orga-p" + (p.id === moi ? " moi" : "") }, corps));
+  };
+  if (!niveaux.length) return h("p", { class: "muted", text: "Aucun fonctionnaire en service." });
+  return h("div", { class: "orga" }, h("p", { class: "sub", style: "margin:0 0 10px", text: `${liste.length} fonctionnaire${plural(liste.length)} en service, du grade le plus élevé au moins élevé (d’après le barème des payes).` }),
+    h("ol", { class: "orga-l" }, niveaux.map(n => h("li", { class: "orga-niv" },
+      h("div", { class: "orga-t" }, h("strong", { text: [...n.grades].join(" · ") }), h("span", { class: "meta", text: `${n.l.length} personne${plural(n.l.length)}` })),
+      h("ul", { class: "orga-gens" }, n.l.sort((a, b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr")).map(p => carte(p, n)))))));
 }
 function annuaireVue(liste, o) {
   o = o || {};
