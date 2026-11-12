@@ -31,7 +31,7 @@ module.exports = {
 
     // À la main : Recouvrement → Bilan du mois en image.
     const f = await ouvrir(env, {});
-    await onglet(f, "recouvrement"); await pause(f, 400);
+    await onglet(f, "recouvrement"); await f.locator('#rc-seg button[data-rc="clotures"]').click(); await pause(f, 400);
     t.contient(texte(await f.locator("#rc-mois").innerText()), "Novembre 2026", "boutons des derniers mois sous la clôture des semaines");
     await f.locator("#rc-mois button", { hasText: "Novembre 2026" }).click(); await pause(f, 1200);
     t.ok(await f.locator("#dlg img").count() > 0, "le bilan du mois s'affiche en image");

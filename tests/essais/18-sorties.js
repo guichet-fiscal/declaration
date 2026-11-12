@@ -17,7 +17,7 @@ module.exports = {
   nom: "Grosse sortie non vue entre deux relevés",
   async lancer(env, t) {
     const d = await ouvrir(env, { avant: SEED });
-    await onglet(d, "recouvrement"); await pause(d, 500);
+    await onglet(d, "recouvrement"); await d.locator('#rc-seg button[data-rc="comptes"]').click(); await pause(d, 500);
     const comptes = texte(await d.locator("#rc-comptes").innerText());
     t.contient(comptes, "202 000 € sortis du compte sans mouvement lu", "sortie non vue signalée (variation moins mouvements lus)");
     const n = (comptes.match(/sortis du compte sans mouvement lu/g) || []).length;
@@ -25,12 +25,12 @@ module.exports = {
     t.sansErreur(d);
     // Seuil réglable : à 20 000 €, la petite sortie aussi ; à 0, plus rien.
     const e = await ouvrir(env, { avant: SEED + ' window.__SEED.push({ collection: "config", id: "main", data: { blanchiment: { sortieNonVue: 20000 } } });' });
-    await onglet(e, "recouvrement"); await pause(e, 500);
+    await onglet(e, "recouvrement"); await e.locator('#rc-seg button[data-rc="comptes"]').click(); await pause(e, 500);
     t.contient(texte(await e.locator("#rc-comptes").innerText()), "32 000 € sortis du compte", "seuil abaissé : la petite sortie aussi");
     await onglet(e, "reglages"); await e.locator("#set-tab-recouvrement").click(); await pause(e, 300);
     t.egal(await e.locator("#bl-sortie").inputValue(), "20000", "le seuil est dans Réglages → Recouvrement");
     const f = await ouvrir(env, { avant: SEED + ' window.__SEED.push({ collection: "config", id: "main", data: { blanchiment: { sortieNonVue: 0 } } });' });
-    await onglet(f, "recouvrement"); await pause(f, 500);
+    await onglet(f, "recouvrement"); await f.locator('#rc-seg button[data-rc="comptes"]').click(); await pause(f, 500);
     t.ok(!/sortis du compte/.test(texte(await f.locator("#rc-comptes").innerText())), "seuil à 0 : jamais");
   },
 };
