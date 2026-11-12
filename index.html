@@ -4137,6 +4137,7 @@ function subscribe() {
   db.doc("meta/bilanMois").onSnapshot(s => { S.bilanMoisMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilanMois"); schedule(); }, onDbError);
   db.doc("meta/sauvegardeAuto").onSnapshot(s => { S.sauvegardeAutoMeta = s.exists ? (s.data() || null) : null; S.loaded.add("sauvegardeAuto"); schedule(); }, onDbError);
   db.doc("meta/classement").onSnapshot(s => { S.classementMeta = s.exists ? (s.data() || null) : null; S.loaded.add("classementMeta"); schedule(); }, onDbError);
+  db.doc("meta/relancesAuto").onSnapshot(s => { S.relAutoMeta = s.exists ? (s.data() || null) : null; S.loaded.add("relAutoMeta"); schedule(); }, onDbError);
   const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
   col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("declarations", s => { S.declarations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -4247,6 +4248,7 @@ function render() {
   bilanAuto();
   communiqueAuto();
   classementAuto();
+  relancesAuto();
   sauvegardeAuto();
   bilanMoisAuto();
 }
@@ -14202,6 +14204,7 @@ const DISCORD_AUTO = [
   ["versements", "Amendes reçues au Trésor (reçu du versement)", "services"],
   ["prets", "Prêts : convention à l’octroi, exigibilité anticipée", "entreprises"],
   ["vehicules", "Véhicules de société : certificat d’affectation, requalification", "police"],
+  ["relancesAuto", "Relances amiables envoyées toutes seules une fois la date limite ou le délai de paiement passé (un message par sujet, chaque patron mentionné ; la mise en demeure reste à la main)", "relances"],
   ["communiques", "Communiqué des redressements de la semaine, le lendemain de la date limite", "entreprises"],
   ["decisions", "Décisions budgétaires (accord, accord partiel, refus) : la fenêtre de décision garde une case pour ne pas publier", "services"],
   ["demandes", "Demandes de moyens reçues (accusé de réception, déconseillé : une saisie peut contenir des erreurs)", "services"],
@@ -14213,7 +14216,7 @@ const DISCORD_AUTO = [
   ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe"]);
+const AUTO_DEFAUT = new Set(["relancesAuto", "bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
   return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : ch === "sauvegardes" ? w.direction || "" : "");
@@ -14682,7 +14685,7 @@ async function sendRelance(x, type, opts) {
   const periodes = type === "declaration" ? x.keys.slice() : [];
   const ref = S.db.collection("relances").doc();
   const r = { entrepriseId: e.id || null, entrepriseNom: e.nom, type, niveau, periodes, items, montant: items.reduce((s, i) => s + i.montant, 0),
-    echeance: new Date(Math.max(Date.now() + relanceDelayMs(niveau), opts.echeance ? new Date(opts.echeance).getTime() || 0 : 0)).toISOString(), at: nowISO(), by: S.uid || null, byNom: S.agentName || "", groupee: !!opts.groupee };
+    echeance: new Date(Math.max(Date.now() + relanceDelayMs(niveau), opts.echeance ? new Date(opts.echeance).getTime() || 0 : 0)).toISOString(), at: nowISO(), by: S.uid || null, byNom: opts.auto ? "Relance automatique" : S.agentName || "", groupee: !!opts.groupee, auto: !!opts.auto };
   if (!(await write(() => ref.set(r)))) return null;
   return Object.assign({ id: ref.id }, r);
 }
@@ -14779,16 +14782,21 @@ function openRappelEcheance() {
 }
 
 // Relance groupée : un seul message, chaque patron mentionné. On peut décocher une entreprise avant l'envoi.
-function relanceAll(type, seulement) {
-  const list = (type === "declaration" ? retardataires().filter(x => x.keys.length)
-    : impayes().map(x => { const items = x.items.filter(i => !saisieOfItem(i)); return Object.assign({}, x, { items, total: items.reduce((t, i) => t + i.montant, 0) }); }).filter(x => x.items.length))
-    .filter(x => !seulement || seulement.has(x.e.id));
-  if (!list.length) return;
-  const decl = type === "declaration";
-  const lim = longDate(new Date(Date.now() + relanceDelayMs("relance")));
-  const head = decl ? "**Déclarations en retard**\nCes entreprises n’ont pas déposé leur déclaration :" : "**Sommes à payer**\nCes entreprises n’ont pas payé à temps :";
+// Message groupé : un seul message, chaque patron mentionné.
+function relanceGroupeParts(type, xs, auto) {
+  const decl = type === "declaration", lim = longDate(new Date(Date.now() + relanceDelayMs("relance")));
+  const head = (decl ? "**Déclarations en retard**\nCes entreprises n’ont pas déposé leur déclaration :" : "**Sommes à payer**\nCes entreprises n’ont pas payé à temps :") + (auto ? "" : "");
   const foot = (decl ? `Déposez-la sur Discord, avec le modèle habituel, avant le ${lim}. Sinon, vous recevrez une mise en demeure.`
     : `Payez avant le ${lim} auprès de la Direction des impôts et cotisations : lors d’une collecte, ou sur rendez-vous depuis votre espace entreprise. Sinon, vous recevrez une mise en demeure de payer.`) + "\n— Préfecture de police · Direction des impôts et cotisations";
+  const lines = xs.map(x => { const m = entMention(x.e); return `• **${x.e.nom}** ${m || "(sans ping)"} : ${decl ? x.keys.map(periodPlain).join(", ") : money(x.total)}`; });
+  return lines.length ? splitMessage(lines, head, foot) : [];
+}
+// Relance groupée : la liste donnée (dossiers de l'onglet), sinon tous les retardataires ou impayés.
+function relanceAll(type, liste) {
+  const list = liste || (type === "declaration" ? retardataires().filter(x => x.keys.length)
+    : impayes().map(x => { const items = x.items.filter(i => !saisieOfItem(i)); return Object.assign({}, x, { items, total: items.reduce((t, i) => t + i.montant, 0) }); }).filter(x => x.items.length));
+  if (!list.length) return;
+  const decl = type === "declaration";
   const boxes = list.map((x, i) => {
     const cb = h("input", { type: "checkbox", id: "rl-" + i });
     cb.checked = true;
@@ -14797,10 +14805,7 @@ function relanceAll(type, seulement) {
   const pre = h("pre", { class: "discord-preview", id: "rl-preview" });
   const count = h("span", { class: "hint" });
   const chosen = () => boxes.filter(([, cb]) => cb.checked).map(([x]) => x);
-  const parts = () => {
-    const lines = chosen().map(x => { const m = entMention(x.e); return `• **${x.e.nom}** ${m || "(sans ping)"} : ${decl ? x.keys.map(periodPlain).join(", ") : money(x.total)}`; });
-    return lines.length ? splitMessage(lines, head, foot) : [];
-  };
+  const parts = () => relanceGroupeParts(type, chosen());
   const refresh = () => {
     const p = parts(), n = chosen().length;
     pre.textContent = p.length ? p.join("\n\n— — —\n\n") : "Aucune entreprise cochée.";
@@ -14867,7 +14872,7 @@ function rcDossiers(e, opts) {
   for (const keys of grD.values()) {
     const x = { e, keys }, rel = relD.filter(r => (r.periodes || []).some(k => keys.includes(k)));
     const last = rel[0] || null, med = rel.find(isMed) || null;
-    const d = { e, type: "declaration", titre: nonDeclarees(keys), montant: 0, etapes: RC_ETAPES.declaration, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
+    const d = { e, x, depuis: deadline(keys[0]).getTime(), type: "declaration", titre: nonDeclarees(keys), montant: 0, etapes: RC_ETAPES.declaration, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
     if (med && medExpired(med)) {
       const toKey = keys.find(k => (med.periodes || []).includes(k)) || keys[0];
       d.etape = 2; d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}, toujours rien au ${jourHeure(med.echeance)}. Vous pouvez établir l’impôt d’office.`;
@@ -14910,8 +14915,9 @@ function rcDossiers(e, opts) {
     const xf = { e, items: free, total: free.reduce((t, i) => t + i.montant, 0) };
     const rel = relP.filter(r => (r.items || []).some(i => free.some(y => sameItem(i, y))));
     const last = rel[0] || null, med = rel.find(isMed) || null;
-    const d = { e, type: "paiement", titre: `${money(xf.total)} non payés`, refs: free.map(i => i.ref).join(", "), montant: xf.total, etapes: RC_ETAPES.paiement, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
+    const d = { e, x: xf, type: "paiement", titre: `${money(xf.total)} non payés`, refs: free.map(i => i.ref).join(", "), montant: xf.total, etapes: RC_ETAPES.paiement, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
     const depuis = Math.min(...free.map(i => new Date(i.since || Date.now()).getTime() + (i.kind === "pret" ? 0 : payDelayMs())));
+    d.depuis = depuis;
     if (tj) {
       d.etape = 3; d.attente = true; d.statut = `Dossier transmis à la justice le ${dateCourte(tj.at)} (${dossierNo("TJ", tj.id)}).`;
     } else if (med && medExpired(med)) {
@@ -15009,18 +15015,18 @@ function renderRcAFaire() {
   const attente = tous.filter(d => (d.attente || !d.suivant) && d.type !== "apayer").sort((a, b) => String(a.echeance || "9").localeCompare(String(b.echeance || "9")));
   const apayer = tous.filter(d => d.type === "apayer").sort((a, b) => String(a.echeance).localeCompare(String(b.echeance)));
   const ep = echeanceProchaine(), epL = ag && ep && ep.ouverte ? rappelCandidats(ep.k) : [], epN = epL.filter(y => !y.deja).length;
-  const neuves = t => afaire.filter(d => d.type === t && d.etape === 0).map(d => d.e.id);
+  const neuves = t => afaire.filter(d => d.type === t && d.etape === 0).map(d => d.x);
   const nd = neuves("declaration"), np = neuves("paiement");
   const groupe = nd.length >= 2 || np.length >= 2 ? h("div", { class: "rc-groupe" }, h("span", { text: "Relancer d’un coup (un seul message, chaque patron mentionné) :" }),
-    nd.length >= 2 ? h("button", { class: "btn ghost small", type: "button", id: "rc-groupe-decl", onclick: () => relanceAll("declaration", new Set(nd)), text: `${nd.length} déclarations en retard` }) : null,
-    np.length >= 2 ? h("button", { class: "btn ghost small", type: "button", id: "rc-groupe-pay", onclick: () => relanceAll("paiement", new Set(np)), text: `${np.length} sommes à payer` }) : null) : null;
+    nd.length >= 2 ? h("button", { class: "btn ghost small", type: "button", id: "rc-groupe-decl", onclick: () => relanceAll("declaration", nd), text: `${nd.length} déclarations en retard` }) : null,
+    np.length >= 2 ? h("button", { class: "btn ghost small", type: "button", id: "rc-groupe-pay", onclick: () => relanceAll("paiement", np), text: `${np.length} sommes à payer` }) : null) : null;
   fill(box,
     epL.length ? h("div", { class: "lot-bar" },
       h("span", { text: `${periodLabel(ep.k)} : à déclarer avant le ${jourLimite(ep.lim)} à 23 h 59. ${epL.length} entreprise${plural(epL.length)} ne l’${epL.length > 1 ? "ont" : "a"} pas encore fait${epN < epL.length ? ` (${epL.length - epN} déjà rappelée${plural(epL.length - epN)})` : ""}.${rappelAutoOk() && Date.now() < ep.moment.getTime() ? ` Rappel automatique le ${jourLimite(ep.moment)} à ${rappelCfg().heure} h.` : ""}` }),
       h("button", { class: "btn small", type: "button", id: "rc-rappel", onclick: openRappelEcheance, text: "Envoyer le rappel" })) : null,
     h("div", { class: "card" },
       h("div", { class: "card-head" }, h("div", {}, h("h3", { text: `À faire${afaire.length ? " (" + afaire.length + ")" : ""}` }),
-        h("p", { class: "sub", text: afaire.length ? "Chaque ligne a son geste suivant. Les autres gestes sont dans « Autres gestes »." : "Rien à faire : chaque dossier attend une réponse ou est réglé." }))),
+        h("p", { class: "sub", text: (afaire.length ? "Chaque ligne a son geste suivant. Les autres gestes sont dans « Autres gestes »." : "Rien à faire : chaque dossier attend une réponse ou est réglé.") + (autoOn("relancesAuto") ? " Les relances amiables partent toutes seules ; la suite reste à vous." : "") }))),
       groupe,
       afaire.length ? h("ul", { class: "rc-dos-l", id: "rc-afaire-l" }, afaire.slice(0, S.rcAll.af ? 500 : 15).map(d => rcLigne(d))) : null,
       afaire.length > 15 ? h("div", { class: "reg-foot" }, h("button", { class: "linkbtn", type: "button", onclick: () => { S.rcAll.af = !S.rcAll.af; renderRecouvrement(); }, text: S.rcAll.af ? "Réduire" : `Afficher les ${afaire.length - 15} autres` })) : null),
@@ -17604,6 +17610,37 @@ async function communiqueAuto() {
 }
 // Le lundi : classement de la semaine passée et bilan du personnel, publiés une fois au salon des agents
 // par la première session de la Direction, dès que la paye est versée ou que chacun a ses heures.
+// Relances automatiques : une fois la date limite ou le délai de paiement passé, la première session de
+// la Direction ou de l'Inspection relance les dossiers jamais relancés : la relance est notée au dossier
+// de chacun (« Relance automatique ») et un message par sujet part au salon des relances, chaque patron
+// mentionné ; seulement les retards de moins de 14 jours. La mise en demeure, la taxation d'office et
+// la saisie restent à la main. Un verrou
+// (meta/relancesAuto) évite que deux sessions relancent en même temps.
+async function relancesAuto() {
+  if (S.relAutoEnCours || !canAgent() || S.readOnly || !autoOn("relancesAuto")) return;
+  if (!["config", "declarations", "relances", "entreprises", "relAutoMeta"].every(x => S.loaded.has(x))) return;
+  if (Date.now() < (S.relAutoProchain || 0)) return;
+  S.relAutoProchain = Date.now() + 60e3;
+  // Seulement les retards de moins de 14 jours : un vieux dossier jamais relancé attend une décision.
+  const aRelancer = () => activeEnts().flatMap(e => rcDossiers(e)).filter(d => (d.type === "declaration" || d.type === "paiement") && d.etape === 0 && d.suivant && d.x && !d.suspendu && Date.now() - (d.depuis || 0) < 14 * 864e5);
+  if (!aRelancer().length) return;
+  const m = S.relAutoMeta;
+  if (m && m.by !== (S.uid || null) && Date.now() - new Date(m.at).getTime() < 120e3) return;
+  S.relAutoEnCours = true;
+  try {
+    if (!(await write(() => S.db.doc("meta/relancesAuto").set({ at: nowISO(), by: S.uid || null, byNom: S.agentName || "" })))) return;
+    await new Promise(r => setTimeout(r, 2500));
+    if (S.relAutoMeta && S.relAutoMeta.by !== (S.uid || null)) return;
+    const dos = aRelancer();
+    for (const type of ["declaration", "paiement"]) {
+      const faits = [];
+      for (const d of dos.filter(z => z.type === type).slice(0, 20)) if (await sendRelance(d.x, type, { groupee: true, auto: true })) faits.push(d.x);
+      if (!faits.length) continue;
+      const mentions = faits.map(x => entMention(x.e)).filter(Boolean);
+      for (const p of relanceGroupeParts(type, faits, true)) { const r = await postDiscord("relances", { content: p, mentions }); if (!r.ok) break; }
+    }
+  } finally { S.relAutoEnCours = false; }
+}
 async function classementAuto() {
   if (S.classementEnCours || !writer() || !autoOn("classement")) return;
   if (!["config", "classementMeta", "payes", "fonctionnaires", "rappels", "pointages"].every(x => S.loaded.has(x))) return;

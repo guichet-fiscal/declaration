@@ -76,6 +76,17 @@ module.exports = {
     const r5 = rv.find((x) => x.montant === 5000), r45 = rv.find((x) => x.montant === 45000);
     t.ok(r5 && r5.niveau === "relance" && r45 && r45.echeance === "2026-11-05T10:00:00Z", "relance de la nouvelle dette seule, date de la mise en demeure inchangée", JSON.stringify(rv.map((x) => [x.niveau, x.montant, x.echeance])));
     t.sansErreur(nd);
+
+    // Relances automatiques : salon configuré, le dossier jamais relancé l'est tout seul, une fois.
+    const au = await ouvrir(env, { hash: "dashboard", avant: SEED + `window.__discord = { webhooks: { entreprises: "${env.url}/__webhook/entreprises" } };`, maintenant: "2026-11-12T10:00:00Z" });
+    await pause(au, 5500);
+    const ra = (await lignes(au, "relances")).filter((x) => x.auto);
+    t.ok(ra.length === 1 && ra[0].entrepriseId === "e2" && ra[0].type === "declaration" && ra[0].byNom === "Relance automatique", "XPL relancée automatiquement", JSON.stringify(ra).slice(0, 200));
+    const wh = au.webhooks.filter((w) => /Déclarations en retard/.test(w.corps));
+    t.ok(wh.length === 1 && /XPL/.test(wh[0].corps), "un message au salon des relances", au.webhooks.map((w) => w.corps.slice(0, 80)).join(" | "));
+    await onglet(au, "recouvrement"); await pause(au, 300);
+    t.contient(texte(await au.locator("#rc-attente-l").innerText()), "XPL", "XPL passe en attente");
+    t.sansErreur(au);
     t.sansErreur(g);
   },
 };
