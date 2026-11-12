@@ -32,6 +32,13 @@ module.exports = {
     t.ok(n > 1 && n === nav, "annuaire : une pastille par personne", `${n} / ${nav}`);
     t.ok(await a.locator("#dlg .annu li.moi .avatar.photo").count() === 1, "annuaire : sa photo");
     await a.locator("#dlg button", { hasText: "Fermer" }).click(); await pause(a, 200);
+    // Carte professionnelle : dessinée avec la photo.
+    await a.locator("#espace-carte").click(); await pause(a, 1500);
+    const carte = await a.evaluate(() => { const i = document.querySelector("#dlg img.carte-pro"); return i ? { w: i.naturalWidth, h: i.naturalHeight } : null; });
+    t.ok(carte && carte.w === 2024 && carte.h === 1276, "carte professionnelle dessinée", JSON.stringify(carte));
+    t.contient(texte(await a.locator("#dlg").innerText()), "Ma carte professionnelle", "fenêtre de la carte");
+    t.ok(await a.locator("#dlg a[download]").count() === 1, "carte à télécharger");
+    await a.locator("#dlg button", { hasText: "Fermer" }).click(); await pause(a, 200);
     t.sansErreur(a);
 
     // 2. La Direction, depuis la fiche de Bruno ; l'effectif et la messagerie montrent les pastilles.
@@ -46,6 +53,10 @@ module.exports = {
     t.ok(await d.locator("#dlg .profil-tete .avatar.photo").count() === 1 && await d.locator("#dlg button", { hasText: "Changer la photo" }).count() === 1, "fiche rouverte avec la photo");
     await d.keyboard.press("Escape"); await pause(d, 300);
     t.ok(await d.locator("#rh-list li", { hasText: "Bruno LEROY" }).locator(".avatar.photo").count() === 1, "effectif : la photo de Bruno");
+    await d.locator("#rh-list .linkbtn", { hasText: "Bruno LEROY" }).click(); await pause(d, 400);
+    await d.locator("#dlg button", { hasText: "Carte professionnelle" }).click(); await pause(d, 1500);
+    t.ok(await d.locator("#dlg img.carte-pro").count() === 1 && (await d.locator("#dlg .dlg-title").first().innerText()).includes("Bruno LEROY"), "fiche : carte professionnelle de Bruno");
+    await d.keyboard.press("Escape"); await pause(d, 300);
     t.sansErreur(d);
 
     // 3. L'Inspection voit les fiches, sans pouvoir changer la photo des autres.

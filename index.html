@@ -1086,6 +1086,7 @@ input.secu-auto{background:var(--ok-soft)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .sc-sig{color:#a9bdf5}}
 .dag-reponse{display:block;margin-top:4px;padding:6px 10px;border-left:3px solid var(--rule-2);background:var(--paper);border-radius:0 8px 8px 0;font-size:13px;color:var(--ink-2);white-space:pre-wrap}
 .annu{display:grid;gap:12px;margin-top:8px}
+.carte-pro{display:block;width:100%;max-width:640px;margin:0 auto;border-radius:18px;box-shadow:0 10px 30px rgba(19,27,44,.22)}
 .avatar{--av:36px;--av-h:210;width:var(--av);height:var(--av);flex:none;border-radius:50%;display:inline-grid;place-items:center;overflow:hidden;
   background:color-mix(in srgb,hsl(var(--av-h) 55% 52%) 22%,var(--sheet)) center/cover no-repeat;color:color-mix(in srgb,hsl(var(--av-h) 60% 34%) 75%,var(--ink));
   font-weight:650;font-size:calc(var(--av) * .38);line-height:1;letter-spacing:.02em;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 10%,transparent)}
@@ -1096,7 +1097,7 @@ input.secu-auto{background:var(--ok-soft)}
 .avatar-btn{appearance:none;border:0;padding:0;background:none;border-radius:50%;cursor:pointer;position:relative;flex:none}
 .avatar-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .avatar-btn.vide::after{content:"+";position:absolute;right:-2px;bottom:-2px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;font:700 15px/20px system-ui,sans-serif;text-align:center;box-shadow:0 0 0 2px var(--paper)}
-.profil-tete{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.profil-tete{display:flex;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:12px}
 .profil-zone{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;align-items:center}
 .profil-outils{display:grid;gap:10px;min-width:0}
 @media (max-width:520px){.profil-zone{grid-template-columns:1fr;justify-items:center}}
@@ -1409,7 +1410,7 @@ table.es-payes{min-width:0;width:100%}
           <p class="sub" id="espace-sub">Votre fiche, vos payes et vos heures, vos échanges avec l’encadrement.</p>
         </div>
       </div>
-      <div class="toolbar"><button class="btn ghost" type="button" id="espace-guide">Guide</button><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
+      <div class="toolbar"><button class="btn ghost" type="button" id="espace-carte">Ma carte professionnelle</button><button class="btn ghost" type="button" id="espace-guide">Guide</button><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
     </div>
     <div id="espace-main"></div>
   </section>
@@ -6233,13 +6234,104 @@ async function chargerPhotosProfils() {
   if (!S.sb) return;
   try { const { data, error } = await S.sb.rpc("photos_profils"); if (!error && data && typeof data === "object") { S.photosProfils = data; schedule(); } } catch (e) { /* sans photos */ }
 }
+/* ---------- Carte professionnelle ---------- */
+// Format carte bancaire, dessinée dans le navigateur : photo de profil (ou initiales), nom, grade, poste,
+// matricule (tiré de la fiche, toujours le même), date d'entrée ; logos du serveur (« République française
+// · Union européenne », Préfecture). Mon espace pour la sienne ; la fiche pour la Direction, l'Inspection
+// et les RH. Elle suit le grade et la photo du moment.
+const matricule = f => { let x = 7; for (const c of String(f.id || "")) x = (x * 33 + c.codePointAt(0)) >>> 0; return `PP-${String(f.at || "").slice(2, 4) || "00"}${String(x % 10000).padStart(4, "0")}`; };
+function nomCarte(nom) {
+  const mots = String(nom || "").replace(/^[^|]*\|\s*/, "").trim().split(/\s+/).filter(Boolean);
+  const grands = mots.filter(w => w.length > 1 && w === w.toUpperCase() && /\p{L}/u.test(w));
+  const nomF = grands.length ? grands.join(" ") : (mots.slice(-1)[0] || "").toUpperCase();
+  const prenom = mots.filter(w => grands.length ? !grands.includes(w) : w !== mots.slice(-1)[0]).join(" ");
+  return { nom: nomF, prenom };
+}
+async function carteCanvas(f, poste) {
+  try { await Promise.all(['800 40px "Archivo"', '700 18px "Archivo"', '400 17px "Archivo"', '600 17px "IBM Plex Mono"'].map(x => document.fonts.load(x))); } catch (e) { /* polices de secours */ }
+  const at = photoProfilAt(f.id), url = at && S.sb ? await photoProfilUrl(f.id, at) : null;
+  const [logoRF, logoPP, photo] = await Promise.all([ctrImage("assets/contrat-logo.png"), ctrImage("assets/logo-prefecture.png"), url ? ctrImage(url) : Promise.resolve(null)]);
+  const W = 1012, H = 638, sc = 2, R = 30, navy = "#14275a", rouge = "#c8102e", ink = "#122229", ink2 = "#4b5d63";
+  const Fo = { disp: '"Archivo", "Arial Narrow", Arial, sans-serif', body: '"Archivo", Arial, sans-serif', mono: '"IBM Plex Mono", Consolas, monospace' };
+  const c = document.createElement("canvas"); c.width = W * sc; c.height = H * sc;
+  const g = c.getContext("2d"); g.scale(sc, sc);
+  const sp = v => { if ("letterSpacing" in g) g.letterSpacing = v; };
+  const rond = (x, y, w, hh, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + hh, r); g.arcTo(x + w, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  rond(0, 0, W, H, R); g.save(); g.clip();
+  g.fillStyle = "#fbfaf6"; g.fillRect(0, 0, W, H); g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, 132);
+  // Filigrane : le logo de la Préfecture, très pâle, derrière les champs.
+  if (logoPP) { g.globalAlpha = 0.06; g.drawImage(logoPP, W - 420, 150, 360, 360); g.globalAlpha = 1; }
+  // En-tête : logos du serveur et intitulé.
+  if (logoRF) { const lh = 92, lw = logoRF.width * lh / logoRF.height; g.drawImage(logoRF, 36, 22, lw, lh); }
+  if (logoPP) g.drawImage(logoPP, W - 36 - 96, 20, 96, 96);
+  g.textAlign = "center"; g.fillStyle = navy;
+  g.font = `700 15px ${Fo.body}`; sp("2.5px"); g.fillText("PRÉFECTURE DE POLICE · GRAND PARIS", W / 2 + 10, 52);
+  sp("1px"); g.font = `800 34px ${Fo.disp}`; g.fillText("CARTE PROFESSIONNELLE", W / 2 + 10, 92); sp("0px");
+  g.textAlign = "left";
+  g.fillStyle = navy; g.fillRect(0, 132, W, 6); g.fillStyle = rouge; g.fillRect(0, 141, W, 2);
+  // Photo.
+  const px = 44, py = 172, pw = 236, ph = 290;
+  g.save(); rond(px, py, pw, ph, 14); g.clip();
+  if (photo) { const s = Math.max(pw / photo.width, ph / photo.height), w = photo.width * s, hh = photo.height * s; g.drawImage(photo, px + (pw - w) / 2, py + (ph - hh) * 0.3, w, hh); }
+  else { g.fillStyle = `hsl(${teinte(f.nom)} 45% 82%)`; g.fillRect(px, py, pw, ph); g.fillStyle = `hsl(${teinte(f.nom)} 45% 28%)`; g.font = `800 96px ${Fo.disp}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(initiales(f.nom), px + pw / 2, py + ph / 2); g.textAlign = "left"; g.textBaseline = "alphabetic"; }
+  g.restore();
+  g.strokeStyle = "rgba(20,39,90,.35)"; g.lineWidth = 2; rond(px, py, pw, ph, 14); g.stroke();
+  // Champs.
+  const n = nomCarte(f.nom), x0 = 318, maxW = W - x0 - 44;
+  const champ = (lab, val, y, taille, mono) => {
+    g.fillStyle = ink2; g.font = `700 12.5px ${Fo.body}`; sp("1.6px"); g.fillText(lab.toUpperCase(), x0, y); sp("0px");
+    let t = taille; g.font = `${mono ? 600 : 700} ${t}px ${mono ? Fo.mono : Fo.body}`;
+    while (g.measureText(val).width > maxW && t > 14) { t -= 1; g.font = `${mono ? 600 : 700} ${t}px ${mono ? Fo.mono : Fo.body}`; }
+    g.fillStyle = ink; g.fillText(val, x0, y + taille + 8);
+  };
+  champ("Nom", n.nom || "—", 190, 40);
+  champ("Prénom", n.prenom || "—", 262, 28);
+  champ("Grade", f.grade || "—", 322, 24);
+  if (poste) champ("Poste", poste, 378, 22);
+  const half = (maxW - 20) / 2;
+  champ("Matricule", matricule(f), 434, 22, true);
+  g.save(); g.translate(half + 20, 0); champ("En fonction depuis", f.at ? new Date(f.at).toLocaleDateString("fr-FR") : "—", 434, 22, true); g.restore();
+  // Pied : bande bleue.
+  g.fillStyle = rouge; g.fillRect(0, H - 92, W, 2); g.fillStyle = navy; g.fillRect(0, H - 86, W, 86);
+  g.fillStyle = "#ffffff"; g.font = `600 15px ${Fo.body}`;
+  g.fillText("Carte strictement personnelle, propriété de la Préfecture de police.", 44, H - 50);
+  g.font = `400 14px ${Fo.body}`; g.fillStyle = "rgba(255,255,255,.78)";
+  g.fillText("À présenter à toute réquisition. À restituer à la fin des fonctions.", 44, H - 26);
+  g.textAlign = "right"; g.font = `600 17px ${Fo.mono}`; g.fillStyle = "#ffffff"; g.fillText(matricule(f), W - 44, H - 38); g.textAlign = "left";
+  if (f.actif === false) {
+    g.save(); g.translate(W / 2 + 120, H / 2 + 10); g.rotate(-0.16); g.globalAlpha = 0.85; g.strokeStyle = rouge; g.fillStyle = rouge; g.lineWidth = 5;
+    g.font = `800 54px ${Fo.disp}`; sp("6px"); const tw = g.measureText("INVALIDE").width; g.strokeRect(-tw / 2 - 26, -48, tw + 52, 84); g.textAlign = "center"; g.fillText("INVALIDE", 0, 14); g.restore();
+  }
+  g.restore();
+  rond(1, 1, W - 2, H - 2, R); g.strokeStyle = "rgba(20,39,90,.25)"; g.lineWidth = 2; g.stroke();
+  return c;
+}
+async function openCarte(fid, back) {
+  const espace = S.espace && S.espace.fid === fid;
+  const f = espace ? Object.assign({ id: fid }, S.espace.fonctionnaire) : foncOf(fid);
+  if (!f) return;
+  const poste = ((espace ? S.espace.contrats : ctrsOf(fid)) || []).map(x => x.poste).find(Boolean) || "";
+  let c;
+  try { c = await carteCanvas(f, poste); } catch (e) { toast("Impossible de dessiner la carte dans ce navigateur.", true); return; }
+  const url = c.toDataURL("image/png"), fname = "carte-professionnelle-" + norm(nomCarte(f.nom).nom || "agent").replace(/\s+/g, "-");
+  const copier = h("button", { class: "btn ink small", type: "button", text: "Copier l’image", onclick: () => {
+    try { navigator.clipboard.write([new ClipboardItem({ "image/png": new Promise(res => c.toBlob(res, "image/png")) })]).then(() => toast("Carte copiée : collez-la avec Ctrl + V."), () => toast("Le navigateur a refusé la copie : téléchargez-la.", true)); }
+    catch (e) { toast("Ce navigateur ne sait pas copier une image : téléchargez-la.", true); }
+  } });
+  openDialog({ eyebrow: espace ? "Mon espace" : "Personnel de la Préfecture", title: espace ? "Ma carte professionnelle" : `Carte professionnelle de ${f.nom || "l’agent"}`, wide: true,
+    body: [h("img", { class: "carte-pro", src: url, alt: `Carte professionnelle de ${f.nom || "l’agent"}` }),
+      h("p", { class: "hint", style: "margin:0", text: [photoProfilAt(fid) ? "" : "Sans photo de profil, la carte porte les initiales. ", "Elle reprend le grade et la photo du moment : refaites-la après un changement."].join("") })],
+    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }) : h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
+      h("a", { class: "btn ghost small", href: url, download: fname + ".png", text: "Télécharger" }), copier] });
+}
 // Fiche RH d'un fonctionnaire : identité, grade, contrats ; la paye reste dans l'onglet Payes.
 function openAgent(fid, back) {
   const f = foncOf(fid); if (!f) return;
   const w = rhWriter(), reopen = () => openAgent(fid, back), taux = gradeTaux(f.grade);
   openDialog({ eyebrow: "Personnel de la Préfecture", title: f.nom || "Sans nom", stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : null,
     body: [
-      h("div", { class: "profil-tete" }, avatar(f.id, f.nom, 72), peutPhotoProfil(f.id) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openPhotoProfil(f.id, f.nom, reopen), text: f.photoAt ? "Changer la photo" : "Ajouter une photo" }) : null),
+      h("div", { class: "profil-tete" }, avatar(f.id, f.nom, 72), peutPhotoProfil(f.id) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openPhotoProfil(f.id, f.nom, reopen), text: f.photoAt ? "Changer la photo" : "Ajouter une photo" }) : null,
+        h("button", { class: "btn ghost small", type: "button", onclick: () => openCarte(f.id, reopen), text: "Carte professionnelle" })),
       kv([["Grade", f.grade || "—"], ["Taux horaire", taux ? `${money(taux)} de l’heure` : "pas dans le barème"],
         ["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"],
         ["Entré", f.at ? `le ${longDate(new Date(f.at))}${f.byNom ? " · fiche créée par " + f.byNom : ""}` : "—"],
@@ -22108,6 +22200,7 @@ async function openNotifs() {
 $("#notif-btn").addEventListener("click", openNotifs);
 $("#espace-notifs").addEventListener("click", openNotifs);
 $("#espace-guide").addEventListener("click", () => openAccueil(0));
+$("#espace-carte").addEventListener("click", () => { const fid = (S.espace && S.espace.fid) || S.monFid; if (fid) openCarte(fid); else toast("Votre compte n’est relié à aucune fiche de fonctionnaire.", true); });
 
 // Un clic sur une notification ouvre le dossier : « #ouvrir=collection/id ».
 function ouvrirDossier(spec) {
