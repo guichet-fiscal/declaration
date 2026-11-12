@@ -62,6 +62,20 @@ module.exports = {
     const apercu = await g.locator("#rl-preview").innerText();
     t.ok(/Déclarations en retard/.test(apercu) && /XPL/.test(apercu) && /Club 77/.test(apercu) && !/Mirror/.test(apercu), "message groupé : seulement celles jamais relancées", apercu.slice(0, 300));
     await g.locator("#dlg button", { hasText: "Annuler" }).click(); await pause(g, 200);
+
+    // Nouvelle dette pendant une mise en demeure : sa propre ligne, qui repart de la relance.
+    const nd = await ouvrir(env, { hash: "dashboard", avant: SEED + `window.__SEED.filter(r => r.id === "de62026-S44").forEach(r => { r.data.total = 5000; if (r.collection === "decisions") r.data.montant = 5000; });` });
+    await pause(nd, 800);
+    await onglet(nd, "recouvrement"); await pause(nd, 400);
+    const lv = nd.locator("#rc-afaire-l > li", { hasText: "Vanguard Armurerie" });
+    t.egal(await lv.count(), 2, "Vanguard : deux lignes");
+    const tv = texte(await nd.locator("#rc-afaire-l").innerText());
+    t.ok(/5 000 € non payés/.test(tv) && /45 000 € non payés/.test(tv) && /Vous pouvez saisir/.test(tv), "la mise en demeure garde la première dette, la nouvelle à part", tv.slice(0, 500));
+    await lv.filter({ hasText: "5 000 € non payés" }).locator(".rc-dos-a > button", { hasText: "Envoyer la relance" }).click(); await pause(nd, 1500);
+    const rv = (await lignes(nd, "relances")).filter((x) => x.entrepriseId === "e6");
+    const r5 = rv.find((x) => x.montant === 5000), r45 = rv.find((x) => x.montant === 45000);
+    t.ok(r5 && r5.niveau === "relance" && r45 && r45.echeance === "2026-11-05T10:00:00Z", "relance de la nouvelle dette seule, date de la mise en demeure inchangée", JSON.stringify(rv.map((x) => [x.niveau, x.montant, x.echeance])));
+    t.sansErreur(nd);
     t.sansErreur(g);
   },
 };

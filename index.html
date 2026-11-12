@@ -14546,8 +14546,8 @@ function aEchoirItems(e) {
   for (const d of declsOf(e)) {
     const dec = S.decisions[d.id];
     if (!dec || dec.statut !== "validee") continue;
-    for (const y of pretsAvis(d)) if (!y.x.payee && new Date(y.x.date).getTime() >= Date.now())
-      out.push({ kind: "pret", id: y.p.id, idx: [y.i], avis: d.id, ref: pretNo(y.p), label: `Prêt · ${echLabel(y)}, avec l’avis ${dossierNo("DF", d.id)}`, montant: Number(y.x.montant) || 0, plan: false, since: dec.at, exigible: y.x.date });
+    for (const y of pretsAvis(d)) if (!y.x.payee && echExigible(y.p, y.i) >= Date.now())
+      out.push({ kind: "pret", id: y.p.id, idx: [y.i], avis: d.id, ref: pretNo(y.p), label: `Prêt · ${echLabel(y)}, avec l’avis ${dossierNo("DF", d.id)}`, montant: Number(y.x.montant) || 0, plan: false, since: dec.at, exigible: new Date(echExigible(y.p, y.i)).toISOString() });
   }
   for (const p of pensOf(e)) if (p.statut === "due" && !penEchue(p)) out.push({ kind: "pen", id: p.id, ref: dossierNo(p.type === "redressement" ? "AMR" : "PN", p.id), label: p.type === "redressement" ? `Redressement fiscal · ${p.motif || ""}` : `Pénalité · ${p.motif || ""}`, montant: Number(p.montant) || 0, since: p.createdAt, exigible: new Date(new Date(p.createdAt || 0).getTime() + payDelayMs()).toISOString() });
   return out.sort((a, b) => String(a.exigible).localeCompare(String(b.exigible)));
@@ -14858,10 +14858,14 @@ function rcDossiers(e, opts) {
     { text: "Renvoyer la dernière lettre", aide: "Même lettre, même date limite, avec la mention « Rappel »", fn: () => rappelerRelance(r) }] : [];
   const renvois = r => (r && (r.rappels || []).length ? ` Renvoyée ${r.rappels.length} fois.` : "");
 
-  // 1. Déclarations en retard.
-  const keys = missingKeys(e);
-  if (keys.length) {
-    const x = { e, keys }, rel = relancesOf(e).filter(r => r.type === "declaration" && (r.periodes || []).some(k => keys.includes(k)));
+  // 1. Déclarations en retard : une ligne par lettre (une semaine en retard pendant une procédure en
+  //    cours a sa propre ligne, qui repart de la relance, sans toucher à la date de la première).
+  const keysAll = missingKeys(e);
+  const relD = relancesOf(e).filter(r => r.type === "declaration");
+  const grD = new Map();
+  for (const k of keysAll) { const r = relD.find(x => (x.periodes || []).includes(k)); const g = r ? r.id : ""; if (!grD.has(g)) grD.set(g, []); grD.get(g).push(k); }
+  for (const keys of grD.values()) {
+    const x = { e, keys }, rel = relD.filter(r => (r.periodes || []).some(k => keys.includes(k)));
     const last = rel[0] || null, med = rel.find(isMed) || null;
     const d = { e, type: "declaration", titre: nonDeclarees(keys), montant: 0, etapes: RC_ETAPES.declaration, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
     if (med && medExpired(med)) {
@@ -14895,11 +14899,16 @@ function rcDossiers(e, opts) {
     suivant: dir ? { text: "Sanctionner le défaut", fn: () => openDefaut(e, closed) } : null, autres: fiche.slice() });
 
   // 3. Sommes échues.
-  const items = unpaidItems(e), free = items.filter(i => !saisieOfItem(i)), held = items.filter(i => saisieOfItem(i));
-  const tj = S.transmissions.find(t => sameEnt(t, e) && justiceOpen(t));
-  if (free.length) {
+  // 3. Sommes échues : une ligne par lettre, comme les déclarations (une dette arrivée pendant une
+  //    mise en demeure repart de la relance).
+  const items = unpaidItems(e), libres = items.filter(i => !saisieOfItem(i)), held = items.filter(i => saisieOfItem(i));
+  const relP = relancesOf(e).filter(r => r.type === "paiement");
+  const grP = new Map();
+  for (const it of libres) { const r = relP.find(x => (x.items || []).some(y => sameItem(y, it))); const g = r ? r.id : ""; if (!grP.has(g)) grP.set(g, []); grP.get(g).push(it); }
+  for (const free of grP.values()) {
+    const tj = S.transmissions.find(t => sameEnt(t, e) && justiceOpen(t) && (t.items || []).some(i => free.some(y => sameItem(i, y))));
     const xf = { e, items: free, total: free.reduce((t, i) => t + i.montant, 0) };
-    const rel = relancesOf(e).filter(r => r.type === "paiement" && (r.items || []).some(i => free.some(y => sameItem(i, y))));
+    const rel = relP.filter(r => (r.items || []).some(i => free.some(y => sameItem(i, y))));
     const last = rel[0] || null, med = rel.find(isMed) || null;
     const d = { e, type: "paiement", titre: `${money(xf.total)} non payés`, refs: free.map(i => i.ref).join(", "), montant: xf.total, etapes: RC_ETAPES.paiement, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
     const depuis = Math.min(...free.map(i => new Date(i.since || Date.now()).getTime() + (i.kind === "pret" ? 0 : payDelayMs())));
@@ -14925,8 +14934,8 @@ function rcDossiers(e, opts) {
     d.autres.push(...lettre(last));
     if (!convPendingOf(e).length) d.autres.push({ text: "Organiser une collecte", aide: "Le transporteur de fonds passe chercher l’argent", fn: () => openConvForm(e, { motif: "collecte" }) });
     if (dir) {
-      const toMaj = items.filter(i => i.kind === "decl" && !majDone(i));
-      if (toMaj.length) d.autres.push({ text: `Majorer de ${pct(c.majorationImpaye)}`, aide: "Majoration pour paiement tardif", fn: () => majorerImpayes({ e, items }) });
+      const toMaj = free.filter(i => i.kind === "decl" && !majDone(i));
+      if (toMaj.length) d.autres.push({ text: `Majorer de ${pct(c.majorationImpaye)}`, aide: "Majoration pour paiement tardif", fn: () => majorerImpayes({ e, items: free }) });
       if (!d.suivant || d.suivant.text !== "Saisir") d.autres.push({ text: "Saisir maintenant", aide: "Sur son compte, chez ceux qui lui doivent de l’argent, ou ses biens", fn: () => openSaisie(e) });
       d.autres.push(tj ? { text: "Ouvrir le dossier de justice", fn: () => openTransmission(tj.id) } : { text: "Transmettre à la justice", fn: () => openJustice(e) });
     }
@@ -19559,10 +19568,17 @@ const pretTotal = p => (p.echeances || []).reduce((t, x) => t + (Number(x.montan
 const pretReste = p => (pretVerse(p) ? Math.max(0, pretTotal(p) - pretPaye(p)) : 0);
 const pretCapitalRestant = p => (pretVerse(p) ? (p.echeances || []).filter(x => !x.payee).reduce((t, x) => t + (Number(x.capital) || 0), 0) : 0);
 // Échéances exigibles : leur date est passée, ou la Direction a prononcé l'exigibilité anticipée.
+// Échéance réclamée avec un avis : exigible quand l'avis l'est, pas avant (même date pour le patron).
+function echExigible(p, i) {
+  const x = (p.echeances || [])[i] || {}, t = new Date(x.date).getTime();
+  if (x.payee) return t;
+  const d = avisDeEcheance(p, i), due = d ? payDue(d) : null;
+  return due ? Math.max(t, due.getTime()) : t;
+}
 function pretDues(p) {
   if (p.statut !== "en_cours") return [];
   const now = Date.now(), ex = p.exigibleLe ? new Date(p.exigibleLe).getTime() : null;
-  return (p.echeances || []).map((x, i) => Object.assign({ i }, x)).filter(x => !x.payee && (new Date(x.date).getTime() < now || (ex && ex <= now)));
+  return (p.echeances || []).map((x, i) => Object.assign({ i }, x)).filter(x => !x.payee && ((ex && ex <= now) || (new Date(x.date).getTime() < now && echExigible(p, x.i) < now)));
 }
 const pretDuMontant = p => pretDues(p).reduce((t, x) => t + (Number(x.montant) || 0), 0);
 // Avis d'imposition et prêt : l'avis de chaque période réclame aussi les échéances de prêt qui tombent
