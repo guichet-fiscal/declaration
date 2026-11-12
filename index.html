@@ -1106,6 +1106,9 @@ button.ts-p{cursor:pointer}
 .ts-p.warn{background:var(--warn-soft);color:var(--warn);font-weight:600}
 .ts-p.accent{background:var(--accent-soft);color:var(--accent)}
 .ts td.num{text-align:right;white-space:nowrap}
+.pret-cap{display:grid;gap:3px;margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--rule);border-left:4px solid var(--ok);background:var(--paper);font-size:13.5px;line-height:1.45}
+.pret-cap.warn{border-left-color:var(--warn)}.pret-cap.bad{border-left-color:var(--bad)}
+.pret-cap.ok strong{color:var(--ok)}.pret-cap.warn strong{color:var(--warn)}.pret-cap.bad strong{color:var(--bad)}
 .d-releves{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:10px 12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
 .d-releves p{margin:0;flex:1 1 320px;font-size:13.5px;line-height:1.45}.d-releves .meta{display:block}
 .cr-jour+.cr-jour{margin-top:10px}
@@ -19528,6 +19531,33 @@ function exigerPret(p) {
 }
 
 // Formulaire : demande (tout agent) ou accord et versement (Direction).
+// Capacité de remboursement : le résultat moyen après impôts des 4 dernières déclarations (par période,
+// comme les échéances), moins les échéances des autres prêts en cours ; avec les impayés et le dernier
+// solde du compte connu. Une indication pour décider, pas une règle.
+function capaciteRemb(e, sauf) {
+  if (!e || !e.id) return null;
+  const ds = declsOf(e).filter(d => dStatus(d) !== "rejetee" && !d.taxationOffice).sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 4);
+  const moy = f => (ds.length ? ds.reduce((t, d) => t + f(d), 0) / ds.length : 0);
+  const res = Math.round(moy(d => (Number(d.ca) || 0) - (Number(d.charges) || 0) - (Number(d.masse) || 0))), imp = Math.round(moy(d => dMontant(d)));
+  const autres = (S.prets || []).filter(p => sameEnt(p, e) && p.statut === "en_cours" && p.id !== sauf);
+  const charge = Math.round(autres.reduce((t, p) => t + (Number(((p.echeances || []).find(x => !x.payee) || {}).montant) || 0), 0));
+  const du = Math.round(unpaidItems(e).reduce((t, x) => t + (Number(x.montant) || 0), 0));
+  const rel = relevesOf(e)[0] || null;
+  return { n: ds.length, res, imp, net: res - imp, charge, dispo: res - imp - charge, du, autres: autres.length, solde: rel ? Number(rel.montant) : null, soldeAt: rel ? rel.at : null };
+}
+function capaciteVue(e, ech, per, sauf) {
+  const c = capaciteRemb(e, sauf);
+  if (!c) return null;
+  if (!c.n) return h("div", { class: "pret-cap warn" }, h("strong", { text: "Capacité de remboursement inconnue" }), h("span", { text: "Aucune déclaration retenue : rien pour juger de ses revenus." }));
+  const part = c.dispo > 0 ? ech / c.dispo : Infinity;
+  const tone = part <= 0.5 ? "ok" : part <= 1 ? "warn" : "bad";
+  const avis = !(ech > 0) ? "" : part <= 0.5 ? `L’échéance prend ${Math.round(part * 100)} % de ce qui reste : remboursement soutenable.` : part <= 1 ? `L’échéance prend ${Math.round(part * 100)} % de ce qui reste : peu de marge.` : c.dispo > 0 ? `L’échéance dépasse ce qui reste chaque ${per} (${Math.round(part * 100)} %) : remboursement très incertain.` : `Rien ne reste chaque ${per} après les impôts${c.charge ? " et les autres prêts" : ""} : remboursement très incertain.`;
+  return h("div", { class: "pret-cap " + tone, id: "pret-cap" },
+    h("strong", { text: `Capacité de remboursement : ${money(Math.max(0, c.dispo))} par ${per}` }),
+    h("span", { text: `Résultat moyen ${money(c.res)} − impôts ${money(c.imp)}${c.charge ? ` − échéances de ${c.autres} autre${plural(c.autres)} prêt${plural(c.autres)} ${money(c.charge)}` : ""}, sur ${c.n} déclaration${plural(c.n)}.` }),
+    avis ? h("span", { style: "font-weight:600", text: avis }) : null,
+    c.du || c.solde != null ? h("span", { class: "meta", text: [c.du ? `${money(c.du)} d’impôts encore dus` : "", c.solde != null ? `compte à ${money(c.solde)} au dernier relevé (${fmtDateTime(new Date(c.soldeAt))})` : ""].filter(Boolean).join(" · ") }) : null);
+}
 function openPretForm(e, demande) {
   const dir = writer(), c = cfg(), per = c.periodicite === "mois" ? "mois" : "semaine";
   const ent = h("input", { id: "pf-ent", list: "ent-options", autocomplete: "off", placeholder: "Nom de l’entreprise" }); if (e) ent.value = e.nom;
@@ -19558,9 +19588,10 @@ function openPretForm(e, demande) {
     fill(sim, Number(mt.value) > 0 ? [
       kv([["Capital", money(p.cap)], ["Intérêts", money(p.inter)], ["Total à rembourser", money(p.tot), "tot"]]),
       h("p", { class: "hint", style: "margin:6px 0 0", text: p.echeances.length > 1 ? `${p.echeances.length} échéances ${p.echeances.every(x => x.montant === p.echeances[0].montant) ? "de" : "d’environ"} ${money(p.echeances[p.echeances.length - 1].montant)}, du ${fmtDate(new Date(p.echeances[0].date))} au ${fmtDate(new Date(p.echeances[p.echeances.length - 1].date))}.` : `Remboursement en une fois le ${fmtDate(new Date(p.echeances[0].date))}.` }),
-      dir && p.cap > t.solde ? h("p", { class: "err", style: "margin:4px 0 0", text: `Le Trésor ne dispose que de ${money(t.solde)}.` }) : null] : h("p", { class: "hint", style: "margin:0", text: "Indiquez le montant pour voir l’échéancier." }));
+      dir && p.cap > t.solde ? h("p", { class: "err", style: "margin:4px 0 0", text: `Le Trésor ne dispose que de ${money(t.solde)}.` }) : null] : h("p", { class: "hint", style: "margin:0", text: "Indiquez le montant pour voir l’échéancier." }),
+      capaciteVue(demande ? entOf(demande) : findEnt(ent.value.trim()), Number(mt.value) > 0 ? Math.max(...p.echeances.map(x => Number(x.montant) || 0)) : 0, per, demande ? demande.id : null));
   };
-  [mt, tx, mode, nb, first].forEach(x => x.addEventListener("input", draw));
+  [mt, tx, mode, nb, first, ent].forEach(x => x.addEventListener("input", draw));
   mode.addEventListener("change", draw);
   const save = async (grant, ev) => {
     const en = demande ? entOf(demande) : findEnt(ent.value);
