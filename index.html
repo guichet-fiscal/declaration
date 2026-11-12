@@ -1033,7 +1033,7 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .secu-photo button{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(19,27,44,.75);color:#fff;font-size:14px;line-height:1;cursor:pointer}
 .secu-ajout{display:grid;gap:6px;padding:12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
 .secu-grande{display:grid;gap:10px}.secu-grande img{max-width:100%;border-radius:8px;border:1px solid var(--rule)}
-.secu-present{border-left:3px solid var(--ok);padding-left:10px}
+.ent-list li.secu-present{border-left:3px solid var(--ok);padding-left:10px}
 .secu-ajout-l{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .secu-ajout-l input[type=file]{flex:1 1 200px;min-width:0}
 .secu-etat{margin:0;font-size:13px;line-height:1.45;color:var(--ok)}.secu-etat.faible{color:var(--warn)}
@@ -1050,6 +1050,21 @@ button.ag-num:hover{background:var(--accent-soft);color:var(--accent)}
 .secu-dedans{margin:0;font-size:13.5px;font-weight:600;color:var(--ok)}
 .secu-alerte{margin:0;padding:6px 10px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-weight:600;font-size:13.5px}
 input.secu-auto{background:var(--ok-soft)}
+.secu-ident,.secu-signaux{display:grid;gap:10px}
+.secu-signal{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--bad);border-left-width:4px;border-radius:10px;background:var(--bad-soft);color:var(--ink)}
+.secu-signal.warn{border-color:var(--warn);background:var(--warn-soft)}
+.secu-signal-t{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.secu-signal-t strong{color:var(--bad);font-size:14.5px}.secu-signal.warn .secu-signal-t strong{color:var(--warn)}
+.secu-signal p{margin:0;font-size:13.5px;line-height:1.45;white-space:pre-wrap}
+.secu-signal .meta{font-size:12.5px}
+.secu-signal .secu-photo{width:84px;height:56px;flex:none}
+.ent-list li.secu-signale{border-left:3px solid var(--bad);padding-left:10px}
+.ent-list li.secu-attendu{border-left:3px solid var(--info, var(--ink-3));padding-left:10px}
+.ent-list li.secu-retard{border-left:3px solid var(--warn);padding-left:10px}
+.secu-titre{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 8px}
+.secu-prochains{margin:8px 0 0}.secu-prochains summary{cursor:pointer;font-size:13.5px;color:var(--ink-2);padding:4px 0}
+.secu-bandeau{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:10px 12px;border-radius:10px;border:1px solid var(--warn);background:var(--warn-soft)}
+.secu-bandeau p{margin:0;flex:1 1 260px;font-size:13.5px;line-height:1.45}
 .guide-liste{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .guide-liste li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center;padding:11px 13px;border:1px solid var(--rule);border-radius:10px;background:var(--paper)}
 .guide-liste strong{font-size:14px}
@@ -1404,11 +1419,12 @@ table.es-payes{min-width:0;width:100%}
     <div class="panel-head">
       <div>
         <h2>Sécurité</h2>
-        <p class="sub">Service de la protection : les entrées dans la Préfecture, les contrôles d’identité avec la photo de la pièce, les rapports.</p>
+        <p class="sub">Service de la protection : les visiteurs attendus, les entrées dans la Préfecture, les contrôles d’identité avec la photo de la pièce, les rapports et les personnes signalées.</p>
       </div>
       <div class="toolbar">
         <button class="btn ghost" type="button" id="secu-entree">Nouvelle entrée</button>
         <button class="btn ghost" type="button" id="secu-controle">Nouveau contrôle</button>
+        <button class="btn ghost" type="button" id="secu-courante">Main courante</button>
         <button class="btn" type="button" id="secu-rapport">Nouveau rapport</button>
       </div>
     </div>
@@ -4425,6 +4441,8 @@ function todoItems() {
     const echP = echeancesPersonnel().filter(x => x.type !== "objectif");
     add(echP.length, `Fin${plural(echP.length)} de période d’essai ou de CDD`, echP.slice(0, 3).map(x => `${x.f.nom} : ${x.type === "essai" ? "essai" : "CDD"} ${x.passe ? "terminé" : x.quand}`).join(", "), () => { S.rhEspace = "bord"; allerA("personnel"); });
     if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
+    const so = secuOubliees();
+    add(so.length, `Sortie${plural(so.length)} oubliée${plural(so.length)} au registre des entrées`, `Dans les locaux depuis plus de ${secuOubliH()} h : ${so.slice(0, 3).map(x => x.nom).join(", ")}`, () => { S.secuVue = "entrees"; allerA("securite"); });
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
     add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA(ptFerme() ? "payes" : "pointeuse"));
   }
@@ -6521,7 +6539,7 @@ function openAccueil(etape) {
 // registre (journal, sauvegardes) ; les photos vont dans l'espace privé « securite ». Les agents écrivent
 // les entrées et les contrôles (tous peuvent noter une sortie) et leurs propres rapports ; les responsables
 // et la Direction lisent tout, marquent les rapports comme lus et suppriment.
-const SECU_COLS = ["securiteEntrees", "securiteControles", "securiteRapports"];
+const SECU_COLS = ["securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus"];
 const SECU_GRADE = /service de la protection|agent de s[ée]curit[ée]|(responsable|directeur|directrice|chef).*s[ée]curit[ée]/i;
 const protectionDe = grade => (!SECU_GRADE.test(grade || "") ? null : /^(responsable|directeur|directrice|chef)/i.test(String(grade).trim()) ? "responsable" : "agent");
 const SECU_MOTIFS = { rdv: "Rendez-vous", convocation: "Convocation", depot: "Dépôt de document", livraison: "Livraison", autre: "Autre" };
@@ -6717,7 +6735,7 @@ function secuSuggestions(input, sauf, choisir) {
     items = norm(input.value).length >= 2 ? secuChercher(input.value, sauf) : [];
     if (items.length === 1 && items[0].cle === cleNom(input.value)) items = [];
     fill(liste, items.map(p => h("button", { type: "button", class: "secu-sugg-l", role: "option", onmousedown: ev => ev.preventDefault(), onclick: () => prendre(p) },
-      h("span", { class: "secu-sugg-n" }, h("strong", { text: p.nom }), p.alertes.length ? chip(SECU_RESULTATS[p.alertes[p.alertes.length - 1].resultat] || SECU_RESULTATS.anomalie) : null),
+      h("span", { class: "secu-sugg-n" }, h("strong", { text: p.nom }), secuSignale(p.nom, p.numero).slice(0, 1).map(y => chip(SECU_SIGNAL[y.motif] || SECU_SIGNAL.autre)), p.alertes.length ? chip(SECU_RESULTATS[p.alertes[p.alertes.length - 1].resultat] || SECU_RESULTATS.anomalie) : null),
       h("span", { class: "meta", text: secuResume(p) }))));
     actif = -1; liste.hidden = !items.length; input.setAttribute("aria-expanded", String(!!items.length));
   };
@@ -6738,6 +6756,14 @@ function secuSuggestions(input, sauf, choisir) {
 function secuIdentite(ch) {
   const champs = Object.keys(SECU_CHAMPS).filter(k => ch[k]);
   const fiche = h("div", { class: "secu-fiche", "aria-live": "polite", hidden: true });
+  // Personne signalée (nom ou numéro de la pièce) : averti même pour quelqu'un d'inconnu au registre.
+  const signal = h("div", { class: "secu-signaux", role: "alert", hidden: true });
+  const bloc = h("div", { class: "secu-ident", hidden: true }, signal, fiche);
+  const majSignal = () => {
+    const l = secuSignale(ch.nom.value, ch.numero ? ch.numero.value : "");
+    fill(signal, l.map(x => secuSignalCarte(x))); signal.hidden = !l.length; bloc.hidden = signal.hidden && fiche.hidden;
+  };
+  if (ch.numero) ch.numero.addEventListener("input", majSignal);
   const marquer = (k, v) => { ch[k].value = v; ch[k].dataset.auto = "1"; ch[k].classList.add("secu-auto"); };
   champs.forEach(k => ch[k].addEventListener("input", () => { delete ch[k].dataset.auto; ch[k].classList.remove("secu-auto"); }));
   const libre = k => !ch[k].value.trim() || ch[k].dataset.auto === "1";
@@ -6748,7 +6774,7 @@ function secuIdentite(ch) {
   };
   function majFiche(msg) {
     const p = secuPersonnes(ch.sauf).get(cleNom(ch.nom.value));
-    if (!p) { fiche.hidden = true; fiche.replaceChildren(); return; }
+    if (!p) { fiche.hidden = true; fiche.replaceChildren(); majSignal(); return; }
     const manque = champs.some(k => k !== "nom" && p[k] && ch[k].value.trim() !== p[k]) || (p.photo && !ch.photos.total());
     // Encore dans les locaux (entrée sans sortie) : dit depuis quand.
     const dedans = secuListe("securiteEntrees").filter(e => !e.sortie && e.id !== ch.sauf && memeSecu(e.nom, p.nom)).sort((a, b) => String(b.arrivee).localeCompare(String(a.arrivee)))[0] || null;
@@ -6758,7 +6784,7 @@ function secuIdentite(ch) {
       p.alertes.map(a => h("p", { class: "secu-alerte", text: `${(SECU_RESULTATS[a.resultat] || SECU_RESULTATS.anomalie)[0]} au contrôle du ${fmtDateTime(new Date(a.date))}` })),
       dedans ? h("p", { class: "secu-dedans", text: `Dans les locaux depuis ${quandSecu(dedans.arrivee)}${dedans.visite ? " · " + dedans.visite : ""}.` }) : null,
       action || manque ? h("div", { class: "secu-fiche-actions" }, action, manque ? h("button", { class: "btn ghost small", type: "button", onclick: () => reprendre(p), text: p.photo && !ch.photos.total() ? "Reprendre son identité et la photo de sa pièce" : "Reprendre son identité" }) : null) : null);
-    fiche.hidden = false;
+    fiche.hidden = false; majSignal();
   }
   ch.nom.addEventListener("input", () => majFiche());
   const sugg = secuSuggestions(ch.nom, ch.sauf, reprendre);
@@ -6782,7 +6808,7 @@ function secuIdentite(ch) {
   }
   const nouvelle = f => { if (libre("nom")) lire(f); };
   majFiche();
-  return { fiche, sugg, lire, nouvelle, reprendre, majFiche };
+  return { fiche: bloc, sugg, lire, nouvelle, reprendre, majFiche, signales: () => secuSignale(ch.nom.value, ch.numero ? ch.numero.value : "") };
 }
 // Lecture de la pièce d'identité : texte reconnu → identité.
 // Bande MRZ d'abord (carte de 2021 [3 × 30], ancienne carte [2 × 36], passeport [2 × 44]),
@@ -7131,9 +7157,9 @@ function openSecuEntree(x, back, pre) {
   const nom = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom" }); nom.value = v.nom || d.nom || "";
   const qualite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : avocat, patron de Taxi G7, citoyen" }); qualite.value = v.qualite || d.qualite || "";
   const naissance = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Ex. : 12/03/1994" }); naissance.value = v.naissance || d.naissance || "";
-  const motif = h("select", {}, Object.entries(SECU_MOTIFS).map(([k, t]) => h("option", { value: k, text: t }))); motif.value = v.motif || "rdv";
-  const precision = h("input", { autocomplete: "off", maxlength: "120", placeholder: "Précision (facultatif)" }); precision.value = v.precision || "";
-  const visite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : Direction des finances publiques" }); visite.value = v.visite || "";
+  const motif = h("select", {}, Object.entries(SECU_MOTIFS).map(([k, t]) => h("option", { value: k, text: t }))); motif.value = v.motif || d.motif || "rdv";
+  const precision = h("input", { autocomplete: "off", maxlength: "120", placeholder: "Précision (facultatif)" }); precision.value = v.precision || d.precision || "";
+  const visite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : Direction des finances publiques" }); visite.value = v.visite || d.visite || "";
   const numero = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); numero.value = v.numero || d.numero || "";
   const arrivee = h("input", { type: "datetime-local" }); arrivee.value = toLocalInput(v.arrivee ? new Date(v.arrivee) : new Date());
   const note = h("textarea", { rows: "2", maxlength: "500" }); note.value = v.note || "";
@@ -7145,23 +7171,29 @@ function openSecuEntree(x, back, pre) {
   ident = secuIdentite({ nom, naissance, numero, qualite, photos, sauf: v.id, actionConnu: sortieAvant });
   for (const p of d.photos || []) photos.reprendre(p);
   if (d.fichiers && d.fichiers.length) photos.ajouterFichiers(d.fichiers);
-  if (pre) { [nom, naissance, numero, qualite].forEach(el => { if (el.value) { el.dataset.auto = "1"; el.classList.add("secu-auto"); } }); photos.montrer(d.controle ? `Identité reprise du contrôle${d.date ? " du " + quandSecu(d.date) : ""}.` : "Identité déjà enregistrée : reprise de son dernier dossier. Vérifiez qu’elle correspond à la personne présente."); }
+  if (pre) { [nom, naissance, numero, qualite].forEach(el => { if (el.value) { el.dataset.auto = "1"; el.classList.add("secu-auto"); } }); photos.montrer(d.attendu ? "Visiteur attendu : vérifiez sa pièce d’identité avant d’enregistrer." : d.controle ? `Identité reprise du contrôle${d.date ? " du " + quandSecu(d.date) : ""}.` : "Identité déjà enregistrée : reprise de son dernier dossier. Vérifiez qu’elle correspond à la personne présente."); }
   ident.majFiche();
   const err = h("p", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Enregistrer l’entrée" });
   go.addEventListener("click", async () => {
     if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom de la personne."; nom.focus(); return; }
+    // Interdit d'entrée : un second clic pour passer outre (consigne de la Direction, par exemple).
+    if (!x && ident.signales().some(y => y.motif === "interdit") && go.dataset.confirme !== "1") {
+      go.dataset.confirme = "1"; go.textContent = "Interdit d’entrée : enregistrer quand même"; err.textContent = "Cette personne est interdite d’entrée. Refusez-la, ou cliquez à nouveau pour noter son entrée malgré tout."; return;
+    }
     go.disabled = true;
     const rid = x ? x.id : secuNouvelId("securiteEntrees");
     const ph = await photos.envoyer("securiteEntrees", rid);
     if (!ph) { go.disabled = false; return; }
     const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), qualite: qualite.value.trim(), naissance: naissance.value.trim(), motif: motif.value, precision: precision.value.trim(), visite: visite.value.trim(),
       numero: numero.value.trim(), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null },
-      !x && d.controle ? { controle: d.controle } : {});
+      !x && d.controle ? { controle: d.controle } : {}, !x && d.attendu ? { attendu: d.attendu } : {});
     delete data.id;
     if (await secuEnregistrer("securiteEntrees", rid, data)) {
       const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
-      toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.`); if (back) back(); else closeDialog();
+      toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.`);
+      if (!x && d.attendu) secuArrivee(d.attendu, rid, data);
+      if (back) back(); else closeDialog();
     } else go.disabled = false;
   });
   openDialog({ eyebrow: "Sécurité · entrées", title: x ? "Modifier l’entrée" : "Nouvelle entrée", wide: true,
@@ -7183,9 +7215,10 @@ function openSecuEntreeVue(id) {
   const reopen = () => openSecuEntreeVue(id), resp = secuResp();
   openDialog({ eyebrow: "Sécurité · entrée", title: x.nom || "Entrée", stampEl: x.sortie ? stamp(["SORTI", "muted"]) : stamp(["DANS LES LOCAUX", "ok"]), wide: true,
     body: [kv([["Qualité", x.qualite || "—"], ["Motif", (SECU_MOTIFS[x.motif] || "—") + (x.precision ? " · " + x.precision : "")], ["Personne ou service visité", x.visite || "—"],
-      ["Arrivée", fmtDateTime(new Date(x.arrivee))], ["Sortie", x.sortie ? `${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " · notée par " + x.sortiePar : ""}` : "pas encore notée"],
+      ["Arrivée", fmtDateTime(new Date(x.arrivee))], ["Sortie", x.sortie ? (x.sortieOubliee ? `heure inconnue · close le ${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " par " + x.sortiePar : ""}` : `${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " · notée par " + x.sortiePar : ""}`) : "pas encore notée"],
       x.naissance ? ["Date de naissance", x.naissance] : null,
       ["Pièce d’identité", x.pieceVue ? (x.numero ? "vue · n° " + x.numero : "vue") : "non vérifiée"], ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
+      secuSignale(x.nom, x.numero).map(y => secuSignalCarte(y, { voir: true })),
       (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
       resp ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteEntrees", x)) { toast("Entrée supprimée."); closeDialog(); } }, text: "Supprimer" }) : null,
@@ -7260,6 +7293,7 @@ function openSecuControleVue(id) {
   openDialog({ eyebrow: "Sécurité · contrôle d’identité", title: x.nom || "Contrôle", stampEl: stamp([res[0].toUpperCase(), res[1]]), wide: true,
     body: [kv([["Date de naissance", x.naissance || "—"], ["Numéro de la pièce", x.numero || "—"], ["Date", fmtDateTime(new Date(x.date))], ["Lieu", x.lieu || "—"],
       ["Motif", SECU_CTRL_MOTIFS[x.motif] || "—"], ["Résultat", res[0]], ["Contrôlé par", x.agent || "—"], x.notes ? ["Notes", x.notes] : null]),
+      secuSignale(x.nom, x.numero).map(y => secuSignalCarte(y, { voir: true })),
       (x.photos || []).length ? sec("Pièce d’identité", h("div", { class: "secu-grande" }, x.photos.map(p => { const img = h("img", { alt: "Pièce d’identité" }); secuPhotoUrl(p.path).then(u => { if (u) img.src = u; }); return img; })))
         : h("p", { class: "muted", text: "Pas de photo de la pièce." }),
       autres.length ? sec(`Autres contrôles de ${x.nom}`, h("ul", { class: "ent-list" }, autres.slice(0, 10).map(c => h("li", {},
@@ -7267,10 +7301,273 @@ function openSecuControleVue(id) {
         chip(SECU_RESULTATS[c.resultat] || SECU_RESULTATS.conforme), h("span", {}))))) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
       secuResp() ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteControles", x)) { toast("Contrôle supprimé."); closeDialog(); } }, text: "Supprimer" }) : null,
-      h("span", { class: "spacer" }), secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuControle(x, reopen), text: "Modifier" }) : null,
+      h("span", { class: "spacer" }),
+      secuResp() && !secuSignale(x.nom, x.numero).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuSignal(null, { nom: x.nom, naissance: x.naissance, numero: x.numero, motif: x.resultat === "recherche" ? "recherche" : "autre", photos: (x.photos || []).slice(0, 1), controle: x.id }, reopen), text: "Signaler cette personne" }) : null,
+      secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuControle(x, reopen), text: "Modifier" }) : null,
       secuEcrit() && !dansLesLocaux(x.nom) ? h("button", { class: "btn small", type: "button", onclick: () => openSecuEntree(null, reopen, secuPreEntree(x)), text: "Noter son entrée" }) : null] });
 }
 const dansLesLocaux = nom => secuListe("securiteEntrees").some(e => !e.sortie && memeSecu(e.nom, nom));
+
+// Personnes signalées (mise à jour 42) : interdit d'entrée, recherchée, à accompagner, à surveiller. Les
+// responsables et la Direction les tiennent ; le guichet avertit l'agent dès que le nom ou le numéro de la
+// pièce correspond, à l'entrée comme au contrôle, même pour quelqu'un d'inconnu au registre.
+const SECU_SIGNAL = { interdit: ["Interdit d’entrée", "bad"], recherche: ["Personne recherchée", "bad"], accompagner: ["À accompagner", "warn"], autre: ["À surveiller", "warn"] };
+const numPiece = x => String(x || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const signalActif = s => s.actif !== false && !(s.jusquau && s.jusquau < jourCle(new Date()));
+const signalRang = s => ((SECU_SIGNAL[s.motif] || SECU_SIGNAL.autre)[1] === "bad" ? 0 : 1);
+function secuSignale(nom, numero) {
+  const n = numPiece(numero), k = cleNom(nom);
+  return secuListe("securiteSignalements").filter(s => signalActif(s) && ((k && memeSecu(s.nom, nom)) || (n.length >= 5 && numPiece(s.numero) === n)))
+    .sort((a, b) => signalRang(a) - signalRang(b));
+}
+function secuSignalCarte(s, o) {
+  o = o || {};
+  const m = SECU_SIGNAL[s.motif] || SECU_SIGNAL.autre, photo = (s.photos || []).find(p => p && p.path);
+  return h("div", { class: "secu-signal" + (m[1] === "bad" ? "" : " warn") },
+    h("div", { class: "secu-signal-t" }, photo ? secuMiniature(photo) : null,
+      h("div", { style: "display:grid;gap:2px;min-width:0" }, h("strong", { text: `${m[0]} : ${s.nom}` }),
+        h("span", { class: "meta", text: [s.naissance ? "né(e) le " + s.naissance : "", s.numero ? "pièce n° " + s.numero : "", `signalé${s.agent ? " par " + s.agent : ""} ${quandSecu(s.at)}`, s.jusquau ? "jusqu’au " + jourTxt(s.jusquau) : ""].filter(Boolean).join(" · ") }))),
+    s.consigne ? h("p", { text: s.consigne }) : null,
+    o.voir ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start", onclick: () => openSecuSignalVue(s.id), text: "Voir le signalement" }) : null);
+}
+function openSecuSignal(x, pre, back) {
+  if (!secuResp()) return;
+  const v = x || pre || {};
+  const nom = h("input", { id: "ss-nom", autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom" }); nom.value = v.nom || "";
+  const naissance = h("input", { id: "ss-naissance", autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); naissance.value = v.naissance || "";
+  const numero = h("input", { id: "ss-numero", autocomplete: "off", maxlength: "40", placeholder: "Facultatif : reconnu même sous un autre nom" }); numero.value = v.numero || "";
+  const motif = h("select", { id: "ss-motif" }, Object.entries(SECU_SIGNAL).map(([k, t]) => h("option", { value: k, text: t[0] }))); motif.value = v.motif || "interdit";
+  const jusquau = h("input", { id: "ss-jusquau", type: "date" }); jusquau.value = (x && x.jusquau) || "";
+  const consigne = h("textarea", { id: "ss-consigne", rows: "3", maxlength: "1000", placeholder: "Ce que l’agent doit faire et pourquoi. Ex. : refuser l’entrée et prévenir la Direction ; menaces envers un agent le 10 novembre." }); consigne.value = v.consigne || "";
+  const photos = secuChampPhotos(x ? x.photos : null, "Photo de la personne ou de sa pièce (facultatif) : elle s’affiche à l’agent avec l’alerte.");
+  if (!x && pre) for (const p of pre.photos || []) photos.reprendre(p);
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Signaler" });
+  go.addEventListener("click", async () => {
+    if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom de la personne."; nom.focus(); return; }
+    if (consigne.value.trim().length < 5) { err.textContent = "Dites à l’agent ce qu’il doit faire."; consigne.focus(); return; }
+    go.disabled = true;
+    const id = x ? x.id : secuNouvelId("securiteSignalements");
+    const ph = await photos.envoyer("securiteSignalements", id);
+    if (!ph) { go.disabled = false; return; }
+    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), naissance: naissance.value.trim(), numero: numero.value.trim(), motif: motif.value, consigne: consigne.value.trim(),
+      jusquau: jusquau.value || null, photos: ph, actif: x ? x.actif !== false : true, controle: (x && x.controle) || (pre && pre.controle) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
+    delete data.id;
+    if (await secuEnregistrer("securiteSignalements", id, data)) {
+      const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
+      toast(x ? "Signalement modifié." : `${data.nom} est signalé(e) aux agents.`); if (back) back(); else { S.secuVue = "signales"; closeDialog(); renderSecurite(); }
+    } else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Sécurité · personnes signalées", title: x ? "Modifier le signalement" : "Signaler une personne", wide: true,
+    body: [h("div", { class: "row2" }, field("ss-nom", "Nom et prénom", nom), field("ss-motif", "Signalement", motif)),
+      h("div", { class: "row2" }, field("ss-naissance", "Date de naissance", naissance), field("ss-numero", "Numéro de la pièce", numero)),
+      field("ss-consigne", "Consigne pour les agents", consigne), field("ss-jusquau", "Jusqu’au (facultatif)", jusquau), photos.el,
+      h("p", { class: "hint", style: "margin:0", text: "Les agents de la protection sont avertis dès qu’ils tapent ce nom ou ce numéro, ou que la lecture de la pièce le trouve. Les ressources humaines le voient aussi." }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function openSecuSignalVue(id) {
+  const x = secuListe("securiteSignalements").find(y => y.id === id); if (!x) return;
+  const reopen = () => openSecuSignalVue(id), resp = secuResp(), m = SECU_SIGNAL[x.motif] || SECU_SIGNAL.autre, actif = signalActif(x);
+  const vus = secuListe("securiteEntrees").filter(e => memeSecu(e.nom, x.nom) || (numPiece(x.numero).length >= 5 && numPiece(e.numero) === numPiece(x.numero))).sort((a, b) => String(b.arrivee).localeCompare(String(a.arrivee)));
+  const basculer = async ev => {
+    ev.currentTarget.disabled = true;
+    const d = Object.assign({}, x, actif ? { actif: false, leveLe: nowISO(), levePar: S.agentName || "" } : { actif: true, jusquau: null, leveLe: null, levePar: null }); delete d.id;
+    if (await secuEnregistrer("securiteSignalements", x.id, d)) { toast(actif ? "Signalement levé : les agents ne sont plus avertis." : "Signalement remis en place."); reopen(); }
+  };
+  openDialog({ eyebrow: "Sécurité · personne signalée", title: x.nom || "Signalement", stampEl: actif ? stamp([m[0].toUpperCase(), m[1]]) : stamp(["LEVÉ", "muted"]), wide: true,
+    body: [kv([["Signalement", m[0]], ["Date de naissance", x.naissance || "—"], ["Numéro de la pièce", x.numero || "—"], ["Consigne", x.consigne || "—"],
+      ["Signalé par", `${x.agent || "—"}, ${quandSecu(x.at)}`], ["Jusqu’au", x.jusquau ? jourTxt(x.jusquau) : "levée par un responsable"],
+      x.leveLe ? ["Levé", `${quandSecu(x.leveLe)}${x.levePar ? " par " + x.levePar : ""}`] : null].filter(Boolean)),
+      (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null,
+      vus.length ? sec("Ses dernières venues", h("ul", { class: "ent-list" }, vus.slice(0, 6).map(e => h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuEntreeVue(e.id), text: quandSecu(e.arrivee) }), h("span", { class: "meta", text: [e.visite ? "voit " + e.visite : "", e.sortie ? "sorti à " + hhmm(e.sortie) : "dans les locaux", e.agent].filter(Boolean).join(" · ") })),
+        h("span", {}), h("span", {}))))) : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
+      resp ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteSignalements", x)) { toast("Signalement supprimé."); closeDialog(); } }, text: "Supprimer" }) : null,
+      h("span", { class: "spacer" }),
+      resp ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuSignal(x, null, reopen), text: "Modifier" }) : null,
+      resp ? h("button", { class: "btn small", type: "button", onclick: basculer, text: actif ? "Lever le signalement" : "Remettre en place" }) : null] });
+}
+
+// Visiteurs attendus (mise à jour 42) : annoncés par le service de la protection, ou depuis un rendez-vous
+// de l'agenda (Direction, Inspection, RH). « Arrivé » ouvre l'entrée déjà remplie ; à l'enregistrement, la
+// personne visitée reçoit un message dans Mon espace.
+const attenduOuvert = a => !a.statut || a.statut === "attendu";
+function secuAttendus() {
+  const fin = new Date(); fin.setHours(23, 59, 59, 999);
+  const l = secuListe("securiteAttendus").filter(attenduOuvert).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const t = a => new Date(a.date).getTime(), maint = Date.now();
+  return { jour: l.filter(a => t(a) <= fin.getTime() && t(a) >= maint - 12 * 3600e3), prochains: l.filter(a => t(a) > fin.getTime() && t(a) < fin.getTime() + 7 * 864e5) };
+}
+const attenduRetard = a => Date.now() - new Date(a.date).getTime() > 20 * 60e3;
+// Hôte : un fonctionnaire de l'annuaire (prévenu à l'arrivée), ou un service écrit librement.
+const hoteDe = txt => { const n = norm(txt); return n ? annuaireListe().find(f => norm(f.nom) === n || memeSecu(f.nom, txt)) || null : null; };
+function openSecuAttendu(x, back) {
+  if (!secuEcrit()) return;
+  const v = x || {};
+  const nom = h("input", { id: "sa-nom", autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom" }); nom.value = v.nom || "";
+  const qualite = h("input", { id: "sa-qualite", autocomplete: "off", maxlength: "80", placeholder: "Ex. : avocat, gérant d’une entreprise" }); qualite.value = v.qualite || "";
+  const quand = h("input", { id: "sa-date", type: "datetime-local" }); quand.value = toLocalInput(v.date ? new Date(v.date) : new Date(Date.now() + 3600e3));
+  const liste = "sa-hotes-" + shortId();
+  const hote = h("input", { id: "sa-hote", autocomplete: "off", maxlength: "80", list: liste, placeholder: "Un fonctionnaire ou un service" }); hote.value = v.hote || "";
+  const dl = h("datalist", { id: liste }, annuaireListe().map(f => h("option", { value: f.nom })));
+  const objet = h("input", { id: "sa-objet", autocomplete: "off", maxlength: "120", placeholder: "Facultatif" }); objet.value = v.objet || "";
+  const aide = h("span", { class: "hint" });
+  const majAide = () => { const f = hoteDe(hote.value); aide.textContent = f ? `${f.nom} sera prévenu(e) dans son espace à l’arrivée du visiteur.` : hote.value.trim() ? "Pas dans l’annuaire : personne ne sera prévenu automatiquement." : ""; };
+  hote.addEventListener("input", majAide); majAide();
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Annoncer le visiteur" });
+  go.addEventListener("click", async () => {
+    if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom du visiteur."; nom.focus(); return; }
+    go.disabled = true;
+    const f = hoteDe(hote.value), id = x ? x.id : secuNouvelId("securiteAttendus");
+    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), qualite: qualite.value.trim(), date: secuDate(quand), hote: f ? f.nom : hote.value.trim(), hoteFid: f ? f.id : null,
+      objet: objet.value.trim(), statut: (x && x.statut) || "attendu", source: (x && x.source) || "securite", at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
+    delete data.id;
+    if (await secuEnregistrer("securiteAttendus", id, data)) { toast(x ? "Visite modifiée." : `${data.nom} est attendu(e) ${quandSecu(data.date)}.`); if (back) back(); else closeDialog(); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: "Sécurité · visiteurs attendus", title: x ? "Modifier la visite" : "Annoncer un visiteur", wide: true,
+    body: [h("div", { class: "row2" }, field("sa-nom", "Visiteur", nom), field("sa-qualite", "Qualité", qualite)),
+      h("div", { class: "row2" }, field("sa-date", "Attendu le", quand), h("div", { class: "field" }, h("label", { for: "sa-hote", text: "Vient voir" }), hote, dl, aide)),
+      field("sa-objet", "Objet de la visite", objet), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+function openSecuAttenduVue(id) {
+  const x = secuListe("securiteAttendus").find(y => y.id === id); if (!x) return;
+  const reopen = () => openSecuAttenduVue(id), w = secuEcrit(), ouvert = attenduOuvert(x);
+  const st = x.statut === "arrive" ? ["ARRIVÉ", "ok"] : x.statut === "annule" ? ["ANNULÉ", "muted"] : attenduRetard(x) ? ["EN RETARD", "warn"] : ["ATTENDU", "info"];
+  openDialog({ eyebrow: "Sécurité · visiteur attendu", title: x.nom || "Visiteur", stampEl: stamp(st), wide: true,
+    body: [kv([["Qualité", x.qualite || "—"], ["Attendu", fmtDateTime(new Date(x.date))], ["Vient voir", x.hote || "—"], x.objet ? ["Objet", x.objet] : null,
+      ["Annoncé par", `${x.agent || "—"}${x.source === "agenda" ? " (rendez-vous de l’agenda)" : ""}`],
+      x.arriveLe ? ["Arrivé", `${fmtDateTime(new Date(x.arriveLe))}${x.arrivePar ? " · noté par " + x.arrivePar : ""}`] : null,
+      x.annonceLe ? ["Personne visitée", "prévenue dans son espace"] : null].filter(Boolean))],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
+      secuResp() ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteAttendus", x)) { toast("Visite supprimée."); closeDialog(); } }, text: "Supprimer" }) : null,
+      h("span", { class: "spacer" }),
+      w && ouvert ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; const d = Object.assign({}, x, { statut: "annule", annuleLe: nowISO(), annulePar: S.agentName || "" }); delete d.id; if (await secuEnregistrer("securiteAttendus", x.id, d)) { toast("Visite annulée."); closeDialog(); } }, text: "Ne viendra pas" }) : null,
+      w && ouvert ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuAttendu(x, reopen), text: "Modifier" }) : null,
+      w && ouvert ? h("button", { class: "btn small", type: "button", onclick: () => secuAccueillir(x), text: "Arrivé : noter son entrée" }) : null,
+      x.entree ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuEntreeVue(x.entree), text: "Voir son entrée" }) : null] });
+}
+// « Arrivé » : l'entrée remplie (identité connue reprise si le registre l'a déjà) ; l'attendu se clôt à
+// l'enregistrement de l'entrée.
+function secuAccueillir(a) {
+  const p = secuPersonnes().get(cleNom(a.nom)) || {};
+  openSecuEntree(null, null, { nom: p.nom || a.nom, naissance: p.naissance, numero: p.numero, qualite: a.qualite || p.qualite, photos: p.photo ? [p.photo] : [], motif: "rdv", visite: a.hote, precision: a.objet, attendu: a.id });
+}
+async function secuArrivee(aid, entree, data) {
+  const a = secuListe("securiteAttendus").find(y => y.id === aid); if (!a || !attenduOuvert(a)) return;
+  const d = Object.assign({}, a, { statut: "arrive", arriveLe: data.arrivee, arrivePar: S.agentName || "", entree }); delete d.id;
+  if (!(await secuEnregistrer("securiteAttendus", a.id, d))) return;
+  if (!a.hoteFid) return;
+  let r;
+  try { r = await S.sb.rpc("annoncer_visiteur", { p_attendu: a.id }); } catch (e) { r = { error: e }; }
+  if (!r.error && r.data) toast(`${a.hote || "La personne visitée"} est prévenu(e) dans son espace.`);
+}
+// Agenda : les visiteurs extérieurs d'un rendez-vous deviennent des visiteurs attendus (un par nom).
+const attendusDe = evId => secuListe("securiteAttendus").filter(a => a.agendaId === evId);
+async function attendusAgenda(evId, ev, noms) {
+  const lies = attendusDe(evId);
+  if (!noms.length && !lies.some(attenduOuvert)) return;
+  const moi = S.monFid ? foncOf(S.monFid) : null;
+  const hote = (lies[0] && lies[0].hote) || (moi && moi.nom) || S.agentName || "", hoteFid = lies.length ? lies[0].hoteFid || null : (moi ? moi.id : null);
+  let ok = true;
+  for (const n of noms) {
+    const a = lies.find(y => memeSecu(y.nom, n));
+    if (a && a.statut === "arrive") continue;
+    const id = a ? a.id : S.db.collection("securiteAttendus").doc().id;
+    const data = Object.assign({}, a || {}, { nom: n, date: ev.debut, hote, hoteFid, objet: ev.titre, agendaId: evId, statut: ev.statut === "annule" ? "annule" : "attendu", source: "agenda",
+      fid: a ? a.fid || null : S.monFid || null, agent: a ? a.agent : S.agentName || "", at: (a && a.at) || nowISO(), modifieLe: a ? nowISO() : null });
+    delete data.id;
+    ok = (await write(() => S.db.doc("securiteAttendus/" + id).set(data))) && ok;
+  }
+  for (const a of lies) if (attenduOuvert(a) && (ev.statut === "annule" || !noms.some(n => memeSecu(n, a.nom)))) {
+    const d = Object.assign({}, a, { statut: "annule", annuleLe: nowISO(), annulePar: S.agentName || "" }); delete d.id;
+    ok = (await write(() => S.db.doc("securiteAttendus/" + a.id).set(d))) && ok;
+  }
+  if (!ok) toast("Le rendez-vous est enregistré, mais pas ses visiteurs pour le service de la protection : la Direction doit exécuter supabase/v42_signalements_attendus.sql.", true);
+}
+
+// Sorties oubliées : une personne notée dans les locaux depuis plus de N heures (3 par défaut) est signalée ;
+// « Tout clore » note leur sortie d'un coup (heure inconnue, marquée comme telle).
+const secuOubliH = () => { const n = Number((S.config || {}).secuOubliHeures); return n > 0 ? n : 3; };
+const secuOubliees = () => secuListe("securiteEntrees").filter(e => !e.sortie && Date.now() - new Date(e.arrivee).getTime() > secuOubliH() * 3600e3);
+async function secuToutClore(bt) {
+  const l = secuOubliees(); if (!l.length) return;
+  if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = `Confirmer : clore ${l.length} entrée${plural(l.length)}`; return; }
+  bt.disabled = true;
+  let n = 0;
+  for (const x of l) { const d = Object.assign({}, x, { sortie: nowISO(), sortiePar: S.agentName || "", sortieOubliee: true }); delete d.id; if (await secuEnregistrer("securiteEntrees", x.id, d)) n++; }
+  toast(n === l.length ? `${n} entrée${plural(n)} close${plural(n)} : sortie notée sans heure connue.` : `${n} sur ${l.length} entrées closes.`, n !== l.length);
+}
+
+// Main courante de fin de service : ce qui s'est passé sur une période (entrées, contrôles, rapports,
+// signalements, personnes encore dans les locaux), en image à garder ou à poster, et, si on veut, remise
+// comme rapport.
+function mainCourante(du, au) {
+  const dans = iso => { const t = new Date(iso).getTime(); return t >= du.getTime() && t <= au.getTime(); };
+  const ent = secuListe("securiteEntrees"), ev = [];
+  ent.filter(e => dans(e.arrivee)).forEach(e => ev.push({ t: e.arrivee, txt: `Entrée de ${e.nom}${e.qualite ? " (" + e.qualite + ")" : ""}`, sub: [SECU_MOTIFS[e.motif] || "", e.visite ? "voit " + e.visite : "", e.pieceVue ? "" : "pièce non vue", secuSignale(e.nom, e.numero).length ? "personne signalée" : ""].filter(Boolean).join(" · "), agent: e.agent }));
+  ent.filter(e => e.sortie && dans(e.sortie)).forEach(e => ev.push({ t: e.sortie, txt: `Sortie de ${e.nom}`, sub: e.sortieOubliee ? "close en fin de service, heure inconnue" : "", agent: e.sortiePar || "" }));
+  const ctl = secuListe("securiteControles").filter(c => dans(c.date));
+  ctl.forEach(c => ev.push({ t: c.date, txt: `Contrôle d’identité de ${c.nom} : ${((SECU_RESULTATS[c.resultat] || SECU_RESULTATS.conforme)[0]).toLowerCase()}`, sub: [c.lieu, SECU_CTRL_MOTIFS[c.motif] || ""].filter(Boolean).join(" · "), agent: c.agent, muted: false }));
+  const rap = secuListe("securiteRapports").filter(r => dans(r.date) && r.type !== "main_courante");
+  rap.forEach(r => ev.push({ t: r.date, txt: `Rapport (${(SECU_RAPPORTS[r.type] || "autre").toLowerCase()}) : ${r.titre}`, sub: r.lieu || "", agent: r.agent }));
+  secuListe("securiteSignalements").filter(s => dans(s.at)).forEach(s => ev.push({ t: s.at, txt: `${s.nom} signalé(e) : ${((SECU_SIGNAL[s.motif] || SECU_SIGNAL.autre)[0]).toLowerCase()}`, sub: "", agent: s.agent }));
+  ev.sort((a, b) => String(a.t).localeCompare(String(b.t)));
+  const restent = ent.filter(e => !e.sortie && new Date(e.arrivee).getTime() <= au.getTime());
+  const parRes = Object.keys(SECU_RESULTATS).map(k => [k, ctl.filter(c => (c.resultat || "conforme") === k).length]).filter(([, n]) => n);
+  return { ev, restent, entrees: ent.filter(e => dans(e.arrivee)).length, ctl, parRes, rap };
+}
+const periodeTxt = (du, au) => jourCle(du) === jourCle(au) ? `${du.toLocaleDateString("fr-FR")} de ${hhmm(du)} à ${hhmm(au)}` : `du ${du.toLocaleDateString("fr-FR")} ${hhmm(du)} au ${au.toLocaleDateString("fr-FR")} ${hhmm(au)}`;
+function mainCouranteDoc(du, au) {
+  const m = mainCourante(du, au), max = 40;
+  const rows = m.ev.slice(0, max).map(e => ({ cells: [e.txt, hhmm(e.t), e.agent || "—"], sub: e.sub || "" }));
+  if (m.ev.length > max) rows.push({ cells: [`… et ${m.ev.length - max} autre${plural(m.ev.length - max)} événement${plural(m.ev.length - max)}`, "", ""], muted: true });
+  return {
+    entete: "PRÉFECTURE DE POLICE · SERVICE DE LA PROTECTION", kind: "MAIN COURANTE", no: `MC-${jourCle(au).replace(/-/g, "")}-${hhmm(au).replace(":", "")}`, tableFirst: true, date: "Arrêtée le " + longDate(new Date()) + " à " + hhmm(new Date()),
+    meta: [["Période", periodeTxt(du, au)], ["Arrêtée par", S.agentName || "—"], ["Entrées", String(m.entrees)],
+      ["Contrôles d’identité", m.ctl.length ? `${m.ctl.length} · ${m.parRes.map(([k, n]) => `${n} ${SECU_RESULTATS[k][0].toLowerCase()}`).join(", ")}` : "aucun"],
+      ["Rapports", m.rap.length ? m.rap.map(r => r.titre).join(", ") : "aucun"], ["Personnes signalées actives", String(secuListe("securiteSignalements").filter(signalActif).length)]],
+    lines: [], total: ["Encore dans les locaux", String(m.restent.length)],
+    stamp: m.restent.length ? null : ["LOCAUX VIDES", "ok"],
+    table: rows.length ? { title: "Déroulé du service", head: ["Événement", "Heure", "Agent"], cols: [0, 0.66, 0.78], align: ["left", "left", "left"], mono: [1], rows } : null,
+    noteTitle: m.restent.length ? "Personnes encore dans les locaux" : "", note: m.restent.length ? m.restent.map(e => `${e.nom} (depuis ${quandSecu(e.arrivee)}${e.visite ? ", voit " + e.visite : ""})`).join(" ; ") : "",
+    footer: "Main courante tenue par le service de la protection de la Préfecture de police. Document interne : il ne se publie pas hors du service."
+  };
+}
+const mainCouranteTexte = (du, au) => {
+  const m = mainCourante(du, au);
+  return [`Main courante ${periodeTxt(du, au)}.`, `${m.entrees} entrée${plural(m.entrees)}, ${m.ctl.length} contrôle${plural(m.ctl.length)}, ${m.rap.length} rapport${plural(m.rap.length)}.`, "",
+    ...m.ev.map(e => `${hhmm(e.t)} · ${e.txt}${e.sub ? " · " + e.sub : ""}${e.agent ? " · par " + e.agent : ""}`), "",
+    m.restent.length ? `Encore dans les locaux : ${m.restent.map(e => e.nom).join(", ")}.` : "Personne dans les locaux à la fin du service."].join("\n");
+};
+function openMainCourante() {
+  if (!secuAcces()) return;
+  const now = new Date(), d0 = new Date(now.getTime() - 6 * 3600e3);
+  const du = h("input", { id: "mc-du", type: "datetime-local" }); du.value = toLocalInput(d0);
+  const au = h("input", { id: "mc-au", type: "datetime-local" }); au.value = toLocalInput(now);
+  const resume = h("p", { class: "hint", style: "margin:0", "aria-live": "polite" });
+  // « Jusqu'à 21:30 » compte toute la minute.
+  const lire = () => { const a = new Date(du.value), b = new Date(new Date(au.value).getTime() + 59999); return isNaN(a) || isNaN(b) || b <= a ? null : [a, b]; };
+  const maj = () => { const p = lire(); if (!p) { resume.textContent = "Choisissez un début avant la fin."; return; } const m = mainCourante(p[0], p[1]); resume.textContent = `${m.ev.length} événement${plural(m.ev.length)} : ${m.entrees} entrée${plural(m.entrees)}, ${m.ctl.length} contrôle${plural(m.ctl.length)}, ${m.rap.length} rapport${plural(m.rap.length)} ; ${m.restent.length} personne${plural(m.restent.length)} encore dans les locaux.`; };
+  [du, au].forEach(el => el.addEventListener("change", maj)); maj();
+  const vite = (t, f) => h("button", { class: "btn ghost small", type: "button", text: t, onclick: () => { const [a, b] = f(); du.value = toLocalInput(a); au.value = toLocalInput(b); maj(); } });
+  const minuit = j => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + j); return d; };
+  openDialog({ eyebrow: "Sécurité", title: "Main courante de fin de service", wide: true,
+    body: [h("div", { class: "row2" }, field("mc-du", "Depuis", du), field("mc-au", "Jusqu’à", au)),
+      h("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, vite("6 dernières heures", () => [new Date(Date.now() - 6 * 3600e3), new Date()]), vite("Aujourd’hui", () => [minuit(0), new Date()]), vite("Hier", () => [minuit(-1), new Date(minuit(0).getTime() - 60e3)])),
+      resume],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
+      secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+        const p = lire(); if (!p) return; ev.currentTarget.disabled = true;
+        const id = secuNouvelId("securiteRapports");
+        const data = Object.assign(secuAuteur(), { type: "main_courante", titre: "Main courante " + periodeTxt(p[0], p[1]), date: p[1].toISOString(), lieu: "Préfecture", personnes: "", recit: mainCouranteTexte(p[0], p[1]), photos: [], statut: "remis", at: nowISO(), modifieLe: null });
+        if (await secuEnregistrer("securiteRapports", id, data)) { toast("Main courante remise aux responsables."); closeDialog(); } else ev.currentTarget.disabled = false;
+      }, text: "Remettre comme rapport" }) : null,
+      h("button", { class: "btn small", type: "button", onclick: () => { const p = lire(); if (p) showDocImage(mainCouranteDoc(p[0], p[1]), openMainCourante); }, text: "Voir l’image" })] });
+}
 
 // Rapports
 const rapportModifiable = x => secuResp() || (!!S.monFid && x.fid === S.monFid && !x.luLe);
@@ -7329,13 +7626,15 @@ function renderSecurite() {
   ["#secu-entree", "#secu-controle", "#secu-rapport"].forEach(sel => { $(sel).hidden = !w; });
   if (!ok) { fill(box); return; }
   if (S.secuErr && !S.db) { fill(box, h("div", { class: "notice", style: "margin:0" }, h("div", {}, h("strong", { text: "Lecture impossible. " }), S.secuAbsente ? "La Direction doit exécuter supabase/v38_securite.sql dans Supabase." : S.secuErr))); return; }
-  const vue = ["entrees", "controles", "rapports"].includes(S.secuVue) ? S.secuVue : "entrees", q = norm(S.secuQ || "");
+  const vue = ["entrees", "controles", "rapports", "signales"].includes(S.secuVue) ? S.secuVue : "entrees", q = norm(S.secuQ || "");
   const trouve = (...t) => !q || t.some(x => norm(x).includes(q));
   const ent = secuListe("securiteEntrees").sort((a, b) => String(b.arrivee).localeCompare(String(a.arrivee)));
   const ctl = secuListe("securiteControles").sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const rap = secuListe("securiteRapports").sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const presents = ent.filter(x => !x.sortie), aLire = rap.filter(x => !x.luLe);
-  const seg = h("div", { class: "seg", role: "group", "aria-label": "Rubrique de la sécurité" }, [["entrees", `Entrées${presents.length ? " · " + presents.length + " dans les locaux" : ""}`], ["controles", "Contrôles d’identité"], ["rapports", `Rapports${secuResp() && aLire.length ? " · " + aLire.length + " à lire" : ""}`]].map(([k, t]) =>
+  const sig = secuListe("securiteSignalements").sort((a, b) => signalRang(a) - signalRang(b) || String(b.at).localeCompare(String(a.at))), sigActifs = sig.filter(signalActif);
+  const oubli = secuOubliees(), resp = secuResp();
+  const seg = h("div", { class: "seg", role: "group", "aria-label": "Rubrique de la sécurité" }, [["entrees", `Entrées${presents.length ? " · " + presents.length + " dans les locaux" : ""}`], ["controles", "Contrôles d’identité"], ["rapports", `Rapports${secuResp() && aLire.length ? " · " + aLire.length + " à lire" : ""}`], ["signales", `Signalés${sigActifs.length ? " · " + sigActifs.length : ""}`]].map(([k, t]) =>
     h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.secuVue = k; renderSecurite(); }, text: t })));
   const rech = h("input", { type: "search", placeholder: "Rechercher un nom", "aria-label": "Rechercher un nom", value: S.secuQ || "" });
   rech.addEventListener("input", () => { S.secuQ = rech.value; clearTimeout(S.secuQt); S.secuQt = setTimeout(() => { renderSecurite(); const r = $("#secu-main input[type=search]"); if (r) { r.focus(); r.setSelectionRange(r.value.length, r.value.length); } }, 250); });
@@ -7345,12 +7644,24 @@ function renderSecurite() {
   let corps;
   if (vue === "entrees") {
     const l = ent.filter(x => trouve(x.nom, x.qualite, x.visite, x.numero)), dans = l.filter(x => !x.sortie), parties = l.filter(x => x.sortie).slice(0, 100);
-    const ligne = x => h("li", { class: x.sortie ? null : "secu-present" },
+    const oubliees = new Set(oubli.map(x => x.id));
+    const ligne = x => { const sg = secuSignale(x.nom, x.numero)[0];
+      return h("li", { class: sg && !x.sortie ? "secu-signale" : oubliees.has(x.id) ? "secu-retard" : x.sortie ? null : "secu-present" },
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuEntreeVue(x.id), text: `${x.nom}${x.qualite ? " · " + x.qualite : ""}` }),
-        h("span", { class: "meta", text: [SECU_MOTIFS[x.motif] || "", x.visite ? "voit " + x.visite : "", "arrivé " + quandSecu(x.arrivee), x.sortie ? "sorti à " + hhmm(x.sortie) : "", x.agent].filter(Boolean).join(" · ") })),
-      chip(x.pieceVue ? ["Pièce vue", "ok"] : ["Pièce non vue", "warn"]),
-      !x.sortie && w ? h("button", { class: "btn ghost small", type: "button", onclick: () => secuSortie(x), text: "Sortie" }) : h("span", {}));
-    corps = [h("h4", { class: "mini-title", text: `Dans les locaux (${dans.length})` }),
+        h("span", { class: "meta", text: [SECU_MOTIFS[x.motif] || "", x.visite ? "voit " + x.visite : "", "arrivé " + quandSecu(x.arrivee), x.sortie ? (x.sortieOubliee ? "sortie notée en fin de service" : "sorti à " + hhmm(x.sortie)) : "", x.agent].filter(Boolean).join(" · ") })),
+      sg ? chip(SECU_SIGNAL[sg.motif] || SECU_SIGNAL.autre) : oubliees.has(x.id) ? chip([`Depuis plus de ${secuOubliH()} h`, "warn"]) : chip(x.pieceVue ? ["Pièce vue", "ok"] : ["Pièce non vue", "warn"]),
+      !x.sortie && w ? h("button", { class: "btn ghost small", type: "button", onclick: () => secuSortie(x), text: "Sortie" }) : h("span", {})); };
+    const att = secuAttendus(), attJour = att.jour.filter(a => trouve(a.nom, a.hote, a.qualite));
+    const ligneAtt = a => h("li", { class: attenduRetard(a) ? "secu-retard" : "secu-attendu" },
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuAttenduVue(a.id), text: `${a.nom}${a.qualite ? " · " + a.qualite : ""}` }),
+        h("span", { class: "meta", text: [`prévu ${quandSecu(a.date)}`, a.hote ? "voit " + a.hote : "", a.objet].filter(Boolean).join(" · ") })),
+      secuSignale(a.nom).length ? chip(SECU_SIGNAL[secuSignale(a.nom)[0].motif] || SECU_SIGNAL.autre) : chip(attenduRetard(a) ? ["En retard", "warn"] : ["Attendu", "info"]),
+      w ? h("button", { class: "btn small", type: "button", onclick: () => secuAccueillir(a), text: "Arrivé" }) : h("span", {}));
+    corps = [h("div", { class: "secu-titre" }, h("h4", { class: "mini-title", style: "margin:0", text: `Visiteurs attendus aujourd’hui (${attJour.length})` }),
+        w ? h("button", { class: "btn ghost small", type: "button", id: "secu-attendu", onclick: () => openSecuAttendu(null), text: "Annoncer un visiteur" }) : null),
+      attJour.length ? h("ul", { class: "ent-list", id: "secu-attendus" }, attJour.map(ligneAtt)) : h("p", { class: "muted", text: "Personne n’est annoncé pour aujourd’hui." }),
+      att.prochains.length ? h("details", { class: "secu-prochains" }, h("summary", { text: `Les 7 prochains jours (${att.prochains.length})` }), h("ul", { class: "ent-list" }, att.prochains.map(ligneAtt))) : null,
+      h("h4", { class: "mini-title", style: "margin-top:16px", text: `Dans les locaux (${dans.length})` }),
       dans.length ? h("ul", { class: "ent-list" }, dans.map(ligne)) : h("p", { class: "muted", text: "Personne n’est noté dans les locaux." }),
       h("h4", { class: "mini-title", style: "margin-top:16px", text: "Sorties récentes" }),
       parties.length ? h("ul", { class: "ent-list" }, parties.map(ligne)) : h("p", { class: "muted", text: q ? "Aucune entrée à ce nom." : "Aucune sortie notée." })];
@@ -7359,8 +7670,20 @@ function renderSecurite() {
     corps = l.length ? h("ul", { class: "ent-list" }, l.map(x => h("li", {},
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuControleVue(x.id), text: x.nom }),
         h("span", { class: "meta", text: [quandSecu(x.date), x.lieu, SECU_CTRL_MOTIFS[x.motif] || "", (x.photos || []).length ? `${x.photos.length} photo${plural(x.photos.length)}` : "sans photo", x.agent].filter(Boolean).join(" · ") })),
-      chip(SECU_RESULTATS[x.resultat] || SECU_RESULTATS.conforme), h("span", {}))))
+      secuSignale(x.nom, x.numero).length ? chip(SECU_SIGNAL[secuSignale(x.nom, x.numero)[0].motif] || SECU_SIGNAL.autre) : chip(SECU_RESULTATS[x.resultat] || SECU_RESULTATS.conforme), h("span", {}))))
       : h("p", { class: "muted", text: q ? "Aucun contrôle à ce nom." : "Aucun contrôle d’identité enregistré." });
+  } else if (vue === "signales") {
+    const l = sig.filter(x => trouve(x.nom, x.numero, x.consigne));
+    const ligne = x => h("li", { class: signalActif(x) ? "secu-signale" : null },
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuSignalVue(x.id), text: x.nom }),
+        h("span", { class: "meta", text: [x.consigne ? String(x.consigne).slice(0, 90) + (String(x.consigne).length > 90 ? "…" : "") : "", x.numero ? "pièce n° " + x.numero : "", signalActif(x) ? (x.jusquau ? "jusqu’au " + jourTxt(x.jusquau) : "") : "levé " + (x.leveLe ? quandSecu(x.leveLe) : "")].filter(Boolean).join(" · ") })),
+      chip(signalActif(x) ? (SECU_SIGNAL[x.motif] || SECU_SIGNAL.autre) : ["Levé", "muted"]), h("span", {}));
+    const act = l.filter(signalActif), leves = l.filter(x => !signalActif(x)).slice(0, 50);
+    corps = [h("div", { class: "secu-titre" }, h("h4", { class: "mini-title", style: "margin:0", text: `Signalements en cours (${act.length})` }),
+        resp ? h("button", { class: "btn small", type: "button", id: "secu-signaler", onclick: () => openSecuSignal(null), text: "Signaler une personne" }) : null),
+      h("p", { class: "hint", style: "margin:0 0 8px", text: "Les agents sont avertis dès qu’ils tapent le nom ou le numéro de la pièce d’une personne signalée, à l’entrée comme au contrôle." }),
+      act.length ? h("ul", { class: "ent-list", id: "secu-signales" }, act.map(ligne)) : h("p", { class: "muted", text: q ? "Aucun signalement à ce nom." : "Personne n’est signalé." }),
+      leves.length ? h("details", { class: "secu-prochains" }, h("summary", { text: `Signalements levés (${leves.length})` }), h("ul", { class: "ent-list" }, leves.map(ligne))) : null];
   } else {
     const l = rap.filter(x => trouve(x.titre, x.personnes, x.agent, x.lieu)).slice(0, 150);
     corps = l.length ? h("ul", { class: "ent-list" }, l.map(x => h("li", {},
@@ -7369,11 +7692,16 @@ function renderSecurite() {
       chip(x.luLe ? ["Lu", "ok"] : ["Remis", "info"]), h("span", {}))))
       : h("p", { class: "muted", text: q ? "Aucun rapport trouvé." : "Aucun rapport remis." });
   }
-  fill(box, notice, h("div", { class: "secu-tete" }, seg, rech), h("div", { class: "card" }, corps));
+  // Sorties oubliées : bandeau, et « Tout clore » pour les responsables.
+  const bandeau = oubli.length && vue === "entrees" ? h("div", { class: "secu-bandeau", role: "status" },
+    h("p", {}, h("strong", { text: `${oubli.length} personne${plural(oubli.length)} notée${plural(oubli.length)} dans les locaux depuis plus de ${secuOubliH()} h. ` }), "Leur sortie a sans doute été oubliée : notez-la, ou clôturez d’un coup en fin de service."),
+    resp ? h("button", { class: "btn ghost small", type: "button", id: "secu-clore", onclick: ev => secuToutClore(ev.currentTarget), text: "Tout clore" }) : null) : null;
+  fill(box, notice, h("div", { class: "secu-tete" }, seg, rech), bandeau, h("div", { class: "card" }, corps));
 }
 $("#secu-entree").addEventListener("click", () => openSecuEntree(null));
 $("#secu-controle").addEventListener("click", () => openSecuControle(null));
 $("#secu-rapport").addEventListener("click", () => openSecuRapport(null));
+$("#secu-courante").addEventListener("click", () => openMainCourante());
 
 /* ---------- Guide du guichet, selon le rôle ---------- */
 // Direction, Inspection, ressources humaines : ce que chacun peut faire, rubrique par rubrique, avec un
@@ -7970,7 +8298,7 @@ function openEvenement(e, o) {
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }),
       w && e.statut !== "annule" ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
         const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer l’annulation"; return; }
-        b.disabled = true; if (await write(() => S.db.doc("agenda/" + e.id).update({ statut: "annule", annuleLe: nowISO(), annulePar: S.agentName || "" }))) { toast("Rendez-vous annulé."); closeDialog(); } else b.disabled = false;
+        b.disabled = true; if (await write(() => S.db.doc("agenda/" + e.id).update({ statut: "annule", annuleLe: nowISO(), annulePar: S.agentName || "" }))) { await attendusAgenda(e.id, Object.assign({}, e, { statut: "annule" }), []); toast("Rendez-vous annulé."); closeDialog(); } else b.disabled = false;
       }, text: "Annuler le rendez-vous" }) : null,
       w && e.statut !== "annule" ? h("button", { class: "btn small", type: "button", onclick: () => openEvForm(e), text: "Modifier" }) : null] });
 }
@@ -7989,6 +8317,9 @@ function openEvForm(e, jour) {
   const desc = h("textarea", { id: "ev-desc", rows: "3", maxlength: "2000", placeholder: "Ordre du jour, consignes…" }); desc.value = v.description;
   const aud = h("select", { id: "ev-aud" }, [["tous", "Tous les fonctionnaires"], ["agents", "Des fonctionnaires choisis"], ["encadrement", "L’encadrement seulement"]].map(([k, l]) => h("option", { value: k, text: l }))); aud.value = v.audience;
   const rep = h("input", { type: "checkbox", id: "ev-rep" }); rep.checked = v.reponseDemandee !== false;
+  // Visiteurs extérieurs : annoncés au service de la protection (onglet Sécurité, « Visiteurs attendus »).
+  const visiteurs = h("input", { id: "ev-visiteurs", autocomplete: "off", maxlength: "300", placeholder: "Ex. : Jean DUPONT, Marie MARTIN (facultatif)" });
+  visiteurs.value = e ? attendusDe(e.id).filter(a => a.statut !== "annule").map(a => a.nom).join(", ") : "";
   const sel = new Set(v.participants || []);
   const liste = h("div", { class: "ev-invites" }, foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(f => {
     const cb = h("input", { type: "checkbox", value: f.id }); cb.checked = sel.has(f.id);
@@ -8020,7 +8351,11 @@ function openEvForm(e, jour) {
       audience: aud.value, participants: aud.value === "agents" ? [...sel] : [], reponseDemandee: aud.value !== "encadrement" && rep.checked, reponses: (e && e.reponses) || {}, statut: "prevu",
       at: (e && e.at) || nowISO(), byNom: (e && e.byNom) || S.agentName || "", modifieLe: e ? nowISO() : null });
     delete body.id;
-    if (await write(() => ref.set(body))) { toast(e ? "Rendez-vous modifié." : "Rendez-vous ajouté : les fonctionnaires concernés le voient dans leur espace."); closeDialog(); }
+    if (await write(() => ref.set(body))) {
+      const noms = visiteurs.value.split(/[,;\n]+/).map(x => x.trim()).filter(x => x.length >= 2).slice(0, 12);
+      await attendusAgenda(ref.id, body, noms);
+      toast(e ? "Rendez-vous modifié." : `Rendez-vous ajouté : les fonctionnaires concernés le voient dans leur espace${noms.length ? ", et le service de la protection attend vos visiteurs" : ""}.`); closeDialog();
+    }
     else go.disabled = false;
   });
   openDialog({ eyebrow: "Agenda", title: e ? "Modifier le rendez-vous" : "Nouveau rendez-vous", wide: true,
@@ -8028,7 +8363,10 @@ function openEvForm(e, jour) {
       h("div", { class: "row2" }, field("ev-date", "Date", date), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, journee, h("span", { text: "Toute la journée" }))),
       heuresRow, finRow, field("ev-lieu", "Lieu", lieu), field("ev-desc", "Description", desc),
       h("div", { class: "row2" }, field("ev-aud", "Pour qui", aud), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, rep, h("span", { text: "Demander s’ils seront présents" }))),
-      invRow, err],
+      invRow,
+      h("div", { class: "field" }, h("label", { for: "ev-visiteurs", text: "Visiteurs extérieurs attendus" }), visiteurs,
+        h("span", { class: "hint", text: "Séparés par des virgules. L’accueil les attend à l’heure du rendez-vous et vous prévient dans votre espace à leur arrivée." })),
+      err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 // Absences : signalées par les fonctionnaires ou enregistrées par l'encadrement.
@@ -11390,7 +11728,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["securiteEntrees", "securiteControles", "securiteRapports", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -11763,7 +12101,7 @@ async function renderDocImage(doc) {
     ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
   }
   ctx.fillStyle = ink2; ctx.font = `700 13px ${F.body}`; spacing("1.5px");
-  ctx.fillText("PRÉFECTURE DE POLICE · IMPÔTS ET COTISATIONS", P + 92, y + 16);
+  ctx.fillText(doc.entete || "PRÉFECTURE DE POLICE · IMPÔTS ET COTISATIONS", P + 92, y + 16);
   spacing("0px"); ctx.fillStyle = ink;
   let kindSize = 38;
   ctx.font = `800 ${kindSize}px ${F.disp}`;
@@ -12709,6 +13047,17 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le rapport « ${v.titre || "?"} »`;
       if (a.luLe && !b.luLe) return `a lu le rapport « ${v.titre || "?"} »`;
       return `a modifié le rapport « ${v.titre || "?"} »`;
+    case "securiteSignalements":
+      if (x === "ajout") return `a signalé ${v.nom || "?"} au service de la protection (${((SECU_SIGNAL[v.motif] || SECU_SIGNAL.autre)[0]).toLowerCase()})`;
+      if (x === "suppression") return `a supprimé le signalement de ${v.nom || "?"}`;
+      if (a.actif === false && b.actif !== false) return `a levé le signalement de ${v.nom || "?"}`;
+      return `a modifié le signalement de ${v.nom || "?"}`;
+    case "securiteAttendus":
+      if (x === "ajout") return `a annoncé la venue de ${v.nom || "?"}${v.hote ? " (voit " + v.hote + ")" : ""}`;
+      if (x === "suppression") return `a supprimé la venue attendue de ${v.nom || "?"}`;
+      if (a.statut === "arrive" && b.statut !== "arrive") return `a noté l’arrivée de ${v.nom || "?"}, attendu${v.hote ? " par " + v.hote : ""}`;
+      if (a.statut === "annule" && b.statut !== "annule") return `a annulé la venue de ${v.nom || "?"}`;
+      return `a modifié la venue attendue de ${v.nom || "?"}`;
     case "entretiens":
       if (x === "ajout") return `a préparé un entretien avec ${v.nom || "un fonctionnaire"} (${jourTxt(v.date)})`;
       if (x === "suppression") return `a supprimé l’entretien de ${v.nom || "un fonctionnaire"} du ${jourTxt(v.date)}`;
@@ -16723,7 +17072,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["securiteEntrees", "securiteControles", "securiteRapports", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);

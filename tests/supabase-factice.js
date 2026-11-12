@@ -114,6 +114,14 @@
         return { data: /^(responsable|directeur|directrice|chef)/i.test(g.trim()) ? "responsable" : "agent", error: null };
       }
       // Photos de profil (mise à jour 41 ; absente si window.__sans41).
+      if (name === "annoncer_visiteur") {
+        const r = rows.get("securiteAttendus/" + args.p_attendu); if (!r || r.data.statut !== "arrive" || r.data.annonceLe || !r.data.hoteFid) return { data: false, error: null };
+        const f = rows.get("fonctionnaires/" + r.data.hoteFid); if (!f) return { data: false, error: null };
+        const id = "m" + Date.now();
+        rows.set("messagesAgents/" + id, { collection: "messagesAgents", id, data: { fid: f.id, nom: f.data.nom, discordId: f.data.discordId || "", de: "equipe", auteur: "Accueil · service de la protection", auteurRole: "securite", texte: `Votre visiteur ${r.data.nom} est arrivé à l'accueil de la Préfecture.`, at: iso(), luAgent: false, visiteur: r.id } });
+        r.data = Object.assign({}, r.data, { annonceLe: iso(), message: id });
+        return { data: true, error: null };
+      }
       if (name === "ma_photo_profil" || name === "photos_profils") {
         if (window.__sans41) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
         if (name === "photos_profils") return { data: Object.fromEntries(docs("fonctionnaires").filter(x => x.actif !== false && x.photoAt).map(x => [x.id, x.photoAt])), error: null };
