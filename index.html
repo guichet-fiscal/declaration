@@ -7618,7 +7618,7 @@ function openSecuControleVue(id) {
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
       secuResp() ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteControles", x)) { toast("Contrôle supprimé."); closeDialog(); } }, text: "Supprimer" }) : null,
       h("span", { class: "spacer" }),
-      secuResp() && !secuSignale(x.nom, x.numero).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuSignal(null, { nom: x.nom, naissance: x.naissance, numero: x.numero, motif: x.resultat === "recherche" ? "recherche" : "autre", photos: (x.photos || []).slice(0, 1), controle: x.id }, reopen), text: "Signaler cette personne" }) : null,
+      secuEcrit() && !secuSignale(x.nom, x.numero).length ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuSignal(null, { nom: x.nom, naissance: x.naissance, numero: x.numero, motif: x.resultat === "recherche" ? "recherche" : "autre", photos: (x.photos || []).slice(0, 1), controle: x.id }, reopen), text: "Signaler cette personne" }) : null,
       secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuControle(x, reopen), text: "Modifier" }) : null,
       secuEcrit() && !dansLesLocaux(x.nom) ? h("button", { class: "btn small", type: "button", onclick: () => openSecuEntree(null, reopen, secuPreEntree(x)), text: "Noter son entrée" }) : null] });
 }
@@ -7646,8 +7646,11 @@ function secuSignalCarte(s, o) {
     s.consigne ? h("p", { text: s.consigne }) : null,
     o.voir ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start", onclick: () => openSecuSignalVue(s.id), text: "Voir le signalement" }) : null);
 }
+// Tout agent de la protection signale ; il modifie ses propres signalements. Lever et supprimer : les
+// responsables et la Direction.
+const signalModifiable = x => secuResp() || (secuEcrit() && !!x && !!x.fid && x.fid === S.monFid);
 function openSecuSignal(x, pre, back) {
-  if (!secuResp()) return;
+  if (x ? !signalModifiable(x) : !secuEcrit()) return;
   const v = x || pre || {};
   const nom = h("input", { id: "ss-nom", autocomplete: "off", maxlength: "80", placeholder: "Prénom et nom" }); nom.value = v.nom || "";
   const naissance = h("input", { id: "ss-naissance", autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); naissance.value = v.naissance || "";
@@ -7702,7 +7705,7 @@ function openSecuSignalVue(id) {
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
       resp ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteSignalements", x)) { toast("Signalement supprimé."); closeDialog(); } }, text: "Supprimer" }) : null,
       h("span", { class: "spacer" }),
-      resp ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuSignal(x, null, reopen), text: "Modifier" }) : null,
+      signalModifiable(x) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuSignal(x, null, reopen), text: "Modifier" }) : null,
       resp ? h("button", { class: "btn small", type: "button", onclick: basculer, text: actif ? "Lever le signalement" : "Remettre en place" }) : null] });
 }
 
@@ -7997,7 +8000,7 @@ function renderSecurite() {
       chip(signalActif(x) ? (SECU_SIGNAL[x.motif] || SECU_SIGNAL.autre) : ["Levé", "muted"]), h("span", {}));
     const act = l.filter(signalActif), leves = l.filter(x => !signalActif(x)).slice(0, 50);
     corps = [h("div", { class: "secu-titre" }, h("h4", { class: "mini-title", style: "margin:0", text: `Signalements en cours (${act.length})` }),
-        resp ? h("button", { class: "btn small", type: "button", id: "secu-signaler", onclick: () => openSecuSignal(null), text: "Signaler une personne" }) : null),
+        w ? h("button", { class: "btn small", type: "button", id: "secu-signaler", onclick: () => openSecuSignal(null), text: "Signaler une personne" }) : null),
       h("p", { class: "hint", style: "margin:0 0 8px", text: "Les agents sont avertis dès qu’ils tapent le nom ou le numéro de la pièce d’une personne signalée, à l’entrée comme au contrôle." }),
       act.length ? h("ul", { class: "ent-list", id: "secu-signales" }, act.map(ligne)) : h("p", { class: "muted", text: q ? "Aucun signalement à ce nom." : "Personne n’est signalé." }),
       leves.length ? h("details", { class: "secu-prochains" }, h("summary", { text: `Signalements levés (${leves.length})` }), h("ul", { class: "ent-list" }, leves.map(ligne))) : null];

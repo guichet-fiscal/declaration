@@ -83,7 +83,21 @@ module.exports = {
     await pause(a, 1000); await a.locator("#tab-btn-securite").click(); await pause(a, 500);
     t.ok(await a.locator(".secu-bandeau").isVisible() && await a.locator("#secu-clore").count() === 0, "agent : bandeau sans « Tout clore »");
     await a.locator("#secu-main .seg button", { hasText: "Signalés" }).click(); await pause(a, 300);
-    t.ok(/Marc VIDAL/.test(texte(await a.locator("#secu-main").innerText())) && await a.locator("#secu-signaler").count() === 0, "agent : liste en lecture");
+    t.ok(/Marc VIDAL/.test(texte(await a.locator("#secu-main").innerText())) && await a.locator("#secu-signaler").count() === 1, "agent : liste et bouton pour signaler");
+    // Le signalement d'un autre : ni modifier, ni lever, ni supprimer.
+    await a.locator("#secu-signales .linkbtn", { hasText: "Marc VIDAL" }).click(); await pause(a, 300);
+    t.egal(await a.locator("#dlg button", { hasText: /Modifier|Lever le signalement|Supprimer/ }).count(), 0, "agent : signalement d'un autre en lecture");
+    await a.keyboard.press("Escape"); await pause(a, 200);
+    // Il signale lui-même une personne.
+    await a.locator("#secu-signaler").click(); await pause(a, 300);
+    await a.locator("#ss-nom").fill("Léo MARCHAND"); await a.locator("#ss-motif").selectOption("autre");
+    await a.locator("#ss-consigne").fill("Comportement agressif à l'accueil, à surveiller.");
+    await a.locator("#dlg button", { hasText: "Signaler" }).click(); await pause(a, 900);
+    const sa = (await lignes(a, "securiteSignalements")).find((x) => x.nom === "Léo MARCHAND") || {};
+    t.ok(sa.fid === "f1" && sa.agent === "Alice MARTIN" && sa.actif === true, "agent : signalement enregistré à son nom", JSON.stringify(sa).slice(0, 160));
+    await a.locator("#secu-signales .linkbtn", { hasText: "Léo MARCHAND" }).click(); await pause(a, 300);
+    t.ok(await a.locator("#dlg button", { hasText: "Modifier" }).count() === 1 && await a.locator("#dlg button", { hasText: "Lever le signalement" }).count() === 0, "agent : modifie le sien, sans le lever");
+    await a.keyboard.press("Escape"); await pause(a, 200);
     await a.locator("#secu-controle").click(); await pause(a, 300);
     await a.locator("#sc-nom").fill("VIDAL Marc"); await pause(a, 200);
     t.ok(await a.locator("#dlg .secu-signal").isVisible(), "agent : alerte au contrôle");
