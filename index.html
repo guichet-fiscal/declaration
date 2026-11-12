@@ -1106,6 +1106,10 @@ button.ts-p{cursor:pointer}
 .ts-p.warn{background:var(--warn-soft);color:var(--warn);font-weight:600}
 .ts-p.accent{background:var(--accent-soft);color:var(--accent)}
 .ts td.num{text-align:right;white-space:nowrap}
+.cr-jour+.cr-jour{margin-top:10px}
+.ent-list li.cr-pris{border-left:3px solid var(--info);padding-left:10px}
+.pt-cr{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.pt-cr button{min-width:72px}
 .orga-l{list-style:none;margin:0;padding:0 0 0 18px;position:relative;display:grid;gap:10px}
 .orga-l::before{content:"";position:absolute;left:5px;top:18px;bottom:18px;width:2px;background:var(--rule)}
 .orga-niv{position:relative;display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:6px 16px;align-items:center;padding:10px 12px;border:1px solid var(--rule);border-radius:12px;background:var(--sheet)}
@@ -1729,6 +1733,7 @@ table.es-payes{min-width:0;width:100%}
       </div>
       <div id="conv-list"><div class="empty">Chargement…</div></div>
     </div>
+    <div class="card" id="creneaux" style="margin-top:16px"></div>
   </section>
 
   <section class="panel" id="tab-contrats" role="tabpanel" aria-labelledby="tab-btn-contrats" hidden>
@@ -3984,6 +3989,7 @@ function subscribe() {
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("creneaux", s => { S.creneaux = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(c => voitReserves() || !estReserve(ctService(c))); });
   col("conventions", s => { S.conventions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("prestations", s => { S.prestations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -4476,6 +4482,8 @@ function todoItems() {
     const echP = echeancesPersonnel().filter(x => x.type !== "objectif");
     add(echP.length, `Fin${plural(echP.length)} de période d’essai ou de CDD`, echP.slice(0, 3).map(x => `${x.f.nom} : ${x.type === "essai" ? "essai" : "CDD"} ${x.passe ? "terminé" : x.quand}`).join(", "), () => { S.rhEspace = "bord"; allerA("personnel"); });
     if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
+    const cj = creneauxDuJour();
+    add(cj.length, `Rendez-vous de paiement aujourd’hui`, cj.slice(0, 3).map(c => `${hhmm(c.debut)} ${c.entrepriseNom || "?"}`).join(", "), () => allerA("convocations"), "info");
     const so = secuOubliees();
     add(so.length, `Sortie${plural(so.length)} oubliée${plural(so.length)} au registre des entrées`, `Dans les locaux depuis plus de ${secuOubliH()} h : ${so.slice(0, 3).map(x => x.nom).join(", ")}`, () => { S.secuVue = "entrees"; allerA("securite"); });
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
@@ -11924,7 +11932,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -13243,6 +13251,13 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le rapport « ${v.titre || "?"} »`;
       if (a.luLe && !b.luLe) return `a lu le rapport « ${v.titre || "?"} »`;
       return `a modifié le rapport « ${v.titre || "?"} »`;
+    case "creneaux":
+      if (x === "ajout") return `a ouvert un créneau de paiement (${v.debut ? fmtDateTime(new Date(v.debut)) : "—"})`;
+      if (x === "suppression") return `a supprimé un créneau de paiement (${v.debut ? fmtDateTime(new Date(v.debut)) : "—"})`;
+      if (a.entrepriseId && !b.entrepriseId) return `${v.entrepriseNom || "une entreprise"} a réservé le créneau de paiement du ${fmtDateTime(new Date(v.debut))}`;
+      if (!a.entrepriseId && b.entrepriseId) return `a libéré le créneau de paiement de ${b.entrepriseNom || "l’entreprise"} (${fmtDateTime(new Date(v.debut))})`;
+      if (a.statut === "annule" && b.statut !== "annule") return `a fermé le créneau de paiement du ${fmtDateTime(new Date(v.debut))}`;
+      return `a modifié le créneau de paiement du ${v.debut ? fmtDateTime(new Date(v.debut)) : "—"}`;
     case "securiteSignalements":
       if (x === "ajout") return `a signalé ${v.nom || "?"} au service de la protection (${((SECU_SIGNAL[v.motif] || SECU_SIGNAL.autre)[0]).toLowerCase()})`;
       if (x === "suppression") return `a supprimé le signalement de ${v.nom || "?"}`;
@@ -15648,8 +15663,76 @@ function openConvDispense(c) {
 }
 
 // Onglet Convocations.
+/* ---------- Créneaux de paiement (supabase/v43_creneaux_paiement.sql) ---------- */
+// La Direction ouvre des permanences (un créneau par tranche) ; le patron en réserve un depuis son espace
+// entreprise pour venir payer. Collection « creneaux » : debut, fin, lieu, statut (ouvert, annule),
+// et, une fois réservé, entrepriseId, entrepriseNom, objet, reserveLe.
+const CRENEAU_LIEU = "Préfecture de police, guichet des impôts et cotisations";
+const creneauPris = c => !!(c && c.entrepriseId);
+const creneauxAVenir = () => (S.creneaux || []).filter(c => c.statut !== "annule" && new Date(c.fin || c.debut).getTime() >= Date.now() - 3600e3).sort((a, b) => String(a.debut).localeCompare(String(b.debut)));
+const creneauxDuJour = () => creneauxAVenir().filter(c => creneauPris(c) && jourCle(new Date(c.debut)) === jourCle(new Date()));
+function renderCreneaux() {
+  const box = $("#creneaux"); if (!box) return;
+  const w = writer(), l = creneauxAVenir(), pris = l.filter(creneauPris);
+  const parJour = new Map();
+  for (const c of l) { const k = jourCle(new Date(c.debut)); if (!parJour.has(k)) parJour.set(k, []); parJour.get(k).push(c); }
+  const ligne = c => h("li", { class: creneauPris(c) ? "cr-pris" : null },
+    h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${hhmm(c.debut)} – ${hhmm(c.fin)}` }),
+      h("span", { class: "meta", text: creneauPris(c) ? [c.entrepriseNom, c.objet, c.reserveLe ? "réservé " + quandSecu(c.reserveLe) : ""].filter(Boolean).join(" · ") : c.lieu || CRENEAU_LIEU })),
+    chip(creneauPris(c) ? ["Réservé", "info"] : ["Libre", "muted"]),
+    w ? h("span", { class: "row-actions" },
+      creneauPris(c) ? h("button", { class: "btn ghost small", type: "button", text: "Libérer", onclick: async ev => {
+        const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer : libérer"; return; }
+        b.disabled = true; const d = Object.assign({}, c, { entrepriseId: null, entrepriseNom: null, objet: null, reserveLe: null, libereLe: nowISO(), liberePar: S.agentName || "" }); delete d.id;
+        if (await write(() => S.db.doc("creneaux/" + c.id).set(d))) toast("Créneau libéré : prévenez l’entreprise."); else b.disabled = false; } }) : null,
+      h("button", { class: "btn ghost small", type: "button", text: "Fermer", onclick: async ev => {
+        const b = ev.currentTarget; if (creneauPris(c) && b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer : fermer"; return; }
+        b.disabled = true; if (await write(() => S.db.doc("creneaux/" + c.id).update({ statut: "annule", annuleLe: nowISO(), annulePar: S.agentName || "" }))) toast(creneauPris(c) ? "Créneau fermé : prévenez l’entreprise." : "Créneau fermé."); else b.disabled = false; } })) : h("span", {}));
+  fill(box, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Permanences de paiement" }),
+      h("p", { class: "sub", text: l.length ? `${l.length} créneau${l.length > 1 ? "x" : ""} à venir · ${pris.length} réservé${plural(pris.length)} par les entreprises depuis leur espace.` : "Ouvrez des créneaux : les patrons en réservent un depuis leur espace entreprise pour venir payer." })),
+      w ? h("button", { class: "btn small", type: "button", id: "cr-ouvrir", onclick: openPermanence, text: "Ouvrir une permanence" }) : null),
+    l.length ? [...parJour.entries()].map(([k, x]) => h("div", { class: "cr-jour" }, h("h4", { class: "mini-title", text: `${jourTxt(k)} · ${x.filter(creneauPris).length}/${x.length} réservé${plural(x.filter(creneauPris).length)}` }),
+      h("ul", { class: "ent-list" }, x.map(ligne)))) : h("p", { class: "muted", style: "margin:0", text: "Aucune permanence à venir." }));
+}
+function openPermanence() {
+  if (!writer()) return;
+  const date = h("input", { id: "cr-date", type: "date" }); date.value = jourCle(new Date(Date.now() + 864e5));
+  const hd = h("input", { id: "cr-hd", type: "time" }); hd.value = "21:00";
+  const hf = h("input", { id: "cr-hf", type: "time" }); hf.value = "22:00";
+  const duree = h("select", { id: "cr-duree" }, [15, 20, 30, 60].map(m => h("option", { value: String(m), text: m === 60 ? "1 heure" : m + " minutes" }))); duree.value = "15";
+  const lieu = h("input", { id: "cr-lieu", maxlength: "120", autocomplete: "off" }); lieu.value = CRENEAU_LIEU;
+  const apercu = h("p", { class: "hint", style: "margin:0", "aria-live": "polite" });
+  const tranches = () => {
+    if (!date.value || !hd.value || !hf.value) return [];
+    const a = new Date(`${date.value}T${hd.value}:00`), b = new Date(`${date.value}T${hf.value}:00`); if (b <= a) b.setDate(b.getDate() + 1);
+    const out = [], pas = Number(duree.value) * 60e3;
+    for (let t = a.getTime(); t + pas <= b.getTime() && out.length < 48; t += pas) out.push([new Date(t), new Date(t + pas)]);
+    return out;
+  };
+  const maj = () => { const t = tranches(); apercu.textContent = t.length ? `${t.length} créneau${t.length > 1 ? "x" : ""} de ${duree.value} minutes, de ${hhmm(t[0][0])} à ${hhmm(t[t.length - 1][1])}${t[0][0].getTime() < Date.now() ? " (déjà commencé : les créneaux passés ne seront pas réservables)" : ""}.` : "Choisissez une date et des heures."; };
+  [date, hd, hf, duree].forEach(el => el.addEventListener("change", maj)); maj();
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Ouvrir les créneaux" });
+  go.addEventListener("click", async () => {
+    const t = tranches(); if (!t.length) { err.textContent = "Aucun créneau dans cet intervalle."; return; }
+    go.disabled = true;
+    const perm = S.db.collection("creneaux").doc().id;
+    let ok = 0;
+    for (const [a, b] of t) {
+      const body = { debut: a.toISOString(), fin: b.toISOString(), lieu: lieu.value.trim() || CRENEAU_LIEU, statut: "ouvert", permanence: perm, at: nowISO(), by: S.uid || null, byNom: S.agentName || "" };
+      if (await write(() => S.db.collection("creneaux").doc().set(body))) ok++;
+    }
+    toast(`${ok} créneau${ok > 1 ? "x" : ""} ouvert${plural(ok)} : les entreprises les voient dans leur espace.`, ok !== t.length);
+    closeDialog();
+  });
+  openDialog({ eyebrow: "Convocations", title: "Ouvrir une permanence de paiement", wide: true,
+    body: [h("div", { class: "row2" }, field("cr-date", "Jour", date), field("cr-duree", "Durée d’un créneau", duree)),
+      h("div", { class: "row2" }, field("cr-hd", "De", hd), field("cr-hf", "À", hf)), field("cr-lieu", "Lieu", lieu), apercu, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
 function renderConvocations() {
   if (S.tab !== "convocations") return;
+  renderCreneaux();
   const box = $("#conv-list");
   if (!S.connected || !S.loaded.has("convocations")) { fill(box, h("div", { class: "empty", text: "Chargement…" })); return; }
   const all = (S.convocations || []).slice();
@@ -17268,7 +17351,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -23305,7 +23388,54 @@ async function chargerEspace() {
   S.convocations = data.convocations || []; S.attestations = data.attestations || [];
   S.portail.e = e;
   document.title = `${e.nom} · Espace entreprise`;
+  await chargerCreneauxPortail();
   renderPortail();
+}
+// Créneaux de paiement (mise à jour 43 ; sans elle, la carte n'apparaît pas).
+async function chargerCreneauxPortail() {
+  let r;
+  try { r = await S.sb.rpc("creneaux_entreprise", { p_jeton: S.portail.jeton }); } catch (err) { r = { error: err }; }
+  S.portail.creneaux = r.error || !Array.isArray(r.data) ? null : r.data;
+}
+function cardCreneauxPortail(e) {
+  const l = S.portail.creneaux;
+  if (!l || e.actif === false) return null;
+  const miens = l.filter(c => c.moi), libres = l.filter(c => !c.moi && new Date(c.debut).getTime() > Date.now());
+  const jours = new Map();
+  for (const c of libres) { const k = jourCle(new Date(c.debut)); if (!jours.has(k)) jours.set(k, []); jours.get(k).push(c); }
+  const annuler = c => async ev => {
+    const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer l’annulation"; return; }
+    b.disabled = true;
+    let r; try { r = await S.sb.rpc("annuler_creneau", { p_jeton: S.portail.jeton, p_creneau: c.id }); } catch (x) { r = { error: x }; }
+    if (r.error) { toast(r.error.message || "Annulation refusée.", true); b.disabled = false; return; }
+    toast("Rendez-vous annulé."); await chargerCreneauxPortail(); renderPortail();
+  };
+  return h("div", { class: "card", id: "pt-creneaux" }, h("div", { class: "card-head" }, h("h3", { text: "Rendez-vous pour payer" })),
+    h("p", { class: "muted", style: "margin:0 0 8px", text: "Réservez un créneau pour venir régler vos sommes à la Préfecture : la Direction vous attend à l’heure dite." }),
+    miens.length ? h("ul", { class: "ent-list", id: "pt-mes-rdv" }, miens.map(c => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${jourTxt(jourCle(new Date(c.debut)))} à ${hhmm(c.debut)}` }), h("span", { class: "meta", text: [c.lieu, c.objet].filter(Boolean).join(" · ") })),
+      chip(["Réservé", "ok"]), new Date(c.debut).getTime() > Date.now() ? h("button", { class: "btn ghost small", type: "button", onclick: annuler(c), text: "Annuler" }) : h("span", {})))) : null,
+    jours.size ? [...jours.entries()].slice(0, 6).map(([k, x]) => h("div", {}, h("h4", { class: "mini-title", text: jourTxt(k) }),
+      h("div", { class: "pt-cr" }, x.map(c => h("button", { class: "btn ghost small", type: "button", title: c.lieu || "", onclick: () => openReserverCreneau(c), text: hhmm(c.debut) })))))
+      : h("p", { class: "muted", style: "margin:0", text: miens.length ? "Pas d’autre créneau libre pour l’instant." : "Aucun créneau libre pour l’instant : revenez plus tard." }));
+}
+function openReserverCreneau(c) {
+  const e = S.portail.e, items = unpaidItems(e).map(x => Object.assign({ late: true }, x)).concat(aEchoirItems(e));
+  const objet = h("select", { id: "pc-objet" }, items.map(x => h("option", { value: `${x.label} · ${x.ref} · ${money(x.montant)}`, text: `${x.label} (${money(x.montant)})` })), h("option", { value: "Autre", text: "Autre chose" }));
+  const precis = h("input", { id: "pc-precis", maxlength: "120", autocomplete: "off", placeholder: "Facultatif" });
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Réserver ce créneau" });
+  go.addEventListener("click", async () => {
+    go.disabled = true; err.textContent = "";
+    const txt = [objet.value, precis.value.trim()].filter(Boolean).join(" · ");
+    let r; try { r = await S.sb.rpc("reserver_creneau", { p_jeton: S.portail.jeton, p_creneau: c.id, p_objet: txt }); } catch (x) { r = { error: x }; }
+    if (r.error) { err.textContent = r.error.message || "Réservation refusée."; go.disabled = false; await chargerCreneauxPortail(); renderPortail(); return; }
+    toast(`Rendez-vous réservé : ${jourTxt(jourCle(new Date(c.debut)))} à ${hhmm(c.debut)}.`); closeDialog(); await chargerCreneauxPortail(); renderPortail();
+  });
+  openDialog({ eyebrow: "Espace entreprise", title: `Rendez-vous ${jourTxt(jourCle(new Date(c.debut)))} à ${hhmm(c.debut)}`,
+    body: [kv([["Lieu", c.lieu || CRENEAU_LIEU], ["Durée", `jusqu’à ${hhmm(c.fin)}`]]), field("pc-objet", "Vous venez payer", objet), field("pc-precis", "Précision", precis),
+      h("p", { class: "hint", style: "margin:0", text: "Venez à l’heure avec de quoi régler. Un empêchement ? Annulez depuis cet espace pour libérer la place." }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 function renderPortail() {
   const e = S.portail.e, box = $("#portail");
@@ -23382,7 +23512,7 @@ function renderPortail() {
   const cardSig = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Signaler une fraude" })),
     h("p", { class: "muted", style: "margin:0", text: "Une entreprise qui ne déclare pas tout, paie en liquide pour cacher ses ventes ou emploie sans déclarer ? Signalez-le : la Préfecture peut ouvrir un contrôle. L’entreprise visée n’en saura rien, et une prime peut vous être versée sur ce qui sera recouvré." }),
     h("div", { class: "paste-row", style: "margin-top:8px" }, h("button", { class: "btn ghost small", type: "button", onclick: openSignalForm, text: "Faire un signalement" })));
-  fill(box, head, cardTodo, cardPay, cardConv, cardDecl, cardAtt, cardRl, cardSig,
+  fill(box, head, cardTodo, cardPay, cardCreneauxPortail(e), cardConv, cardDecl, cardAtt, cardRl, cardSig,
     h("p", { class: "hint", style: "margin:0;text-align:center", text: "Ce lien est personnel : ne le partagez pas. En cas de perte, demandez-en un nouveau à la Préfecture ; l’ancien ne marchera plus." }));
 }
 function openSignalForm() {

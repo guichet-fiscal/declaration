@@ -114,6 +114,28 @@
         return { data: /^(responsable|directeur|directrice|chef)/i.test(g.trim()) ? "responsable" : "agent", error: null };
       }
       // Photos de profil (mise à jour 41 ; absente si window.__sans41).
+      // Espace entreprise : window.__jetons = { jeton: identifiant de l'entreprise }.
+      const ent = () => { const eid = (window.__jetons || {})[args.p_jeton]; return eid ? rows.get("entreprises/" + eid) || null : null; };
+      if (name === "espace_entreprise") {
+        const e = ent(); if (!e) return { data: null, error: null };
+        const mine = c => docs(c).filter(x => x.entrepriseId === e.id);
+        return { data: { maintenant: iso(), entreprise: Object.assign({ id: e.id }, e.data), config: (rows.get("config/main") || { data: {} }).data, declarations: mine("declarations"), decisions: {}, echeanciers: {},
+          penalites: mine("penalites"), relances: [], prets: [], depots: mine("depots"), clotures: [], convocations: mine("convocations"), attestations: [] }, error: null };
+      }
+      if (name === "creneaux_entreprise" || name === "reserver_creneau" || name === "annuler_creneau") {
+        if (window.__sans43) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
+        const e = ent(); if (!e) return { data: null, error: name === "creneaux_entreprise" ? null : { message: "Lien inconnu ou coupé." } };
+        const ouverts = () => [...rows.values()].filter(r => r.collection === "creneaux" && (r.data.statut || "ouvert") === "ouvert");
+        if (name === "creneaux_entreprise") return { data: ouverts().filter(r => new Date(r.data.debut).getTime() > Date.now() - 7200e3 && (!r.data.entrepriseId || r.data.entrepriseId === e.id))
+          .sort((x, y) => String(x.data.debut).localeCompare(String(y.data.debut))).map(r => ({ id: r.id, debut: r.data.debut, fin: r.data.fin, lieu: r.data.lieu, moi: r.data.entrepriseId === e.id, objet: r.data.entrepriseId === e.id ? r.data.objet : null })), error: null };
+        const r = rows.get("creneaux/" + args.p_creneau);
+        if (name === "annuler_creneau") { if (!r || r.data.entrepriseId !== e.id) return { data: false, error: null }; const d = Object.assign({}, r.data); delete d.entrepriseId; delete d.entrepriseNom; delete d.objet; delete d.reserveLe; r.data = d; return { data: true, error: null }; }
+        if (!r || (r.data.statut || "ouvert") !== "ouvert") return { data: null, error: { message: "Ce créneau n'existe plus." } };
+        if (r.data.entrepriseId && r.data.entrepriseId !== e.id) return { data: null, error: { message: "Ce créneau vient d'être pris : choisissez-en un autre." } };
+        if (ouverts().filter(x => x.data.entrepriseId === e.id && new Date(x.data.debut).getTime() > Date.now()).length >= 2) return { data: null, error: { message: "Vous avez déjà deux rendez-vous à venir : annulez-en un d'abord." } };
+        r.data = Object.assign({}, r.data, { entrepriseId: e.id, entrepriseNom: e.data.nom, objet: args.p_objet, reserveLe: iso() });
+        return { data: { id: r.id }, error: null };
+      }
       if (name === "annoncer_visiteur") {
         const r = rows.get("securiteAttendus/" + args.p_attendu); if (!r || r.data.statut !== "arrive" || r.data.annonceLe || !r.data.hoteFid) return { data: false, error: null };
         const f = rows.get("fonctionnaires/" + r.data.hoteFid); if (!f) return { data: false, error: null };
