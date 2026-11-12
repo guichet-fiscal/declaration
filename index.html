@@ -1142,6 +1142,7 @@ button.ts-p{cursor:pointer}
 .d-releves{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:10px 12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
 .d-releves p{margin:0;flex:1 1 320px;font-size:13.5px;line-height:1.45}.d-releves .meta{display:block}
 .chrono-f{margin:0 0 10px}
+.nc-deja{margin-top:10px;padding:10px 12px;border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:6px;display:grid;gap:8px;font-size:13.5px}
 .chrono{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--rule);display:grid;gap:2px}
 .chrono-j{margin:12px 0 4px -14px;padding-left:14px;font-size:12px;font-weight:700;color:var(--ink-2)}
 .chrono-j::first-letter{text-transform:uppercase}
@@ -2432,6 +2433,11 @@ table.es-payes{min-width:0;width:100%}
                   <input id="s-repjours" type="number" min="1" max="30" step="1">
                   <span class="hint">En jours après la proposition de rectification. Ensuite, elle est réputée acceptée.</span>
                 </div>
+                <div class="field">
+                  <label for="s-reprise">Délai de reprise</label>
+                  <input id="s-reprise" type="number" min="0" max="520" step="1">
+                  <span class="hint">En semaines après la fin d’une période : plus ancienne, elle ne peut plus être contrôlée. 0 : sans limite.</span>
+                </div>
               </div>
               <div class="paste-row">
                 <button class="btn" type="submit" id="s-save">Enregistrer</button>
@@ -2779,7 +2785,7 @@ const byCreatedDesc = (a, b) => String(b.createdAt || "").localeCompare(String(a
 /* ---------- État ---------- */
 const DEFAULTS = {
   periodicite: "semaine", delaiJours: 2, tauxIS: 20, tauxCot: 25, majoration: 10,
-  budgetInitial: 0, dotations: [], devise: "€", salaireMin: 0, enveloppes: {}, enveloppesSemaines: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2,
+  budgetInitial: 0, dotations: [], devise: "€", salaireMin: 0, enveloppes: {}, enveloppesSemaines: {}, delaiPaiementJours: 2, servicesMentions: {}, attestationJours: 28, delaiReponseJours: 2, delaiRepriseSemaines: 0,
   exoActive: true, exoPeriodes: 4, exoIS: 100, exoCot: 50, exoDegressif: false,
   mecActive: true, mecTaux: 60, mecPlafond: 20000,
   delaiMiseEnDemeureJours: 2, majorationImpaye: 10, majorationOffice: 40,
@@ -12021,6 +12027,7 @@ function renderSettings() {
     $("#s-paydelai").value = String(c.delaiPaiementJours ?? 2);
     $("#s-attjours").value = String(c.attestationJours || 28);
     $("#s-repjours").value = String(c.delaiReponseJours || 2);
+    $("#s-reprise").value = String(Math.max(0, Number(c.delaiRepriseSemaines) || 0));
     const opts = [];
     let kk = keyOf(new Date());
     for (let i = 0; i < 30; i++) { opts.push([kk, periodLabel(kk)]); kk = prevKey(kk); }
@@ -12074,6 +12081,7 @@ $("#form-set").addEventListener("submit", async e => {
     delaiPaiementJours: Math.max(0, Math.min(30, Math.round(Number($("#s-paydelai").value) || 0))),
     attestationJours: Math.max(1, Math.min(365, Math.round(Number($("#s-attjours").value) || 28))),
     delaiReponseJours: Math.max(1, Math.min(30, Math.round(Number($("#s-repjours").value) || 2))),
+    delaiRepriseSemaines: Math.max(0, Math.min(520, Math.round(Number($("#s-reprise").value) || 0))),
     debutSuivi: $("#s-debut").value || DEFAULTS.debutSuivi
   };
   const bad = [];
@@ -13482,7 +13490,7 @@ function describe(e) {
         if (plus.length === 1 && !moins.length) return `a inscrit une dotation de ${money(plus[0].montant)} au Trésor${plus[0].motif ? ` (${plus[0].motif})` : ""}`;
         if (moins.length === 1 && !plus.length) return `a retiré la dotation de ${money(moins[0].montant)} du Trésor`;
       }
-      const L = { dotations: "dotations du Trésor", contratTravail: "modèle de contrat de travail", tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", servicesReserves: "services réservés à la Direction", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
+      const L = { dotations: "dotations du Trésor", contratTravail: "modèle de contrat de travail", tauxIS: "impôt", tauxCot: "cotisations", majoration: "majoration", delaiJours: "délai", delaiPaiementJours: "délai de paiement", attestationJours: "validité des attestations", delaiReponseJours: "délai de réponse aux contrôles", delaiRepriseSemaines: "délai de reprise", delaiMiseEnDemeureJours: "délai des mises en demeure", majorationImpaye: "majoration pour paiement tardif", majorationOffice: "majoration de taxation d’office", tiersDefaut: "tiers détenteur", justiceDestinataire: "destinataire des dossiers de justice", exoActive: "exonération", exoPeriodes: "durée de l’exonération", exoIS: "exonération de l’impôt", exoCot: "exonération des cotisations", exoDegressif: "exonération dégressive", periodicite: "rythme", budgetInitial: "fonds de départ", devise: "devise", salaireMin: "salaire minimum", services: "services", enveloppes: "enveloppes", enveloppesSemaines: "plafonds des enveloppes (par semaine)", enveloppesMois: "plafonds des enveloppes", convMajoration: "majoration d’absence à une collecte", convAmende: "amende d’absence à une convocation", convIntervalle: "intervalle des collectes", convLieu: "lieu des convocations", convTransporteur: "transporteur de fonds", servicesMentions: "mentions Discord", servicesReserves: "services réservés à la Direction", debutSuivi: "début du suivi", baremeIS: "barème de l’impôt", baremeCot: "barème des cotisations", baremeMode: "mode de calcul" };
       const ch = Object.keys(L).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])).map(k => L[k]);
       return ch.length ? `a modifié les réglages (${ch.join(", ")})` : "a modifié les réglages";
     }
@@ -13673,7 +13681,7 @@ const FIELD_LABEL = {
   resultat: "Résultat", impot: "Impôt", cotisations: "Cotisations", majoration: "Majoration", total: "Total", declarant: "Déclarant", note: "Observation",
   statut: "Statut", montant: "Montant", montantAccorde: "Montant accordé", commentaire: "Motif", motif: "Motif", service: "Service", objet: "Objet",
   quantite: "Quantité", urgence: "Urgence", justification: "Justification", demandeur: "Demandeur", enRetard: "Hors délai", echeances: "Échéances",
-  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", delaiMiseEnDemeureJours: "Délai des mises en demeure", majorationImpaye: "Majoration pour paiement tardif", majorationOffice: "Majoration de taxation d’office", tiersDefaut: "Tiers détenteur", justiceDestinataire: "Destinataire des dossiers de justice", tiers: "Tiers détenteur", recouvre: "Recouvré", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
+  salaries: "Salariés détaillés", tauxIS: "Taux d’impôt", tauxCot: "Taux de cotisations", delaiJours: "Délai de dépôt", delaiPaiementJours: "Délai de paiement", attestationJours: "Validité des attestations", delaiReponseJours: "Délai de réponse aux contrôles", delaiRepriseSemaines: "Délai de reprise", delaiMiseEnDemeureJours: "Délai des mises en demeure", majorationImpaye: "Majoration pour paiement tardif", majorationOffice: "Majoration de taxation d’office", tiersDefaut: "Tiers détenteur", justiceDestinataire: "Destinataire des dossiers de justice", tiers: "Tiers détenteur", recouvre: "Recouvré", exoActive: "Exonération", exoPeriodes: "Durée de l’exonération", exoIS: "Exonération de l’impôt", exoCot: "Exonération des cotisations", exoDegressif: "Exonération dégressive", exoneration: "Exonération",
   services: "Services", enveloppes: "Enveloppes", enveloppesSemaines: "Plafonds par semaine", enveloppesMois: "Plafonds par mois", convMajoration: "Majoration d’absence (collecte)", convAmende: "Amende d’absence", convIntervalle: "Minutes entre deux passages", convLieu: "Lieu des convocations", convTransporteur: "Transporteur de fonds", servicesMentions: "Mentions Discord", servicesReserves: "Services réservés à la Direction", baremeIS: "Barème de l’impôt", baremeCot: "Barème des cotisations",
   baremeMode: "Mode de calcul", baremeCotBase: "Base des cotisations", debutSuivi: "Début du suivi", budgetInitial: "Fonds de départ", devise: "Devise",
   salaireMin: "Salaire minimum", periodicite: "Rythme", type: "Type", periodes: "Périodes", nature: "Nature"
@@ -18703,6 +18711,16 @@ function amrDoc(c, p) {
 }
 const amrDocFromPen = p => amrDoc(S.controles.find(c => c.id === p.controleId) || null, p);
 
+/* ---------- Recontrôle et délai de reprise ---------- */
+// Une période déjà vérifiée (contrôle terminé) peut être recontrôlée, mais l'inspecteur le voit à l'ouverture
+// et confirme qu'il a des éléments nouveaux. Au-delà du délai de reprise (réglage, en semaines après la fin
+// de la période ; 0 = sans limite), une période ne peut plus être contrôlée.
+const repriseSemaines = () => Math.max(0, Math.round(Number(cfg().delaiRepriseSemaines) || 0));
+const repriseFin = k => { const n = repriseSemaines(), b = bounds(k); return n && b ? new Date(b.end.getTime() + n * 7 * 864e5) : null; };
+const reprisePassee = k => { const f = repriseFin(k); return !!f && f.getTime() < Date.now(); };
+const dejaControlee = (e, d, k) => S.controles.filter(c => sameEnt(c, e) && c.statut !== "ouvert" && c.statut !== "propose" && ((d && (c.declIds || []).includes(d.id)) || (c.periodes || []).includes(k)))
+  .sort((a, b) => String(b.closLe || b.ouvertLe).localeCompare(String(a.closLe || a.ouvertLe)));
+const dejaTxt = c => `${dossierNo("CF", c.id)}, ${String((CSTAT[c.statut] || ["clos"])[0]).toLowerCase()}${c.closLe ? " le " + fmtDate(new Date(c.closLe)) : ""}`;
 function newControle(e, declIds, opts) {
   opts = opts || {};
   const ds = declsOf(e).filter(d => dStatus(d) !== "rejetee").sort((a, b) => String(b.periode).localeCompare(String(a.periode))).slice(0, 16);
@@ -18711,10 +18729,24 @@ function newControle(e, declIds, opts) {
   if (!ds.length && !att.length) { toast("Cette entreprise n’a aucune déclaration à contrôler, et aucune période qu’elle puisse encore déclarer.", true); return; }
   const pre = new Set(declIds && declIds.length ? declIds : ds.length ? [ds[0].id] : []);
   const nowK = keyOf(new Date()), preAtt = ds.length ? null : att.includes(nowK) ? nowK : att[att.length - 1];
-  const boxes = ds.map(d => { const cb = h("input", { type: "checkbox", id: "nc-" + d.id, "data-decl": d.id }); cb.checked = pre.has(d.id); const busy = ctrlOf(d); cb.disabled = !!busy;
-    return h("label", { class: "switch", for: "nc-" + d.id }, cb, `${periodPlain(d.periode)} · ${money(d.ca)} de chiffre d’affaires · ${(DSTAT[dStatus(d)] || DSTAT.soumise)[0].toLowerCase()}${busy ? " · déjà dans " + dossierNo("CF", busy.id) : ""}`); });
-  const attBoxes = att.map(k => { const cb = h("input", { type: "checkbox", id: "nc-att-" + k, "data-att": k }); const busy = ctrlAttend(e, k); cb.checked = !busy && k === preAtt; cb.disabled = !!busy;
-    return h("label", { class: "switch", for: "nc-att-" + k }, cb, `${periodLabel(k)}${k === nowK ? " (en cours)" : ""} · pas encore déclarée${busy ? " · déjà dans " + dossierNo("CF", busy.id) : ` · à déclarer avant le ${fmtDate(deadline(k))}`}`); });
+  // Déjà contrôlée : signalée, cochable ; passé le délai de reprise : plus cochable.
+  const deja = {}, marque = (cb, k, dd) => { const l = dd.length ? dd : null; if (l) { deja[k] = l; cb.dataset.deja = k; } };
+  const boxes = ds.map(d => { const cb = h("input", { type: "checkbox", id: "nc-" + d.id, "data-decl": d.id }); const busy = ctrlOf(d), vieux = !busy && reprisePassee(d.periode);
+    cb.checked = pre.has(d.id) && !vieux; cb.disabled = !!busy || vieux; if (!busy && !vieux) marque(cb, d.periode, dejaControlee(e, d, d.periode));
+    return h("label", { class: "switch", for: "nc-" + d.id }, cb, `${periodPlain(d.periode)} · ${money(d.ca)} de chiffre d’affaires · ${(DSTAT[dStatus(d)] || DSTAT.soumise)[0].toLowerCase()}${busy ? " · déjà dans " + dossierNo("CF", busy.id) : vieux ? ` · trop ancienne : délai de reprise passé le ${fmtDate(repriseFin(d.periode))}` : deja[d.periode] ? ` · déjà contrôlée (${dejaTxt(deja[d.periode][0])})` : ""}`); });
+  const attBoxes = att.map(k => { const cb = h("input", { type: "checkbox", id: "nc-att-" + k, "data-att": k }); const busy = ctrlAttend(e, k); cb.checked = !busy && k === preAtt; cb.disabled = !!busy; if (!busy) marque(cb, k, dejaControlee(e, null, k));
+    return h("label", { class: "switch", for: "nc-att-" + k }, cb, `${periodLabel(k)}${k === nowK ? " (en cours)" : ""} · pas encore déclarée${busy ? " · déjà dans " + dossierNo("CF", busy.id) : ` · à déclarer avant le ${fmtDate(deadline(k))}`}${!busy && deja[k] ? ` · déjà contrôlée (${dejaTxt(deja[k][0])})` : ""}`); });
+  const dejaOk = h("input", { type: "checkbox", id: "nc-deja-ok" }), dejaTx = h("p", { style: "margin:0" });
+  const dejaBox = h("div", { class: "nc-deja", id: "nc-deja", role: "note" }, dejaTx,
+    h("label", { class: "switch", for: "nc-deja-ok" }, dejaOk, "J’ai des éléments nouveaux sur cette période, indiqués dans le motif"));
+  const lesCases = [...boxes, ...attBoxes].map(l => l.querySelector("input"));
+  const dejaCoches = () => lesCases.filter(b => b.dataset.deja && b.checked && !b.disabled).map(b => b.dataset.deja);
+  const dejaSync = () => {
+    const l = [...new Set(dejaCoches())].sort();
+    dejaBox.hidden = !l.length;
+    if (l.length) dejaTx.textContent = `${l.length > 1 ? "Ces périodes ont" : "Cette période a"} déjà été contrôlée${plural(l.length)} : ${l.map(k => `${periodPlain(k)} (${deja[k].map(dejaTxt).join(" ; ")})`).join(", ")}. On ${l.length > 1 ? "les" : "la"} recontrôle seulement pour des faits que le premier contrôle ne connaissait pas : dites lesquels dans le motif.`;
+  };
+  lesCases.forEach(b => b.addEventListener("change", dejaSync)); dejaSync();
   const motif = h("textarea", { id: "nc-motif", rows: "3", placeholder: att.length && !ds.length ? "Ce qui a été constaté : mouvements du compte, ventes, salaires…" : "Pourquoi ce contrôle : alertes, signalement, incohérences…" });
   const al = [...new Set(ds.filter(d => pre.has(d.id)).flatMap(activeAlerts))];
   motif.value = opts.motif || (al.length ? "Alertes du guichet : " + al.join(" ; ") + "." : "");
@@ -18736,12 +18768,16 @@ function newControle(e, declIds, opts) {
     const ids = $$("input[data-decl]", dlg).filter(b => b.checked && !b.disabled).map(b => b.dataset.decl);
     const attK = $$("input[data-att]", dlg).filter(b => b.checked && !b.disabled).map(b => b.dataset.att);
     if (!ids.length && !attK.length) { err.textContent = "Cochez au moins une période à contrôler."; return; }
+    const rec = [...new Set(dejaCoches())];
+    if (rec.length && !dejaOk.checked) { err.textContent = "Période déjà contrôlée : cochez « J’ai des éléments nouveaux » et dites lesquels dans le motif, ou décochez-la."; dejaOk.focus(); return; }
+    if (rec.length && motif.value.trim().length < 15) { err.textContent = "Pour recontrôler, écrivez dans le motif les éléments nouveaux."; motif.focus(); return; }
     const btn = ev.currentTarget; btn.disabled = true;
     const ref = S.db.collection("controles").doc();
     const sel = ids.map(id => S.declarations.find(d => d.id === id)).filter(Boolean);
     const c = { entrepriseId: e.id || null, entrepriseNom: e.nom, declIds: ids, periodes: [...new Set(sel.map(d => d.periode).concat(attK))].sort(), motif: motif.value.trim(), origine: orig.value, inspecteur: insp.value.trim(),
       statut: "ouvert", ouvertLe: nowISO(), ouvertPar: S.agentName || "", by: S.uid || null, notes: [], pieces: [], rectifications: {}, qualification: "bonne_foi", suspendus: [], calcV: 2 };
     if (attK.length) Object.assign(c, { attente: attK, enCours: attK.slice(), suspendre: susp.checked });
+    if (rec.length) c.recontrole = rec.map(k => ({ periode: k, controles: deja[k].map(x => x.id) }));
     // On garde l'état de chaque avis avant suspension pour le rétablir exactement à la fin du contrôle.
     c.avant = {};
     if (opts.rectifications) for (const id of ids) if (opts.rectifications[id]) c.rectifications[id] = opts.rectifications[id];
@@ -18759,7 +18795,8 @@ function newControle(e, declIds, opts) {
   };
   openDialog({
     eyebrow: "Contrôle fiscal", title: "Ouvrir un contrôle · " + e.nom,
-    body: [sec("Périodes à vérifier", h("div", { class: "checks-col" }, boxes, attBoxes),
+    body: [sec("Périodes à vérifier", h("div", { class: "checks-col" }, boxes, attBoxes), dejaBox,
+        repriseSemaines() ? h("p", { class: "hint", style: "margin:6px 0 0", text: `Délai de reprise : une période se contrôle jusqu’à ${repriseSemaines()} semaine${plural(repriseSemaines())} après sa fin (réglages).` }) : null,
         att.length ? h("p", { class: "hint", style: "margin:6px 0 0", text: "Une période pas encore déclarée peut être contrôlée sans attendre, quand des opérations suspectes sont constatées pendant la période (sur le modèle de la flagrance fiscale, art. L16-0 BA du LPF). Rangez les captures du compte dans les pièces du contrôle ; la déclaration rejoindra le contrôle dès sa saisie, et son avis attendra la fin du contrôle." }) : null),
       h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "nc-orig", text: "Origine" }), orig), h("div", { class: "field" }, h("label", { for: "nc-insp", text: "Inspecteur chargé du dossier" }), insp)),
       avBox,
@@ -18987,6 +19024,8 @@ function openControle(id) {
     ["Avis", pen ? dossierNo("AMR", pen.id) : "—"], ["Mis en recouvrement le", c.recouvreLe ? fmtDateTime(new Date(c.recouvreLe)) : "—"],
     ["Paiement", pen ? chip(pen.statut === "annulee" ? ["Dégrevé", "muted"] : PSTAT[pen.statut] || PSTAT.due) : "—"], pen && pen.paidAt && pen.statut === "payee" ? ["Payé le", fmtDateTime(new Date(pen.paidAt))] : null, ["Somme", money(c.total), "tot"]])));
   if (c.aviseur && c.aviseur.nom) body.push(aviseurSection(c, c0, reopen));
+  if ((c.recontrole || []).length) body.push(sec("Recontrôle", h("ul", { class: "ent-list" }, c.recontrole.map(r => h("li", {}, `${periodPlain(r.periode)} déjà contrôlée : `,
+    (r.controles || []).map((cid, i) => { const x = S.controles.find(y => y.id === cid); return [i ? ", " : "", x ? h("button", { class: "linkbtn", type: "button", onclick: () => openControle(cid), text: dejaTxt(x) }) : dossierNo("CF", cid)]; }))))));
   { const cs = conservatoireSection(c, c0, reopen); if (cs) body.push(cs); }
   { const dc = communicationSection(c, c0, reopen); if (dc) body.push(dc); }
   { const rf = rescritsOf(entOf(c)).filter(r => r.statut === "repondu"); if (rf.length) body.push(h("div", { class: "notice", style: "margin:0;border-left-color:var(--accent)" }, h("div", {}, h("strong", { text: `${rf.length} rescrit${plural(rf.length)} engage${rf.length > 1 ? "nt" : ""} la Préfecture envers cette entreprise. ` }), rf.map(r => `${dossierNo("RF", r.id)} : ${r.question.slice(0, 60)}${r.question.length > 60 ? "…" : ""}`).join(" ; ") + "."))); }
