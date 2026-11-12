@@ -1134,6 +1134,8 @@ button.ts-p{cursor:pointer}
 .dv-ex{display:grid;gap:6px}
 .cs-jour+.cs-jour{margin-top:10px}#cs-liste{margin-top:8px}
 #dv-card:empty{display:none}
+.pt-delai{display:grid;gap:8px;justify-items:start;margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--paper);border:1px dashed var(--rule)}
+.pt-delai p{margin:0;font-size:13.5px;line-height:1.45}
 .pret-cap{display:grid;gap:3px;margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--rule);border-left:4px solid var(--ok);background:var(--paper);font-size:13.5px;line-height:1.45}
 .pret-cap.warn{border-left-color:var(--warn)}.pret-cap.bad{border-left-color:var(--bad)}
 .pret-cap.ok strong{color:var(--ok)}.pret-cap.warn strong{color:var(--warn)}.pret-cap.bad strong{color:var(--bad)}
@@ -4161,6 +4163,7 @@ function subscribe() {
   col("vehicules", s => { S.vehicules = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("soupcons", s => { S.soupcons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("delais", s => { S.delais = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("validations", s => { S.validations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("creneaux", s => { S.creneaux = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(c => voitReserves() || !estReserve(ctService(c))); });
@@ -4656,6 +4659,8 @@ function todoItems() {
     const echP = echeancesPersonnel().filter(x => x.type !== "objectif");
     add(echP.length, `Fin${plural(echP.length)} de période d’essai ou de CDD`, echP.slice(0, 3).map(x => `${x.f.nom} : ${x.type === "essai" ? "essai" : "CDD"} ${x.passe ? "terminé" : x.quand}`).join(", "), () => { S.rhEspace = "bord"; allerA("personnel"); });
     if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
+    const dla = (S.delais || []).filter(x => x.statut === "attente");
+    add(dla.length, `Demande${plural(dla.length)} de délai de paiement`, dla.slice(0, 3).map(x => `${x.entrepriseNom} : ${delaiTxt(x)}`).join(", "), () => openDelai(dla[0].id));
     if (S.role === "direction") {
       const dv = dvAttente(), aMoi = dv.filter(v => !dvMienne(v));
       add(aMoi.length, `Geste${plural(aMoi.length)} sensible${plural(aMoi.length)} à valider`, aMoi.slice(0, 2).map(v => `${v.libelle} (${v.demandePar || "?"})`).join(" ; "), openValidations, "bad");
@@ -12126,7 +12131,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["validations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["delais", "validations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -13450,6 +13455,10 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le rapport « ${v.titre || "?"} »`;
       if (a.luLe && !b.luLe) return `a lu le rapport « ${v.titre || "?"} »`;
       return `a modifié le rapport « ${v.titre || "?"} »`;
+    case "delais":
+      if (x === "ajout") return `${v.entrepriseNom || "Une entreprise"} demande un délai de paiement : ${delaiTxt(v)}`;
+      if (a.statut !== b.statut) return a.statut === "accordee" ? `a accordé le délai de paiement de ${v.entrepriseNom || "?"} (${delaiTxt(v)})` : a.statut === "refusee" ? `a refusé le délai de paiement de ${v.entrepriseNom || "?"}` : a.statut === "annulee" ? `${v.entrepriseNom || "L’entreprise"} a annulé sa demande de délai` : `a modifié la demande de délai de ${v.entrepriseNom || "?"}`;
+      return `a modifié la demande de délai de ${v.entrepriseNom || "?"}`;
     case "validations":
       if (x === "ajout") return `a demandé une seconde validation : ${v.libelle || "geste sensible"}`;
       if (a.statut !== b.statut) return a.statut === "validee" ? `a validé : ${v.libelle || "geste sensible"} (demandé par ${v.demandePar || "?"})` : a.statut === "refusee" ? `a refusé : ${v.libelle || "geste sensible"} (demandé par ${v.demandePar || "?"})` : a.statut === "retiree" ? `a retiré sa demande : ${v.libelle || ""}` : `a classé la demande : ${v.libelle || ""}`;
@@ -14844,6 +14853,64 @@ function relanceAll(type, liste) {
   refresh();
 }
 
+/* ---------- Demandes de délai de paiement (supabase/v46_lettres_delais.sql) ---------- */
+// Le patron demande, depuis son espace, à payer un ou plusieurs avis en 2 à 4 fois ou plus tard (2, 4
+// ou 7 jours), avec un motif. La Direction accepte (échéancier) ou refuse. Pendant la demande, le
+// recouvrement de ces avis est suspendu : pas de relance automatique, le dossier attend la réponse.
+const delaiTxt = dl => (dl.mode === "plusieurs" ? `payer en ${dl.nb} fois` : `payer ${dl.jours} jours plus tard`);
+const delaisEnAttente = e => (S.delais || []).filter(dl => dl.statut === "attente" && sameEnt(dl, e));
+const delaiDe = (e, ids) => delaisEnAttente(e).find(dl => (dl.decls || []).some(id => ids.includes(id))) || null;
+function delaiEcheances(d, dl) {
+  const total = Math.max(0, dMontant(d) - dCredit(d)), out = [];
+  if (dl.mode === "report") {
+    const base = Math.max(Date.now(), (payDue(d) || new Date()).getTime()), dt = new Date(base + (Number(dl.jours) || 2) * 864e5);
+    dt.setHours(23, 59, 0, 0);
+    return { total, echeances: [{ n: 1, date: dt.toISOString(), montant: total, payee: false, paidAt: null }] };
+  }
+  const n = Math.max(2, Math.min(4, Number(dl.nb) || 2)), step = cfg().periodicite === "mois" ? 30 : 7, part = Math.floor(total / n);
+  for (let i = 0; i < n; i++) { const dt = new Date(); dt.setDate(dt.getDate() + step * i); dt.setHours(23, 59, 0, 0); out.push({ n: i + 1, date: dt.toISOString(), montant: i === n - 1 ? total - part * (n - 1) : part, payee: false, paidAt: null }); }
+  return { total, echeances: out };
+}
+function openDelai(id) {
+  const dl = (S.delais || []).find(x => x.id === id); if (!dl) return;
+  const e = entOf(dl), dir = writer() && S.role === "direction", reopen = () => openDelai(id);
+  const decls = (dl.decls || []).map(i => S.declarations.find(d => d.id === i)).filter(Boolean);
+  const reponse = h("textarea", { id: "dl-reponse", rows: "2", maxlength: "400", placeholder: "Facultatif : un mot pour l’entreprise (publié avec la réponse)" });
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const repondre = async (oui, b) => {
+    b.disabled = true;
+    if (oui) {
+      let n = 0;
+      for (const d of decls) {
+        if (dReste(d) <= 0 || echOf(d)) continue;
+        const p = delaiEcheances(d, dl);
+        if (await write(() => S.db.doc("echeanciers/" + d.id).set({ declId: d.id, entrepriseId: d.entrepriseId || null, entrepriseNom: d.entrepriseNom, total: p.total, echeances: p.echeances, delai: dl.id, createdAt: nowISO(), by: S.uid || null }))) n++;
+      }
+      if (!n && decls.some(d => dReste(d) > 0 && !echOf(d))) { err.textContent = "Échéancier refusé : rien n’a changé."; b.disabled = false; return; }
+    }
+    const body = Object.assign({}, dl, { statut: oui ? "accordee" : "refusee", decideLe: nowISO(), decidePar: S.uid || null, decideParNom: S.agentName || "", reponse: reponse.value.trim() || null }); delete body.id;
+    if (!(await write(() => S.db.doc("delais/" + dl.id).set(body)))) { b.disabled = false; return; }
+    if (hookFor("relances")) {
+      const m = entMention(e);
+      await postDiscord("relances", { content: `**Demande de délai ${oui ? "accordée" : "refusée"}** · ${e.nom || dl.entrepriseNom}${m ? " " + m : ""} : ${delaiTxt(dl)} (${decls.map(d => dossierNo("DF", d.id)).join(", ")}).${body.reponse ? " " + body.reponse : ""}${oui ? " Les dates sont dans votre espace entreprise." : ""}\n— Préfecture de police · Direction des impôts et cotisations`, mentions: m ? [m] : [] });
+    }
+    toast(oui ? `Délai accordé : ${delaiTxt(dl)}.` : "Demande de délai refusée.");
+    closeDialog();
+  };
+  const st = dl.statut === "attente" ? ["EN ATTENTE", "warn"] : dl.statut === "accordee" ? ["ACCORDÉ", "ok"] : dl.statut === "refusee" ? ["REFUSÉ", "bad"] : ["ANNULÉE", "muted"];
+  openDialog({ eyebrow: "Recouvrement · demande de délai", title: e.nom || dl.entrepriseNom, stampEl: stamp(st), wide: true,
+    body: [kv([["Demande", capFirst(delaiTxt(dl))], ["Motif", dl.motif || "—"], ["Envoyée le", fmtDateTime(new Date(dl.at)) + (dl.enLigne ? " depuis l’espace entreprise" : "")],
+      dl.decideLe ? ["Réponse", `${dl.statut === "accordee" ? "Accordée" : "Refusée"} le ${fmtDateTime(new Date(dl.decideLe))}${dl.decideParNom ? " par " + dl.decideParNom : ""}${dl.reponse ? " · " + dl.reponse : ""}`] : null].filter(Boolean)),
+      sec("Avis concernés", h("ul", { class: "ent-list" }, decls.map(d => h("li", {},
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openDecl(d.id), text: `${dossierNo("DF", d.id)} · ${periodPlain(d.periode)}` }),
+          h("span", { class: "meta", text: echOf(d) ? "déjà en échéancier" : dReste(d) > 0 ? `reste ${money(dReste(d))}${payDue(d) ? " · à payer avant le " + fmtDateTime(payDue(d)) : ""}` : "payé" })),
+        h("span", {}), h("span", {}))))),
+      dl.statut === "attente" && dir ? field("dl-reponse", "Réponse", reponse) : null,
+      dl.statut === "attente" && dir ? h("p", { class: "hint", style: "margin:0", text: dl.mode === "plusieurs" ? `Accorder crée un échéancier : ${dl.nb} échéances, une par ${cfg().periodicite === "mois" ? "mois" : "semaine"}, la première ce soir.` : `Accorder repousse la date de paiement de ${dl.jours} jours.` }) : null, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
+      dl.statut === "attente" && dir ? h("button", { class: "btn ghost small", type: "button", onclick: ev => repondre(false, ev.currentTarget), text: "Refuser" }) : null,
+      dl.statut === "attente" && dir ? h("button", { class: "btn small", type: "button", onclick: ev => repondre(true, ev.currentTarget), text: "Accorder" }) : null] });
+}
 /* ---------- Dossiers de recouvrement ---------- */
 // Une entreprise peut avoir deux dossiers : ses déclarations en retard (relance → mise en demeure →
 // taxation d'office) et ses sommes échues (relance → mise en demeure → saisie ou justice). Pour chacun :
@@ -14861,7 +14928,8 @@ function rcDossiers(e, opts) {
   const fiche = opts.fiche ? [] : [{ text: "Ouvrir la fiche de l’entreprise", fn: () => openFiche(e) }];
   const lettre = r => r ? [{ text: "Voir la dernière lettre", aide: `${rlLabel(r)} ${rlNo(r)} du ${dateCourte(r.at)}`, fn: () => showDocImage(relanceDoc(r), back) },
     { text: "Renvoyer la dernière lettre", aide: "Même lettre, même date limite, avec la mention « Rappel »", fn: () => rappelerRelance(r) }] : [];
-  const renvois = r => (r && (r.rappels || []).length ? ` Renvoyée ${r.rappels.length} fois.` : "");
+  const renvois = r => (r && (r.rappels || []).length ? ` Renvoyée ${r.rappels.length} fois.` : "") + lu(r);
+  const lu = r => (!r ? "" : r.accuseLe ? ` Lue par l’entreprise le ${jourHeure(r.accuseLe)}.` : r.vueLe ? ` Ouverte dans son espace le ${jourHeure(r.vueLe)}, pas encore marquée lue.` : "");
 
   // 1. Déclarations en retard : une ligne par lettre (une semaine en retard pendant une procédure en
   //    cours a sa propre ligne, qui repart de la relance, sans toucher à la date de la première).
@@ -14875,7 +14943,7 @@ function rcDossiers(e, opts) {
     const d = { e, x, depuis: deadline(keys[0]).getTime(), type: "declaration", titre: nonDeclarees(keys), montant: 0, etapes: RC_ETAPES.declaration, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
     if (med && medExpired(med)) {
       const toKey = keys.find(k => (med.periodes || []).includes(k)) || keys[0];
-      d.etape = 2; d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}, toujours rien au ${jourHeure(med.echeance)}. Vous pouvez établir l’impôt d’office.`;
+      d.etape = 2; d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}, toujours rien au ${jourHeure(med.echeance)}. Vous pouvez établir l’impôt d’office.${lu(med)}`;
       d.suivant = { text: "Taxer d’office", fn: () => startTaxOffice(e, toKey, med) };
     } else if (med) {
       d.etape = 2; d.attente = true; d.echeance = med.echeance;
@@ -14921,7 +14989,7 @@ function rcDossiers(e, opts) {
     if (tj) {
       d.etape = 3; d.attente = true; d.statut = `Dossier transmis à la justice le ${dateCourte(tj.at)} (${dossierNo("TJ", tj.id)}).`;
     } else if (med && medExpired(med)) {
-      d.etape = 2; d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}, toujours pas payé au ${jourHeure(med.echeance)}.${dir ? " Vous pouvez saisir." : " La Direction peut saisir."}`;
+      d.etape = 2; d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}, toujours pas payé au ${jourHeure(med.echeance)}.${dir ? " Vous pouvez saisir." : " La Direction peut saisir."}${lu(med)}`;
       if (dir) d.suivant = { text: "Saisir", fn: () => openSaisie(e) }; else d.attente = true;
     } else if (med) {
       d.etape = 2; d.attente = true; d.echeance = med.echeance;
@@ -14935,6 +15003,11 @@ function rcDossiers(e, opts) {
     } else {
       d.statut = `À payer depuis le ${jourHeure(depuis)}. Pas encore relancée.`;
       d.suivant = { text: "Envoyer la relance", fn: () => relanceOne(xf, "paiement", "relance", { back }) };
+    }
+    const dlA = delaiDe(e, free.filter(i => i.kind === "decl").map(i => i.id));
+    if (dlA && !tj) {
+      d.suspendu = true; d.statut = `L’entreprise demande à ${delaiTxt(dlA)} (le ${dateCourte(dlA.at)}) : « ${dlA.motif} ». Le recouvrement attend la réponse.`;
+      d.suivant = dir ? { text: "Répondre à la demande de délai", fn: () => openDelai(dlA.id) } : null; d.attente = !dir;
     }
     if (!med && !tj && (!d.suivant || d.etape === 0)) d.autres.push({ text: "Mettre en demeure tout de suite", aide: "Sans attendre la fin du délai de la relance", fn: () => relanceOne(xf, "paiement", "mise_en_demeure", { back }) });
     d.autres.push(...lettre(last));
@@ -14958,8 +15031,9 @@ function rcDossiers(e, opts) {
   const ae = aEchoirItems(e);
   if (ae.length) {
     const x = { e, items: ae }, tot = ae.reduce((t, i) => t + i.montant, 0), last = relanceFor(e, "paiement", ae);
-    out.push({ e, type: "apayer", titre: `${money(tot)} à payer avant le ${jourHeure(ae[0].exigible)}`, refs: ae.map(i => i.ref).join(", "), montant: tot, etapes: null, etape: 0, attente: true, echeance: ae[0].exigible,
-      statut: last ? `Rappel envoyé le ${dateCourte(last.at)}.` : "Délai de paiement en cours.", suivant: null,
+    const dlB = delaiDe(e, ae.filter(i => i.kind === "decl").map(i => i.id));
+    out.push({ e, type: "apayer", titre: `${money(tot)} à payer avant le ${jourHeure(ae[0].exigible)}`, refs: ae.map(i => i.ref).join(", "), montant: tot, etapes: null, etape: 0, attente: !(dlB && dir), echeance: ae[0].exigible, suspendu: !!dlB,
+      statut: dlB ? `L’entreprise demande à ${delaiTxt(dlB)} (le ${dateCourte(dlB.at)}) : « ${dlB.motif} ».` : last ? `Rappel envoyé le ${dateCourte(last.at)}.` : "Délai de paiement en cours.", suivant: dlB && dir ? { text: "Répondre à la demande de délai", fn: () => openDelai(dlB.id) } : null,
       autres: [{ text: last ? "Envoyer un autre rappel" : "Envoyer un rappel", aide: "Avant la date limite, sans menace", fn: () => relanceOne(x, "paiement", "relance", { echeance: ae[0].exigible, back }) }].concat(lettre(last).slice(0, 1), fiche) });
   }
   return out;
@@ -15013,7 +15087,7 @@ function renderRcAFaire() {
   const ag = canAgent(), tous = S.entreprises.flatMap(e => rcDossiers(e));
   const afaire = tous.filter(d => !d.attente && d.suivant).sort((a, b) => b.etape - a.etape || b.montant - a.montant || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
   const attente = tous.filter(d => (d.attente || !d.suivant) && d.type !== "apayer").sort((a, b) => String(a.echeance || "9").localeCompare(String(b.echeance || "9")));
-  const apayer = tous.filter(d => d.type === "apayer").sort((a, b) => String(a.echeance).localeCompare(String(b.echeance)));
+  const apayer = tous.filter(d => d.type === "apayer" && !(d.suivant && !d.attente)).sort((a, b) => String(a.echeance).localeCompare(String(b.echeance)));
   const ep = echeanceProchaine(), epL = ag && ep && ep.ouverte ? rappelCandidats(ep.k) : [], epN = epL.filter(y => !y.deja).length;
   const neuves = t => afaire.filter(d => d.type === t && d.etape === 0).map(d => d.x);
   const nd = neuves("declaration"), np = neuves("paiement");
@@ -15121,7 +15195,7 @@ function renderRecouvrement() {
       h("div", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; let n = 0; for (const r of orphans) if (await write(() => S.db.doc("relances/" + r.id).delete())) n++; toast(`${n} relance${plural(n)} supprimée${plural(n)}.`); }, text: "Les supprimer" }))) : null,
     hist.length ? h("ul", { class: "ent-list" }, hist.slice(0, S.rcAll.hist ? 500 : RC_LIMIT).map(r => h("li", {},
     h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${rlNo(r)} · ${r.entrepriseNom}` }), orphan(r) ? h("span", { class: "tag", text: "entreprise retirée" }) : null,
-      h("span", { class: "meta", text: `${rlLabel(r)} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · ${fmtDateTime(new Date(r.at))}${r.byNom ? " · " + r.byNom : ""}${r.groupee ? " · groupée" : ""}` })),
+      h("span", { class: "meta", text: `${rlLabel(r)} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)} · ${fmtDateTime(new Date(r.at))}${r.byNom ? " · " + r.byNom : ""}${r.groupee ? " · groupée" : ""}${r.accuseLe ? " · lue le " + fmtDateTime(new Date(r.accuseLe)) : r.vueLe ? " · ouverte le " + fmtDateTime(new Date(r.vueLe)) : ""}` })),
     rlStateChip(r),
     h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Image" }),
       dir ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
@@ -17764,7 +17838,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["delais", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 function openRestore(e) {
   const path = jPath(e);
@@ -23843,7 +23917,59 @@ async function chargerEspace() {
   S.portail.e = e;
   document.title = `${e.nom} · Espace entreprise`;
   await chargerCreneauxPortail();
+  await chargerDelaisPortail();
   renderPortail();
+}
+async function chargerDelaisPortail() {
+  let r;
+  try { r = await S.sb.rpc("delais_entreprise", { p_jeton: S.portail.jeton }); } catch (err) { r = { error: err }; }
+  S.portail.delais = r.error || !Array.isArray(r.data) ? null : r.data;
+}
+// Avis qu'on peut demander à payer plus tard ou en plusieurs fois : émis, pas encore payés, sans échéancier.
+const avisPourDelai = e => declsOf(e).filter(d => dStatus(d) === "validee" && dReste(d) > 0 && !echOf(d)).sort((a, b) => String(a.periode).localeCompare(String(b.periode)));
+function delaiPortailBloc(e) {
+  const l = S.portail.delais;
+  if (!l || e.actif === false) return null;
+  const att = l.find(x => x.statut === "attente"), der = l.find(x => x.statut !== "annulee" && x.statut !== "attente" && Date.now() - new Date(x.decideLe || x.at).getTime() < 7 * 864e5);
+  const av = avisPourDelai(e);
+  if (att) return h("div", { class: "pt-delai", id: "pt-delai" }, h("p", {}, h("strong", { text: "Demande de délai envoyée " }), `le ${fmtDateTime(new Date(att.at))} (${delaiTxt(att)}) : en attente de la Direction. Les relances sont suspendues pour ces avis.`),
+    h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
+      const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer l’annulation"; return; }
+      b.disabled = true; let r; try { r = await S.sb.rpc("annuler_delai", { p_jeton: S.portail.jeton, p_id: att.id }); } catch (x) { r = { error: x }; }
+      if (r.error) { toast(r.error.message || "Annulation refusée.", true); b.disabled = false; return; }
+      toast("Demande annulée."); await chargerDelaisPortail(); renderPortail(); }, text: "Annuler la demande" }));
+  return h("div", { class: "pt-delai", id: "pt-delai" },
+    der ? h("p", {}, h("strong", { text: der.statut === "accordee" ? "Délai accordé " : "Délai refusé " }), `le ${fmtDateTime(new Date(der.decideLe || der.at))} (${delaiTxt(der)})${der.reponse ? " : " + der.reponse : "."}`) : null,
+    av.length ? h("p", { class: "muted", text: "Vous ne pouvez pas tout payer à temps ? Demandez à payer en plusieurs fois ou un peu plus tard. Pendant la demande, vous n’êtes pas relancé." }) : null,
+    av.length ? h("button", { class: "btn ghost small", type: "button", id: "pt-delai-btn", onclick: openDemandeDelai, text: "Demander un délai de paiement" }) : null);
+}
+function openDemandeDelai() {
+  const e = S.portail.e, av = avisPourDelai(e);
+  if (!av.length) return;
+  const cbs = av.map((d, i) => { const cb = h("input", { type: "checkbox", id: "pd-" + i, value: d.id }); cb.checked = true; return [d, cb]; });
+  const mode = h("select", { id: "pd-mode" }, h("option", { value: "plusieurs", text: "Payer en plusieurs fois" }), h("option", { value: "report", text: "Payer un peu plus tard" }));
+  const nb = h("select", { id: "pd-nb" }, [2, 3, 4].map(n => h("option", { value: String(n), text: `En ${n} fois, une par ${cfg().periodicite === "mois" ? "mois" : "semaine"}` })));
+  const jours = h("select", { id: "pd-jours", hidden: true }, [2, 4, 7].map(n => h("option", { value: String(n), text: `${n} jours plus tard` })));
+  mode.addEventListener("change", () => { nb.hidden = mode.value !== "plusieurs"; jours.hidden = mode.value !== "report"; });
+  const motif = h("textarea", { id: "pd-motif", rows: "3", maxlength: "500", placeholder: "Pourquoi ? Ex. : gros achat de matériel cette semaine, recettes en baisse…" });
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", text: "Envoyer la demande" });
+  go.addEventListener("click", async () => {
+    const ids = cbs.filter(([, cb]) => cb.checked).map(([d]) => d.id);
+    if (!ids.length) { err.textContent = "Cochez au moins un avis."; return; }
+    if (motif.value.trim().length < 10) { err.textContent = "Expliquez en une phrase pourquoi vous demandez ce délai."; motif.focus(); return; }
+    go.disabled = true; err.textContent = "";
+    let r; try { r = await S.sb.rpc("demander_delai", { p_jeton: S.portail.jeton, p_decls: ids, p_mode: mode.value, p_nb: Number(nb.value), p_jours: Number(jours.value), p_motif: motif.value.trim() }); } catch (x) { r = { error: x }; }
+    if (r.error) { err.textContent = r.error.message || "Demande refusée."; go.disabled = false; return; }
+    toast("Demande envoyée : la Direction vous répondra ici et sur Discord."); closeDialog(); await chargerDelaisPortail(); renderPortail();
+  });
+  openDialog({ eyebrow: "Espace entreprise", title: "Demander un délai de paiement", wide: true,
+    body: [h("div", { class: "field" }, h("span", { class: "lbl", text: "Avis concernés" }), h("ul", { class: "rl-pick" }, cbs.map(([d, cb], i) => h("li", {},
+        h("label", { class: "switch", for: "pd-" + i }, cb, h("strong", { text: `${dossierNo("DF", d.id)} · ${periodPlain(d.periode)}` })), h("span", { class: "meta", text: money(dReste(d)) }))))),
+      h("div", { class: "row2" }, field("pd-mode", "Ce que vous demandez", mode), h("div", { class: "field" }, h("label", { for: "pd-nb", text: "Comment" }), nb, jours)),
+      field("pd-motif", "Motif", motif),
+      h("p", { class: "hint", style: "margin:0", text: "La Direction accepte ou refuse. Pendant la demande, ces avis ne sont pas relancés ; après un refus, ils redeviennent à payer comme avant." }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 // Créneaux de paiement (mise à jour 43 ; sans elle, la carte n'apparaît pas).
 async function chargerCreneauxPortail() {
@@ -23927,7 +24053,8 @@ function renderPortail() {
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${x.label}` }), h("span", { class: "meta", text: `${x.ref}${x.late ? " · délai de paiement dépassé" : x.exigible ? " · à payer avant le " + fmtDateTime(new Date(x.exigible)) : ""}` })),
       chip(x.late ? ["En retard", "bad"] : ["À payer", "warn"]), h("span", { class: "num", style: "font-weight:700", text: money(x.montant) })))) : h("p", { class: "muted", style: "margin:0", text: "Rien à payer pour l’instant." }),
     items.length ? h("div", { class: "pt-total" }, h("span", { text: "Total" }), h("span", { class: "num", text: money(tot) })) : null,
-    items.length ? h("p", { class: "hint", style: "margin:8px 0 0", text: "Réglez ces sommes auprès de la Direction des impôts et cotisations de la Préfecture de police. Une somme en retard est relancée, puis majorée." }) : null);
+    items.length ? h("p", { class: "hint", style: "margin:8px 0 0", text: "Réglez ces sommes auprès de la Direction des impôts et cotisations de la Préfecture de police. Une somme en retard est relancée, puis majorée." }) : null,
+    delaiPortailBloc(e));
   // Déclarations déposées
   const ds = declsOf(e).slice().sort((a, b) => String(b.periode).localeCompare(String(a.periode)) || byCreatedDesc(a, b));
   const cardDecl = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Vos déclarations" })),
@@ -23959,15 +24086,29 @@ function renderPortail() {
       : h("p", { class: "muted", style: "margin:0", text: "Pas d’attestation en cours de validité. Demandez-la à la Direction des impôts et cotisations : elle est délivrée quand toutes vos déclarations échues sont déposées et vos sommes échues payées." }));
   // Relances
   const rl = relancesOf(e);
-  const cardRl = rl.length ? h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Rappels et relances reçus" })),
-    h("ul", { class: "ent-list" }, rl.slice(0, 12).map(r => h("li", {},
-      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: rlLabel(r) }), h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)}` })),
-      rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(relanceDoc(r)), text: "Voir" })))))) : null;
+  // Lettres : ouvertes à l'affichage de l'espace, lues d'un clic (mise à jour 46 ; sans elle, rien n'est noté).
+  rl.slice(0, 12).filter(r => !r.vueLe && !rlSettled(r)).forEach(r => lettreVue(r, false));
+  const cardRl = rl.length ? h("div", { class: "card", id: "pt-lettres" }, h("div", { class: "card-head" }, h("h3", { text: "Lettres de la Préfecture" })),
+    h("ul", { class: "ent-list" }, rl.slice(0, 12).sort((a, b) => (rlSettled(a) - rlSettled(b)) || String(b.at).localeCompare(String(a.at))).map(r => h("li", {},
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: rlLabel(r) }), h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)}${r.accuseLe ? " · lue le " + fmtDateTime(new Date(r.accuseLe)) : ""}` })),
+      rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => { lettreVue(r, false); showDocImage(relanceDoc(r)); }, text: "Voir" }),
+        !r.accuseLe && !rlSettled(r) && S.portail.lettres !== false ? h("button", { class: "btn small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; if (await lettreVue(r, true)) { toast("Merci : la Préfecture sait que vous avez lu cette lettre."); renderPortail(); } else ev.currentTarget.disabled = false; }, text: "J’ai pris connaissance" }) : null))))) : null;
   const cardSig = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Signaler une fraude" })),
     h("p", { class: "muted", style: "margin:0", text: "Une entreprise qui ne déclare pas tout, paie en liquide pour cacher ses ventes ou emploie sans déclarer ? Signalez-le : la Préfecture peut ouvrir un contrôle. L’entreprise visée n’en saura rien, et une prime peut vous être versée sur ce qui sera recouvré." }),
     h("div", { class: "paste-row", style: "margin-top:8px" }, h("button", { class: "btn ghost small", type: "button", onclick: openSignalForm, text: "Faire un signalement" })));
   fill(box, head, cardTodo, cardPay, cardCreneauxPortail(e), cardConv, cardDecl, cardAtt, cardRl, cardSig,
     h("p", { class: "hint", style: "margin:0;text-align:center", text: "Ce lien est personnel : ne le partagez pas. En cas de perte, demandez-en un nouveau à la Préfecture ; l’ancien ne marchera plus." }));
+}
+// Lettre ouverte (affichée) ou lue (« J'ai pris connaissance ») : notée au dossier par la base.
+async function lettreVue(r, accuse) {
+  if (S.portail.lettres === false) return false;
+  if (!accuse && (r.vueLe || r._vueEnvoyee)) return true;
+  if (!accuse) r._vueEnvoyee = true;
+  let x;
+  try { x = await S.sb.rpc("relance_vue", { p_jeton: S.portail.jeton, p_relance: r.id, p_accuse: !!accuse }); } catch (e) { x = { error: e }; }
+  if (x.error) { if (/relance_vue|schema cache|not find/i.test(x.error.message || "")) S.portail.lettres = false; else if (accuse) toast(x.error.message || "Enregistrement refusé.", true); return false; }
+  if (x.data) { if (x.data.vueLe) r.vueLe = x.data.vueLe; if (x.data.accuseLe) r.accuseLe = x.data.accuseLe; }
+  return true;
 }
 function openSignalForm() {
   const e = S.portail.e;

@@ -124,8 +124,25 @@
       if (name === "espace_entreprise") {
         const e = ent(); if (!e) return { data: null, error: null };
         const mine = c => docs(c).filter(x => x.entrepriseId === e.id);
-        return { data: { maintenant: iso(), entreprise: Object.assign({ id: e.id }, e.data), config: (rows.get("config/main") || { data: {} }).data, declarations: mine("declarations"), decisions: {}, echeanciers: {},
-          penalites: mine("penalites"), relances: [], prets: [], depots: mine("depots"), clotures: [], convocations: mine("convocations"), attestations: [] }, error: null };
+        return { data: { maintenant: iso(), entreprise: Object.assign({ id: e.id }, e.data), config: (rows.get("config/main") || { data: {} }).data, declarations: mine("declarations"), decisions: Object.fromEntries(mine("declarations").map(d => [d.id, (rows.get("decisions/" + d.id) || {}).data]).filter(x => x[1])), echeanciers: Object.fromEntries(mine("declarations").map(d => [d.id, (rows.get("echeanciers/" + d.id) || {}).data]).filter(x => x[1])),
+          penalites: mine("penalites"), relances: mine("relances"), prets: mine("prets"), depots: mine("depots"), clotures: [], convocations: mine("convocations"), attestations: [] }, error: null };
+      }
+      if (["relance_vue", "demander_delai", "annuler_delai", "delais_entreprise"].includes(name)) {
+        if (window.__sans46) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
+        const e = ent(); if (!e) return { data: null, error: { message: "Lien inconnu ou coupé." } };
+        if (name === "relance_vue") {
+          const r = rows.get("relances/" + args.p_relance); if (!r || r.data.entrepriseId !== e.id) return { data: null, error: null };
+          r.data = Object.assign({}, r.data, { vueLe: r.data.vueLe || iso() }, args.p_accuse ? { accuseLe: r.data.accuseLe || iso() } : {});
+          return { data: { vueLe: r.data.vueLe, accuseLe: r.data.accuseLe || null }, error: null };
+        }
+        const mes = () => [...rows.values()].filter(r => r.collection === "delais" && r.data.entrepriseId === e.id);
+        if (name === "delais_entreprise") return { data: mes().map(r => Object.assign({ id: r.id }, r.data)).sort((x, y) => String(y.at).localeCompare(String(x.at))), error: null };
+        if (name === "annuler_delai") { const r = rows.get("delais/" + args.p_id); if (!r || r.data.entrepriseId !== e.id || r.data.statut !== "attente") return { data: false, error: null }; r.data = Object.assign({}, r.data, { statut: "annulee", annuleLe: iso() }); return { data: true, error: null }; }
+        if (mes().some(r => r.data.statut === "attente")) return { data: null, error: { message: "Une demande de délai attend déjà la réponse de la Direction." } };
+        if (String(args.p_motif || "").trim().length < 10) return { data: null, error: { message: "Expliquez en une phrase pourquoi vous demandez ce délai." } };
+        const id = "dl" + Date.now();
+        rows.set("delais/" + id, { collection: "delais", id, data: { entrepriseId: e.id, entrepriseNom: e.data.nom, decls: args.p_decls, mode: args.p_mode, nb: args.p_mode === "plusieurs" ? args.p_nb : undefined, jours: args.p_mode === "report" ? args.p_jours : undefined, motif: args.p_motif, statut: "attente", enLigne: true, at: iso() } });
+        return { data: { id }, error: null };
       }
       if (name === "creneaux_entreprise" || name === "reserver_creneau" || name === "annuler_creneau") {
         if (window.__sans43) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
