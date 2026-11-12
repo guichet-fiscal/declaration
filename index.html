@@ -1106,6 +1106,8 @@ button.ts-p{cursor:pointer}
 .ts-p.warn{background:var(--warn-soft);color:var(--warn);font-weight:600}
 .ts-p.accent{background:var(--accent-soft);color:var(--accent)}
 .ts td.num{text-align:right;white-space:nowrap}
+.d-releves{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:10px 12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
+.d-releves p{margin:0;flex:1 1 320px;font-size:13.5px;line-height:1.45}.d-releves .meta{display:block}
 .cr-jour+.cr-jour{margin-top:10px}
 .ent-list li.cr-pris{border-left:3px solid var(--info);padding-left:10px}
 .pt-cr{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
@@ -2031,6 +2033,7 @@ table.es-payes{min-width:0;width:100%}
                 <span class="hint" id="d-per-hint"></span>
               </div>
             </div>
+            <div class="d-releves" id="d-releves" hidden></div>
             <label class="switch" for="d-vide" style="margin-top:8px"><input type="checkbox" id="d-vide"> Pas d’activité cette semaine : rien vendu, rien acheté, aucun salaire</label>
           </div></div>
           <div class="case"><div class="case-no">01</div><div class="case-body">
@@ -10970,6 +10973,7 @@ function decisionText(dm) {
 
 /* ---------- Saisie : déclaration ---------- */
 function renderDeclPreview() {
+  majDeclReleves();
   const key = $("#d-per").value || defaultKey();
   const tax = S.taxOffice && S.taxOffice.periode === key;
   const c = tax ? Object.assign({}, cfg(), { majoration: Number(cfg().majorationOffice) || 0 }) : cfg();
@@ -14854,8 +14858,47 @@ function secteurEstimation(e, k) {
     return { ca: Math.round(med(o => o.ca)), ch: Math.round(med(o => o.ch)), ms: Math.round(med(o => o.ms)), nb: Math.round(med(o => o.nb)), n: l.length, secteur: e.secteur };
   });
 }
+// Ce que les relevés du compte montrent pour une période : recettes (et paiements d'autres entreprises vers
+// elle), charges hors salaires (sans les paiements à la Préfecture), salaires et leurs bénéficiaires.
+function estimationReleves(e, k) {
+  const f = e && e.id ? fenetreDecl(e, k) : null;
+  if (!f) return null;
+  const { t0, t1 } = f, dans = m => m.t > t0 && m.t <= t1, somme = l => l.reduce((t, m) => t + m.montant, 0);
+  const mv = mvtsOf(e).filter(dans), recus = mv.filter(m => m.montant > 0 && !NON_RECETTE_RE.test(m.libelle));
+  const autres = paiementsVers(e).filter(p => dans(p) && !recus.some(m => Math.abs(m.montant - p.montant) < 0.5 && Math.abs(m.t - p.t) <= 3 * 6e4));
+  if (!mv.length && !autres.length) return null;
+  const salM = mv.filter(m => m.montant < 0 && SALAIRE_RE.test(m.libelle));
+  const chM = mv.filter(m => m.montant < 0 && !SALAIRE_RE.test(m.libelle) && !/pr[ée]fecture/i.test(m.libelle));
+  const benef = new Set(salM.map(m => norm(contrepartie(m.libelle) || m.libelle).replace(/\b(salaires?|paies?|primes?|virements?|vir|de|du|des|pour|a|au)\b/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean));
+  const ca = Math.round(somme(recus) + autres.reduce((t, p) => t + p.montant, 0)), ch = Math.round(-somme(chM)), ms = Math.round(-somme(salM));
+  const nb = benef.size || (salM.length ? 1 : 0), entier = couvert(e, t0, t1), n = mv.length + autres.length;
+  const quand = t => fmtDateTime(new Date(t));
+  return { id: "releves", label: "Relevés du compte", ca, ch, ms, nb, sal: null, entier, n,
+    texte: `${n} mouvement${plural(n)} relevé${plural(n)} sur le compte entre le ${quand(t0)} et le ${quand(t1)}${entier ? "" : " (période relevée en partie seulement)"}` };
+}
+function majDeclReleves() {
+  const box = $("#d-releves"); if (!box) return;
+  const e = findEnt($("#d-ent").value.trim()), k = $("#d-per").value;
+  const x = e && k && !S.editDecl ? estimationReleves(e, k) : null;
+  // Même résumé : rien à redessiner (un clic sur le bouton ne doit pas tomber dans le vide).
+  const cle = x ? JSON.stringify([e.id, k, x.ca, x.ch, x.ms, x.nb, x.n, x.entier]) : "";
+  if (box.dataset.cle === cle) return;
+  box.dataset.cle = cle;
+  if (!x) { box.hidden = true; box.replaceChildren(); return; }
+  fill(box, h("p", {}, h("strong", { text: "Relevés du compte : " }), `${money(x.ca)} reçus, ${money(x.ch)} de charges, ${money(x.ms)} de salaires${x.nb ? ` (${x.nb} bénéficiaire${plural(x.nb)})` : ""}. `,
+      h("span", { class: "meta", text: x.texte + "." })),
+    h("button", { class: "btn ghost small", type: "button", id: "d-prerempli", onclick: () => {
+      if ($("#d-vide").checked) { $("#d-vide").checked = false; $("#d-vide").dispatchEvent(new Event("change")); }
+      $("#d-ca").value = String(x.ca); $("#d-ch").value = String(x.ch); $("#d-ms").value = String(x.ms); if (x.nb) $("#d-nb").value = String(x.nb);
+      const note = $("#d-note"); if (note && !note.value.trim()) note.value = `Montants préremplis d’après les relevés du compte (${x.texte}).`;
+      renderDeclPreview(); toast(x.entier ? "Préremplie d’après les relevés : vérifiez avec le patron." : "Préremplie d’après les relevés, qui ne couvrent qu’une partie de la semaine : complétez.", !x.entier);
+    }, text: "Préremplir d’après les relevés" }));
+  box.hidden = false;
+}
 function estimationsOffice(e, k) {
   const out = [], run = semainesNonDeclarees(e, k), ik = Math.max(0, run.indexOf(k));
+  const er = estimationReleves(e, k);
+  if (er && er.entier) out.push(er);
   // La plus longue suite de semaines non déclarées autour de k dont les soldes de début et de fin sont connus.
   let bc = null;
   for (let i = 0; i <= ik && !bc; i++) for (let j = run.length; j > ik && !bc; j--) bc = baseCompte(e, run.slice(i, j));
