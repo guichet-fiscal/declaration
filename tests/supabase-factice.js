@@ -127,6 +127,12 @@
         return { data: { maintenant: iso(), entreprise: Object.assign({ id: e.id }, e.data), config: (rows.get("config/main") || { data: {} }).data, declarations: mine("declarations"), decisions: Object.fromEntries(mine("declarations").map(d => [d.id, (rows.get("decisions/" + d.id) || {}).data]).filter(x => x[1])), echeanciers: Object.fromEntries(mine("declarations").map(d => [d.id, (rows.get("echeanciers/" + d.id) || {}).data]).filter(x => x[1])),
           penalites: mine("penalites"), relances: mine("relances"), prets: mine("prets"), depots: mine("depots"), clotures: [], convocations: mine("convocations"), attestations: [] }, error: null };
       }
+      if (name === "vehicules_entreprise") {
+        if (window.__sans47) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
+        const e = ent(); if (!e) return { data: null, error: null };
+        const cf = (rows.get("config/main") || { data: {} }).data.vehicules || {};
+        return { data: { taxe: !!cf.taxe, montants: cf.taxeMontants || {}, vehicules: [...rows.values()].filter(r => r.collection === "vehicules" && r.data.entrepriseId === e.id).map(r => ({ id: r.id, entrepriseId: e.id, plaque: r.data.plaque, modele: r.data.modele, categorie: r.data.categorie, achatLe: r.data.achatLe, createdAt: r.data.createdAt, statut: r.data.statut, vente: { at: (r.data.vente || {}).at || null }, saisiLe: r.data.saisiLe || null, requalification: { at: (r.data.requalification || {}).at || null } })) }, error: null };
+      }
       if (["relance_vue", "demander_delai", "annuler_delai", "delais_entreprise"].includes(name)) {
         if (window.__sans46) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
         const e = ent(); if (!e) return { data: null, error: { message: "Lien inconnu ou coupé." } };

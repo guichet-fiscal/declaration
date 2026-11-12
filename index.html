@@ -1142,6 +1142,8 @@ button.ts-p{cursor:pointer}
 .d-releves{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:10px 12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
 .d-releves p{margin:0;flex:1 1 320px;font-size:13.5px;line-height:1.45}.d-releves .meta{display:block}
 .chrono-f{margin:0 0 10px}
+.tvs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 12px;align-items:end}
+.tvs-grid label{font-size:12.5px}
 .nc-deja{margin-top:10px;padding:10px 12px;border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:6px;display:grid;gap:8px;font-size:13.5px}
 .chrono{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--rule);display:grid;gap:2px}
 .chrono-j{margin:12px 0 4px -14px;padding-left:14px;font-size:12px;font-weight:700;color:var(--ink-2)}
@@ -2156,6 +2158,7 @@ table.es-payes{min-width:0;width:100%}
             <dt id="c-bon-l" hidden>Bonus de régularité</dt><dd id="c-bon" class="exo" hidden></dd>
             <dt id="c-mec-l" hidden>Réduction d’impôt des partenaires</dt><dd id="c-mec" class="exo" hidden></dd>
             <dt id="c-maj-l">Majoration de retard</dt><dd id="c-maj">0 €</dd>
+            <dt id="c-tvs-l" hidden>Taxe sur les véhicules de société</dt><dd id="c-tvs" hidden></dd>
             <dt class="tot-dt">Montant dû</dt><dd class="tot-dd" id="c-tot">0 €</dd>
             <dt id="c-comp-l" hidden>Réglé par compensation (contrats)</dt><dd id="c-comp" class="exo" hidden></dd>
             <dt id="c-reste-l" class="tot-dt" hidden>Reste à payer</dt><dd id="c-reste" class="tot-dd" hidden></dd>
@@ -2626,6 +2629,9 @@ table.es-payes{min-width:0;width:100%}
                 <div class="field"><label for="vh-marge">Voitures en plus de l’effectif</label><input id="vh-marge" type="number" min="0" max="20" step="1"><span class="hint">Au-delà, les derniers achats ressortent. Utilitaires et poids lourds non comptés.</span></div>
               </div>
               <div class="field"><label for="vh-loisir">Secteurs qui peuvent avoir des sportives, voitures de prestige, hélicoptères ou bateaux</label><textarea id="vh-loisir" rows="3" placeholder="Un secteur par ligne. Ex. : Concession automobile, Location de véhicules"></textarea></div>
+              <label class="switch" for="vh-taxe"><input type="checkbox" id="vh-taxe"> Taxe sur les véhicules de société</label>
+              <p class="hint" style="margin:-4px 0 0">Option. Chaque véhicule détenu pendant une période ajoute à son avis d’imposition le montant de son type, par véhicule et par période ; 0 : exonéré. Compte pour les déclarations enregistrées après l’activation.</p>
+              <div class="tvs-grid" id="vh-taxe-montants"></div>
               <div class="paste-row">
                 <button class="btn" type="button" id="vh-save">Enregistrer</button>
                 <span id="vh-msg" class="hint" aria-live="polite"></span>
@@ -10680,6 +10686,7 @@ function avisText(d) {
     `${isLabel(d)} : ${money(brutIS(d))}`,
     `${cotLabel(d)} : ${money(brutCot(d))}`].concat(exoLines(d).map(([l, v]) => `${l} : ${v}`));
   if (d.enRetard) L.push(`Majoration de retard (${pct(d.majPct)}) : ${money(d.majoration)}`);
+  tvsLines(d).forEach(([l, v]) => L.push(`${l} : ${v}`));
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) L.push(`Montant rectifié après vérification : ${money(dec.montant)}`);
   const pa = pretsAvis(d);
   if (pa.length) { L.push(`Impôt et cotisations : ${money(m)}`); pa.forEach(y => L.push(`Remboursement du prêt ${pretNo(y.p)} · ${echLabel(y)} du ${longDate(new Date(y.x.date))} : ${money(y.x.montant)}`)); }
@@ -10708,6 +10715,7 @@ function openDecl(id) {
         [d.bareme === "progressif" ? `Cotisations (barème, ${pct(d.tauxCot)} effectif)` : `Cotisations (${pct(d.tauxCot)})`, money(brutCot(d)), "num"],
         ...exoLines(d).map(([l, v]) => [l.replace("Exonération de début d’activité", "Exonération"), v, "num"]),
         d.enRetard ? [`Majoration (${pct(d.majPct)})`, money(d.majoration), "num"] : null,
+        ...tvsLines(d).map(([l, v]) => [l.replace("Taxe sur les véhicules de société", "Taxe véhicules"), v, "num"]),
         ["Total calculé", money(d.total), "tot"]]))),
     sec("Dépôt", kv([
       ["Déclarant", d.declarant || "—"],
@@ -11197,8 +11205,10 @@ function renderDeclPreview() {
   const exP = mecExclus(entP, key, editingP);
   const officeP = tax || exP.some(id => (S.declarations.find(x => x.id === id) || {}).taxationOffice);
   const r1 = applyBonus(applyExo(r0, entP, key, c, late), entP, key, c, late);
-  const r = officeP ? r1 : applyMecenat(r1, entP, key, c, late, exP);
-  const xo = r.exoneration, mc = r.mecenat, bn = r.bonus;
+  const r = applyVehicules(officeP ? r1 : applyMecenat(r1, entP, key, c, late, exP), entP, key);
+  const xo = r.exoneration, mc = r.mecenat, bn = r.bonus, tv = r.taxeVehicules;
+  $("#c-tvs-l").hidden = $("#c-tvs").hidden = !tv;
+  if (tv) { $("#c-tvs-l").textContent = `Taxe sur les véhicules de société (${tv.vehicules.length} véhicule${plural(tv.vehicules.length)})`; $("#c-tvs").textContent = money(tv.montant); }
   $("#c-bon-l").hidden = $("#c-bon").hidden = !bn;
   if (bn) { $("#c-bon-l").textContent = bonusLabel(bn); $("#c-bon").textContent = "− " + money(bn.montant); }
   $("#c-exo-l").hidden = $("#c-exo").hidden = !xo;
@@ -11489,7 +11499,7 @@ async function submitDecl(e) {
   const editing = S.editDecl ? S.declarations.find(x => x.id === S.editDecl) || null : null;
   // Réduction d'impôt des partenaires : ni sur une imposition d'office, ni deux fois avec la déclaration remplacée.
   const r1 = applyBonus(applyExo(compute(ca, ch, ms, late, c, nb, sal), ent, key, c, late), ent, key, c, late);
-  const r = office ? r1 : applyMecenat(r1, ent, key, c, late, [editing && editing.id, repl && repl.id].filter(Boolean));
+  const r = applyVehicules(office ? r1 : applyMecenat(r1, ent, key, c, late, [editing && editing.id, repl && repl.id].filter(Boolean)), ent, key);
   const rcomp = applyCompensation(r, ent, [editing && editing.id, repl && repl.id].filter(Boolean));
   const lockedK = isClosed(key) ? key : editing && isClosed(editing.periode) ? editing.periode : null;
   if (lockedK) { err.textContent = `${closedNote(lockedK)} : la Direction doit la rouvrir pour y ajouter ou modifier une déclaration.`; return null; }
@@ -11499,7 +11509,7 @@ async function submitDecl(e) {
     ca: Math.round(ca), charges: Math.round(ch), masse: Math.round(ms), nbSalaries: Math.round(nb),
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
-    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, bonus: r.bonus || null, mecenat: r.mecenat || null, compensation: rcomp.compensation || null,
+    bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, bonus: r.bonus || null, mecenat: r.mecenat || null, compensation: rcomp.compensation || null, taxeVehicules: r.taxeVehicules || null,
     taxationOffice: tax ? { relanceId: tax.relanceId, base: tax.base, majoration: Number(c.majoration) || 0 }
       : repl && repl.taxationOffice ? Object.assign({}, repl.taxationOffice, { rectifiee: true })
       : editing0 && editing0.taxationOffice ? editing0.taxationOffice : null,
@@ -12664,6 +12674,7 @@ function avisDoc(d) {
   } else lines.push([`Impôt sur le résultat (${pct(d.tauxIS)})`, money(brutIS(d))], [`Cotisations sociales (${pct(d.tauxCot)})`, money(brutCot(d))]);
   exoLines(d).forEach(l => lines.push(l));
   if (d.enRetard) lines.push([`Majoration de retard (${pct(d.majPct)})`, money(d.majoration)]);
+  tvsLines(d).forEach(l => lines.push(l));
   if (dec && dec.montant != null && Number(dec.montant) !== Number(d.total)) lines.push(["Montant rectifié après vérification", money(dec.montant), true]);
   if (dAvoir(d)) lines.push([`Déjà payé sur la déclaration remplacée ${dossierNo("DF", d.remplace)}`, "− " + money(dAvoir(d))]);
   if (dComp(d)) lines.push(["Réglé par compensation · contrats payés par la Préfecture", "− " + money(dComp(d))]);
@@ -22322,7 +22333,42 @@ const VEH_CATS = {
 const VEH_SOURCES = { entreprise: "l’entreprise", concession: "la concession", police: "un constat de police", agent: "un agent du guichet" };
 const CONSTATS = { conforme: ["Usage conforme", "ok"], perso: ["Usage personnel", "bad"], conducteur: ["Conducteur non autorisé", "bad"], autre: ["Autre irrégularité", "warn"] };
 // La facture de la concession n'est plus demandée dans la déclaration d'achat : 0 jour = pas exigée.
-function vcfg() { return Object.assign({ actif: true, delaiFacture: 0, partCA: 50, parcMarge: 1, secteursLoisir: "" }, cfg().vehicules || {}); }
+function vcfg() { return Object.assign({ actif: true, delaiFacture: 0, partCA: 50, parcMarge: 1, secteursLoisir: "", taxe: false, taxeMontants: {} }, cfg().vehicules || {}); }
+// Taxe sur les véhicules de société (option, désactivée par défaut) : un montant par véhicule et par période selon
+// son type, ajouté à l'avis d'imposition. Sur le modèle de la taxe annuelle sur les véhicules de tourisme
+// (art. 1010 du CGI) : les utilitaires, poids lourds et véhicules de service en sont exonérés au départ.
+// Compte chaque véhicule détenu pendant la période, même une partie (acheté avant sa fin, ni vendu, ni saisi,
+// ni requalifié avant son début).
+const TVS_DEFAUT = { utilitaire: 0, poids_lourd: 0, service: 0, berline: 500, suv: 1000, moto: 200, sportive: 2500, prestige: 5000, aerien: 5000, nautique: 3000 };
+const tvsMontants = () => Object.assign({}, TVS_DEFAUT, vcfg().taxeMontants || {});
+function vehDetenu(v, k) {
+  const b = bounds(k);
+  if (!b) return false;
+  const debut = new Date(v.achatLe || v.createdAt || 0).getTime();
+  const fin = v.statut === "vendu" && v.vente ? v.vente.at : v.statut === "saisi" ? v.saisiLe : v.statut === "requalifie" && v.requalification ? v.requalification.at : null;
+  return Number.isFinite(debut) && debut <= b.end.getTime() && (!fin || !(new Date(fin).getTime() < b.start.getTime()));
+}
+function taxeVehicules(e, k) {
+  if (!vcfg().taxe || !e || !e.id) return null;
+  const m = tvsMontants();
+  const l = (S.vehicules || []).filter(v => sameEnt(v, e) && vehDetenu(v, k))
+    .map(v => ({ id: v.id, plaque: v.plaque || "", categorie: v.categorie || "", montant: Math.max(0, Math.round(Number(m[v.categorie]) || 0)) })).filter(x => x.montant > 0);
+  return l.length ? { montant: l.reduce((t, x) => t + x.montant, 0), vehicules: l } : null;
+}
+// À appliquer en dernier : les réductions recalculent le total à partir de l'impôt et des cotisations.
+function applyVehicules(r, e, k) {
+  const tv = taxeVehicules(e, k);
+  return Object.assign({}, r, { total: (Number(r.total) || 0) + (tv ? tv.montant : 0), taxeVehicules: tv });
+}
+const tvsMontant = d => (d && d.taxeVehicules ? Number(d.taxeVehicules.montant) || 0 : 0);
+// Lignes de l'avis : une par type de véhicule.
+function tvsLines(d) {
+  const tv = d && d.taxeVehicules;
+  if (!tv || !(tv.vehicules || []).length) return [];
+  const par = {};
+  tv.vehicules.forEach(x => { const c = par[x.categorie] = par[x.categorie] || { n: 0, m: 0, p: [] }; c.n++; c.m += Number(x.montant) || 0; if (x.plaque) c.p.push(x.plaque); });
+  return Object.entries(par).map(([c, x]) => [`Taxe sur les véhicules de société · ${(VEH_CATS[c] || ["Véhicule"])[0].toLowerCase()}${x.n > 1 ? " × " + x.n : ""}${x.p.length && x.p.length <= 3 ? " (" + x.p.join(", ") + ")" : ""}`, money(x.m)]);
+}
 function vehNo(v) { return dossierNo("VS", v.id); }
 function normPlaque(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, ""); }
 function vehCat(v) { return VEH_CATS[v.categorie] || ["Véhicule", "tourisme"]; }
@@ -22918,12 +22964,19 @@ function renderVehSettings(force) {
   $("#vh-part").value = String(c.partCA);
   $("#vh-marge").value = String(c.parcMarge);
   $("#vh-loisir").value = String(c.secteursLoisir || "");
+  $("#vh-taxe").checked = !!c.taxe;
+  const m = tvsMontants(), grille = $("#vh-taxe-montants");
+  fill(grille, Object.entries(VEH_CATS).map(([k, [l]]) => h("div", { class: "field" }, h("label", { for: "vh-tx-" + k, text: l }),
+    h("div", { class: "money", "data-cur": cfg().devise || "€" }, Object.assign(h("input", { id: "vh-tx-" + k, "data-cat": k, type: "number", min: "0", step: "100", inputmode: "numeric" }), { value: String(Number(m[k]) || 0) })))));
+  grille.hidden = !c.taxe;
 }
+$("#vh-taxe").addEventListener("change", () => { $("#vh-taxe-montants").hidden = !$("#vh-taxe").checked; });
 $("#card-veh").addEventListener("input", () => { S.vehDirty = true; $("#vh-msg").textContent = "Modifications non enregistrées."; });
 $("#vh-save").addEventListener("click", async () => {
   if (!writer()) return;
   const v = { actif: $("#vh-actif").checked, delaiFacture: Math.max(0, Math.min(30, Math.round(Number($("#vh-fact").value) || 0))), partCA: Math.max(0, Math.min(1000, Math.round(Number($("#vh-part").value) || 0))),
-    parcMarge: Math.max(0, Math.min(20, Math.round(Number($("#vh-marge").value) || 0))), secteursLoisir: $("#vh-loisir").value.trim() };
+    parcMarge: Math.max(0, Math.min(20, Math.round(Number($("#vh-marge").value) || 0))), secteursLoisir: $("#vh-loisir").value.trim(),
+    taxe: $("#vh-taxe").checked, taxeMontants: Object.fromEntries($$("#vh-taxe-montants input[data-cat]").map(x => [x.dataset.cat, Math.max(0, Math.min(1e7, Math.round(Number(x.value) || 0)))])) };
   const ok = await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { vehicules: v, updatedAt: nowISO() })));
   if (ok) { S.vehDirty = false; $("#vh-msg").textContent = "Réglages enregistrés."; toast("Véhicules de société : réglages enregistrés."); renderVehSettings(true); }
 });
@@ -24060,7 +24113,17 @@ async function chargerEspace() {
   document.title = `${e.nom} · Espace entreprise`;
   await chargerCreneauxPortail();
   await chargerDelaisPortail();
+  await chargerVehiculesPortail();
   renderPortail();
+}
+// Mise à jour 47 : la taxe sur les véhicules de société (si la Direction l'a activée) et les véhicules de
+// l'entreprise, pour que le montant estimé de la déclaration en ligne la compte. Sans le script : sans elle.
+async function chargerVehiculesPortail() {
+  let r;
+  try { r = await S.sb.rpc("vehicules_entreprise", { p_jeton: S.portail.jeton }); } catch (err) { r = { error: err }; }
+  const x = !r || r.error ? null : r.data;
+  S.vehicules = x && Array.isArray(x.vehicules) ? x.vehicules : [];
+  if (x && x.taxe) S.config = Object.assign({}, S.config, { vehicules: { taxe: true, taxeMontants: x.montants || {} } });
 }
 async function chargerDelaisPortail() {
   let r;
@@ -24331,11 +24394,12 @@ function openDepotForm(k0) {
   };
   const refresh = () => {
     const v = values(), k = per.value, late = Date.now() > deadline(k).getTime();
-    const r = applyBonus(applyExo(compute(v.ca, v.ch, v.ms, late, cfg(), v.nb, v.sal), e, k, cfg(), late), e, k, cfg(), late);
+    const r = applyVehicules(applyBonus(applyExo(compute(v.ca, v.ch, v.ms, late, cfg(), v.nb, v.sal), e, k, cfg(), late), e, k, cfg(), late), e, k);
     const rows = [["Résultat", money(r.resultat)], ["Impôt", money(r.impot)], ["Cotisations", money(r.cotisations)]];
     if (r.exoneration) rows.push([`Exonération de début d’activité (période ${r.exoneration.rang} sur ${r.exoneration.sur})`, "− " + money((r.exoneration.montantIS || 0) + (r.exoneration.montantCot || 0))]);
     if (r.bonus) rows.push([bonusLabel(r.bonus), "− " + money(r.bonus.montant)]);
     if (late) rows.push([`Majoration de retard (${pct(cfg().majoration)})`, money(r.majoration)]);
+    if (r.taxeVehicules) rows.push([`Taxe sur les véhicules de société (${r.taxeVehicules.vehicules.length} véhicule${plural(r.taxeVehicules.vehicules.length)})`, money(r.taxeVehicules.montant)]);
     fill(prev, rows.flatMap(([a, b]) => [h("dt", { text: a }), h("dd", { class: "num", text: b })]), h("dt", { class: "tot-dt", text: "Montant estimé" }), h("dd", { class: "tot-dd num", text: money(r.total) }));
   };
   fillFrom(depotDe(per.value));
