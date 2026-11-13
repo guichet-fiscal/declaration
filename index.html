@@ -3171,7 +3171,10 @@ function treasury() {
     if (a && !rep.has(dm.id) && (a.statut === "accordee" || a.statut === "partielle")) dep += Number(a.montantAccorde) || 0;
   }
   // Payes des fonctionnaires de la Préfecture (une demande « budget salaires » reprise en paye n'est comptée qu'une fois).
-  const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0) - retenuesTous().reduce((t, r) => t + r.rembourse, 0) + aPartTous().reduce((t, x) => t + x.montant, 0);
+  // Les payes d'un mois prises sur sa demande « salaires » (déjà comptée parmi les demandes) ne comptent pas deux fois.
+  const moisSal = [...new Set(S.demandes.filter(dm => dm.nature === "salaires" && norm(dm.service || "") === norm(payeSvc())).map(demImputation))];
+  const payes = payesVersees().reduce((t, p) => t + payeTotal(p), 0) - retenuesTous().reduce((t, r) => t + r.rembourse, 0) + aPartTous().reduce((t, x) => t + x.montant, 0)
+    - moisSal.reduce((t, m) => t + payesSurSalaires(m), 0);
   const budget = Number(cfg().budgetInitial) || 0, dotations = dotationsTresor().reduce((t, x) => t + x.montant, 0);
   // Prêts : le capital versé sort du Trésor, les remboursements (intérêts compris) y reviennent.
   let pv = 0, pr = 0, pd = 0;
@@ -3600,8 +3603,9 @@ function envUse(key) {
   const svcs = new Map(); for (const c of S.contrats || []) { const s = ctService(c); if (s && !svcs.has(norm(s))) svcs.set(norm(s), s); }
   for (const [k, s] of svcs) for (const x of ctImputations(s, key)) out[k] = (out[k] || 0) + x.montant;
   // Payes de la Préfecture versées pour les semaines du mois.
-  const py = payesImpute(payeSvc(), key);
-  if (py.total) out[norm(payeSvc())] = (out[norm(payeSvc())] || 0) + py.total;
+  // (prises d'abord sur la demande « salaires » du mois, déjà comptée : seule la part qui la dépasse s'ajoute)
+  const py = payesImpute(payeSvc(), key), pyEnPlus = py.total - payesSurSalaires(key);
+  if (pyEnPlus) out[norm(payeSvc())] = (out[norm(payeSvc())] || 0) + pyEnPlus;
   return out;
 }
 // Bilan d'un service pour un mois : demandé, accordé, en attente, refusé, plafond.
@@ -3609,8 +3613,9 @@ function envStats(service, key) {
   const n = norm(service), list = S.demandes.filter(dm => norm(dm.service || "Autre") === n && demImputation(dm) === key);
   const st = dm => aStatus(dm), sum = (l, f) => l.reduce((t, x) => t + f(x), 0);
   const rep = payeRepris(), py = payesImpute(service, key);
-  const achats = ctImputations(service, key), cap = envCap(service, key), credits = sum(list.filter(dm => !rep.has(dm.id)), demAccorde), achete = achats.reduce((t, x) => t + x.montant, 0), payes = py.total, accorde = credits + achete + payes;
-  return { list, achats, cap, credits, achete, payes, payesList: py.list, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
+  const surSalaires = norm(service) === norm(payeSvc()) ? payesSurSalaires(key) : 0, salaires = norm(service) === norm(payeSvc()) ? salairesMois(key) : 0;
+  const achats = ctImputations(service, key), cap = envCap(service, key), credits = sum(list.filter(dm => !rep.has(dm.id)), demAccorde), achete = achats.reduce((t, x) => t + x.montant, 0), payes = py.total, accorde = credits + achete + payes - surSalaires;
+  return { list, achats, cap, credits, achete, payes, surSalaires, salaires, payesList: py.list, accorde, demande: sum(list, dm => Number(dm.montant) || 0), attente: sum(list.filter(dm => ["attente", "etude"].includes(st(dm))), dm => Number(dm.montant) || 0),
     refuse: list.filter(dm => st(dm) === "refusee").length, reste: cap ? cap - accorde : null };
 }
 const envServices = keys => { const names = cfg().services.slice(); for (const dm of S.demandes) if (dm.service && !names.some(n => norm(n) === norm(dm.service)) && keys.includes(demImputation(dm))) names.push(dm.service); for (const c of S.contrats || []) { const s = ctService(c); if (s && !names.some(n => norm(n) === norm(s)) && keys.some(k => ctImputations(s, k).length)) names.push(s); } return names; };
@@ -4906,7 +4911,7 @@ function openService(name, k) {
       mk("Plafond", x.cap ? money(x.cap) : "—", x.cap ? moisNom(k) : "sans plafond"),
       mk("Accordé", money(x.credits), `${x.list.length} demande${plural(x.list.length)} ce mois-là`),
       mk("Achats sous contrat", money(x.achete), x.achats.length ? `${x.achats.length} imputation${plural(x.achats.length)}` : "aucun"),
-      x.payes || norm(name) === norm(payeSvc()) ? mk("Payes versées", money(x.payes), x.payesList.length ? `${x.payesList.length} semaine${plural(x.payesList.length)}` : "aucune ce mois-là") : null,
+      x.payes || norm(name) === norm(payeSvc()) ? mk("Payes versées", money(x.payes), x.salaires ? `prises sur les ${money(x.salaires)} de la demande « salaires »${x.payes > x.salaires ? ` ; ${money(x.payes - x.salaires)} en plus` : ""}` : x.payesList.length ? `${x.payesList.length} semaine${plural(x.payesList.length)}` : "aucune ce mois-là") : null,
       mk("En attente", money(x.attente), "demandés"),
       mk("Reste", x.cap ? money(x.reste) : "—", x.cap ? `${Math.round(ratio * 100)} % utilisés` : "sans plafond", x.cap && x.reste < 0 ? "bad" : "")),
     x.cap ? h("div", { class: "meter " + tone, role: "img", "aria-label": `${Math.round(ratio * 100)} % de l’enveloppe utilisée` }, h("i", { style: `width:${Math.min(100, ratio * 100)}%` })) : null,
@@ -5259,6 +5264,16 @@ function payesImpute(service, m) {
   const list = payesDuMois(m);
   return { total: list.reduce((t, p) => t + payeTotal(p), 0) - rembMois(m) + aPartMois(m), list };
 }
+// Demandes « salaires » de la Préfecture pour un mois (accordées ; pas une ancienne demande reprise dans
+// une paye) : c'est l'argent des payes de ce mois, viré et déduit une fois de l'enveloppe et du Trésor. Les
+// payes du mois sont prises dessus : seule la part qui le dépasse compte en plus. Le budget des payes du
+// mois est leur total (sans demande, le réglage « Budget des payes par mois »).
+function salairesDemandes(m) {
+  const rep = payeRepris();
+  return S.demandes.filter(dm => dm.nature === "salaires" && norm(dm.service || "") === norm(payeSvc()) && demAccorde(dm) > 0 && !rep.has(dm.id) && demImputation(dm) === m);
+}
+const salairesMois = m => salairesDemandes(m).reduce((t, dm) => t + demAccorde(dm), 0);
+const payesSurSalaires = m => Math.min(Math.max(0, payesImpute(payeSvc(), m).total), salairesMois(m));
 
 /* Rappels : ceux nés d'un prorata se lisent sur les payes versées, les autres sont saisis à la main.
    Ce qui en a été versé se lit aussi sur les payes : rien n'est compté deux fois. */
@@ -5341,17 +5356,19 @@ function payeLignesPrep(k, p) {
   });
 }
 function payeBudget(k, p) {
-  const c = payeCfg(), m = moisDe(k), bm = Math.max(0, Math.round(Number(c.budgetMois) || 0));
+  // Budget du mois : les demandes « salaires » accordées pour ce mois, sinon le réglage.
+  const c = payeCfg(), m = moisDe(k), sal = salairesMois(m), bm = sal > 0 ? sal : Math.max(0, Math.round(Number(c.budgetMois) || 0));
   const deja = payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0) - rembMois(m) + aPartMois(m), reste = bm - deja;
   const semaines = semainesDuMois(m).filter(w => w === k || (w > k && !payeVersee(payeOf(w))));
   const n = Math.max(1, semaines.length), lisse = Math.max(0, Math.floor(reste / n));
-  const cap = envCap(c.service, m), used = (envUse(m)[norm(c.service)] || 0) - (payeVersee(p) ? payeTotal(p) : 0);
-  const envReste = cap ? Math.max(0, cap - used) : null;
+  // Place dans l'enveloppe : ce qui y reste, plus ce qui reste de la demande « salaires » (déjà déduite).
+  const cap = envCap(c.service, m), used = (envUse(m)[norm(c.service)] || 0) - (payeVersee(p) && !sal ? payeTotal(p) : 0);
+  const envReste = cap ? Math.max(0, cap - used) + Math.max(0, sal - deja) : null;
   const imp = p && p.budgetImpose != null && p.budgetImpose !== "" && Number.isFinite(Number(p.budgetImpose)) ? Math.max(0, Math.round(Number(p.budgetImpose))) : null;
   let dispo = lisse, limite = "lisse";
   if (imp != null) { dispo = Math.min(imp, Math.max(0, reste)); limite = imp > Math.max(0, reste) ? "mois" : "impose"; }
   if (envReste != null && envReste < dispo) { dispo = envReste; limite = "enveloppe"; }
-  return { mois: m, budgetMois: bm, deja, reste, semaines, n, lisse, envCap: cap || 0, envReste, impose: imp, dispo: Math.max(0, dispo), limite };
+  return { mois: m, budgetMois: bm, salaires: sal, salairesDm: sal ? salairesDemandes(m).map(dm => dmNo(dm)) : [], deja, reste, semaines, n, lisse, envCap: cap || 0, envReste, impose: imp, dispo: Math.max(0, dispo), limite };
 }
 function payeCalc(k) {
   const p = payeOf(k);
@@ -5562,9 +5579,12 @@ function payeSemOptions(sel, k) {
   sel.value = k;
 }
 function payeGo(k) { S.payeSem = k; renderPayes(true); }
+// Reprise : une demande « salaires » accordée avant la première paye du guichet, qui a payé des agents à la
+// main. Depuis, une demande « salaires » est l'argent des payes de son mois (salairesDemandes).
 function repriseCandidats() {
-  const done = payeRepris();
-  return S.demandes.filter(dm => dm.nature === "salaires" && norm(dm.service) === norm(payeSvc()) && demAccorde(dm) > 0 && !done.has(dm.id));
+  const done = payeRepris(), premiere = payesVersees().map(p => String(p.verseeLe || "")).filter(Boolean).sort()[0];
+  return S.demandes.filter(dm => dm.nature === "salaires" && norm(dm.service) === norm(payeSvc()) && demAccorde(dm) > 0 && !done.has(dm.id)
+    && (!premiere || String((S.arbitrages[dm.id] || {}).at || dm.createdAt || "") < premiere));
 }
 // Prévision : une semaine au maximum (chaque agent à son plafond d'heures), le rythme de la semaine en
 // cours et le risque de prorata, face au budget de la semaine et au reste du mois.
@@ -5629,7 +5649,7 @@ function renderPayes(force) {
   if (!force && box.contains(document.activeElement) && document.activeElement.matches("input")) return;
   const c = payeCfg(), k = S.payeSem = S.payeSem || semKey(new Date()), x = payeCalc(k), b = x.budget || {}, wk = (bounds(k) || {}).week;
   const saisieK = semSaisie(k);
-  $("#py-intro").textContent = `La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service${saisieK ? " relevées sur la tablette en jeu et saisies ici" : ""} × taux horaire du grade${c.primes.length && k >= c.primesDepuis ? `, plus une prime de présence (${c.primes.slice().reverse().map(x => `${money(x.montant)} dès ${fmtH(x.heures).replace(" h 00", " h")}`).join(", ")})` : ""}, ${c.plafondHeures} h et ${money(c.payeMax)} au plus par semaine, prime comprise. Elle est déduite de l’enveloppe ${c.service} ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.`;
+  $("#py-intro").textContent = `La paye des fonctionnaires de la Préfecture, semaine par semaine : heures de service${saisieK ? " relevées sur la tablette en jeu et saisies ici" : ""} × taux horaire du grade${c.primes.length && k >= c.primesDepuis ? `, plus une prime de présence (${c.primes.slice().reverse().map(x => `${money(x.montant)} dès ${fmtH(x.heures).replace(" h 00", " h")}`).join(", ")})` : ""}, ${c.plafondHeures} h et ${money(c.payeMax)} au plus par semaine, prime comprise. Elle est prise sur la demande « salaires » du mois (sinon, déduite de l’enveloppe ${c.service}) ; si le budget de la semaine ne suffit pas, toutes les payes baissent du même pourcentage et ce qui manque devient un rappel, versé plus tard.`;
   payeSemOptions($("#py-sem"), k);
   // Reprise des salaires déjà versés par une demande « budget salaires ».
   const rep = repriseCandidats();
@@ -5653,7 +5673,7 @@ function renderPayes(force) {
     bl.push(h("span", {}, "Budget utilisé : ", h("b", { text: money(b.dispo) }), b.limite === "reprise" ? " (salaires repris)" : b.limite === "impose" ? " (fixé à la main)" : b.limite === "enveloppe" ? " (limité par l’enveloppe)" : ` (lissé sur ${b.semaines || 1} semaine${plural(b.semaines || 1)})`));
     if (x.coef < 1) bl.push(h("span", { class: "warn", text: `Prorata : ${pctC(x.coef)} versés` }));
   } else {
-    bl.push(h("span", {}, `Budget des payes ${deMois(b.mois)} : `, h("b", { text: money(b.budgetMois) })), h("span", {}, "déjà versé : ", h("b", { text: money(b.deja) })),
+    bl.push(h("span", {}, `Budget des payes ${deMois(b.mois)} : `, h("b", { text: money(b.budgetMois) }), b.salaires ? ` (demande${plural((b.salairesDm || []).length)} « salaires » ${(b.salairesDm || []).join(", ")})` : " (réglage)"), h("span", {}, "déjà versé : ", h("b", { text: money(b.deja) })),
       h("span", {}, `reste ${money(b.reste)} pour ${b.n} semaine${plural(b.n)} (${b.semaines.map(z => "S" + (bounds(z) || {}).week).join(", ")}) → `, h("b", { text: money(b.lisse) }), " cette semaine"));
     if (b.limite === "impose" || b.limite === "mois") bl.push(h("span", { class: "warn" }, `Budget fixé à la main : ${money(b.dispo)}`, w ? h("button", { class: "linkbtn", type: "button", style: "margin-left:6px", onclick: () => payeSet(k, { budgetImpose: null }), text: "revenir au budget lissé" }) : null));
     if (b.limite === "enveloppe") bl.push(h("span", { class: "warn", text: `Limité par l’enveloppe ${c.service} : il n’y reste que ${money(b.envReste)}` }));
@@ -5882,7 +5902,8 @@ function openPayeReglages() {
     closeDialog(); toast("Barème et budget des payes enregistrés.");
   });
   openDialog({ eyebrow: "Payes de la Préfecture", title: "Barème et budget", wide: true,
-    body: [h("div", { class: "row2" }, field("py-r-svc", "Enveloppe imputée", svc), h("div", { class: "field" }, h("label", { for: "py-r-bud", text: "Budget des payes par mois" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(bud, { id: "py-r-bud" })))),
+    body: [h("div", { class: "row2" }, field("py-r-svc", "Enveloppe imputée", svc), h("div", { class: "field" }, h("label", { for: "py-r-bud", text: "Budget des payes par mois" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(bud, { id: "py-r-bud" })),
+      h("span", { class: "hint", text: "Sert pour un mois sans demande « salaires » de la Préfecture. Avec une demande accordée, le budget du mois est le total de ses demandes « salaires » : pour l’augmenter, faites une demande de complément." }))),
       h("div", { class: "row2" }, field("py-r-plaf", "Heures payées au plus par semaine", plaf), h("div", { class: "field" }, h("label", { for: "py-r-max", text: "Paye maximum par semaine" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(max, { id: "py-r-max" })))),
       h("h4", { style: "margin:14px 0 2px", text: "Grades et taux horaires" }), h("p", { class: "hint", style: "margin:0", text: "Du premier grade au plus haut. Le taux horaire multiplie les heures de service de l’agent." }),
       rowsBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addRow(null), text: "Ajouter un grade" }),
@@ -9102,7 +9123,7 @@ function renderBordRH() {
   const absEnCours = (S.absences || []).filter(a => a.statut !== "annulee" && a.du <= auj && a.au >= auj), absBientot = (S.absences || []).filter(a => a.statut !== "annulee" && a.du > auj && a.du <= dans7);
   const sancs = (S.sanctions || []).filter(x => x.statut === "vigueur"), dags = dagsEnAttente();
   const objectifs = (S.entretiens || []).flatMap(e => (e.objectifs || []).filter(o => o.etat === "en_cours").map(o => Object.assign({ fid: e.fid, nom: e.nom }, o)));
-  const m = moisDe(semKey(new Date())), c = payeCfg(), depense = paye ? payesDuMois(m).reduce((t, p) => t + payeTotal(p), 0) : 0, budget = Number(c.budgetMois) || 0;
+  const m = moisDe(semKey(new Date())), c = payeCfg(), depense = paye ? payesDuMois(m).reduce((t, p) => t + payeTotal(p), 0) : 0, budget = salairesMois(m) || Number(c.budgetMois) || 0;
   const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
   const kpis = h("div", { class: "minis" },
     mk("Effectif", String(actifs.length), `fonctionnaire${plural(actifs.length)} en service`),
