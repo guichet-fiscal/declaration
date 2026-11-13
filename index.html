@@ -7087,7 +7087,7 @@ function secuChampPhotos(existantes, aide, opts) {
   if (lireBt) lireBt.addEventListener("click", async () => { lireBt.disabled = true; try { const b = await aLire(); if (b) await opts.lire(b); else montrer("Photo indisponible.", true); } finally { lireBt.disabled = false; } });
   const input = h("input", { type: "file", accept: "image/*", multiple: true });
   input.addEventListener("change", () => { ajouter(input.files); input.value = ""; });
-  const zone = h("div", { class: "secu-ajout" }, h("span", { class: "hint", text: aide || "Photo de la carte d’identité : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité. Six photos au plus." }),
+  const zone = h("div", { class: "secu-ajout" }, h("span", { class: "hint", text: aide || "Photo de la carte d’identité ou du permis de conduire : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité. Six photos au plus." }),
     h("div", { class: "secu-ajout-l" }, input, lireBt), liste, etat);
   collageSecu = { zone, fn: ev => { const f = imageCollee(ev.clipboardData); if (f) { ev.preventDefault(); ajouter([f]); } } };
   const montrer = (txt, faible) => { etat.textContent = txt || ""; etat.hidden = !txt; etat.classList.toggle("faible", !!faible); };
@@ -7187,7 +7187,7 @@ function secuIdentite(ch) {
     const l = secuSignale(ch.nom.value, ch.numero ? ch.numero.value : "");
     fill(signal, l.map(x => secuSignalCarte(x))); signal.hidden = !l.length; bloc.hidden = signal.hidden && fiche.hidden;
   };
-  if (ch.numero) ch.numero.addEventListener("input", majSignal);
+  if (ch.numero) ch.numero.addEventListener("input", () => { if (!ch.numero.value.trim()) delete ch.numero.dataset.piece; majSignal(); });
   const marquer = (k, v) => { ch[k].value = v; ch[k].dataset.auto = "1"; ch[k].classList.add("secu-auto"); };
   champs.forEach(k => ch[k].addEventListener("input", () => { delete ch[k].dataset.auto; ch[k].classList.remove("secu-auto"); }));
   const libre = k => !ch[k].value.trim() || ch[k].dataset.auto === "1";
@@ -7225,7 +7225,8 @@ function secuIdentite(ch) {
     if (!lu.length) { ch.photos.montrer("Rien de lisible sur cette photo : remplissez l’identité à la main.", true); return; }
     const faits = lu.filter(k => libre(k));
     faits.forEach(k => marquer(k, r[k]));
-    const vu = lu.map(k => (k === "nom" ? r.nom : k === "naissance" ? "né(e) le " + r.naissance : "n° " + r.numero)).join(", ");
+    if (ch.numero && r.numero && norm(ch.numero.value) === norm(r.numero)) { if (r.piece) ch.numero.dataset.piece = r.piece; else delete ch.numero.dataset.piece; }
+    const vu = (r.piece === "permis" ? "permis de conduire, " : "") + lu.map(k => (k === "nom" ? r.nom : k === "naissance" ? "né(e) le " + r.naissance : "n° " + r.numero)).join(", ");
     const ecart = lu.filter(k => !faits.includes(k) && (k === "nom" ? !memeSecu(ch.nom.value, r.nom) : norm(ch[k].value) !== norm(r[k])));
     ch.photos.montrer(`Lu sur la pièce : ${vu}. ` + (ecart.length ? `Différent de ce qui est tapé (${ecart.map(k => SECU_CHAMPS[k]).join(", ")}) : vérifiez la pièce.` : faits.length ? "Vérifiez avant d’enregistrer." : "Conforme à ce qui est tapé."), !!ecart.length);
     majFiche();
@@ -7328,8 +7329,29 @@ function pieceEtiquette(l) {
   }
   return null;
 }
+// Permis de conduire, lu en texte : pas d'intitulés, des numéros de champ (« 1. PODIL », « 2. DAMIEN »,
+// « 3. 11.10.2000 », « 5. 01KS47088 »), souvent mal lus ; la bande du bas donne le nom et le numéro.
+function lirePermisTexte(brutes) {
+  const r = { nom: "", naissance: "", numero: "", source: "permis", piece: "permis" };
+  const b = brutes.map(permisBande).find(Boolean) || {};
+  // Après le bandeau : les deux premières lignes de lettres seules (numéro de champ retiré) sont le nom et le prénom.
+  const debut = brutes.findIndex(l => /PERMIS|CONDUIRE/i.test(l));
+  const noms = brutes.slice(debut + 1).map(l => l.replace(/^\s*(?:[0-9][a-c]?|[«»|!]+)[.,:]?\s+/i, "").trim()).filter(l => /^[\p{Lu}][\p{Lu}' -]+$/u.test(l) && !/PERMIS|CONDUIRE|R[ÉE]PUBLIQUE|FRAN[ÇC]AISE|PR[ÉE]FECTURE/.test(l) && !/</.test(l));
+  let nom = noms[0] ? pieceNomPropre(noms[0]).toUpperCase() : b.nom || "";
+  // Nom de la ligne mal lu (« POOIL ») et nom de la bande proches : la bande l'emporte (sans accents, elle ne
+  // remplace pas un nom qui n'en diffère que par eux).
+  const sansAcc = x => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z]/g, "");
+  if (b.nom && nom && sansAcc(nom) !== sansAcc(b.nom) && ecartMots(sansAcc(nom), sansAcc(b.nom)) <= 2) nom = b.nom;
+  const pre = noms[1] ? pieceMot(pieceNomPropre(noms[1]).split(" ")[0]) : "";
+  r.nom = [pre, nom].filter(Boolean).join(" ");
+  const dates = pieceDates(brutes.join("\n")).filter(x => pieceAge(x) && pieceAge(x) <= (new Date().getFullYear() - 10) * 10000 + 1231).sort((x, y) => pieceAge(x) - pieceAge(y));
+  r.naissance = dates[0] || "";
+  r.numero = b.numero || brutes.flatMap(l => l.split(/\s+/)).map(permisNumero).find(Boolean) || "";
+  return r;
+}
 function lirePieceTexte(texte) {
   const brutes = String(texte || "").split(/\r?\n/).map(l => l.replace(/[ \t]+/g, " ").trim()).filter(Boolean);
+  if (brutes.some(l => /PERMIS\s+DE\s+CONDUIRE|DRIVING\s+LICEN[CS]E/i.test(l)) || brutes.some(l => /^D\W?[1IL]{1,2}FRA/.test(l.replace(/\s+/g, "")))) return lirePermisTexte(brutes);
   const r = { nom: "", naissance: "", numero: "", source: "" };
   const mrz = lireMrz(brutes);
   const lignes = [];
@@ -7410,17 +7432,22 @@ async function lirePiece(blob, suivi) {
   const score = r => (r.nom ? 2 : 0) + (r.naissance ? 1 : 0) + (r.numero ? 1 : 0);
   let l = await lire(3), r = lirePieceTexte(l.texte), autre = null;
   if (!(r.nom && r.naissance && r.numero)) { autre = await lire(11); const r2 = lirePieceTexte(autre.texte); if (score(r2) > score(r)) { [l, autre] = [autre, l]; r = r2; } }
-  const k = c.width / src.width, cadre = carteRF(src, k, l.mots) || (autre && carteRF(src, k, autre.mots));
+  // Permis de conduire (« PERMIS », « CONDUIRE » dans le bandeau) ou carte d'identité du serveur.
+  const k = c.width / src.width, permis = estPermis(l.mots) || !!(autre && estPermis(autre.mots)) || r.piece === "permis";
+  const modele = permis ? PIECES_RF.permis : PIECES_RF.carte;
+  const cadre = carteRF(src, k, l.mots, modele) || (autre && carteRF(src, k, autre.mots, modele));
+  if (permis) r.piece = "permis";
   if (cadre) {
-    const g = await lireCarteRF(w, src, cadre);
+    const g = permis ? await lirePermisRF(w, src, cadre, r) : await lireCarteRF(w, src, cadre);
     if (g) {
       if (g.nom) r.nom = g.nom;
       if (g.naissance) r.naissance = g.naissance;
       if (g.numero) r.numero = g.numero;
-      r.source = (r.source ? r.source + "+" : "") + "carte";
+      r.source = permis ? "permis" : (r.source ? r.source + "+" : "") + "carte";
       return Object.assign(r, { texte: l.texte });
     }
   }
+  if (permis) return Object.assign(r, { texte: l.texte });
   if (r.numero) {
     const m = l.mots.find(x => x.t === r.numero);
     if (m) { try { const n = await relireNumero(w, c, m); if (n) r.numero = n; } catch (e) { /* lecture du mot gardée */ } }
@@ -7441,11 +7468,52 @@ const CARTE_RF = {
 // Sans repère, la carte n'est pas celle du serveur.
 const CARTE_RF_REPERES = [["REPUBLIQUE", 0.195, 0.506, null, null, 2], ["FRANCAISE", 0.525, 0.802, null, null, 2], ["NATIONALE", 0.300, 0.433, 0.137, 0.164, 1],
   ["IDENTITY", 0.601, 0.708, 0.137, 0.163, 1], ["CARD", 0.717, 0.780, 0.137, 0.163, 0], ["CARTE", 0.216, 0.290, 0.137, 0.164, 0]];
+// Permis de conduire du serveur (format européen : « PERMIS DE CONDUIRE », « RÉPUBLIQUE FRANÇAISE », photo à
+// gauche, champs numérotés 1 à 9, bande en bas « D1FRA… »). Places mesurées sur une vraie capture (13 nov.).
+const PERMIS_RF = {
+  nom: [0.375, 0.165, 0.95, 0.255, "ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ-' "],
+  prenom: [0.375, 0.245, 0.95, 0.325, "ABCDEFGHIJKLMNOPQRSTUVWXYZÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸ-' "],
+  naissance: [0.375, 0.325, 0.64, 0.40, "0123456789. "],
+  numero: [0.375, 0.548, 0.66, 0.625, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"],
+  bande: [0.06, 0.885, 0.975, 0.975, "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"]
+};
+const PERMIS_RF_REPERES = [["PERMIS", 0.159, 0.299, 0.099, 0.141, 1], ["CONDUIRE", 0.376, 0.580, 0.099, 0.141, 1],
+  ["REPUBLIQUE", 0.707, 0.842, null, null, 2], ["FRANCAISE", 0.851, 0.968, null, null, 2]];
+// Modèles de pièce : repères, rapport largeur / hauteur, haut des capitales de « RÉPUBLIQUE » (accent lu ou non).
+const PIECES_RF = {
+  carte: { reperes: CARTE_RF_REPERES, ratio: 1.6, haut: [0.025, 0.045] },
+  permis: { reperes: PERMIS_RF_REPERES, ratio: 444 / 284, haut: [0.112, 0.118] }
+};
+// Numéro du permis : 2 chiffres, 2 lettres, 5 chiffres (« 01KS47088 »). Lu de travers : les lettres prises
+// pour des chiffres à la place des chiffres, et l'inverse, sont corrigées si le numéro prend alors cette forme.
+const PERMIS_NUM = /^\d{2}[A-Z]{2}\d{5}$/;
+function permisNumero(t) {
+  const m = String(t || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (PERMIS_NUM.test(m)) return m;
+  if (m.length !== 9) return "";
+  const enChiffre = { O: "0", Q: "0", D: "0", I: "1", L: "1", Z: "2", S: "5", G: "6", B: "8", A: "4", T: "7" }, enLettre = { 0: "O", 1: "I", 2: "Z", 4: "A", 5: "S", 6: "G", 8: "B" };
+  const c = [...m].map((x, i) => (i === 2 || i === 3 ? enLettre[x] || x : enChiffre[x] || x)).join("");
+  return PERMIS_NUM.test(c) ? c : "";
+}
+// Bande du permis : « D1FRA » + numéro + chiffres + NOM<<<<. Lue de travers (« DI1FRAO01KS… ») : le
+// numéro est la première suite de la forme du permis après « FRA », le nom les lettres devant « << ».
+function permisBande(t) {
+  const l = String(t || "").toUpperCase().replace(/\s+/g, "").replace(/[«»‹›]/g, "<");
+  const i = l.search(/FRA/);
+  if (i < 0) return null;
+  const apres = l.slice(i + 3, i + 3 + 14), r = {};
+  for (let j = 0; j + 9 <= apres.length; j++) { const n = permisNumero(apres.slice(j, j + 9)); if (n && /^[0-9OQD]{2}[A-Z]{2}/.test(apres.slice(j, j + 4)) && !/^[A-Z]{2}/.test(apres.slice(j, j + 2))) { r.numero = n; break; } }
+  const m = /\d([A-Z]{2,}(?:<[A-Z]+)*)<</.exec(l.slice(i + 3));
+  if (m) r.nom = m[1].replace(/</g, " ").trim();
+  return r.numero || r.nom ? r : null;
+}
+const estPermis = mots => ["PERMIS", "CONDUIRE"].some(mot => mots.some(x => x.brut && !/\p{Ll}/u.test(x.brut) && ecartMots(String(x.t || "").replace(/[^A-Z]/g, ""), mot) <= 1));
 const ecartMots = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j); for (let i = 1; i <= a.length; i++) { let p = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t; } } return d[b.length]; };
-function carteRF(src, k, mots) {
+function carteRF(src, k, mots, modele) {
+  const M = modele || PIECES_RF.carte;
   // Repères trouvés (en capitales, comme le bandeau : « Français », la nationalité, n'en est pas un).
   const vus = [];
-  for (const [mot, g, dr, h, b, tol] of CARTE_RF_REPERES) {
+  for (const [mot, g, dr, h, b, tol] of M.reperes) {
     const m = mots.find(x => x.brut && !/\p{Ll}/u.test(x.brut) && ecartMots(x.brut.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z]/g, ""), mot) <= tol);
     if (m) vus.push({ g, dr, h, b, x0: m.bbox.x0 / k, x1: m.bbox.x1 / k, y0: m.bbox.y0 / k, y1: m.bbox.y1 / k, accent: /É|É/.test(m.brut) });
   }
@@ -7462,10 +7530,10 @@ function carteRF(src, k, mots) {
   // Un repère qui ne tombe pas à sa place (mot de la capture autour de la carte) est écarté.
   const bons = l.filter(a => Math.abs(a.x0 - (f.X + a.g * f.W)) < 0.04 * f.W && Math.abs(a.x1 - (f.X + a.dr * f.W)) < 0.04 * f.W);
   if (bons.length && bons.length < l.length) { l = bons; f = ajuster(l); if (!f) return null; }
-  const { W, X } = f, H = W / 1.6;
+  const { W, X } = f, H = W / M.ratio;
   // Hauteur : les repères sans accent d'abord ; « RÉPUBLIQUE » et « FRANÇAISE » seuls, à peu près (haut des
   // capitales, ou de l'accent s'il est lu).
-  const nets = l.filter(a => a.h !== null), ys = nets.length ? nets.flatMap(a => [a.y0 - a.h * H, a.y1 - a.b * H]) : l.map(a => a.y0 - (a.accent ? 0.025 : 0.045) * H);
+  const nets = l.filter(a => a.h !== null), ys = nets.length ? nets.flatMap(a => [a.y0 - a.h * H, a.y1 - a.b * H]) : l.map(a => a.y0 - (a.accent ? M.haut[0] : M.haut[1]) * H);
   const Y = ys.reduce((s, y) => s + y, 0) / ys.length;
   if (W < 120 || X < -0.08 * W || Y < -0.12 * H || X + W > src.width + 0.08 * W || Y + H > src.height + 0.12 * H) return null;
   // Carte recadrée : toute l'image.
@@ -7529,6 +7597,29 @@ async function lireCarteRF(w, src, cadre) {
   }
   return out;
 }
+// Permis : nom et prénom en capitales, naissance (champ 3), numéro (champ 5), confirmés par la bande du bas
+// et par la lecture d'ensemble (« lu ») : à égalité de doute, la valeur qu'elle a aussi lue l'emporte.
+async function lirePermisRF(w, src, cadre, lu) {
+  lu = lu || {};
+  const capitales = r => { const n = pieceNomPropre(r.t).toUpperCase(); return r.conf >= 60 && n.replace(/[^\p{L}]/gu, "").length >= 2 ? n : ""; };
+  const bande = await voteChampRF(w, src, cadre, PERMIS_RF.bande, r => { const b = permisBande(r.t); return b ? JSON.stringify(b) : ""; });
+  const bd = bande ? JSON.parse(bande.v) : {};
+  const nom = await voteChampRF(w, src, cadre, PERMIS_RF.nom, capitales, v => !!bd.nom && v.replace(/[^A-Z]/g, "") === bd.nom.replace(/[^A-Z]/g, ""));
+  const out = {};
+  const n = nom ? nom.v : bd.nom || "";
+  if (!n) return null;
+  const pre = await voteChampRF(w, src, cadre, PERMIS_RF.prenom, r => { const p = (pieceNomPropre(r.t).split(" ")[0] || "").toUpperCase(); return r.conf >= 60 && /^\p{Lu}{2,}(?:-\p{Lu}{2,})*$/u.test(p) ? p : ""; });
+  out.nom = [pre ? pieceMot(pre.v) : "", n].filter(Boolean).join(" ");
+  const nai = await voteChampRF(w, src, cadre, PERMIS_RF.naissance, r => pieceDateRF(r.t), v => !!lu.naissance && v === lu.naissance);
+  if (nai) out.naissance = nai.v;
+  // Petite capture : le premier chiffre du jour se perd parfois (« 1.10.2000 » pour 11.10.2000). Même mois et
+  // même année que la lecture d'ensemble : son jour l'emporte.
+  if (lu.naissance && out.naissance && out.naissance !== lu.naissance && out.naissance.slice(2) === lu.naissance.slice(2)) out.naissance = lu.naissance;
+  else if (!out.naissance && lu.naissance) out.naissance = lu.naissance;
+  const num = await voteChampRF(w, src, cadre, PERMIS_RF.numero, r => permisNumero(r.t.split(/\s+/).sort((a, b) => Math.abs(9 - a.length) - Math.abs(9 - b.length))[0]), v => v === bd.numero);
+  out.numero = num ? num.v : bd.numero || "";
+  return out;
+}
 // Confusions entre lettre et chiffre que la lecture signe par signe peut corriger.
 // Seules celles vues sur les captures : un chiffre lu comme une lettre au milieu de lettres.
 const PIECE_PAIRES = { I: "1", O: "0", Q: "0", A: "4" };
@@ -7584,11 +7675,11 @@ function openSecuEntree(x, back, pre) {
   const motif = h("select", {}, Object.entries(SECU_MOTIFS).map(([k, t]) => h("option", { value: k, text: t }))); motif.value = v.motif || d.motif || "rdv";
   const precision = h("input", { autocomplete: "off", maxlength: "120", placeholder: "Précision (facultatif)" }); precision.value = v.precision || d.precision || "";
   const visite = h("input", { autocomplete: "off", maxlength: "80", placeholder: "Ex. : Direction des finances publiques" }); visite.value = v.visite || d.visite || "";
-  const numero = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); numero.value = v.numero || d.numero || "";
+  const numero = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); numero.value = v.numero || d.numero || ""; if (!v.numero && d.piece) numero.dataset.piece = d.piece;
   const arrivee = h("input", { type: "datetime-local" }); arrivee.value = toLocalInput(v.arrivee ? new Date(v.arrivee) : new Date());
   const note = h("textarea", { rows: "2", maxlength: "500" }); note.value = v.note || "";
   let ident;
-  const photos = secuChampPhotos(v.photos, "Photo de la pièce d’identité : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité.",
+  const photos = secuChampPhotos(v.photos, "Photo de la pièce d’identité ou du permis de conduire : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité.",
     { lire: b => ident.lire(b), nouvelle: f => ident.nouvelle(f) });
   // Encore dans les locaux : sa sortie d'abord, plutôt qu'une seconde entrée ouverte.
   const sortieAvant = (p, dedans) => !dedans || x ? null : h("button", { class: "btn small", type: "button", text: "Noter sa sortie d’abord", onclick: async ev => { ev.currentTarget.disabled = true; await secuSortie(dedans); ident.majFiche(); } });
@@ -7610,7 +7701,7 @@ function openSecuEntree(x, back, pre) {
     const ph = await photos.envoyer("securiteEntrees", rid);
     if (!ph) { go.disabled = false; return; }
     const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), qualite: qualite.value.trim(), naissance: naissance.value.trim(), motif: motif.value, precision: precision.value.trim(), visite: visite.value.trim(),
-      numero: numero.value.trim(), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null },
+      numero: numero.value.trim(), piece: pieceDe(numero, x), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null },
       !x && d.controle ? { controle: d.controle } : {}, !x && d.attendu ? { attendu: d.attendu } : {});
     delete data.id;
     if (await secuEnregistrer("securiteEntrees", rid, data)) {
@@ -7642,7 +7733,7 @@ function openSecuEntreeVue(id) {
     body: [kv([["Qualité", x.qualite || "—"], ["Motif", (SECU_MOTIFS[x.motif] || "—") + (x.precision ? " · " + x.precision : "")], ["Personne ou service visité", x.visite || "—"],
       ["Arrivée", fmtDateTime(new Date(x.arrivee))], ["Sortie", x.sortie ? (x.sortieOubliee ? `heure inconnue · close le ${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " par " + x.sortiePar : ""}` : `${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " · notée par " + x.sortiePar : ""}`) : "pas encore notée"],
       x.naissance ? ["Date de naissance", x.naissance] : null,
-      ["Pièce d’identité", x.pieceVue ? (x.numero ? "vue · n° " + x.numero : "vue") : "non vérifiée"], ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
+      ["Pièce d’identité", x.pieceVue ? (x.numero ? `${SECU_PIECES[x.piece] ? SECU_PIECES[x.piece] + " vu" : "vue"} · n° ${x.numero}` : "vue") : "non vérifiée"], ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
       secuSignale(x.nom, x.numero).map(y => secuSignalCarte(y, { voir: true })),
       (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
@@ -7690,7 +7781,7 @@ function openSecuControle(x, back) {
     const rid = x ? x.id : secuNouvelId("securiteControles");
     const ph = await photos.envoyer("securiteControles", rid);
     if (!ph) { go.disabled = false; return; }
-    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), naissance: naissance.value.trim(), numero: numero.value.trim(), lieu: lieu.value.trim(), motif: motif.value,
+    const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), naissance: naissance.value.trim(), numero: numero.value.trim(), piece: pieceDe(numero, x), lieu: lieu.value.trim(), motif: motif.value,
       resultat: resultat.value, date: secuDate(date), notes: notes.value.trim(), photos: ph, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null });
     delete data.id;
     if (await secuEnregistrer("securiteControles", rid, data)) {
@@ -7710,14 +7801,18 @@ function openSecuControle(x, back) {
       field("sc-resultat", "Résultat", resultat), suiteBox, field("sc-notes", "Notes", notes), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
 }
-const secuPreEntree = c => ({ nom: c.nom, naissance: c.naissance, numero: c.numero, photos: (c.photos || []).slice(0, 2), date: c.date, controle: c.id });
+const secuPreEntree = c => ({ nom: c.nom, naissance: c.naissance, numero: c.numero, piece: c.piece || "", photos: (c.photos || []).slice(0, 2), date: c.date, controle: c.id });
+// Sorte de pièce présentée, notée quand la lecture la reconnaît (« permis » : permis de conduire).
+const SECU_PIECES = { permis: "permis de conduire" };
+const pieceNumTxt = x => (x.numero ? x.numero + (SECU_PIECES[x.piece] ? ` (${SECU_PIECES[x.piece]})` : "") : "—");
+const pieceDe = (numero, x) => (numero.value.trim() ? numero.dataset.piece || (x && x.numero === numero.value.trim() ? x.piece || "" : "") : "");
 function openSecuControleVue(id) {
   const x = secuListe("securiteControles").find(y => y.id === id); if (!x) return;
   noterConsultation("securiteControles", id, x.nom);
   const reopen = () => openSecuControleVue(id), res = SECU_RESULTATS[x.resultat] || SECU_RESULTATS.conforme;
   const autres = secuListe("securiteControles").filter(c => c.id !== x.id && memeSecu(c.nom, x.nom)).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   openDialog({ eyebrow: "Sécurité · contrôle d’identité", title: x.nom || "Contrôle", stampEl: stamp([res[0].toUpperCase(), res[1]]), wide: true,
-    body: [kv([["Date de naissance", x.naissance || "—"], ["Numéro de la pièce", x.numero || "—"], ["Date", fmtDateTime(new Date(x.date))], ["Lieu", x.lieu || "—"],
+    body: [kv([["Date de naissance", x.naissance || "—"], ["Numéro de la pièce", pieceNumTxt(x)], ["Date", fmtDateTime(new Date(x.date))], ["Lieu", x.lieu || "—"],
       ["Motif", SECU_CTRL_MOTIFS[x.motif] || "—"], ["Résultat", res[0]], ["Contrôlé par", x.agent || "—"], x.notes ? ["Notes", x.notes] : null]),
       secuSignale(x.nom, x.numero).map(y => secuSignalCarte(y, { voir: true })),
       (x.photos || []).length ? sec("Pièce d’identité", h("div", { class: "secu-grande" }, x.photos.map(p => { const img = h("img", { alt: "Pièce d’identité" }); secuPhotoUrl(p.path).then(u => { if (u) img.src = u; }); return img; })))
