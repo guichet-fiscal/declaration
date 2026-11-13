@@ -794,6 +794,16 @@ input[readonly]{background:var(--muted-soft);color:var(--ink-2)}
 .rc-dos .meta{font-size:12.5px}
 .rc-dos-s{margin:0;font-size:14px;line-height:1.45;color:var(--ink)}
 .rc-dos-a{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rc-dos-env{margin:0;font-size:12.5px;color:var(--ink-2)}
+.rc-dos-env.auj strong{color:var(--ok)}
+.rc-demain{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);padding:4px 10px;border:1px dashed var(--rule);border-radius:999px}
+.rc-demain::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.rc-menu button.off{cursor:not-allowed;opacity:.55}
+.rc-auj{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.rc-auj li{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;padding:7px 0;border-bottom:1px solid var(--rule-2);font-size:13.5px}
+.rc-auj li:last-child{border-bottom:0}
+.rc-auj .h{font-family:var(--f-mono);font-size:12.5px;color:var(--ink-2);padding-top:1px}
+.rc-demain-l summary{cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink-2)}
 .rc-steps{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:12.5px;color:var(--ink-3)}
 .rc-steps li{display:inline-flex;align-items:center;gap:6px}
 .rc-steps li::before{content:"";width:9px;height:9px;border-radius:50%;border:2px solid var(--rule);background:var(--sheet);flex:none}
@@ -14893,6 +14903,7 @@ async function sendRelance(x, type, opts) {
 }
 async function relanceOne(x, type, niveau, opts) {
   opts = opts || {};
+  if (bloqueAujourdhui(x.e)) return null;
   const r = await sendRelance(x, type, { niveau, echeance: opts.echeance });
   if (!r) return null;
   const doc = relanceDoc(r), label = rlLabel(r), fem = type === "paiement" || isMed(r);
@@ -14941,7 +14952,7 @@ function openRappelEcheance() {
   if (!x) { toast("Aucune période à rappeler pour l’instant.", true); return; }
   const list = rappelCandidats(x.k);
   if (!list.length) { toast(`Toutes les entreprises ont déclaré ${dePeriode(x.k).replace(/^de la /, "la ")}.`); return; }
-  const boxes = list.map(({ e, deja }, i) => { const cb = h("input", { type: "checkbox", id: "re-" + i }); cb.checked = !deja; return [e, cb, deja]; });
+  const boxes = list.map(({ e, deja }, i) => { const cb = h("input", { type: "checkbox", id: "re-" + i }), auj = envoiDuJour(e); cb.checked = !deja && !auj; cb.disabled = !!auj; return [e, cb, deja, auj]; });
   const pre = h("pre", { class: "discord-preview", id: "re-preview" }), count = h("span", { class: "hint" });
   const chosen = () => boxes.filter(([, cb]) => cb.checked).map(([e]) => e);
   const copyBtn = h("button", { class: "btn ghost small", type: "button", text: "Enregistrer et copier le message" });
@@ -14973,9 +14984,10 @@ function openRappelEcheance() {
   openDialog({
     eyebrow: "Recouvrement", title: "Rappel avant la date limite", wide: true,
     body: [h("p", { style: "margin:0", text: `${periodLabel(x.k)} : à déclarer au plus tard le ${jourLimite(x.lim)} à 23 h 59. Les entreprises ci-dessous ne l’ont pas encore fait. Le message mentionne chaque patron dont l’ID Discord est connu ; le rappel est inscrit à leur dossier. ${auto}` }),
-      h("ul", { class: "rl-pick" }, boxes.map(([e, cb, deja], i) => h("li", {},
+      h("ul", { class: "rl-pick" }, boxes.map(([e, cb, deja, auj], i) => h("li", {},
         h("label", { class: "switch", for: "re-" + i }, cb, h("strong", { text: e.nom })), " ", pingTag(e),
-        deja ? h("span", { class: "meta", text: `déjà rappelée le ${fmtDateTime(new Date(deja.at))}${deja.auto ? " (automatique)" : deja.byNom ? " par " + deja.byNom : ""}` }) : null))),
+        deja ? h("span", { class: "meta", text: `déjà rappelée le ${fmtDateTime(new Date(deja.at))}${deja.auto ? " (automatique)" : deja.byNom ? " par " + deja.byNom : ""}` })
+          : auj ? h("span", { class: "meta", text: demainTxt(auj).toLowerCase() }) : null))),
       sec("Aperçu du message", pre)],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), count, h("span", { class: "spacer" }), copyBtn, sendBtn].filter(Boolean)
   });
@@ -15000,9 +15012,9 @@ function relanceAll(type, liste) {
   if (!list.length) return;
   const decl = type === "declaration";
   const boxes = list.map((x, i) => {
-    const cb = h("input", { type: "checkbox", id: "rl-" + i });
-    cb.checked = true;
-    return [x, cb];
+    const cb = h("input", { type: "checkbox", id: "rl-" + i }), auj = envoiDuJour(x.e);
+    cb.checked = !auj; cb.disabled = !!auj;
+    return [x, cb, auj];
   });
   const pre = h("pre", { class: "discord-preview", id: "rl-preview" });
   const count = h("span", { class: "hint" });
@@ -15014,7 +15026,7 @@ function relanceAll(type, liste) {
     count.textContent = `${n} entreprise${plural(n)} cochée${plural(n)}${p.length > 1 ? ` · ${p.length} messages` : ""}`;
     copyBtn.disabled = !n; if (sendBtn) sendBtn.disabled = !n;
   };
-  const commit = async () => { let n = 0; for (const x of chosen()) if (await sendRelance(x, type, { groupee: true })) n++; return n; };
+  const commit = async () => { let n = 0; for (const x of chosen()) if (!envoiDuJour(x.e) && await sendRelance(x, type, { groupee: true })) n++; return n; };
   const copyBtn = h("button", { class: "btn ghost small", type: "button", text: "Enregistrer et copier le message" });
   const sendBtn = hookFor("relances") ? h("button", { class: "btn ink small", type: "button", text: "Enregistrer et publier sur Discord" }) : null;
   copyBtn.addEventListener("click", async () => {
@@ -15036,9 +15048,71 @@ function relanceAll(type, liste) {
     eyebrow: "Recouvrement", title: decl ? "Relancer d’un coup : déclarations en retard" : "Relancer d’un coup : sommes à payer", wide: true,
     body: [
       h("p", { style: "margin:0", text: "Un seul message pour toutes les entreprises cochées, chaque patron mentionné. La relance est notée au dossier de chacune. Décochez celles à laisser de côté." }),
-      h("ul", { class: "rl-pick" }, boxes.map(([x, cb], i) => h("li", {},
+      h("ul", { class: "rl-pick" }, boxes.map(([x, cb, auj], i) => h("li", {},
         h("label", { class: "switch", for: "rl-" + i }, cb, h("strong", { text: x.e.nom })), " ", pingTag(x.e),
-        h("span", { class: "meta", text: decl ? x.keys.map(periodPlain).join(", ") : `${money(x.total)} · ${x.items.map(i => i.ref).join(", ")}` })))),
+        h("span", { class: "meta", text: (decl ? x.keys.map(periodPlain).join(", ") : `${money(x.total)} · ${x.items.map(i => i.ref).join(", ")}`) + (auj ? ` · ${demainTxt(auj).toLowerCase()}` : "") })))),
+      sec("Aperçu du message", pre)],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), count, h("span", { class: "spacer" }), copyBtn, sendBtn].filter(Boolean)
+  });
+  boxes.forEach(([, cb]) => cb.addEventListener("change", refresh));
+  refresh();
+}
+
+// Rappel groupé des lettres en attente : un seul message, chaque patron mentionné, le rappel noté sur chaque
+// lettre. Une entreprise déjà contactée aujourd'hui n'est pas proposée.
+function rappelGroupeParts(ds) {
+  const head = "**Rappel**\nCes entreprises ont reçu une lettre de la Préfecture et n’y ont pas encore donné suite :";
+  const foot = "Après cette date, la procédure continue : mise en demeure, puis taxation d’office pour une déclaration, saisie ou poursuites pour une somme due. Pour payer : lors d’une collecte, ou sur rendez-vous depuis votre espace entreprise.\n— Préfecture de police · Direction des impôts et cotisations";
+  const lines = ds.map(d => { const r = d.renvoi.r, m = entMention(d.e);
+    return `• **${d.e.nom}** ${m || "(sans ping)"} : ${rlLabel(r).toLowerCase()} ${rlNo(r)} du ${dateCourte(r.at)}, ${r.type === "declaration" ? semainesTxt((r.periodes || []).filter(k => (d.x.keys || []).includes(k))) + " à déclarer" : money(d.montant) + " à payer"} avant le ${jourHeure(r.echeance)}`; });
+  return lines.length ? splitMessage(lines, head, foot) : [];
+}
+function rappelAll(liste) {
+  const list = (liste || []).filter(d => d.renvoi && d.renvoi.r);
+  if (!list.length) return;
+  const boxes = list.map((d, i) => { const cb = h("input", { type: "checkbox", id: "rg-" + i }), auj = envoiDuJour(d.e); cb.checked = !auj; cb.disabled = !!auj; return [d, cb, auj]; });
+  const pre = h("pre", { class: "discord-preview", id: "rg-preview" }), count = h("span", { class: "hint" });
+  const chosen = () => boxes.filter(([, cb]) => cb.checked).map(([d]) => d);
+  const copyBtn = h("button", { class: "btn ghost small", type: "button", text: "Enregistrer et copier le message" });
+  const sendBtn = hookFor("relances") ? h("button", { class: "btn ink small", type: "button", text: "Enregistrer et publier sur Discord" }) : null;
+  const refresh = () => {
+    const p = rappelGroupeParts(chosen()), n = chosen().length;
+    pre.textContent = p.length ? p.join("\n\n— — —\n\n") : "Aucune lettre cochée.";
+    count.textContent = `${n} lettre${plural(n)} cochée${plural(n)}${p.length > 1 ? ` · ${p.length} messages` : ""}`;
+    copyBtn.disabled = !n; if (sendBtn) sendBtn.disabled = !n;
+  };
+  // Plusieurs lettres d'une même entreprise partent dans le même message : un seul contact ce jour-là.
+  const commit = async () => {
+    const faites = [], ici = new Set();
+    for (const d of chosen()) {
+      if (envoiDuJour(d.e) && !ici.has(d.e.id)) continue;
+      const cur = S.relances.find(x => x.id === d.renvoi.r.id) || d.renvoi.r;
+      const body = Object.assign({}, cur, { rappels: (cur.rappels || []).concat([{ at: nowISO(), byNom: S.agentName || "", groupe: true }]) }); delete body.id;
+      if (await write(() => S.db.doc("relances/" + cur.id).set(body))) { faites.push(d); ici.add(d.e.id); }
+    }
+    return faites;
+  };
+  copyBtn.addEventListener("click", async () => {
+    copyBtn.disabled = true; if (sendBtn) sendBtn.disabled = true;
+    const f = await commit(), text = rappelGroupeParts(f).join("\n\n");
+    closeDialog();
+    copyText(text, `${f.length} rappel${plural(f.length)} enregistré${plural(f.length)} : message copié pour Discord.`);
+  });
+  if (sendBtn) sendBtn.addEventListener("click", async () => {
+    sendBtn.disabled = true; copyBtn.disabled = true;
+    const f = await commit(), mentions = [...new Set(f.map(d => entMention(d.e)).filter(Boolean))];
+    let ok = true;
+    for (const p of rappelGroupeParts(f)) { const r = await postDiscord("relances", { content: p, mentions }); if (!r.ok) { ok = false; toast("Rappels enregistrés, mais Discord a refusé l’envoi : " + r.error + ".", true); break; } }
+    closeDialog();
+    if (ok) toast(`${f.length} rappel${plural(f.length)} enregistré${plural(f.length)} et publié${plural(f.length)} sur Discord.`);
+  });
+  openDialog({
+    eyebrow: "Recouvrement", title: "Rappeler d’un coup : lettres en attente", wide: true,
+    body: [
+      h("p", { style: "margin:0", text: "Un seul message pour toutes les lettres cochées, chaque patron mentionné. Le rappel est noté sur chaque lettre ; la date limite ne change pas. Une entreprise déjà contactée aujourd’hui attend demain." }),
+      h("ul", { class: "rl-pick" }, boxes.map(([d, cb, auj], i) => h("li", {},
+        h("label", { class: "switch", for: "rg-" + i }, cb, h("strong", { text: d.e.nom })), " ", pingTag(d.e),
+        h("span", { class: "meta", text: `${rlLabel(d.renvoi.r)} ${rlNo(d.renvoi.r)} · ${d.titre} · avant le ${jourHeure(d.renvoi.r.echeance)}${auj ? " · " + demainTxt(auj).toLowerCase() : ""}` })))),
       sec("Aperçu du message", pre)],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), count, h("span", { class: "spacer" }), copyBtn, sendBtn].filter(Boolean)
   });
@@ -15114,14 +15188,38 @@ const dateCourte = d => new Date(d).toLocaleDateString("fr-FR", { day: "numeric"
 const jourHeure = d => `${dateCourte(d)} à ${hhmm(d)}`;
 const majuscule = t => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
 const nonDeclarees = ks => majuscule(semainesTxt(ks)) + ` non déclarée${plural(ks.length)}`;
+// Une lettre par jour et par entreprise : relance, mise en demeure, rappel d'une lettre, rappel de la date
+// limite, à la main ou automatique, tout compte. Le lendemain (heure de Paris), elle peut être de nouveau
+// contactée. Chaque ligne dit le dernier envoi ; les gestes qui enverraient une lettre attendent demain.
+function envoisDe(e) {
+  const l = [];
+  for (const r of relancesOf(e)) {
+    if (r.at) l.push({ at: r.at, r, quoi: rlLabel(r), par: r.auto ? "automatique" : r.byNom || "" });
+    for (const x of r.rappels || []) if (x.at) l.push({ at: x.at, r, quoi: "Rappel : " + rlLabel(r).charAt(0).toLowerCase() + rlLabel(r).slice(1), par: x.byNom || "", rappel: true });
+  }
+  return l.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+const estAujourdhui = t => jourCle(new Date(t)) === jourCle(new Date());
+const envoisDuJour = e => (e && e.id ? envoisDe(e).filter(x => estAujourdhui(x.at)) : []);
+const envoiDuJour = e => envoisDuJour(e)[0] || null;
+const quandCourt = t => { const k = jourCle(new Date(t)), hier = new Date(); hier.setDate(hier.getDate() - 1);
+  return k === jourCle(new Date()) ? `aujourd’hui à ${hhmm(t)}` : k === jourCle(hier) ? `hier à ${hhmm(t)}` : `le ${jourHeure(t)}`; };
+const envoiTxt = x => `${x.quoi} ${rlNo(x.r)}${x.par ? " (" + x.par + ")" : ""}`;
+const demainTxt = x => `Déjà contactée aujourd’hui à ${hhmm(x.at)} : prochain envoi possible demain`;
+function bloqueAujourdhui(e) {
+  const x = envoiDuJour(e);
+  if (!x) return false;
+  toast(`${e.nom || "Cette entreprise"} a déjà reçu une lettre aujourd’hui à ${hhmm(x.at)} (${x.quoi.toLowerCase()}). Prochain envoi possible demain.`, true);
+  return true;
+}
 function rcDossiers(e, opts) {
   opts = opts || {};
   const back = opts.back, ag = canAgent(), dir = writer(), c = cfg(), out = [];
   if (!e || !e.id || !ag) return out;
   const fiche = opts.fiche ? [] : [{ text: "Ouvrir la fiche de l’entreprise", fn: () => openFiche(e) }];
   const lettre = r => r ? [{ text: "Voir la dernière lettre", aide: `${rlLabel(r)} ${rlNo(r)} du ${dateCourte(r.at)}`, fn: () => showDocImage(relanceDoc(r), back) },
-    { text: "Renvoyer la dernière lettre", aide: "Même lettre, même date limite, avec la mention « Rappel »", fn: () => rappelerRelance(r) }] : [];
-  const renvois = r => (r && (r.rappels || []).length ? ` Renvoyée ${r.rappels.length} fois.` : "") + lu(r);
+    { text: "Renvoyer la dernière lettre", aide: "Même lettre, même date limite, avec la mention « Rappel »", fn: () => rappelerRelance(r), envoi: true, renvoi: true, r }] : [];
+  const renvois = r => { const rp = (r && r.rappels) || [], dr = rp[rp.length - 1]; return (dr ? ` Rappelée ${rp.length > 1 ? rp.length + " fois, la dernière " : ""}${quandCourt(dr.at)}.` : "") + lu(r); };
   const lu = r => (!r ? "" : r.accuseLe ? ` Lue par l’entreprise le ${jourHeure(r.accuseLe)}.` : r.vueLe ? ` Ouverte dans son espace le ${jourHeure(r.vueLe)}, pas encore marquée lue.` : "");
 
   // 1. Déclarations en retard : une ligne par lettre (une semaine en retard pendant une procédure en
@@ -15136,22 +15234,22 @@ function rcDossiers(e, opts) {
     const d = { e, x, depuis: deadline(keys[0]).getTime(), type: "declaration", titre: nonDeclarees(keys), montant: 0, etapes: RC_ETAPES.declaration, etape: 0, attente: false, echeance: null, suivant: null, autres: [] };
     if (med && medExpired(med)) {
       const toKey = keys.find(k => (med.periodes || []).includes(k)) || keys[0];
-      d.etape = 2; d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}, toujours rien au ${jourHeure(med.echeance)}. Vous pouvez établir l’impôt d’office.${lu(med)}`;
+      d.etape = 2; d.statut = `Mise en demeure envoyée ${quandCourt(med.at)}, toujours rien au ${jourHeure(med.echeance)}. Vous pouvez établir l’impôt d’office.${lu(med)}`;
       d.suivant = { text: "Taxer d’office", fn: () => startTaxOffice(e, toKey, med) };
     } else if (med) {
       d.etape = 2; d.attente = true; d.echeance = med.echeance;
-      d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}. Elle a jusqu’au ${jourHeure(med.echeance)} pour déclarer.${renvois(med)}`;
+      d.statut = `Mise en demeure envoyée ${quandCourt(med.at)}. Elle a jusqu’au ${jourHeure(med.echeance)} pour déclarer.${renvois(med)}`;
     } else if (last && new Date(last.echeance).getTime() < Date.now()) {
-      d.etape = 1; d.statut = `Relancée le ${dateCourte(last.at)}, toujours rien au ${jourHeure(last.echeance)}.${renvois(last)}`;
-      d.suivant = { text: "Envoyer la mise en demeure", fn: () => relanceOne(x, "declaration", "mise_en_demeure", { back }) };
+      d.etape = 1; d.statut = `Relancée ${quandCourt(last.at)}, toujours rien au ${jourHeure(last.echeance)}.${renvois(last)}`;
+      d.suivant = { text: "Envoyer la mise en demeure", fn: () => relanceOne(x, "declaration", "mise_en_demeure", { back }), envoi: true };
     } else if (last) {
       d.etape = 1; d.attente = true; d.echeance = last.echeance;
-      d.statut = `Relancée le ${dateCourte(last.at)}. Elle a jusqu’au ${jourHeure(last.echeance)} pour déclarer.${renvois(last)}`;
+      d.statut = `Relancée ${quandCourt(last.at)}. Elle a jusqu’au ${jourHeure(last.echeance)} pour déclarer.${renvois(last)}`;
     } else {
       d.statut = `En retard depuis le ${jourHeure(deadline(keys[0]))}. Pas encore relancée.`;
-      d.suivant = { text: "Envoyer la relance", fn: () => relanceOne(x, "declaration", "relance", { back }) };
+      d.suivant = { text: "Envoyer la relance", fn: () => relanceOne(x, "declaration", "relance", { back }), envoi: true };
     }
-    if (!med && (!d.suivant || d.etape === 0)) d.autres.push({ text: "Mettre en demeure tout de suite", aide: "Sans attendre la fin du délai de la relance", fn: () => relanceOne(x, "declaration", "mise_en_demeure", { back }) });
+    if (!med && (!d.suivant || d.etape === 0)) d.autres.push({ text: "Mettre en demeure tout de suite", aide: "Sans attendre la fin du délai de la relance", fn: () => relanceOne(x, "declaration", "mise_en_demeure", { back }), envoi: true });
     if (!(med && medExpired(med))) d.autres.push({ text: "Taxer d’office maintenant", aide: "Sans attendre la fin de la procédure", fn: () => startTaxOffice(e, keys[0], med) });
     d.autres.push(...lettre(last));
     if (dir) d.autres.push({ text: "Passer une semaine", aide: "Rien à déclarer (pas de PDG, reprise…)", fn: () => openPasserSemaine(e, back, keys[keys.length - 1]) });
@@ -15182,27 +15280,27 @@ function rcDossiers(e, opts) {
     if (tj) {
       d.etape = 3; d.attente = true; d.statut = `Dossier transmis à la justice le ${dateCourte(tj.at)} (${dossierNo("TJ", tj.id)}).`;
     } else if (med && medExpired(med)) {
-      d.etape = 2; d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}, toujours pas payé au ${jourHeure(med.echeance)}.${dir ? " Vous pouvez saisir." : " La Direction peut saisir."}${lu(med)}`;
+      d.etape = 2; d.statut = `Mise en demeure envoyée ${quandCourt(med.at)}, toujours pas payé au ${jourHeure(med.echeance)}.${dir ? " Vous pouvez saisir." : " La Direction peut saisir."}${lu(med)}`;
       if (dir) d.suivant = { text: "Saisir", fn: () => openSaisie(e) }; else d.attente = true;
     } else if (med) {
       d.etape = 2; d.attente = true; d.echeance = med.echeance;
-      d.statut = `Mise en demeure envoyée le ${dateCourte(med.at)}. Elle a jusqu’au ${jourHeure(med.echeance)} pour payer.${renvois(med)}`;
+      d.statut = `Mise en demeure envoyée ${quandCourt(med.at)}. Elle a jusqu’au ${jourHeure(med.echeance)} pour payer.${renvois(med)}`;
     } else if (last && new Date(last.echeance).getTime() < Date.now()) {
-      d.etape = 1; d.statut = `Relancée le ${dateCourte(last.at)}, toujours pas payé au ${jourHeure(last.echeance)}.${renvois(last)}`;
-      d.suivant = { text: "Envoyer la mise en demeure", fn: () => relanceOne(xf, "paiement", "mise_en_demeure", { back }) };
+      d.etape = 1; d.statut = `Relancée ${quandCourt(last.at)}, toujours pas payé au ${jourHeure(last.echeance)}.${renvois(last)}`;
+      d.suivant = { text: "Envoyer la mise en demeure", fn: () => relanceOne(xf, "paiement", "mise_en_demeure", { back }), envoi: true };
     } else if (last) {
       d.etape = 1; d.attente = true; d.echeance = last.echeance;
-      d.statut = `Relancée le ${dateCourte(last.at)}. Elle a jusqu’au ${jourHeure(last.echeance)} pour payer.${renvois(last)}`;
+      d.statut = `Relancée ${quandCourt(last.at)}. Elle a jusqu’au ${jourHeure(last.echeance)} pour payer.${renvois(last)}`;
     } else {
       d.statut = `À payer depuis le ${jourHeure(depuis)}. Pas encore relancée.`;
-      d.suivant = { text: "Envoyer la relance", fn: () => relanceOne(xf, "paiement", "relance", { back }) };
+      d.suivant = { text: "Envoyer la relance", fn: () => relanceOne(xf, "paiement", "relance", { back }), envoi: true };
     }
     const dlA = delaiDe(e, free.filter(i => i.kind === "decl").map(i => i.id));
     if (dlA && !tj) {
       d.suspendu = true; d.statut = `L’entreprise demande à ${delaiTxt(dlA)} (le ${dateCourte(dlA.at)}) : « ${dlA.motif} ». Le recouvrement attend la réponse.`;
       d.suivant = dir ? { text: "Répondre à la demande de délai", fn: () => openDelai(dlA.id) } : null; d.attente = !dir;
     }
-    if (!med && !tj && (!d.suivant || d.etape === 0)) d.autres.push({ text: "Mettre en demeure tout de suite", aide: "Sans attendre la fin du délai de la relance", fn: () => relanceOne(xf, "paiement", "mise_en_demeure", { back }) });
+    if (!med && !tj && (!d.suivant || d.etape === 0)) d.autres.push({ text: "Mettre en demeure tout de suite", aide: "Sans attendre la fin du délai de la relance", fn: () => relanceOne(xf, "paiement", "mise_en_demeure", { back }), envoi: true });
     d.autres.push(...lettre(last));
     if (!convPendingOf(e).length) d.autres.push({ text: "Organiser une collecte", aide: "Le transporteur de fonds passe chercher l’argent", fn: () => openConvForm(e, { motif: "collecte" }) });
     if (dir) {
@@ -15227,7 +15325,19 @@ function rcDossiers(e, opts) {
     const dlB = delaiDe(e, ae.filter(i => i.kind === "decl").map(i => i.id));
     out.push({ e, type: "apayer", titre: `${money(tot)} à payer avant le ${jourHeure(ae[0].exigible)}`, refs: ae.map(i => i.ref).join(", "), montant: tot, etapes: null, etape: 0, attente: !(dlB && dir), echeance: ae[0].exigible, suspendu: !!dlB,
       statut: dlB ? `L’entreprise demande à ${delaiTxt(dlB)} (le ${dateCourte(dlB.at)}) : « ${dlB.motif} ».` : last ? `Rappel envoyé le ${dateCourte(last.at)}.` : "Délai de paiement en cours.", suivant: dlB && dir ? { text: "Répondre à la demande de délai", fn: () => openDelai(dlB.id) } : null,
-      autres: [{ text: last ? "Envoyer un autre rappel" : "Envoyer un rappel", aide: "Avant la date limite, sans menace", fn: () => relanceOne(x, "paiement", "relance", { echeance: ae[0].exigible, back }) }].concat(lettre(last).slice(0, 1), fiche) });
+      autres: [{ text: last ? "Envoyer un autre rappel" : "Envoyer un rappel", aide: "Avant la date limite, sans menace", fn: () => relanceOne(x, "paiement", "relance", { echeance: ae[0].exigible, back }), envoi: true }].concat(lettre(last).slice(0, 1), fiche) });
+  }
+  // Lettre en attente de réponse : « Rappeler » à portée de main (une fois par jour). Dernier envoi à
+  // l'entreprise sur chaque ligne ; contactée aujourd'hui, les gestes qui envoient une lettre attendent demain.
+  const env = envoisDe(e), auj = env[0] && estAujourdhui(env[0].at) ? env[0] : null;
+  for (const d of out) {
+    if (d.type !== "declaration" && d.type !== "paiement" && d.type !== "apayer") continue;
+    d.dernier = env[0] || null; d.aujourdhui = auj;
+    const rv = d.attente && !d.suspendu && d.etape > 0 && d.etape < 3 ? d.autres.find(a => a.renvoi) : null;
+    if (rv) { d.renvoi = { text: d.etape === 2 ? "Rappeler la mise en demeure" : "Rappeler la relance", fn: rv.fn, r: rv.r }; d.autres = d.autres.filter(a => a !== rv); }
+    if (!auj) continue;
+    if (d.suivant && d.suivant.envoi) d.bloque = true;
+    d.autres = d.autres.map(a => a.envoi ? Object.assign({}, a, { off: demainTxt(auj) }) : a);
   }
   return out;
 }
@@ -15235,8 +15345,8 @@ function rcDossiers(e, opts) {
 function menuGestes(items, label) {
   const wrap = h("span", { class: "rc-menu-w" });
   const btn = h("button", { class: "btn ghost small", type: "button", "aria-haspopup": "menu", "aria-expanded": "false", text: label || "Autres gestes" });
-  const menu = h("div", { class: "rc-menu", role: "menu", hidden: true }, items.map(it => h("button", { type: "button", role: "menuitem", onclick: () => { fermer(); it.fn(); } },
-    h("span", { text: it.text }), it.aide ? h("small", { text: it.aide }) : null)));
+  const menu = h("div", { class: "rc-menu", role: "menu", hidden: true }, items.map(it => h("button", { type: "button", role: "menuitem", "aria-disabled": it.off ? "true" : null, class: it.off ? "off" : null, onclick: () => { if (it.off) return; fermer(); it.fn(); } },
+    h("span", { text: it.text }), it.off || it.aide ? h("small", { text: it.off || it.aide }) : null)));
   const dehors = ev => { if (!wrap.contains(ev.target)) fermer(); };
   const touche = ev => {
     if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); fermer(); btn.focus(); return; }
@@ -15269,8 +15379,12 @@ function rcLigne(d, opts) {
     d.refs ? h("span", { class: "meta", text: d.refs }) : null,
     steps,
     h("p", { class: "rc-dos-s", text: d.statut }),
-    d.suivant || d.autres.length ? h("div", { class: "rc-dos-a" },
-      d.suivant ? h("button", { class: "btn small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; try { await d.suivant.fn(); } finally { b.disabled = false; } }, text: d.suivant.text }) : null,
+    d.dernier ? h("p", { class: "rc-dos-env" + (d.aujourdhui ? " auj" : "") }, h("span", { text: "Dernier envoi à l’entreprise : " }), h("strong", { text: quandCourt(d.dernier.at) }), ` · ${envoiTxt(d.dernier)}`) : null,
+    d.suivant || d.renvoi || d.autres.length ? h("div", { class: "rc-dos-a" },
+      d.suivant && !d.bloque ? h("button", { class: "btn small", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; try { await d.suivant.fn(); } finally { b.disabled = false; } }, text: d.suivant.text }) : null,
+      d.suivant && d.bloque ? h("span", { class: "rc-demain", text: `${d.suivant.text} : demain` }) : null,
+      d.renvoi && !d.aujourdhui ? h("button", { class: "btn ghost small rc-renvoi", type: "button", onclick: async ev => { const b = ev.currentTarget; b.disabled = true; try { await d.renvoi.fn(); } finally { b.disabled = false; } }, text: d.renvoi.text }) : null,
+      d.renvoi && d.aujourdhui && !d.bloque ? h("span", { class: "rc-demain", text: `${d.renvoi.text} : demain` }) : null,
       d.autres.length ? menuGestes(d.autres) : null) : null);
 }
 // Onglet Recouvrement, rubrique « À faire » : les dossiers qui attendent un geste, puis ceux qui attendent
@@ -15278,9 +15392,14 @@ function rcLigne(d, opts) {
 function renderRcAFaire() {
   const box = $("#rc-afaire"); if (!box) return;
   const ag = canAgent(), tous = S.entreprises.flatMap(e => rcDossiers(e));
-  const afaire = tous.filter(d => !d.attente && d.suivant).sort((a, b) => b.etape - a.etape || b.montant - a.montant || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
+  const afaire = tous.filter(d => !d.attente && d.suivant && !d.bloque).sort((a, b) => b.etape - a.etape || b.montant - a.montant || String(a.e.nom).localeCompare(String(b.e.nom), "fr"));
+  const demain = tous.filter(d => !d.attente && d.suivant && d.bloque);
   const attente = tous.filter(d => (d.attente || !d.suivant) && d.type !== "apayer").sort((a, b) => String(a.echeance || "9").localeCompare(String(b.echeance || "9")));
   const apayer = tous.filter(d => d.type === "apayer" && !(d.suivant && !d.attente)).sort((a, b) => String(a.echeance).localeCompare(String(b.echeance)));
+  // Fait aujourd'hui : chaque lettre partie aujourd'hui (une entreprise par jour), et ce qui reprend demain.
+  const auj = S.entreprises.flatMap(e => envoisDuJour(e).map(x => Object.assign({ e }, x))).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  const nAuj = new Set(auj.map(x => x.e.id)).size;
+  const aRappeler = attente.filter(d => d.renvoi && !d.aujourdhui);
   const ep = echeanceProchaine(), epL = ag && ep && ep.ouverte ? rappelCandidats(ep.k) : [], epN = epL.filter(y => !y.deja).length;
   const neuves = t => afaire.filter(d => d.type === t && d.etape === 0).map(d => d.x);
   const nd = neuves("declaration"), np = neuves("paiement");
@@ -15293,13 +15412,23 @@ function renderRcAFaire() {
       h("button", { class: "btn small", type: "button", id: "rc-rappel", onclick: openRappelEcheance, text: "Envoyer le rappel" })) : null,
     h("div", { class: "card" },
       h("div", { class: "card-head" }, h("div", {}, h("h3", { text: `À faire${afaire.length ? " (" + afaire.length + ")" : ""}` }),
-        h("p", { class: "sub", text: (afaire.length ? "Chaque ligne a son geste suivant. Les autres gestes sont dans « Autres gestes »." : "Rien à faire : chaque dossier attend une réponse ou est réglé.") + (autoOn("relancesAuto") ? " Les relances amiables partent toutes seules ; la suite reste à vous." : "") }))),
+        h("p", { class: "sub", text: (afaire.length ? "Chaque ligne a son geste suivant. Les autres gestes sont dans « Autres gestes ». Une lettre par jour et par entreprise." : demain.length ? "Rien d’autre aujourd’hui : la suite reprend demain (une lettre par jour et par entreprise)." : "Rien à faire : chaque dossier attend une réponse ou est réglé.") + (autoOn("relancesAuto") ? " Les relances amiables partent toutes seules ; la suite reste à vous." : "") }))),
       groupe,
       afaire.length ? h("ul", { class: "rc-dos-l", id: "rc-afaire-l" }, afaire.slice(0, S.rcAll.af ? 500 : 15).map(d => rcLigne(d))) : null,
       afaire.length > 15 ? h("div", { class: "reg-foot" }, h("button", { class: "linkbtn", type: "button", onclick: () => { S.rcAll.af = !S.rcAll.af; renderRecouvrement(); }, text: S.rcAll.af ? "Réduire" : `Afficher les ${afaire.length - 15} autres` })) : null),
+    auj.length ? h("div", { class: "card", style: "margin-top:16px", id: "rc-auj" },
+      h("h3", { text: `Fait aujourd’hui (${nAuj} entreprise${plural(nAuj)})` }),
+      h("p", { class: "sub", text: "Une lettre par jour et par entreprise : ces entreprises pourront être relancées ou rappelées demain." }),
+      h("ul", { class: "rc-auj", id: "rc-auj-l" }, auj.map(x => h("li", {}, h("span", { class: "h", text: hhmm(x.at) }),
+        h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom }), ` · ${envoiTxt(x)}`)))),
+      demain.length ? h("details", { class: "rc-demain-l", style: "margin-top:8px" },
+        h("summary", { text: `Reprend demain (${demain.length})` }),
+        h("ul", { class: "rc-dos-l", id: "rc-demain-l" }, demain.map(d => rcLigne(d)))) : null) : null,
     attente.length ? h("div", { class: "card", style: "margin-top:16px" },
       h("h3", { text: `En attente d’une réponse (${attente.length})` }),
-      h("p", { class: "sub", text: "Le délai laissé à l’entreprise n’est pas fini. Le dossier revient dans « À faire » s’il n’y a rien à la date dite." }),
+      h("p", { class: "sub", text: "Le délai laissé à l’entreprise n’est pas fini. Le dossier revient dans « À faire » s’il n’y a rien à la date dite. Une lettre peut être rappelée une fois par jour." }),
+      aRappeler.length >= 2 ? h("div", { class: "rc-groupe" }, h("span", { text: "Rappeler d’un coup (un seul message, chaque patron mentionné) :" }),
+        h("button", { class: "btn ghost small", type: "button", id: "rc-rappel-groupe", onclick: () => rappelAll(aRappeler), text: `${aRappeler.length} lettres en attente` })) : null,
       h("ul", { class: "rc-dos-l", id: "rc-attente-l" }, attente.map(d => rcLigne(d)))) : null,
     apayer.length ? h("details", { class: "card rc-apayer", style: "margin-top:16px" },
       h("summary", {}, h("strong", { text: `Dans le délai de paiement (${apayer.length})` }), h("span", { class: "meta", text: ` · ${money(apayer.reduce((t, d) => t + d.montant, 0))} à payer, pas encore en retard` })),
@@ -15326,12 +15455,14 @@ const rlChip = r => {
   return h("span", { class: "rl-state" },
     chip([`${med ? "Mise en demeure" : "Relancée"} le ${fmtDate(new Date(r.at))}${late && !ok ? (med ? " · délai expiré" : " · sans réponse") : ""}`, ok ? "ok" : med ? (late ? "bad" : "warn") : late ? "warn" : "muted"]),
     h("span", { class: "hint", text: `${rlNo(r)} envoyée par ${r.byNom || "—"} · ${quand}${dr ? ` · rappelée ${rp.length > 1 ? rp.length + " fois, " : ""}le ${fmtDate(new Date(dr.at))} par ${dr.byNom || "—"}` : ""}` }),
-    canAgent() && !ok && r.type !== "echeance" ? h("button", { class: "linkbtn", type: "button", onclick: ev => { ev.stopPropagation(); rappelerRelance(r); }, text: `Rappeler ${med ? "la mise en demeure" : "la relance"}` }) : null);
+    canAgent() && !ok && r.type !== "echeance" ? (envoiDuJour(entOf(r)) ? h("span", { class: "hint", text: `Rappel possible demain (déjà contactée aujourd’hui à ${hhmm(envoiDuJour(entOf(r)).at)})` })
+      : h("button", { class: "linkbtn", type: "button", onclick: ev => { ev.stopPropagation(); rappelerRelance(r); }, text: `Rappeler ${med ? "la mise en demeure" : "la relance"}` })) : null);
 };
 // Rappel d'une relance ou d'une mise en demeure : même document, même date limite, republié avec la
 // mention du rappel ; le rappel est noté sur la relance (qui, quand).
 async function rappelerRelance(r) {
   const cur = S.relances.find(x => x.id === r.id) || r;
+  if (bloqueAujourdhui(entOf(cur))) return;
   const body = Object.assign({}, cur, { rappels: (cur.rappels || []).concat([{ at: nowISO(), byNom: S.agentName || "" }]) }); delete body.id;
   if (!(await write(() => S.db.doc("relances/" + r.id).set(body)))) return;
   const doc = relanceDoc(Object.assign({ id: r.id }, body)), lim = fmtDateTime(new Date(body.echeance));
@@ -17889,7 +18020,8 @@ async function relancesAuto() {
   if (Date.now() < (S.relAutoProchain || 0)) return;
   S.relAutoProchain = Date.now() + 60e3;
   // Seulement les retards de moins de 14 jours : un vieux dossier jamais relancé attend une décision.
-  const aRelancer = () => activeEnts().flatMap(e => rcDossiers(e)).filter(d => (d.type === "declaration" || d.type === "paiement") && d.etape === 0 && d.suivant && d.x && !d.suspendu && Date.now() - (d.depuis || 0) < 14 * 864e5);
+  // Une lettre par jour et par entreprise : déjà contactée aujourd'hui, elle attend demain.
+  const aRelancer = () => activeEnts().flatMap(e => rcDossiers(e)).filter(d => (d.type === "declaration" || d.type === "paiement") && d.etape === 0 && d.suivant && !d.bloque && d.x && !d.suspendu && Date.now() - (d.depuis || 0) < 14 * 864e5);
   if (!aRelancer().length) return;
   const m = S.relAutoMeta;
   if (m && m.by !== (S.uid || null) && Date.now() - new Date(m.at).getTime() < 120e3) return;
@@ -17898,10 +18030,10 @@ async function relancesAuto() {
     if (!(await write(() => S.db.doc("meta/relancesAuto").set({ at: nowISO(), by: S.uid || null, byNom: S.agentName || "" })))) return;
     await new Promise(r => setTimeout(r, 2500));
     if (S.relAutoMeta && S.relAutoMeta.by !== (S.uid || null)) return;
-    const dos = aRelancer();
+    const dos = aRelancer(), contactees = new Set();
     for (const type of ["declaration", "paiement"]) {
       const faits = [];
-      for (const d of dos.filter(z => z.type === type).slice(0, 20)) if (await sendRelance(d.x, type, { groupee: true, auto: true })) faits.push(d.x);
+      for (const d of dos.filter(z => z.type === type && !contactees.has(z.e.id)).slice(0, 20)) if (await sendRelance(d.x, type, { groupee: true, auto: true })) { faits.push(d.x); contactees.add(d.e.id); }
       if (!faits.length) continue;
       const mentions = faits.map(x => entMention(x.e)).filter(Boolean);
       for (const p of relanceGroupeParts(type, faits, true)) { const r = await postDiscord("relances", { content: p, mentions }); if (!r.ok) break; }

@@ -12,7 +12,7 @@ module.exports = {
     await onglet(d, "recouvrement"); await pause(d, 400);
     const af = texte(await d.locator("#rc-afaire-l").innerText());
     t.ok(/Vanguard Armurerie/.test(af) && /45 000 € non payés/.test(af) && /Vous pouvez saisir/.test(af), "Vanguard : mise en demeure sans effet, saisie proposée", af.slice(0, 300));
-    t.ok(/Taxi G7/.test(af) && /Relancée le 7 novembre, toujours pas payé/.test(af), "Taxi G7 : relance sans réponse");
+    t.ok(/Taxi G7/.test(af) && /Relancée le 7 novembre à \d\d:\d\d, toujours pas payé/.test(af), "Taxi G7 : relance sans réponse");
     t.egal(await d.locator("#rc-afaire-l > li").first().locator(".rc-dos-a > button").innerText(), "Saisir", "le dossier le plus avancé en premier, un seul geste principal");
     t.egal(await d.locator("#rc-afaire-l li", { hasText: "Taxi G7" }).locator(".rc-steps li.suivant").innerText(), "Mise en demeure", "étape suivante en évidence");
     t.contient(texte(await d.locator("#rc-attente-l").innerText()), "Elle a jusqu’au 12 novembre à 11:00 pour payer", "Club 77 en attente, avec la date");
