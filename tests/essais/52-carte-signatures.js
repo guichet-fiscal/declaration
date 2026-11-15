@@ -24,6 +24,9 @@ module.exports = {
     const [chooser] = await Promise.all([d.waitForEvent("filechooser"), d.locator("#carte-sig-autorite").click()]);
     await chooser.setFiles(image); await pause(d, 1500);
     t.ok(await d.evaluate(() => window.__fichiers && window.__fichiers.has("profils/signature-f2.png")), "signature importée (profils/signature-<fiche>.png)");
+    // Importée par erreur : on la retire (deux clics), la carte reprend le nom écrit à la main.
+    await d.locator("#carte-sig-autorite-retirer").click(); await pause(d, 100); await d.locator("#carte-sig-autorite-retirer").click(); await pause(d, 1500);
+    t.ok(await d.evaluate(() => !window.__fichiers.has("profils/signature-f2.png")) && await d.locator("#carte-sig-autorite-retirer").count() === 0 && /Importer la signature de Bruno Leroy/.test(await d.locator("#carte-sig-autorite").innerText()), "signature importée retirée");
     t.sansErreur(d);
 
     // L'agent, dans Mon espace : même signataire, calculé sur l'annuaire et le barème de son espace.

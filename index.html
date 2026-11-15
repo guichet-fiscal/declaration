@@ -6954,6 +6954,16 @@ function importerSignatureMain(fid, nom, apres) {
   });
   inp.click();
 }
+// Retirer une signature importée : la carte reprend le nom écrit à la main (deux clics).
+function boutonRetirerSignature(fid, nom, id, apres) {
+  return h("button", { class: "btn ghost small danger", type: "button", id, onclick: async ev => {
+    const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer le retrait"; return; }
+    b.disabled = true;
+    const { error } = await S.sb.storage.from("profils").remove(["signature-" + fid + ".png"]);
+    if (error) { toast(error.message || "Signature non retirée.", true); b.disabled = false; return; }
+    SIG_MAIN.delete(fid); toast(`Signature importée de ${nom} retirée : la carte reprend son nom écrit à la main.`); if (apres) apres();
+  }, text: `Retirer la signature importée de ${nomSigne(nom)}` });
+}
 async function carteCanvas(f, poste) {
   try { await Promise.all(['800 40px "Archivo"', '700 18px "Archivo"', '400 17px "Archivo"', '600 17px "IBM Plex Mono"'].map(x => document.fonts.load(x))); } catch (e) { /* polices de secours */ }
   const at = photoProfilAt(f.id), url = at && S.sb ? await photoProfilUrl(f.id, at) : null, aut = autoriteCarte();
@@ -7037,6 +7047,7 @@ async function openCarte(fid, back) {
   const poste = ((espace ? S.espace.contrats : ctrsOf(fid)) || []).map(x => x.poste).find(Boolean) || "";
   let c; const aut = autoriteCarte();
   try { c = await carteCanvas(f, poste); } catch (e) { toast("Impossible de dessiner la carte dans ce navigateur.", true); return; }
+  const [imgTit, imgAut] = await Promise.all([signatureMainUrl(f.id), aut ? signatureMainUrl(aut.id) : Promise.resolve(null)]);
   const url = c.toDataURL("image/png"), fname = "carte-professionnelle-" + norm(nomCarte(f.nom).nom || "agent").replace(/\s+/g, "-");
   const copier = h("button", { class: "btn ink small", type: "button", text: "Copier l’image", onclick: () => {
     try { navigator.clipboard.write([new ClipboardItem({ "image/png": new Promise(res => c.toBlob(res, "image/png")) })]).then(() => toast("Carte copiée : collez-la avec Ctrl + V."), () => toast("Le navigateur a refusé la copie : téléchargez-la.", true)); }
@@ -7047,8 +7058,10 @@ async function openCarte(fid, back) {
       h("p", { class: "hint", style: "margin:0", text: [photoProfilAt(fid) ? "" : "Sans photo de profil, la carte porte les initiales. ", "Elle reprend le grade et la photo du moment : refaites-la après un changement. ",
         aut ? `Signée par le titulaire et par ${aut.nom} (${aut.grade}, le plus haut gradé en service) : leur nom écrit à la main, ou leur signature si la Direction l’a importée.` : "Signée par le titulaire."].join("") }),
       rhWriter() ? h("div", { class: "row-actions" },
-        h("button", { class: "btn ghost small", type: "button", id: "carte-sig-titulaire", onclick: () => importerSignatureMain(f.id, f.nom, () => openCarte(fid, back)), text: `Importer la signature de ${nomSigne(f.nom)}` }),
-        aut && aut.id !== f.id ? h("button", { class: "btn ghost small", type: "button", id: "carte-sig-autorite", onclick: () => importerSignatureMain(aut.id, aut.nom, () => openCarte(fid, back)), text: `Importer la signature de ${nomSigne(aut.nom)}` }) : null) : null],
+        h("button", { class: "btn ghost small", type: "button", id: "carte-sig-titulaire", onclick: () => importerSignatureMain(f.id, f.nom, () => openCarte(fid, back)), text: `${imgTit ? "Changer" : "Importer"} la signature de ${nomSigne(f.nom)}` }),
+        imgTit ? boutonRetirerSignature(f.id, f.nom, "carte-sig-titulaire-retirer", () => openCarte(fid, back)) : null,
+        aut && aut.id !== f.id ? h("button", { class: "btn ghost small", type: "button", id: "carte-sig-autorite", onclick: () => importerSignatureMain(aut.id, aut.nom, () => openCarte(fid, back)), text: `${imgAut ? "Changer" : "Importer"} la signature de ${nomSigne(aut.nom)}` }) : null,
+        aut && aut.id !== f.id && imgAut ? boutonRetirerSignature(aut.id, aut.nom, "carte-sig-autorite-retirer", () => openCarte(fid, back)) : null) : null],
     foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }) : h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
       h("a", { class: "btn ghost small", href: url, download: fname + ".png", text: "Télécharger" }), copier] });
 }
