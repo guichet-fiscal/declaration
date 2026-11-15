@@ -482,6 +482,13 @@ td.tone-text{color:var(--tone)}
 .chart .area{fill:var(--s3);opacity:.12;pointer-events:none}
 .chart .dot{fill:var(--s3);stroke:var(--sheet);stroke-width:2;pointer-events:none}
 .chart .b3{fill:var(--s3)}
+.chart .seuil{stroke:var(--bad);stroke-width:1.5;stroke-dasharray:5 4;pointer-events:none}
+.chart text.seuil-l{fill:var(--bad)}
+.chart .dot.bas{fill:var(--bad)}
+.tp-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:20px;align-items:start;margin-top:8px}
+@media (max-width:900px){.tp-grid{grid-template-columns:minmax(0,1fr)}}
+.tr-prev{margin:10px 0 0;font-size:13px;color:var(--ink-2);line-height:1.5}
+.tr-prev .chip{margin-right:4px}
 .hbars{display:grid;gap:9px;margin-top:12px}
 .hbar{display:grid;grid-template-columns:minmax(90px,32%) minmax(0,1fr) auto;gap:12px;align-items:center;font-size:13.5px}
 .hbar .lab{overflow-wrap:anywhere;text-align:left}
@@ -1457,6 +1464,7 @@ table.es-payes{min-width:0;width:100%}
         </div>
         <div class="legend" id="legend"></div>
         <div class="chart" id="chart"></div>
+        <p class="tr-prev" id="tr-prev" hidden></p>
         <ul class="svc-list" id="svc-list" hidden></ul>
       </div>
     </div>
@@ -2040,6 +2048,16 @@ table.es-payes{min-width:0;width:100%}
       <div class="kpi" id="e-taux"><span class="l">Recouvrement</span><span class="v">—</span><span class="s">part des avis déjà payée</span></div>
     </div>
     <div class="econ-grid">
+      <div class="card span2" id="tr-prev-card" hidden>
+        <h3>Prévision du Trésor sur 8 semaines</h3>
+        <p class="sub">Le solde d’aujourd’hui prolongé semaine par semaine au rythme des quatre dernières semaines. Une tendance pour anticiper, pas un engagement : une grosse demande accordée ou une rentrée exceptionnelle la change.</p>
+        <div class="tp-grid">
+          <div id="tp-kv"></div>
+          <div><div class="chart" id="tp-chart"></div></div>
+        </div>
+        <div id="tp-phrase"></div>
+        <div class="paste-row" id="tp-seuil" style="margin-top:12px;align-items:center"></div>
+      </div>
       <div class="card">
         <h3>Chiffre d’affaires déclaré</h3>
         <p class="sub" id="ch-ca-sub">Total des entreprises, 12 dernières périodes.</p>
@@ -4334,6 +4352,7 @@ function schedule() {
   setTimeout(() => { if (raf) { cancelAnimationFrame(raf); raf = 0; render(); } }, 250);
 }
 function render() {
+  S.rendu = (S.rendu || 0) + 1;
   renderSecurite();
   const c = cfg();
   $$(".money[data-cur]").forEach(m => { if (m.dataset.cur !== "%") m.dataset.cur = c.devise || "€"; });
@@ -4683,6 +4702,146 @@ function renderChart() {
   treasuryChart($("#chart"), $("#legend"), 8);
   $("#dash-tr-sub").textContent = `Recettes encaissées, crédits accordés et achats payés, ${spanLabel(recentKeys(8), 8)}.`;
   $("#svc-list").hidden = true;
+  renderPrevTresorDash();
+}
+
+/* ---------- Prévision du Trésor ---------- */
+// Le solde d'aujourd'hui prolongé semaine par semaine : recettes, crédits et achats des services au rythme
+// des 4 dernières semaines complètes (à la date de l'encaissement ou de l'accord) ; payes au rythme actuel ;
+// échéances de prêts à recevoir à leur date. Quand la Préfecture prend ses payes sur une demande « salaires »,
+// celle du mois suivant sort du Trésor d'un coup, sa première semaine (au rythme actuel × ses semaines de paye).
+const seuilTresor = () => Math.max(0, Math.round(Number((S.config || {}).seuilTresor) || 0));
+// Calculée une fois par affichage (tableau de bord, « À traiter », Économie).
+function tresorPrevision(n) {
+  n = n || 8;
+  const c = S.prevTresorCache;
+  if (c && c.rendu === S.rendu && c.n === n && c.seuil === seuilTresor()) return c.p;
+  const p = calculPrevision(n);
+  S.prevTresorCache = { rendu: S.rendu, n, seuil: seuilTresor(), p };
+  return p;
+}
+function calculPrevision(n) {
+  const now = new Date(), cur = semKey(now), t = treasury(), passees = [];
+  for (let k = semPrec(cur); passees.length < 4; k = semPrec(k)) passees.push(k);
+  const rec = new Map(passees.map(k => [k, 0])), dep = new Map(passees.map(k => [k, 0]));
+  const put = (m, date, v) => { if (!date || !v) return; const k = semKey(new Date(date)); if (m.has(k)) m.set(k, m.get(k) + v); };
+  // Recettes à la date de leur encaissement.
+  for (const d of S.declarations) {
+    const st = dStatus(d), dec = S.decisions[d.id] || {}, e = echOf(d);
+    if (e && (st === "validee" || st === "payee")) for (const x of e.echeances) { if (x.payee) put(rec, x.paidAt, Number(x.montant) || 0); }
+    else if (st === "payee") put(rec, dec.paidAt || dec.at, Math.max(0, dMontant(d) - dCredit(d)));
+  }
+  for (const p of S.penalites) if (p.statut === "payee") put(rec, p.paidAt, Number(p.montant) || 0);
+  for (const v of S.versements || []) put(rec, v.confirmeLe || v.date || v.at, vtRecu(v));
+  // Crédits accordés (hors demandes « salaires », comptées avec les payes), achats sous contrat, primes.
+  const rep = payeRepris();
+  for (const dm of S.demandes) { if (dm.nature === "salaires" || rep.has(dm.id)) continue; const a = S.arbitrages[dm.id]; put(dep, (a && a.at) || dm.recueAt || dm.createdAt, demAccorde(dm)); }
+  for (const c of S.contrats || []) if (!c.demandeId) for (const p of c.paiements || []) if (p.mode !== "impot") put(dep, p.at, Number(p.montant) || 0);
+  for (const c of primesVersees()) put(dep, c.prime.at, Number(c.prime.montant) || 0);
+  const moy = m => Math.round([...m.values()].reduce((s, v) => s + v, 0) / passees.length);
+  const recSem = moy(rec), depSem = moy(dep), rythme = rythmePayes().rythme, rap = rappelsDus().reduce((s, r) => s + (Number(r.reste) || 0), 0);
+  // Payes : sur la demande « salaires » du mois quand c'est l'usage, sinon à chaque versement.
+  const m0 = moisKey(now), surDemande = salairesMois(m0) > 0 || salairesMois(moisPrec(m0)) > 0, pool = new Map(), demandesPrevues = [];
+  const prets = []; for (const p of S.prets || []) if (p.statut === "en_cours") for (const x of p.echeances || []) if (!x.payee && x.date) prets.push({ k: semKey(new Date(x.date)), montant: Number(x.montant) || 0 });
+  const finSem = (bounds(cur) || {}).end, frac = finSem ? Math.max(0, Math.min(1, (finSem.getTime() - now.getTime()) / (7 * 864e5))) : 1;
+  let solde = t.solde, k = cur;
+  const rows = [];
+  for (let i = 0; i < n; i++, k = semSuiv(k)) {
+    const f = i === 0 ? frac : 1, m = moisDe(k), r = { k, rec: Math.round(recSem * f), dep: Math.round(depSem * f), payes: 0, salaires: 0, prets: 0 };
+    r.prets = prets.filter(x => x.k === k || (i === 0 && x.k < k)).reduce((s, x) => s + x.montant, 0);
+    let paye = payeVersee(payeOf(k)) ? 0 : Math.max(rythme, k <= cur ? payeCalc(k).totalDu : 0) + (i === 0 ? rap : 0);
+    if (surDemande) {
+      if (!pool.has(m)) {
+        const sal = salairesMois(m);
+        if (sal > 0 || m <= m0) pool.set(m, Math.max(0, sal - payesImpute(payeSvc(), m).total));
+        else { const nb = semainesDuMois(m).length, v = rythme * nb; pool.set(m, v); r.salaires = v; demandesPrevues.push({ m, montant: v, k, nb }); }
+      }
+      const pris = Math.min(pool.get(m), paye); pool.set(m, pool.get(m) - pris); paye -= pris;
+    }
+    r.payes = Math.round(paye);
+    solde += r.rec + r.prets - r.dep - r.payes - r.salaires;
+    r.solde = Math.round(solde);
+    rows.push(r);
+  }
+  const seuil = seuilTresor(), sous = rows.find(r => r.solde < seuil) || null;
+  return { solde0: Math.round(t.solde), recSem, depSem, rythme, rap, surDemande, demandesPrevues, rows, seuil, sous, fin: rows[rows.length - 1].solde, passees };
+}
+const semaineDu = k => { const b = bounds(k); return b ? `semaine du ${b.start.getDate()} ${MOIS[b.start.getMonth()]}` : k; };
+// Courbe d'un solde qui peut passer sous zéro, avec la ligne du seuil en pointillés.
+function drawSolde(box, o) {
+  bindChart(box);
+  const f = frame(box, o.height), n = o.values.length, all = o.values.concat(o.seuil ? [o.seuil] : []);
+  const mx = Math.max(...all), mn0 = Math.min(...all);
+  let hi = niceMax(Math.max(0, mx)), lo = mn0 < 0 ? -niceMax(-mn0) : 0, ticks = lo < 0 ? [lo, 0, hi] : [0, hi / 2, hi];
+  // Loin de zéro, l'axe se resserre sur les valeurs : c'est la variation qui compte.
+  if (mn0 > 0 && mx - mn0 < mx * 0.5) {
+    const pas = niceMax(Math.max(mx - mn0, mx * 0.004)) / 2;
+    lo = Math.floor(mn0 / pas) * pas; hi = Math.ceil(mx / pas) * pas; if (hi === lo) hi = lo + pas;
+    ticks = [lo, (lo + hi) / 2, hi];
+  }
+  const y = v => f.mt + f.ih - ((v - lo) / (hi - lo)) * f.ih, gw = f.iw / n, xs = i => f.ml + gw * i + gw / 2, bas = y(Math.max(lo, 0));
+  let s = `<svg viewBox="0 0 ${f.W} ${f.H}" width="${f.W}" height="${f.H}" role="img" aria-label="${o.label}">`;
+  ticks.forEach(v => { s += `<line class="${v === 0 ? "base" : "grid"}" x1="${f.ml}" x2="${f.W - f.mr}" y1="${y(v)}" y2="${y(v)}"></line><text x="${f.ml - 6}" y="${y(v) + 4}" text-anchor="end">${compact(v)}</text>`; });
+  o.values.forEach((v, i) => { s += `<rect class="hit" data-i="${i}" x="${f.ml + i * gw + 1}" y="${f.mt - 4}" width="${Math.max(1, gw - 2)}" height="${f.ih + 4}" rx="4"></rect>`; });
+  if (o.seuil) s += `<line class="seuil" x1="${f.ml}" x2="${f.W - f.mr}" y1="${y(o.seuil)}" y2="${y(o.seuil)}"></line><text class="seuil-l" x="${f.W - f.mr}" y="${y(o.seuil) - 5}" text-anchor="end">seuil ${compact(o.seuil)}</text>`;
+  const pts = o.values.map((v, i) => `${xs(i)},${y(v)}`);
+  s += `<path class="area" d="M${xs(0)},${bas}L${pts.join("L")}L${xs(n - 1)},${bas}Z"></path><path class="line" d="M${pts.join("L")}"></path>`;
+  o.values.forEach((v, i) => { s += `<circle class="dot${v < (o.seuil || 0) ? " bas" : ""}${i === n - 1 ? " end" : ""}" cx="${xs(i)}" cy="${y(v)}" r="${i === n - 1 ? 5 : 3}"></circle>`; });
+  s += `<text class="lbl" x="${xs(n - 1)}" y="${y(o.values[n - 1]) - 10}" text-anchor="end">${compact(o.values[n - 1])}</text>`;
+  o.short.forEach((lab, i) => { s += `<text x="${xs(i)}" y="${f.H - 8}" text-anchor="middle"${i === n - 1 ? ' class="lbl"' : ""}>${lab}</text>`; });
+  box.innerHTML = s + "</svg>";
+  box.append(h("div", { class: "tip", hidden: true }));
+  box._chart = { full: o.full, series: o.series, fmt: v => money(v) };
+}
+function prevTresorPhrase(p) {
+  if (p.solde0 < p.seuil) return [`Le Trésor est déjà sous le seuil de ${money(p.seuil)} : ${money(p.solde0)} aujourd’hui, ${money(p.fin)} attendus dans ${p.rows.length} semaines au rythme actuel.`, "bad"];
+  if (p.sous) return [`Au rythme actuel, le Trésor passerait sous ${p.seuil ? "le seuil de " + money(p.seuil) : "zéro"} la ${semaineDu(p.sous.k)} (${money(p.sous.solde)}).`, "bad"];
+  return [`Au rythme actuel, le Trésor reste au-dessus ${p.seuil ? "du seuil de " + money(p.seuil) : "de zéro"} sur les ${p.rows.length} semaines : ${money(p.fin)} attendus la ${semaineDu(p.rows[p.rows.length - 1].k)}.`, "ok"];
+}
+function renderPrevTresor() {
+  const card = $("#tr-prev-card");
+  if (!card) return;
+  if (!S.connected || !["declarations", "demandes", "arbitrages", "payes"].every(x => S.loaded.has(x))) { card.hidden = true; return; }
+  card.hidden = false;
+  let p; try { p = tresorPrevision(8); } catch (e) { fill($("#tp-body"), h("div", { class: "empty", text: "Prévision indisponible pour l’instant." })); return; }
+  const [phrase, ton] = prevTresorPhrase(p), w = writer();
+  const val = (m, note) => h("span", {}, m, note ? h("span", { class: "hint", style: "display:block;font-weight:400", text: note }) : null);
+  fill($("#tp-kv"), kv([
+    ["Solde aujourd’hui", money(p.solde0)],
+    ["Recettes par semaine", val(money(p.recSem), `moyenne des semaines ${p.passees.slice().reverse().map(k => (bounds(k) || {}).week).join(", ")}, à la date de l’encaissement`)],
+    ["Crédits et achats par semaine", val(money(p.depSem), "demandes accordées (hors salaires), achats sous contrat, primes")],
+    ["Payes par semaine", val(money(p.rythme), p.surDemande ? "rythme actuel, prises sur la demande « salaires » du mois" : "rythme actuel, à chaque versement")],
+    p.rap ? ["Rappels de paye dus", val(money(p.rap), "comptés la première semaine")] : null,
+    ...p.demandesPrevues.map(x => [`Demande « salaires » ${deMois(x.m)}`, val(money(x.montant), `${x.nb} semaines au rythme actuel, sortie la ${semaineDu(x.k)}`)]),
+    [`Solde dans ${p.rows.length} semaines`, money(p.fin), "tot"]]));
+  fill($("#tp-phrase"), h("div", { class: "notice", id: "tp-alerte", style: `margin:12px 0 0;border-left-color:var(--${ton})` }, h("div", { text: phrase })));
+  drawSolde($("#tp-chart"), { values: p.rows.map(r => r.solde), seuil: p.seuil, short: p.rows.map(r => periodShort(r.k)), full: p.rows.map(r => `${periodLabel(r.k)} · fin de semaine`),
+    series: [{ name: "Solde prévu", values: p.rows.map(r => r.solde) }, { name: "Recettes", values: p.rows.map(r => r.rec + r.prets) }, { name: "Crédits, achats et payes", values: p.rows.map(r => r.dep + r.payes + r.salaires) }],
+    label: `Solde prévu du Trésor, ${p.rows.length} prochaines semaines` });
+  const box = $("#tp-seuil");
+  if (!w) { fill(box, p.seuil ? h("span", { class: "hint", text: `Seuil d’alerte : ${money(p.seuil)} (réglé par la Direction).` }) : null); return; }
+  if (box.contains(document.activeElement)) return;
+  const inp = h("input", { type: "number", min: "0", step: "1000", inputmode: "numeric", id: "tp-seuil-v", value: p.seuil ? String(p.seuil) : "", placeholder: "0", style: "width:180px" });
+  const go = h("button", { class: "btn ghost small", type: "button", id: "tp-seuil-ok", text: "Enregistrer le seuil" });
+  go.addEventListener("click", async () => {
+    const v = Math.round(Number(inp.value || 0));
+    if (!(v >= 0)) { toast("Indiquez un montant.", true); return; }
+    go.disabled = true;
+    if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { seuilTresor: v, updatedAt: nowISO() })))) toast(v ? `Seuil d’alerte du Trésor : ${money(v)}.` : "Seuil d’alerte retiré : l’alerte se fait sous zéro.");
+    go.disabled = false;
+  });
+  fill(box, h("label", { for: "tp-seuil-v", class: "muted", style: "font-weight:500", text: "Seuil d’alerte" }), h("div", { class: "money", "data-cur": cfg().devise || "€" }, inp), go,
+    h("span", { class: "hint", text: "Le Trésor ne devrait pas descendre en dessous : la Direction est prévenue dans « À traiter »." }));
+}
+function renderPrevTresorDash() {
+  const el = $("#tr-prev");
+  if (!el) return;
+  if (!S.connected || !canAgent() || !["declarations", "demandes", "arbitrages", "payes"].every(x => S.loaded.has(x))) { el.hidden = true; return; }
+  let p; try { p = tresorPrevision(8); } catch (e) { el.hidden = true; return; }
+  const [phrase, ton] = prevTresorPhrase(p);
+  el.hidden = false;
+  fill(el, chip(["Prévision", ton]), h("span", { text: " " + phrase + " " }),
+    h("button", { class: "linkbtn", type: "button", onclick: () => { allerA("economie"); setTimeout(() => { const c = $("#tr-prev-card"); if (c) c.scrollIntoView({ behavior: "smooth", block: "start" }); }, 120); }, text: "Voir la prévision" }));
 }
 
 /* Alertes du tableau de bord */
@@ -4804,6 +4963,8 @@ function todoItems() {
     add(so.length, `Sortie${plural(so.length)} oubliée${plural(so.length)} au registre des entrées`, `Dans les locaux depuis plus de ${secuOubliH()} h : ${so.slice(0, 3).map(x => x.nom).join(", ")}`, () => { S.secuVue = "entrees"; allerA("securite"); });
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
     add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA(ptFerme() ? "payes" : "pointeuse"));
+    const pt = (() => { try { return S.loaded.has("payes") ? tresorPrevision(8) : null; } catch (e) { return null; } })();
+    if (pt && pt.sous) add(1, pt.solde0 < pt.seuil ? "Trésor sous le seuil d’alerte" : `Trésor sous ${pt.seuil ? "le seuil" : "zéro"} d’ici ${pt.rows.indexOf(pt.sous) + 1} semaine${plural(pt.rows.indexOf(pt.sous) + 1)}`, pt.solde0 < pt.seuil ? `${money(pt.solde0)} pour un seuil de ${money(pt.seuil)}` : `Au rythme actuel : ${money(pt.sous.solde)} la ${semaineDu(pt.sous.k)}${pt.seuil ? ` (seuil ${money(pt.seuil)})` : ""}`, () => { allerA("economie"); setTimeout(() => { const c = $("#tr-prev-card"); if (c) c.scrollIntoView({ behavior: "smooth", block: "start" }); }, 120); }, "bad");
     const coh = coherence();
     add(coh.length, `Contrôle de cohérence : ${coh.length} point${plural(coh.length)} à vérifier`, coh.slice(0, 2).map(x => x.titre).join(" ; ") + (coh.length > 2 ? "…" : ""), openCoherence);
   }
@@ -13802,6 +13963,7 @@ function renderEconomie() {
   setKpi("e-taux", dues ? `${Math.round(paidPart / dues * 100)} %` : "—", dues ? `${money(dues - paidPart)} restent à payer` : "aucun avis émis", dues && paidPart < dues ? "warn" : "");
   drawCols($("#ch-ca"), { short, full, series: [{ name: "Chiffre d’affaires", cls: "b1", values: per.map(ds => sumOf(ds, "ca")) }], label: "Chiffre d’affaires déclaré, " + spanLabel(keys, 12) });
   treasuryChart($("#ch-tr"), $("#lg-tr"), 12, keys);
+  renderPrevTresor();
   $("#ch-ca-sub").textContent = `Total des entreprises, ${spanLabel(keys, 12)}.`;
   $("#ch-tr-sub").textContent = `Ce qui entre dans le Trésor et ce qui en sort, ${spanLabel(keys, 12)}.`;
   $("#ch-emp-sub").textContent = `Nombre total de salariés, ${spanLabel(keys, 12)}.`;
