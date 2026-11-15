@@ -7156,7 +7156,25 @@ async function chargerPerso() {
     if (r1.error) { S.persoErr = tableAbsente(r1.error) ? "absente" : r1.error.message || "erreur"; return; }
     S.persoErr = null; S.espacePerso = (r1.data || []).map(persoVersEv);
   } catch (e) { S.persoErr = e.message || "erreur"; }
+  await chargerMesAttendus();
 }
+// Visiteurs annoncés depuis Mon espace (mise à jour 50) : null tant que le script manque.
+async function chargerMesAttendus() {
+  let r; try { r = await S.sb.rpc("mes_attendus"); } catch (e) { r = { error: e }; }
+  S.mesAttendus = !r || r.error || !Array.isArray(r.data) ? null : r.data;
+}
+const attendusPerso = id => (S.mesAttendus || []).filter(a => a.agendaPersoId === id);
+async function annoncerAttendusPerso(id, noms) {
+  let r; try { r = await S.sb.rpc("annoncer_attendus_perso", { p_ref: id, p_noms: noms }); } catch (e) { r = { error: e }; }
+  if (r.error) {
+    toast(/annoncer_attendus_perso|schema cache|does not exist/i.test(r.error.message || "") ? "Rendez-vous enregistré, mais les visiteurs ne sont pas annoncés : la Direction doit exécuter supabase/v50_visiteurs_espace.sql." : `Rendez-vous enregistré, mais pas ses visiteurs : ${r.error.message || "refusé"}`, true);
+    return false;
+  }
+  await chargerMesAttendus();
+  return true;
+}
+const nomsVisiteurs = v => String(v || "").split(/[,;\n]+/).map(x => x.trim()).filter(x => x.length >= 2).slice(0, 12);
+const attenduEtat = a => a.statut === "arrive" ? ["Arrivé" + (a.arriveLe ? " à " + hhmm(a.arriveLe) : ""), "ok"] : a.statut === "annule" ? ["Annulé", "muted"] : ["Attendu", "info"];
 // Rappels de l'agenda commun : réglage habituel et réglages par rendez-vous (table rappels_agents).
 const rappelDefaut = () => (S.rappelsPrefs && S.rappelsPrefs.defaut_min !== undefined ? S.rappelsPrefs.defaut_min : 60);
 const rappelEvenement = id => { const ev = (S.rappelsPrefs && S.rappelsPrefs.evenements) || {}; return Object.prototype.hasOwnProperty.call(ev, id) ? ev[id] : undefined; };
@@ -9239,7 +9257,8 @@ function openPerso(e) {
   openDialog({ eyebrow: "Mon agenda · personnel", title: e.titre,
     body: [kv([["Quand", agQuand(e)], e.lieu ? ["Lieu", e.lieu] : null, ["Rappel", e.journee ? "—" : e.rappelMin != null ? rappelTxt(e.rappelMin).toLowerCase() + ", sur vos appareils où les notifications sont activées" : "aucun"]].filter(Boolean)),
       e.description ? h("p", { style: "white-space:pre-wrap;margin:0", text: e.description }) : null,
-      h("p", { class: "hint", style: "margin:0", text: "Événement personnel : ni la Direction, ni l’Inspection, ni les ressources humaines ne le voient." })],
+      attendusPerso(e.id).length ? sec("Visiteurs attendus à l’accueil", h("ul", { class: "ent-list", id: "pe-visiteurs-l" }, attendusPerso(e.id).map(a => h("li", {}, h("span", { text: a.nom }), chip(attenduEtat(a)), h("span", {}))))) : null,
+      h("p", { class: "hint", style: "margin:0", text: attendusPerso(e.id).some(a => a.statut !== "annule") ? "Événement personnel : ni la Direction, ni l’Inspection, ni les ressources humaines ne le voient. L’accueil voit seulement vos visiteurs (nom, heure, titre du rendez-vous) et vous prévient à leur arrivée." : "Événement personnel : ni la Direction, ni l’Inspection, ni les ressources humaines ne le voient." })],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Fermer" }), h("span", { class: "spacer" }),
       h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
         const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer la suppression"; return; }
@@ -9247,7 +9266,9 @@ function openPerso(e) {
         const { error } = await S.sb.from("agenda_perso").delete().eq("id", e.id);
         if (error) { toast(error.message || "Événement non supprimé.", true); b.disabled = false; return; }
         S.espacePerso = (S.espacePerso || []).filter(x => x.id !== e.id);
-        toast("Événement supprimé."); closeDialog(); renderEspace(); chargerPerso().then(renderEspace);
+        const vis = attendusPerso(e.id).some(a => a.statut === "attendu");
+        if (vis) await annoncerAttendusPerso(e.id, []);
+        toast(vis ? "Événement supprimé : l’accueil n’attend plus vos visiteurs." : "Événement supprimé."); closeDialog(); renderEspace(); chargerPerso().then(renderEspace);
       }, text: "Supprimer" }),
       h("button", { class: "btn small", type: "button", onclick: () => openPersoForm(e), text: "Modifier" })] });
 }
@@ -9262,6 +9283,11 @@ function openPersoForm(e, jour) {
   const journee = h("input", { type: "checkbox", id: "pe-journee" }); journee.checked = !!(e && e.journee);
   const lieu = h("input", { id: "pe-lieu", maxlength: "120", autocomplete: "off", placeholder: "Facultatif" }); lieu.value = e ? e.lieu : "";
   const note = h("textarea", { id: "pe-note", rows: "3", maxlength: "1000", placeholder: "Facultatif : ce qu’il ne faut pas oublier" }); note.value = e ? e.description : "";
+  // Visiteurs extérieurs (mise à jour 50) : annoncés à l'accueil du service de la protection.
+  const visiteurs = h("input", { id: "pe-visiteurs", autocomplete: "off", maxlength: "300", placeholder: "Ex. : Jean DUPONT, Marie MARTIN (facultatif)" });
+  visiteurs.value = e ? attendusPerso(e.id).filter(a => a.statut !== "annule").map(a => a.nom).join(", ") : "";
+  const visRow = S.mesAttendus ? h("div", { class: "field" }, h("label", { for: "pe-visiteurs", text: "Visiteurs extérieurs attendus à la Préfecture" }), visiteurs,
+    h("span", { class: "hint", text: "Séparés par des virgules. L’accueil les attend à l’heure du rendez-vous (il voit leur nom, l’heure, le titre et votre nom) et vous prévient dans votre espace à leur arrivée." })) : null;
   // Sans la mise à jour 35, seul le rappel d'une heure existe.
   const opts = S.rappelsErr === "absente" ? RAPPEL_OPTS.filter(([v]) => v === null || v === 60) : RAPPEL_OPTS;
   const rappel = h("select", { id: "pe-rappel" }, opts.map(([v, l]) => h("option", { value: v === null ? "" : String(v), text: l })));
@@ -9273,7 +9299,7 @@ function openPersoForm(e, jour) {
   const sync = () => { heuresRow.hidden = journee.checked; finRow.hidden = !journee.checked; rappelRow.hidden = journee.checked; };
   journee.addEventListener("change", sync); sync();
   const err = h("span", { class: "err", "aria-live": "polite" });
-  const go = h("button", { class: "btn ink small", type: "button", text: e ? "Enregistrer" : "Ajouter à mon agenda" });
+  const go = h("button", { class: "btn ink small", type: "button", id: "pe-ok", text: e ? "Enregistrer" : "Ajouter à mon agenda" });
   go.addEventListener("click", async () => {
     err.textContent = "";
     if (!titre.value.trim()) { err.textContent = "Donnez un titre."; titre.focus(); return; }
@@ -9285,26 +9311,33 @@ function openPersoForm(e, jour) {
       debut = new Date(`${date.value}T${hd.value}:00`); fin = hf.value ? new Date(`${date.value}T${hf.value}:00`) : null;
       if (fin && fin <= debut) fin.setDate(fin.getDate() + 1);
     }
+    const noms = S.mesAttendus ? nomsVisiteurs(visiteurs.value) : [], avaient = e ? attendusPerso(e.id).some(a => a.statut === "attendu") : false;
+    if (noms.length && journee.checked) { err.textContent = "Indiquez l’heure du rendez-vous : l’accueil attend vos visiteurs à une heure précise."; return; }
+    if (noms.length && (debut.getTime() < Date.now() - 12 * 3600e3 || debut.getTime() > Date.now() + 60 * 864e5)) { err.textContent = "Les visiteurs ne s’annoncent que pour un rendez-vous des 60 prochains jours."; date.focus(); return; }
     const rmin = journee.checked || !rappel.value ? null : Number(rappel.value);
     const body = { titre: titre.value.trim(), debut: debut.toISOString(), fin: fin ? fin.toISOString() : null, journee: journee.checked, lieu: lieu.value.trim(), note: note.value.trim(), rappel: rmin != null };
     if (S.rappelsErr !== "absente") body.rappel_min = rmin;
     go.disabled = true;
     const fid = (S.espace && S.espace.fid) || S.monFid;
-    const { error } = e ? await S.sb.from("agenda_perso").update(Object.assign(body, { modifie_le: nowISO() })).eq("id", e.id) : await S.sb.from("agenda_perso").insert(Object.assign(body, { fid }));
+    const nid = e ? e.id : (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c => (c ^ (Math.random() * 16) >> (c / 4)).toString(16)));
+    const { error } = e ? await S.sb.from("agenda_perso").update(Object.assign(body, { modifie_le: nowISO() })).eq("id", e.id) : await S.sb.from("agenda_perso").insert(Object.assign(body, { id: nid, fid }));
     if (error) {
       go.disabled = false;
       err.textContent = /agenda_perso|does not exist|schema cache/i.test(error.message || "") ? "L’agenda personnel ouvrira dès que la Direction aura exécuté supabase/v34_agenda_perso.sql."
         : /row-level security|violates/i.test(error.message || "") ? "Votre compte n’est relié à aucune fiche de fonctionnaire en service." : error.message || "Événement non enregistré.";
       return;
     }
-    if (!e && rmin != null && !(typeof Notification !== "undefined" && Notification.permission === "granted")) toast("Ajouté. Pour recevoir le rappel, activez les notifications sur cet appareil (en haut de votre espace).");
-    else toast(e ? "Événement modifié." : "Ajouté à votre agenda.");
+    const annonce = noms.length || avaient ? await annoncerAttendusPerso(nid, noms) : false;
+    if (annonce && noms.length) toast(`${e ? "Événement modifié" : "Ajouté à votre agenda"} : l’accueil attend ${noms.length > 1 ? "vos " + noms.length + " visiteurs" : noms[0]} à ${hhmm(debut.toISOString())}.`);
+    else if (annonce) toast("Événement modifié : l’accueil n’attend plus de visiteur.");
+    else if (!e && rmin != null && !(typeof Notification !== "undefined" && Notification.permission === "granted")) toast("Ajouté. Pour recevoir le rappel, activez les notifications sur cet appareil (en haut de votre espace).");
+    else if (!noms.length) toast(e ? "Événement modifié." : "Ajouté à votre agenda.");
     closeDialog(); await chargerPerso(); renderEspace();
   });
   openDialog({ eyebrow: "Mon agenda · personnel", title: e ? "Modifier l’événement" : "Nouvel événement personnel", wide: true,
     body: [field("pe-titre", "Titre", titre),
       h("div", { class: "row2" }, field("pe-date", "Date", date), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, journee, h("span", { text: "Toute la journée" }))),
-      heuresRow, finRow, field("pe-lieu", "Lieu", lieu), field("pe-note", "Note", note), rappelRow,
+      heuresRow, finRow, field("pe-lieu", "Lieu", lieu), field("pe-note", "Note", note), rappelRow, visRow,
       h("p", { class: "hint", style: "margin:0", text: "Vous seul voyez cet événement : il n’est montré ni à la Direction, ni à l’Inspection, ni aux ressources humaines." }), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
@@ -13050,6 +13083,15 @@ function grouperErreurs(lignes) {
   }
   return [...m.values()].sort((a, b) => String(b.lignes[0].at).localeCompare(String(a.lignes[0].at)));
 }
+// Version de la page (document.lastModified, « MM/JJ/AAAA HH:MM:SS ») : une erreur vue seulement sur des
+// versions antérieures à celle en ligne a peut-être déjà été corrigée (marge de 2 h pour les fuseaux).
+const versionDate = v => { const m = /^(\d\d)\/(\d\d)\/(\d{4}) (\d\d):(\d\d):(\d\d)$/.exec(String(v || "")); return m ? new Date(+m[3], +m[1] - 1, +m[2], +m[4], +m[5], +m[6]) : null; };
+const versionTxt = v => { const d = versionDate(v); return d ? fmtDateTime(d) : v || "—"; };
+function errAncienne(g) {
+  const cur = versionDate(document.lastModified); if (!cur) return false;
+  const vs = g.lignes.map(x => versionDate(x.version));
+  return vs.length > 0 && vs.every(d => d && d.getTime() < cur.getTime() - 2 * 3600e3);
+}
 function majErreursHint() {
   const el = $("#b-erreurs-n"); if (!el) return;
   el.textContent = S.erreursAbsente ? "Exécutez supabase/v37_suivi.sql pour les recevoir." : S.erreursNouvelles ? `${S.erreursNouvelles} nouvelle${plural(S.erreursNouvelles)} depuis votre dernière visite.` : "Rien de nouveau.";
@@ -13083,7 +13125,7 @@ async function openErreurs() {
   fill(box, h("ul", { class: "ent-list err-list" }, groupes.map(g => h("li", {},
     h("div", { style: "min-width:0" },
       h("button", { class: "linkbtn", type: "button", onclick: () => openErreurGroupe(g), text: errCourt(g.message, 140) }),
-      h("span", { class: "meta", text: `${ERR_TYPES[g.type] || g.type} · ${g.lignes.length} fois · ${g.personnes.size} personne${plural(g.personnes.size)} · dernière le ${fmtDateTime(new Date(g.lignes[0].at))}` }),
+      h("span", { class: "meta", text: `${ERR_TYPES[g.type] || g.type} · ${g.lignes.length} fois · ${g.personnes.size} personne${plural(g.personnes.size)} · dernière le ${fmtDateTime(new Date(g.lignes[0].at))}${errAncienne(g) ? " · sur une version plus ancienne de la page" : ""}` }),
       h("span", { class: "meta", text: [[...g.navigateurs].slice(0, 3).join(", "), [...g.appareils].slice(0, 3).join(", ")].filter(Boolean).join(" · ") })),
     chip([String(g.lignes.length), g.type === "demarrage" || g.personnes.size > 1 ? "bad" : "warn"]),
     h("button", { class: "btn ghost small", type: "button", onclick: () => openErreurGroupe(g), text: "Détail" })))));
@@ -13093,7 +13135,7 @@ function openErreurGroupe(g) {
   const x0 = Object.assign({}, g.lignes[0], { details: (g.lignes.find(x => x.details) || {}).details || null, pile: (g.lignes.find(x => x.pile) || {}).pile || "" });
   openDialog({ eyebrow: "Erreur remontée", title: ERR_TYPES[g.type] || "Erreur", wide: true, body: [
     kv([["Message", g.message], ["Où", g.source || "—"], ["Nombre", `${g.lignes.length} fois`], ["Personnes", [...g.personnes].join(", ")],
-      ["Navigateurs", [...g.navigateurs].join(", ") || "—"], ["Appareils", [...g.appareils].join(", ") || "—"], ["Version de la page", x0.version || "—"]]),
+      ["Navigateurs", [...g.navigateurs].join(", ") || "—"], ["Appareils", [...g.appareils].join(", ") || "—"], ["Version de la page", errAncienne(g) ? `${versionTxt(x0.version)} · plus ancienne que la version en ligne (${versionTxt(document.lastModified)}) : peut-être déjà corrigée. Si elle ne revient pas, marquez-la comme réglée.` : versionTxt(x0.version)]]),
     h("h4", { class: "err-h", text: "Dernières fois" }),
     h("ul", { class: "ent-list" }, g.lignes.slice(0, 20).map(x => h("li", {},
       h("div", { style: "min-width:0" }, h("strong", { text: `${x.nom || x.discord || "Inconnu"} · ${fmtDateTime(new Date(x.at))}` }),

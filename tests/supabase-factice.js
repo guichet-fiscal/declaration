@@ -150,6 +150,25 @@
         rows.set("delais/" + id, { collection: "delais", id, data: { entrepriseId: e.id, entrepriseNom: e.data.nom, decls: args.p_decls, mode: args.p_mode, nb: args.p_mode === "plusieurs" ? args.p_nb : undefined, jours: args.p_mode === "report" ? args.p_jours : undefined, motif: args.p_motif, statut: "attente", enLigne: true, at: iso() } });
         return { data: { id }, error: null };
       }
+      // Visiteurs annoncés depuis Mon espace (mise à jour 50) ; __sans50 = script absent.
+      if (name === "annoncer_attendus_perso" || name === "mes_attendus") {
+        if (window.__sans50) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
+        const f = fonc(); if (!f) return { data: null, error: { message: "Votre compte n’est relié à aucune fiche de fonctionnaire en service." } };
+        const att = () => [...rows.values()].filter(r => r.collection === "securiteAttendus" && r.data.hoteFid === f.id);
+        if (name === "mes_attendus") return { data: att().map(r => ({ id: r.id, nom: r.data.nom, date: r.data.date, statut: r.data.statut, arriveLe: r.data.arriveLe || null, agendaPersoId: r.data.agendaPersoId || null, objet: r.data.objet })), error: null };
+        const ev = (window.__perso || []).find(p => p.id === args.p_ref && p.fid === f.id);
+        const noms = ev ? [...new Set((args.p_noms || []).map(n => String(n).trim()).filter(n => n.length >= 2))].slice(0, 12) : [];
+        if (noms.length && ev.journee) return { data: null, error: { message: "Indiquez l’heure du rendez-vous : l’accueil attend vos visiteurs à une heure précise." } };
+        const lies = att().filter(r => r.data.agendaPersoId === args.p_ref);
+        for (const r of lies) if (r.data.statut === "attendu" && !noms.some(n => n.toLowerCase() === String(r.data.nom).toLowerCase())) r.data = Object.assign({}, r.data, { statut: "annule", annuleLe: iso(), annulePar: f.data.nom });
+        for (const n of noms) {
+          const r = lies.find(x => String(x.data.nom).toLowerCase() === n.toLowerCase());
+          if (r) { if (r.data.statut !== "arrive") r.data = Object.assign({}, r.data, { nom: n, date: new Date(ev.debut).toISOString(), objet: ev.titre, statut: "attendu", modifieLe: iso() }); continue; }
+          const id = "va" + Math.random().toString(16).slice(2, 12);
+          rows.set("securiteAttendus/" + id, { collection: "securiteAttendus", id, data: { nom: n, date: new Date(ev.debut).toISOString(), hote: f.data.nom, hoteFid: f.id, objet: ev.titre, agendaPersoId: args.p_ref, statut: "attendu", source: "espace", fid: f.id, agent: f.data.nom, at: iso() } });
+        }
+        return { data: noms.length, error: null };
+      }
       if (["reclamer", "retirer_reclamation", "reclamations_entreprise"].includes(name)) {
         if (window.__sans49) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
         const e = ent(); if (!e) return { data: null, error: { message: "Lien inconnu ou coupé." } };

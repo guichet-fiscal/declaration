@@ -30,7 +30,7 @@ module.exports = {
     const vieilles = `window.__erreursRemontees = [
       { id: 1, at: "2026-11-10T19:00:00Z", type: "ecriture", message: "permission denied for table registre", empreinte: "aaaa1111", nom: "Alice MARTIN", role: "agent", navigateur: "Safari 17.4", appareil: "iPhone · appli installée · 390×844", onglet: "espace", details: { code: "42501" }, pile: "Error: permission denied\\n at write" },
       { id: 2, at: "2026-11-10T20:00:00Z", type: "ecriture", message: "permission denied for table registre", empreinte: "aaaa1111", nom: "Bruno LEROY", role: "agent", navigateur: "Chrome 130", appareil: "Android · 412×915", onglet: "espace" },
-      { id: 3, at: "2026-11-10T18:00:00Z", type: "discord", message: "Discord injoignable depuis ce navigateur", empreinte: "bbbb2222", nom: "Directeur Test", role: "direction", navigateur: "Firefox 132", appareil: "Windows · 1920×1080", onglet: "payes" }];`;
+      { id: 3, at: "2026-11-10T18:00:00Z", type: "discord", message: "Discord injoignable depuis ce navigateur", empreinte: "bbbb2222", nom: "Directeur Test", role: "direction", navigateur: "Firefox 132", appareil: "Windows · 1920×1080", onglet: "payes", version: "01/02/2020 10:00:00" }];`;
     const e = await ouvrir(env, { avant: vieilles });
     await pause(e, 600);
     const todo = texte(await e.locator("#todo-card").innerText().catch(() => ""));
@@ -38,6 +38,7 @@ module.exports = {
     await e.locator("#todo .linkbtn", { hasText: "Erreurs remontées" }).click(); await pause(e, 500);
     const liste = texte(await e.locator("#dlg").innerText());
     t.ok(/permission denied/.test(liste) && /2 fois · 2 personnes/.test(liste) && /Discord injoignable/.test(liste), "erreurs regroupées, les plus récentes d'abord", liste.slice(0, 300));
+    t.ok(/Discord injoignable[^]*sur une version plus ancienne de la page/.test(liste) && !/2 personnes[^·]*· dernière le [^·]*· sur une version/.test(liste), "erreur vue sur une ancienne version signalée", liste.slice(0, 500));
     await e.locator("#dlg .err-list .linkbtn").first().click(); await pause(e, 300);
     const detail = texte(await e.locator("#dlg").innerText());
     t.ok(/Safari 17\.4/.test(detail) && /Chrome 130/.test(detail) && /iPhone/.test(detail) && /Alice MARTIN/.test(detail) && /code : 42501/.test(detail), "détail : navigateurs, appareils, personnes, précisions", detail.slice(0, 400));
