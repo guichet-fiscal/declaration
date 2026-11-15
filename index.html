@@ -1229,6 +1229,12 @@ button.ts-p{cursor:pointer}
 .secu-consigne{margin:0 0 14px;padding:10px 12px;border:1px solid var(--rule);border-radius:8px}
 .tvs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 12px;align-items:end}
 .tvs-grid label{font-size:12.5px}
+.arrivee-l{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.arrivee-l li{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--rule-2);font-size:13.5px}
+.arrivee-l li:last-child{border-bottom:0}
+.arrivee-m{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700}
+.arrivee-l li.ok .arrivee-m{background:var(--ok-soft,#e3f4ea);color:var(--ok)}
+.arrivee-l li.ko .arrivee-m{background:var(--warn-soft);color:var(--warn)}
 .nc-deja{margin-top:10px;padding:10px 12px;border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:6px;display:grid;gap:8px;font-size:13.5px}
 .chrono{list-style:none;margin:0;padding:0 0 0 14px;border-left:2px solid var(--rule);display:grid;gap:2px}
 .chrono-j{margin:12px 0 4px -14px;padding-left:14px;font-size:12px;font-weight:700;color:var(--ink-2)}
@@ -6466,8 +6472,36 @@ function ctrSection(f, back) {
 /* ---------- Personnel (ressources humaines) ---------- */
 // L'onglet Personnel : les fonctionnaires, l'état de leur contrat de travail, et leur fiche RH. Ouvert à la
 // Direction et au rôle « Ressources humaines » (qui ne voit que cet onglet), en lecture pour les autres.
-const RH_VUES = [["tous", "En service"], ["aucun", "Sans contrat"], ["a_signer", "À signer"], ["signe", "Signés"], ["retires", "Retirés"]];
+const RH_VUES = [["tous", "En service"], ["incomplets", "Arrivée incomplète"], ["aucun", "Sans contrat"], ["a_signer", "À signer"], ["signe", "Signés"], ["retires", "Retirés"]];
 const rhEtat = f => { const c = ctrsOf(f.id)[0]; return c ? (c.statut === "signe" ? "signe" : "a_signer") : "aucun"; };
+// Dossier d'arrivée : ce qui manque pour qu'un agent soit en règle et ait accès à son espace.
+function arriveeDe(f) {
+  const et = rhEtat(f);
+  return [
+    { k: "grade", ok: !!gradeTaux(f.grade), t: "Grade du barème", aide: f.grade ? `« ${f.grade} » n’est pas dans le barème : pas de taux, pas de paye` : "aucun grade : pas de paye" },
+    { k: "discord", ok: !!f.discordId, t: "Compte Discord sur la fiche", aide: "sans lui, ni espace, ni notifications, ni mention" },
+    { k: "contrat", ok: et === "signe", t: "Contrat de travail signé", aide: et === "a_signer" ? "établi, signature de l’agent attendue" : "à établir" },
+    { k: "photo", ok: !!f.photoAt, t: "Photo de profil", aide: "pour l’annuaire, l’organigramme et la carte" },
+    { k: "carte", ok: !!f.carteRemiseLe, t: "Carte professionnelle remise", aide: "à télécharger, donner en jeu, puis marquer remise" }];
+}
+const arriveeManque = f => arriveeDe(f).filter(x => !x.ok);
+function arriveeSection(f, reopen) {
+  if (f.actif === false) return null;
+  const l = arriveeDe(f), manque = l.filter(x => !x.ok), w = rhWriter(), c = ctrsOf(f.id)[0];
+  const geste = x => !w || x.ok ? null
+    : x.k === "grade" || x.k === "discord" ? h("button", { class: "linkbtn", type: "button", onclick: () => openFoncForm(f, null, reopen), text: "Modifier la fiche" })
+    : x.k === "contrat" ? h("button", { class: "linkbtn", type: "button", onclick: () => c ? openCtr(c.id) : openCtrForm(f, null), text: c ? "Ouvrir le contrat" : "Établir le contrat" })
+    : x.k === "photo" && peutPhotoProfil(f.id) ? h("button", { class: "linkbtn", type: "button", onclick: () => openPhotoProfil(f.id, f.nom, reopen), text: "Ajouter la photo" })
+    : x.k === "carte" ? h("span", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openCarte(f.id, reopen), text: "Voir la carte" }), " · ",
+        h("button", { class: "linkbtn", type: "button", id: "ag-carte-remise", onclick: async ev => { const b = ev.currentTarget; b.disabled = true;
+          const body = Object.assign({}, f, { carteRemiseLe: nowISO(), carteRemisePar: S.agentName || "" }); delete body.id;
+          if (await write(() => S.db.doc("fonctionnaires/" + f.id).set(body))) { toast("Carte professionnelle notée remise."); reopen(); } else b.disabled = false; }, text: "Marquer remise" }))
+    : null;
+  return sec(manque.length ? `Arrivée : ${manque.length} chose${plural(manque.length)} à faire` : "Arrivée : dossier complet",
+    h("ul", { class: "arrivee-l", id: "ag-arrivee" }, l.map(x => h("li", { class: x.ok ? "ok" : "ko" }, h("span", { class: "arrivee-m", "aria-hidden": "true", text: x.ok ? "✓" : "!" }),
+      h("div", { style: "min-width:0" }, h("strong", { text: x.t }), x.ok ? (x.k === "carte" && f.carteRemiseLe ? h("span", { class: "meta", text: ` · le ${fmtDate(new Date(f.carteRemiseLe))}${f.carteRemisePar ? " par " + f.carteRemisePar : ""}` }) : null) : h("span", { class: "meta", text: " · " + x.aide })),
+      geste(x)))));
+}
 function renderPersonnel() {
   const box = $("#rh-list");
   if (!box || S.tab !== "personnel") return;
@@ -6486,10 +6520,10 @@ function renderPersonnel() {
     mk("À signer", String(n.a_signer), n.a_signer ? "contrat établi, signature de l’agent attendue" : "aucun contrat en attente", n.a_signer ? "warn" : ""),
     mk("Sans contrat", String(n.aucun), n.aucun ? "contrat de travail à établir" : "tout le monde a un contrat", n.aucun ? "bad" : "ok"));
   let vue = S.rhVue || "tous"; if (!RH_VUES.some(x => x[0] === vue)) vue = "tous";
-  const cnt = { tous: actifs.length, aucun: n.aucun, a_signer: n.a_signer, signe: n.signe, retires: retires.length };
+  const cnt = { tous: actifs.length, incomplets: actifs.filter(f => arriveeManque(f).length).length, aucun: n.aucun, a_signer: n.a_signer, signe: n.signe, retires: retires.length };
   fill($("#rh-seg"), h("div", { class: "seg", role: "group", "aria-label": "Filtrer les fonctionnaires", style: "margin:4px 0 10px" }, RH_VUES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.rhVue = k; renderPersonnel(); }, text: `${l} (${cnt[k]})` }))));
   const q = norm($("#rh-q").value || "");
-  const list = (vue === "retires" ? retires : vue === "tous" ? actifs : actifs.filter(f => rhEtat(f) === vue)).filter(f => !q || norm(`${f.nom} ${f.grade}`).includes(q));
+  const list = (vue === "retires" ? retires : vue === "tous" ? actifs : vue === "incomplets" ? actifs.filter(f => arriveeManque(f).length) : actifs.filter(f => rhEtat(f) === vue)).filter(f => !q || norm(`${f.nom} ${f.grade}`).includes(q));
   $("#rh-sub").textContent = vue === "retires" ? "Retirés des effectifs : plus comptés dans la paye. Leur fiche et leurs contrats restent consultables." : "Cliquez sur un nom pour ouvrir sa fiche et ses contrats.";
   if (!list.length) { fill(box, h("div", { class: "empty", text: q ? "Aucun fonctionnaire ne correspond à cette recherche." : vue === "aucun" ? "Tout le monde a un contrat de travail." : vue === "a_signer" ? "Aucun contrat en attente de signature." : vue === "signe" ? "Aucun contrat signé pour l’instant." : vue === "retires" ? "Personne n’a été retiré des effectifs." : "Aucun fonctionnaire : ajoutez le premier." })); return; }
   fill(box, h("ul", { class: "ent-list" }, list.map(f => {
@@ -6501,7 +6535,7 @@ function renderPersonnel() {
     return h("li", {},
       h("div", { class: "av-ligne" }, avatar(f.id, f.nom, 34), h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openAgent(f.id), text: f.nom || "Sans nom" }),
         h("span", { class: "meta", text: [f.grade || "sans grade", taux ? money(taux) + "/h" : "pas de taux au barème", f.at ? "entré le " + fmtDate(new Date(f.at)) : "", f.actif === false && f.retireLe ? "retiré le " + fmtDate(new Date(f.retireLe)) : "", c ? ctrNo(c) : "", (() => { const n = sanctionsOf(f.id).filter(x => x.statut === "vigueur").length; return n ? `${n} sanction${plural(n)} en vigueur` : ""; })()].filter(Boolean).join(" · ") }))),
-      f.actif === false ? chip(["Retiré", "muted"]) : et === "aucun" ? chip(["Sans contrat", "bad"]) : chip(CTR_STAT[et]),
+      f.actif === false ? chip(["Retiré", "muted"]) : vue === "incomplets" ? chip([`À faire : ${arriveeManque(f).map(x => ({ grade: "grade", discord: "Discord", contrat: "contrat", photo: "photo", carte: "carte" })[x.k]).join(", ")}`, "warn"]) : et === "aucun" ? chip(["Sans contrat", "bad"]) : chip(CTR_STAT[et]),
       act);
   })));
 }
@@ -6704,6 +6738,7 @@ function openAgent(fid, back) {
           return ["Période d’essai", w && !e.conclu ? h("span", {}, t + " · ", h("button", { class: "linkbtn", type: "button", onclick: () => openEssaiDecision(f, reopen), text: "décider" })) : t]; })(),
         (() => { const c = ctrsOf(f.id)[0]; return f.actif !== false && c && c.type === "CDD" && c.fin ? ["Fin du CDD", `${ctrJour(c.fin)} (${c.fin < jourCle(new Date()) ? "terminé" : dansTxt(c.fin, jourCle(new Date()))})`] : null; })(),
         f.note ? ["Note", f.note] : null]),
+      arriveeSection(f, reopen),
       ctrSection(f, reopen),
       entretiensSection(f, reopen),
       sanctionsSection(f, reopen),
@@ -9222,6 +9257,8 @@ function renderBordRH() {
   const veille = [
     ...echRH.map(x => [`${x.titre} : ${x.quand}`, x.type === "essai" ? "Essai concluant, prolongé ou fin de contrat : à décider sur sa fiche." : "Nouveau contrat ou retrait des effectifs : depuis sa fiche.", () => x.type === "essai" && rhWriter() ? openEssaiDecision(x.f, () => openAgent(x.f.id)) : openAgent(x.f.id)]),
     echObj.length ? [`${echObj.length} objectif${plural(echObj.length)} à échéance dans les 7 jours`, echObj.slice(0, 4).map(x => `${x.f.nom} : ${x.quand}`).join(", "), () => { S.rhEspace = "entretiens"; renderPersonnel(); }] : null,
+    actifs.some(f => arriveeManque(f).length) ? [`${actifs.filter(f => arriveeManque(f).length).length} dossier${plural(actifs.filter(f => arriveeManque(f).length).length)} d’arrivée incomplet${plural(actifs.filter(f => arriveeManque(f).length).length)}`,
+      actifs.filter(f => arriveeManque(f).length).slice(0, 4).map(f => `${f.nom} (${arriveeManque(f).map(x => x.k === "discord" ? "Discord" : x.k === "carte" ? "carte" : x.k).join(", ")})`).join(", "), () => { S.rhEspace = "effectif"; S.rhVue = "incomplets"; renderPersonnel(); }] : null,
     sans.length ? [`${sans.length} agent${plural(sans.length)} sans heure de service depuis deux semaines`, sans.slice(0, 6).map(f => f.nom).join(", ") + (sans.length > 6 ? "…" : ""), () => { S.rhEspace = "effectif"; renderPersonnel(); }] : null,
     absEnCours.length ? [`${absEnCours.length} absent${plural(absEnCours.length)} aujourd’hui`, absEnCours.map(a => a.nom).join(", "), () => { S.rhEspace = "absences"; renderPersonnel(); }] : null,
     dags.length ? [`${dags.length} demande${plural(dags.length)} en attente`, dags.slice(0, 4).map(d => `${d.nom} (${(DAG_TYPES[d.type] || DAG_TYPES.autre).nom.toLowerCase()})`).join(", "), () => { S.rhEspace = "demandes"; renderPersonnel(); }] : null,
