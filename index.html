@@ -1678,6 +1678,7 @@ table.es-payes{min-width:0;width:100%}
       <div id="py-rappels"></div>
       <div class="paste-row" id="py-actions"></div>
     </div>
+    <div class="card" id="py-conseil" style="margin-top:16px" hidden></div>
     <div class="card" id="py-prevision" style="margin-top:16px" hidden></div>
     <div class="card" id="py-cls" style="margin-top:16px"></div>
     <div class="dash-grid">
@@ -5624,6 +5625,70 @@ function payePrevision(k) {
   return { k, grades: [...grades.values()].sort((a, z) => a.max - z.max || String(a.grade).localeCompare(String(z.grade), "fr")), agents: [...grades.values()].reduce((t, g) => t + g.n, 0),
     maxSem, budget: b, enCours, du, proj, coefMax, coefProj, moisMax: b.deja + b.n * maxSem, plafondHeures: ph };
 }
+/* ---------- Budget des payes conseillé ---------- */
+// Ce qu'il faut au mois pour payer chaque semaine en entier et solder les rappels : ce qui est déjà versé,
+// les semaines restantes au « rythme » (la plus haute de la dernière semaine versée et de la moyenne des 4
+// dernières, en payes dues avant prorata ; une semaine déjà saisie à ce qu'elle coûte, si c'est plus) et
+// les rappels encore dus. Face au budget du mois (demandes « salaires »), il donne le complément à demander.
+function rythmePayes() {
+  const v = payesVersees().slice().sort((a, b) => String(a.semaine || a.id).localeCompare(String(b.semaine || b.id))).slice(-4).map(p => payeCalc(p.semaine || p.id).totalDu);
+  if (!v.length) return { rythme: 0, dernier: 0, moyenne: 0, n: 0 };
+  const dernier = v[v.length - 1], moyenne = Math.round(v.reduce((t, x) => t + x, 0) / v.length);
+  return { rythme: Math.max(dernier, moyenne), dernier, moyenne, n: v.length };
+}
+function besoinPayes(m) {
+  const r = rythmePayes(), cur = semKey(new Date()), sem = [];
+  let prevu = 0;
+  for (const w of semainesDuMois(m)) {
+    if (payeVersee(payeOf(w))) continue;
+    const du = w <= cur ? payeCalc(w).totalDu : 0, v = w < cur && du > 0 ? du : Math.max(du, r.rythme);
+    prevu += v; sem.push({ w, v, du, enCours: w === cur, passee: w < cur });
+  }
+  const deja = payesImpute(payeSvc(), m).total, rap = rappelsDus().reduce((t, x) => t + (Number(x.reste) || 0), 0);
+  const sal = salairesMois(m), budget = sal > 0 ? sal : Math.max(0, Math.round(Number(payeCfg().budgetMois) || 0));
+  const besoin = deja + prevu + rap;
+  return { m, r, sem, deja, prevu, rap, besoin, budget, sal, dms: salairesDemandes(m), manque: Math.max(0, besoin - budget), marge: Math.max(0, budget - besoin) };
+}
+const arrondiHaut = (v, pas) => Math.ceil(v / pas) * pas;
+// Prépare la demande « salaires » dans « Saisir une demande » : à vérifier, enregistrer puis accorder.
+function preparerDemandeSalaires(m, montant, complement) {
+  newDemFor(payeSvc());
+  setTimeout(() => {
+    const objet = `${complement ? "Complément de salaires" : "Budget salaires"} ${moisNom(m)}`;
+    $("#m-nature").value = "salaires"; $("#m-objet").value = objet;
+    moisOptions($("#m-per"), m); $("#m-per").dataset.touched = "1";
+    setArticles([{ designation: objet, quantite: 1, prixUnitaire: montant }]);
+    renderDemEnv();
+    toast(`Demande « salaires » de ${money(montant)} préparée pour ${moisNom(m)} : vérifiez, enregistrez, puis accordez-la.`);
+  }, 80);
+}
+function renderConseilPayes() {
+  const box = $("#py-conseil");
+  if (!box) return;
+  if (!(S.fonctionnaires || []).some(f => f.actif !== false) || !payesVersees().length) { box.hidden = true; fill(box); return; }
+  const m = moisDe(semKey(new Date())), x = besoinPayes(m), w = writer(), r = x.r;
+  const [ya, ma] = m.split("-").map(Number), suiv = ma === 12 ? `${ya + 1}-01` : `${ya}-${String(ma + 1).padStart(2, "0")}`;
+  const ns = semainesDuMois(suiv).length, besoinSuiv = ns * r.rythme, salSuiv = salairesMois(suiv);
+  const item = (l, v, sub, cls) => h("div", {}, h("span", { class: "l", text: l }), h("span", { class: "v" + (cls ? " " + cls : ""), text: v }), sub ? h("span", { class: "s", text: sub }) : null);
+  const semTxt = x.sem.map(z => `S${(bounds(z.w) || {}).week} ${z.passee ? "à verser" : z.enCours ? "en cours" : "à venir"} ≈ ${money(z.v)}`).join(", ");
+  const complement = arrondiHaut(x.manque, 10000);
+  fill(box,
+    h("div", { class: "card-head" }, h("div", {}, h("h3", { text: `Budget des payes ${deMois(m)}` }),
+      h("p", { class: "sub", text: `Ce qu’il faut pour payer chaque semaine en entier et solder les rappels. Rythme retenu : ${money(r.rythme)} par semaine (la plus haute de la dernière semaine versée, ${money(r.dernier)}, et de la moyenne des ${r.n} dernières, ${money(r.moyenne)}, en payes dues avant prorata).` }))),
+    h("div", { class: "py-prev-kv", id: "py-conseil-kv" },
+      item("Déjà versé", money(x.deja)),
+      item("Semaines restantes", money(x.prevu), semTxt || "aucune"),
+      item("Rappels encore dus", money(x.rap)),
+      item("Besoin du mois", money(x.besoin), `budget : ${money(x.budget)}${x.sal ? ` (${x.dms.map(dmNo).join(", ")})` : " (réglage)"}`, x.manque ? "neg" : "")),
+    x.manque
+      ? h("div", { class: "py-note", style: "margin:12px 0 0" }, h("b", { text: `Il manque ${money(x.manque)}. ` }), `Sans complément, les payes seront réduites au prorata et des rappels resteront dus.`,
+          w ? h("div", { style: "margin-top:8px" }, h("button", { class: "btn small", type: "button", id: "py-complement", onclick: () => preparerDemandeSalaires(m, complement, true), text: `Préparer la demande de complément (${money(complement)})` })) : null)
+      : h("div", { class: "py-note ok", style: "margin:12px 0 0" }, h("b", { text: "Le budget suffit au rythme actuel. " }), `Marge : ${money(x.marge)}.`),
+    h("div", { class: "py-note info", style: "margin:10px 0 0" }, h("b", { text: `${MoisNom(suiv)} : ` }),
+      `${ns} semaine${plural(ns)} de paye × ${money(r.rythme)} = ${money(besoinSuiv)}${salSuiv ? ` ; demandes « salaires » déjà accordées : ${money(salSuiv)}` : ""}.`,
+      w && besoinSuiv > salSuiv ? h("button", { class: "linkbtn", type: "button", id: "py-mois-suivant", style: "margin-left:6px", onclick: () => preparerDemandeSalaires(suiv, arrondiHaut(besoinSuiv - salSuiv, 10000), salSuiv > 0), text: `Préparer la demande (${money(arrondiHaut(besoinSuiv - salSuiv, 10000))})` }) : null));
+  box.hidden = false;
+}
 function renderPrevision(k0) {
   const box = $("#py-prevision");
   const k = !payeVersee(payeOf(k0)) ? k0 : semKey(new Date());
@@ -5692,7 +5757,14 @@ function renderPayes(force) {
     if (b.limite === "enveloppe") bl.push(h("span", { class: "warn", text: `Limité par l’enveloppe ${c.service} : il n’y reste que ${money(b.envReste)}` }));
     if (w) bl.push(h("button", { class: "linkbtn", type: "button", onclick: () => openPayeBudget(k), text: "Changer le budget de la semaine" }));
   }
+  // Avant de verser : la semaine dépasse son budget → le complément du mois, ou un budget de semaine plus haut.
+  if (!x.versee && x.coef < 1 && x.totalDu > 0) {
+    const bp = besoinPayes(b.mois || moisDe(k)), comp = arrondiHaut(bp.manque, 10000);
+    bl.push(h("span", { class: "warn", id: "py-depasse" }, `Cette semaine coûte ${money(x.totalDu)} pour ${money(b.dispo)} de budget : payes à ${pctC(x.coef)}, ${money(x.totalDu - x.totalVerse)} en rappels. `,
+      w && comp > 0 ? h("button", { class: "linkbtn", type: "button", onclick: () => preparerDemandeSalaires(bp.m, comp, true), text: `Préparer un complément de ${money(comp)}` }) : null));
+  }
   fill($("#py-budget"), h("div", { class: "py-budget" }, bl));
+  renderConseilPayes();
   renderPrevision(k);
   // Tableau des agents
   const shown = x.lignes;
