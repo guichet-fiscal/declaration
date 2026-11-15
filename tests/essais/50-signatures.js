@@ -24,8 +24,10 @@ module.exports = {
     await a.keyboard.press("Escape"); await pause(a, 200);
     await a.locator("#espace-signature").click(); await pause(a, 900);
     t.egal(await a.locator("#sig-fonction").inputValue(), "Cheffe du bureau des impôts", "repris à la réouverture");
-    await a.locator("#dlg button", { hasText: "Valeurs du guichet" }).click(); await pause(a, 700);
-    t.ok((await a.locator("#sig-fonction").inputValue()) === "Agent administratif" && !(await a.evaluate(() => localStorage.getItem("gf-signature-f1"))), "valeurs du guichet rétablies");
+    t.ok(await a.locator("#sig-annuler").isEnabled(), "« Annuler mes changements » actif après un changement");
+    await a.locator("#sig-annuler").click(); await pause(a, 700);
+    t.ok((await a.locator("#sig-fonction").inputValue()) === "Agent administratif" && !(await a.evaluate(() => localStorage.getItem("gf-signature-f1"))), "changements annulés : valeurs remplies par le guichet");
+    t.ok(await a.locator("#sig-annuler").isDisabled(), "rien à annuler : bouton grisé");
     t.egal(await a.locator("#sig-dl").getAttribute("download"), "signature-alice-martin.png", "nom du fichier");
     t.sansErreur(a);
 

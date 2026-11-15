@@ -7089,6 +7089,7 @@ function openSignature(fid, back) {
     const diff = {}; for (const k of ["nom", "fonction", "email", "discord", "photo"]) if (v[k] !== def[k]) diff[k] = v[k];
     if (v.service.some((x, i) => x !== def.service[i])) diff.service = v.service;
     try { if (Object.keys(diff).length) localStorage.setItem(signatureCle(fid), JSON.stringify(diff)); else localStorage.removeItem(signatureCle(fid)); } catch (e) { /* sans stockage */ }
+    remettre.disabled = !Object.keys(diff).length;
   };
   const plusTard = () => { clearTimeout(minuteur); minuteur = setTimeout(dessiner, 250); };
   [nom, fonction, email, discord, ...serv].forEach(x => x.addEventListener("input", plusTard)); photo.addEventListener("change", dessiner);
@@ -7097,7 +7098,8 @@ function openSignature(fid, back) {
     try { navigator.clipboard.write([new ClipboardItem({ "image/png": new Promise(res => canvas.toBlob(res, "image/png")) })]).then(() => toast("Signature copiée : collez-la au bas de votre document avec Ctrl + V."), () => toast("Le navigateur a refusé la copie : téléchargez-la.", true)); }
     catch (e) { toast("Ce navigateur ne sait pas copier une image : téléchargez-la.", true); }
   } });
-  const remettre = h("button", { class: "btn ghost small", type: "button", text: "Valeurs du guichet", onclick: () => {
+  // Revient à ce que le guichet remplit tout seul (fiche, contrat, adresse tirée du nom), en oubliant les changements.
+  const remettre = h("button", { class: "btn ghost small", type: "button", id: "sig-annuler", disabled: true, title: "Revenir au nom de la fiche, à la fonction du contrat et à l’adresse tirée du nom", text: "Annuler mes changements", onclick: () => {
     nom.value = def.nom; fonction.value = def.fonction; email.value = def.email; discord.value = def.discord; serv.forEach((x, i) => { x.value = def.service[i]; }); photo.checked = true; dessiner();
   } });
   openDialog({ eyebrow: espace ? "Mon espace" : "Personnel de la Préfecture", title: espace ? "Ma signature" : `Signature de ${f.nom || "l’agent"}`, wide: true,
@@ -7152,7 +7154,7 @@ function openSignaturesTous() {
     etat.textContent = `${fichiers.length} signature${plural(fichiers.length)} dans signatures-agents.zip.`; tout.disabled = false;
   });
   openDialog({ eyebrow: "Personnel de la Préfecture", title: "Signatures des agents", wide: true,
-    body: [h("p", { style: "margin:0", text: "Chaque fonctionnaire a sa signature dans Mon espace (« Ma signature »). Ici, celle de chacun avec les valeurs du guichet : nom de la fiche, fonction du dernier contrat (sinon le grade), adresse tirée du nom, photo de profil. Ouvrez-en une pour l’ajuster avant de l’envoyer." }),
+    body: [h("p", { style: "margin:0", text: "Chaque fonctionnaire a sa signature dans Mon espace (« Ma signature »). Ici, celle de chacun telle que le guichet la remplit : nom de la fiche, fonction du dernier contrat (sinon le grade), adresse tirée du nom, photo de profil. Ouvrez-en une pour l’ajuster avant de l’envoyer." }),
       h("ul", { class: "ent-list", id: "sigs-l" }, l.map(f => h("li", {},
         h("div", { style: "min-width:0;display:flex;gap:10px;align-items:center" }, avatar(f.id, f.nom, 32), h("div", { style: "min-width:0" }, h("strong", { text: f.nom || "Sans nom" }), h("span", { class: "meta", text: sigReglages(f, false).fonction || "—" }))),
         h("span", { class: "meta", text: sigEmail(f.nom) }),
