@@ -4176,10 +4176,11 @@ function renderDV() {
   const coches = [...ids].map(id => { const a = dirs.find(x => String(x.discord_id) === id); const cb = h("input", { type: "checkbox", value: id, "data-dv-ex": id }); cb.checked = c.exemptes.includes(id); cb.disabled = !w;
     return h("label", { class: "switch" }, cb, h("span", { text: a ? `${a.nom || "Sans nom"}${id === S.discordId ? " (vous)" : ""}` : `Compte ${id}${a ? "" : " (hors liste des accès)"}` })); });
   const go = h("button", { class: "btn small", type: "button", text: "Enregistrer", disabled: !w, onclick: async ev => {
-    ev.currentTarget.disabled = true;
+    const evBtn = ev.currentTarget;
+    evBtn.disabled = true;
     const v = { actif: actif.checked, seuil: Math.max(0, Math.round(Number(seuil.value) || 0)) || DV_DEF.seuil, exemptes: $$("#dv-card input[data-dv-ex]").filter(i => i.checked).map(i => i.value) };
     if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { doubleValidation: v, updatedAt: nowISO() })))) toast("Double validation enregistrée.");
-    ev.currentTarget.disabled = false;
+    evBtn.disabled = false;
   } });
   fill(box, h("h3", { text: "Double validation" }),
     h("p", { class: "sub", text: `Annuler une pénalité, supprimer une déclaration, retirer une entreprise ou accorder un prêt d’au moins ${money(c.seuil)} : un membre de la Direction le demande, un autre le valide. Les comptes cochés plus bas agissent seuls.` }),
@@ -6413,9 +6414,10 @@ function openCtr(id, back) {
   const sigDate = h("input", { type: "date", id: "ct-sig-date" }); sigDate.value = jourCle(new Date());
   const sigBox = h("div", { class: "paste-row", hidden: true }, field("ct-sig-date", "Signé par le salarié le", sigDate),
     h("button", { class: "btn ink small", type: "button", onclick: async ev => {
-      ev.currentTarget.disabled = true;
+    const evBtn = ev.currentTarget;
+      evBtn.disabled = true;
       const body = Object.assign({}, ct, { statut: "signe", salarieSigneLe: sigDate.value || jourCle(new Date()), signeEnregistrePar: S.agentName || "", modifieLe: nowISO() }); delete body.id;
-      if (await write(() => S.db.doc("contratsTravail/" + id).set(body))) { toast(`Contrat ${ctrNo(ct)} signé par ${ct.nom}.`); reopen(); } else ev.currentTarget.disabled = false;
+      if (await write(() => S.db.doc("contratsTravail/" + id).set(body))) { toast(`Contrat ${ctrNo(ct)} signé par ${ct.nom}.`); reopen(); } else evBtn.disabled = false;
     }, text: "Confirmer la signature" }));
   const retirer = async (bt, quoi) => {
     if (bt.dataset.confirme !== "1") { bt.dataset.confirme = "1"; bt.textContent = quoi === "sig" ? "Confirmer : le contrat redevient à signer" : "Confirmer la suppression"; return; }
@@ -6575,9 +6577,10 @@ function openPhotoProfil(fid, nom, apres) {
     if (await noterPhotoProfil(fid, true)) fini(moi ? "Votre photo de profil est enregistrée." : `Photo de ${nom || "l’agent"} enregistrée.`); else go.disabled = false;
   });
   const retirer = at ? h("button", { class: "btn ghost small", type: "button", text: "Retirer la photo", onclick: async ev => {
-    ev.currentTarget.disabled = true;
+    const evBtn = ev.currentTarget;
+    evBtn.disabled = true;
     try { await S.sb.storage.from("profils").remove([fid + ".jpg"]); } catch (e) { /* la fiche n'en parle plus */ }
-    if (await noterPhotoProfil(fid, false)) fini("Photo retirée."); else ev.currentTarget.disabled = false;
+    if (await noterPhotoProfil(fid, false)) fini("Photo retirée."); else evBtn.disabled = false;
   } }) : null;
   openDialog({ eyebrow: moi ? "Mon espace" : "Personnel de la Préfecture", title: moi ? "Ma photo de profil" : `Photo de ${nom || "l’agent"}`, body: [zone],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => closeDialog(), text: "Annuler" }), retirer, h("span", { class: "spacer" }), go] });
@@ -8107,10 +8110,11 @@ function openMainCourante() {
       resume],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
       secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: async ev => {
-        const p = lire(); if (!p) return; ev.currentTarget.disabled = true;
+    const evBtn = ev.currentTarget;
+        const p = lire(); if (!p) return; evBtn.disabled = true;
         const id = secuNouvelId("securiteRapports");
         const data = Object.assign(secuAuteur(), { type: "main_courante", titre: "Main courante " + periodeTxt(p[0], p[1]), date: p[1].toISOString(), lieu: "Préfecture", personnes: "", recit: mainCouranteTexte(p[0], p[1]), photos: [], statut: "remis", at: nowISO(), modifieLe: null });
-        if (await secuEnregistrer("securiteRapports", id, data)) { toast("Main courante remise aux responsables."); closeDialog(); } else ev.currentTarget.disabled = false;
+        if (await secuEnregistrer("securiteRapports", id, data)) { toast("Main courante remise aux responsables."); closeDialog(); } else evBtn.disabled = false;
       }, text: "Remettre comme rapport" }) : null,
       h("button", { class: "btn small", type: "button", onclick: () => { const p = lire(); if (p) showDocImage(mainCouranteDoc(p[0], p[1]), openMainCourante); }, text: "Voir l’image" })] });
 }
@@ -12565,10 +12569,11 @@ function openErreurGroupe(g) {
     x0.pile ? h("details", { class: "err-pile" }, h("summary", { text: "Détail technique (pile d’appels)" }), h("pre", { text: x0.pile })) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: openErreurs, text: "Retour" }), h("span", { class: "spacer" }),
       h("button", { class: "btn small", type: "button", onclick: async ev => {
-        ev.currentTarget.disabled = true;
+    const evBtn = ev.currentTarget;
+        evBtn.disabled = true;
         let r;
         try { r = await S.sb.from("erreurs_client").delete().eq("empreinte", g.empreinte); } catch (e) { r = { error: e }; }
-        if (r.error) { toast("Effacement refusé : " + (r.error.message || "erreur inconnue"), true); ev.currentTarget.disabled = false; return; }
+        if (r.error) { toast("Effacement refusé : " + (r.error.message || "erreur inconnue"), true); evBtn.disabled = false; return; }
         toast("Erreur marquée comme réglée."); openErreurs();
       }, text: "Marquer comme réglée" })] });
 }
@@ -18674,12 +18679,13 @@ function openComRefus(c0, x, back) {
     body: [h("p", { style: "margin:0", text: `${x.destinataireNom} n’a pas répondu avant le ${fmtDateTime(new Date(x.delai))}. L’amende pour refus de communication lui est infligée (art. 1734 du CGI).` }),
       h("div", { class: "field" }, h("label", { for: "dc-amende", text: "Amende" }), h("div", { class: "money", "data-cur": cur() }, m)), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Annuler" }), h("span", { class: "spacer" }), h("button", { class: "btn danger small", type: "button", onclick: async ev => {
+    const evBtn = ev.currentTarget;
       const v = Math.round(Number(m.value) || 0);
       if (v <= 0) { err.textContent = "Indiquez le montant de l’amende."; return; }
-      ev.currentTarget.disabled = true;
+      evBtn.disabled = true;
       const d = S.entreprises.find(y => y.id === x.destinataireId) || { id: x.destinataireId, nom: x.destinataireNom };
       const pid = await addPenalty(d, `Refus de communication · ${comNo(c0, x)} (contrôle ${dossierNo("CF", c0.id)})`, v, null, { communication: { controleId: c0.id, id: x.id } });
-      if (!pid) { ev.currentTarget.disabled = false; return; }
+      if (!pid) { evBtn.disabled = false; return; }
       if (await saveControleList(c0, "communications", l => l.map(y => y.id === x.id ? Object.assign({}, y, { statut: "refus", refusLe: nowISO(), penaliteId: pid }) : y), `Amende de ${money(v)} infligée à ${d.nom}.`)) back();
     }, text: "Infliger l’amende" })] });
 }
@@ -24633,7 +24639,7 @@ function renderPortail() {
     h("ul", { class: "ent-list" }, rl.slice(0, 12).sort((a, b) => (rlSettled(a) - rlSettled(b)) || String(b.at).localeCompare(String(a.at))).map(r => h("li", {},
       h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: rlLabel(r) }), h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))} · ${r.type !== "paiement" ? (r.periodes || []).map(periodPlain).join(", ") : money(r.montant)}${r.accuseLe ? " · lue le " + fmtDateTime(new Date(r.accuseLe)) : ""}` })),
       rlStateChip(r), h("span", { class: "row-actions" }, h("button", { class: "btn ghost small", type: "button", onclick: () => { lettreVue(r, false); showDocImage(relanceDoc(r)); }, text: "Voir" }),
-        !r.accuseLe && !rlSettled(r) && S.portail.lettres !== false ? h("button", { class: "btn small", type: "button", onclick: async ev => { ev.currentTarget.disabled = true; if (await lettreVue(r, true)) { toast("Merci : la Préfecture sait que vous avez lu cette lettre."); renderPortail(); } else ev.currentTarget.disabled = false; }, text: "J’ai pris connaissance" }) : null))))) : null;
+        !r.accuseLe && !rlSettled(r) && S.portail.lettres !== false ? h("button", { class: "btn small", type: "button", onclick: async ev => { const evBtn = ev.currentTarget; evBtn.disabled = true; if (await lettreVue(r, true)) { toast("Merci : la Préfecture sait que vous avez lu cette lettre."); renderPortail(); } else evBtn.disabled = false; }, text: "J’ai pris connaissance" }) : null))))) : null;
   const cardSig = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Signaler une fraude" })),
     h("p", { class: "muted", style: "margin:0", text: "Une entreprise qui ne déclare pas tout, paie en liquide pour cacher ses ventes ou emploie sans déclarer ? Signalez-le : la Préfecture peut ouvrir un contrôle. L’entreprise visée n’en saura rien, et une prime peut vous être versée sur ce qui sera recouvré." }),
     h("div", { class: "paste-row", style: "margin-top:8px" }, h("button", { class: "btn ghost small", type: "button", onclick: openSignalForm, text: "Faire un signalement" })));
