@@ -30,7 +30,8 @@ module.exports = {
     t.ok(f1 && f1.essai && f1.essai.statut === "concluant" && f1.essai.par, "décision gardée sur la fiche", JSON.stringify(f1 && f1.essai));
     t.contient(texte(await d.locator("#dlg").innerText()), "Période d’essai concluante", "la fiche affiche l'essai concluant");
     await d.locator("#dlg button", { hasText: "Fermer" }).click(); await pause(d, 400);
-    t.ok(!/Alice MARTIN/.test(texte(await d.locator("#rh-bord").innerText()).split("À surveiller")[1] || ""), "plus d'alerte pour Alice");
+    // (Alice reste citée parmi les dossiers d'arrivée incomplets : photo et carte manquent.)
+    t.ok(!/période d’essai de Alice MARTIN/.test(texte(await d.locator("#rh-bord").innerText()).split("À surveiller")[1] || ""), "plus d'alerte d'essai pour Alice");
 
     // Prolongation au-delà de la semaine : l'alerte s'arrête, la fiche dit la nouvelle date.
     await d.locator("#rh-bord .linkbtn", { hasText: "Directeur Test" }).click(); await pause(d, 400);
