@@ -1232,7 +1232,11 @@ button.ts-p{cursor:pointer}
 .chrono-f{margin:0 0 10px}
 .consigne-l{display:grid;gap:6px}
 .consigne-r{display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr) 64px auto;gap:6px;align-items:center}
-@media (max-width:560px){.consigne-r{grid-template-columns:1fr 64px auto}.consigne-r input:not([type=number]){grid-column:1/-1;grid-row:2}}
+.consigne-ret{grid-column:1/-1;display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink-2)}
+.consigne-ret input[type=checkbox]{width:auto;flex:none}
+.consigne-ret > span{white-space:nowrap}
+.consigne-ret .consigne-ret-motif{flex:1 1 auto;min-width:0}
+@media (max-width:560px){.consigne-r{grid-template-columns:1fr 64px auto}.consigne-r > input:not([type=number]){grid-column:1/-1;grid-row:2}}
 .secu-consigne{margin:0 0 14px;padding:10px 12px;border:1px solid var(--rule);border-radius:8px}
 .tvs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 12px;align-items:end}
 .tvs-grid label{font-size:12.5px}
@@ -4962,6 +4966,8 @@ function todoItems() {
     add(cj.length, `Rendez-vous de paiement aujourd’hui`, cj.slice(0, 3).map(c => `${hhmm(c.debut)} ${c.entrepriseNom || "?"}`).join(", "), () => allerA("convocations"), "info");
     const nr = secuListe("securiteEntrees").filter(x => x.sortie && enConsigne(x));
     add(nr.length, `Consigne : objets non récupérés`, nr.slice(0, 3).map(x => `${consigneTicket(x)} ${x.nom}`).join(", "), () => { S.secuVue = "entrees"; allerA("securite"); });
+    const ar = secuListe("securiteEntrees").filter(aRemettre);
+    add(ar.length, `Consigne : objets retenus à remettre`, ar.slice(0, 3).map(x => `${consigneTicket(x)} ${consigneTxt(retenus(x))}`).join(", "), () => { S.secuVue = "entrees"; allerA("securite"); }, "info");
     const so = secuOubliees();
     add(so.length, `Sortie${plural(so.length)} oubliée${plural(so.length)} au registre des entrées`, `Dans les locaux depuis plus de ${secuOubliH()} h : ${so.slice(0, 3).map(x => x.nom).join(", ")}`, () => { S.secuVue = "entrees"; allerA("securite"); });
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
@@ -7981,10 +7987,17 @@ const secuDate = el => { const d = el.value ? new Date(el.value) : new Date(); r
 /* ---------- Consigne : armes et objets déposés à l'entrée ---------- */
 // Déposés à l'arrivée (sorte, description, nombre), avec un ticket « C-… » ; rendus à la sortie. Une personne
 // sortie sans les avoir récupérés reste signalée (« Objets non récupérés ») jusqu'à ce qu'ils soient rendus.
+// Un objet qui ne doit pas être rendu (arme sans permis, objet volé, pièce à conviction…) est « retenu », avec
+// un motif : il n'est pas proposé à la sortie et attend d'être remis (police, justice…) ou rendu finalement.
 const SECU_CONSIGNE = { poing: "Arme de poing", longue: "Arme longue", blanche: "Arme blanche", intermediaire: "Matraque, Taser", munitions: "Munitions", telephone: "Téléphone", sac: "Sac", autre: "Autre objet" };
 const consigneTicket = x => "C-" + String(x.id || "").slice(-4).toUpperCase();
 const consigneTxt = l => (l || []).map(o => `${SECU_CONSIGNE[o.type] || "Objet"}${o.desc ? " (" + o.desc + ")" : ""}${Number(o.n) > 1 ? " × " + o.n : ""}`).join(", ");
-const enConsigne = x => !!x && (x.consigne || []).length > 0 && !x.consigneRendue;
+const rendables = x => ((x && x.consigne) || []).filter(o => !o.retenu);
+const retenus = x => ((x && x.consigne) || []).filter(o => o.retenu);
+const enConsigne = x => !!x && rendables(x).length > 0 && !x.consigneRendue;
+const aRemettre = x => !!x && retenus(x).length > 0 && !x.consigneRemise;
+const SECU_REMISE = { police: "Remis à la police", gendarmerie: "Remis à la gendarmerie", justice: "Remis à la justice", detruit: "Détruit", rendu: "Rendu finalement à la personne" };
+const retenusTxt = x => retenus(x).map(o => `${consigneTxt([o])}, motif : ${o.retenu.motif}`).join(" ; ");
 function champConsigne(l) {
   const box = h("div", { class: "consigne-l", id: "se-consigne" }), lignes = [];
   const ajouter = o => {
@@ -7992,15 +8005,65 @@ function champConsigne(l) {
     const type = h("select", { "aria-label": "Objet déposé" }, Object.entries(SECU_CONSIGNE).map(([k, t]) => h("option", { value: k, text: t }))); type.value = o.type || "poing";
     const desc = h("input", { maxlength: "60", placeholder: "Modèle, couleur… (facultatif)", "aria-label": "Description de l’objet" }); desc.value = o.desc || "";
     const n = h("input", { type: "number", min: "1", max: "99", step: "1", inputmode: "numeric", "aria-label": "Nombre" }); n.value = String(o.n || 1);
-    const L = { type, desc, n };
-    L.row = h("div", { class: "consigne-r" }, type, desc, n, h("button", { class: "btn ghost small", type: "button", text: "Retirer", onclick: () => { L.row.remove(); lignes.splice(lignes.indexOf(L), 1); } }));
+    const ret = h("input", { type: "checkbox", class: "consigne-ret-cb" }); ret.checked = !!o.retenu;
+    const motif = h("input", { class: "consigne-ret-motif", maxlength: "120", placeholder: "Pourquoi : arme sans permis, objet volé, pièce à conviction…", "aria-label": "Motif de la retenue" }); motif.value = (o.retenu && o.retenu.motif) || "";
+    motif.hidden = !ret.checked;
+    ret.addEventListener("change", () => { motif.hidden = !ret.checked; if (ret.checked) motif.focus(); });
+    const L = { type, desc, n, ret, motif, avant: o.retenu || null };
+    L.row = h("div", { class: "consigne-r" }, type, desc, n, h("button", { class: "btn ghost small", type: "button", text: "Retirer", onclick: () => { L.row.remove(); lignes.splice(lignes.indexOf(L), 1); } }),
+      h("label", { class: "consigne-ret" }, ret, h("span", { text: "Ne pas rendre" }), motif));
     lignes.push(L); box.appendChild(L.row);
   };
   (l || []).forEach(ajouter);
   const el = h("div", { class: "field" }, h("label", { text: "Consigne : armes et objets déposés" }), box,
     h("div", {}, h("button", { class: "btn ghost small", type: "button", id: "se-consigne-plus", onclick: () => { ajouter(); box.lastChild.querySelector("input").focus(); }, text: "Ajouter un objet" })),
-    h("span", { class: "hint", text: "Rendus à la sortie. Donnez à la personne le numéro de ticket inscrit sur son entrée." }));
-  return { el, valeur: () => lignes.map(L => ({ type: L.type.value, desc: L.desc.value.trim(), n: Math.max(1, Math.min(99, Math.round(Number(L.n.value) || 1))) })) };
+    h("span", { class: "hint", text: "Rendus à la sortie. Donnez à la personne le numéro de ticket inscrit sur son entrée. « Ne pas rendre » : l’objet est retenu (arme sans permis, objet volé…), avec un motif." }));
+  return { el,
+    manque: () => { const L = lignes.find(y => y.ret.checked && y.motif.value.trim().length < 3); return L ? L.motif : null; },
+    valeur: () => lignes.map(L => Object.assign({ type: L.type.value, desc: L.desc.value.trim(), n: Math.max(1, Math.min(99, Math.round(Number(L.n.value) || 1))) },
+      L.ret.checked ? { retenu: { motif: L.motif.value.trim(), at: (L.avant && L.avant.at) || nowISO(), par: (L.avant && L.avant.par) || S.agentName || "" } } : {})) };
+}
+// Retenir des objets encore en consigne : ils ne seront pas rendus (motif obligatoire).
+function secuRetenir(x, fin) {
+  const l = enConsigne(x) ? (x.consigne || []).map((o, i) => [o, i]).filter(([o]) => !o.retenu) : [];
+  if (!l.length) return;
+  const cbs = l.map(([o, i]) => { const cb = h("input", { type: "checkbox", id: "sr-" + i, value: String(i) }); if (l.length === 1) cb.checked = true; return [o, i, cb]; });
+  const motif = h("input", { id: "sr-motif", maxlength: "120", placeholder: "Ex. : arme sans permis de port, objet signalé volé, pièce à conviction" });
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn small", type: "button", id: "sr-ok", text: "Retenir" });
+  go.addEventListener("click", async () => {
+    const pris = cbs.filter(([, , cb]) => cb.checked);
+    if (!pris.length) { err.textContent = "Cochez l’objet à retenir."; return; }
+    if (motif.value.trim().length < 3) { err.textContent = "Indiquez pourquoi il ne sera pas rendu."; motif.focus(); return; }
+    go.disabled = true;
+    const r = { motif: motif.value.trim(), at: nowISO(), par: S.agentName || "" }, idx = new Set(pris.map(([, i]) => i));
+    const data = Object.assign({}, x, { consigne: (x.consigne || []).map((o, i) => idx.has(i) ? Object.assign({}, o, { retenu: r }) : o) }); delete data.id;
+    if (await secuEnregistrer("securiteEntrees", x.id, data)) {
+      toast(`${pris.length > 1 ? "Objets retenus" : "Objet retenu"} : ${consigneTxt(pris.map(([o]) => o))}. ${pris.length > 1 ? "Ils ne seront pas rendus" : "Il ne sera pas rendu"} à ${x.nom}.`);
+      closeDialog(); if (fin) fin(Object.assign({ id: x.id }, data));
+    } else go.disabled = false;
+  });
+  openDialog({ eyebrow: `Sécurité · consigne ${consigneTicket(x)}`, title: "Retenir des objets",
+    body: [h("p", { style: "margin:0", text: `Objets déposés par ${x.nom} qui ne lui seront pas rendus. Ils restent à la consigne jusqu’à leur remise (police, justice…).` }),
+      h("ul", { class: "rl-pick" }, cbs.map(([o, i, cb]) => h("li", {}, h("label", { class: "switch", for: "sr-" + i }, cb, h("strong", { text: consigneTxt([o]) }))))),
+      field("sr-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); if (fin) fin(null); }, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+// Objets retenus : remis (police, gendarmerie, justice), détruits, ou rendus finalement.
+function secuRemettre(x) {
+  const qui = h("select", { id: "sm-qui" }, Object.entries(SECU_REMISE).map(([k, t]) => h("option", { value: k, text: t })));
+  const note = h("input", { id: "sm-note", maxlength: "160", placeholder: "Ex. : agent qui les a pris en charge, numéro de procédure (facultatif)" });
+  const go = h("button", { class: "btn small", type: "button", id: "sm-ok", text: "Enregistrer" });
+  go.addEventListener("click", async () => {
+    go.disabled = true;
+    const data = Object.assign({}, x, { consigneRemise: { a: qui.value, note: note.value.trim(), at: nowISO(), par: S.agentName || "" } }); delete data.id;
+    if (await secuEnregistrer("securiteEntrees", x.id, data)) { toast(`${SECU_REMISE[qui.value]} : ${consigneTxt(retenus(x))} (ticket ${consigneTicket(x)}).`); closeDialog(); }
+    else go.disabled = false;
+  });
+  openDialog({ eyebrow: `Sécurité · consigne ${consigneTicket(x)}`, title: "Objets retenus",
+    body: [kv([["Déposés par", x.nom], ["Objets", retenusTxt(x)], ["Retenus", (() => { const r = retenus(x)[0].retenu; return `${fmtDateTime(new Date(r.at))}${r.par ? " par " + r.par : ""}`; })()]]),
+      h("div", { class: "row2" }, field("sm-qui", "Ce qu’ils deviennent", qui), field("sm-note", "Précision", note))],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
 async function secuRendreConsigne(x) {
   const data = Object.assign({}, x, { consigneRendue: { at: nowISO(), par: S.agentName || "" } }); delete data.id;
@@ -8034,6 +8097,7 @@ function openSecuEntree(x, back, pre) {
   const go = h("button", { class: "btn small", type: "button", text: x ? "Enregistrer" : "Enregistrer l’entrée" });
   go.addEventListener("click", async () => {
     if (nom.value.trim().length < 2) { err.textContent = "Indiquez le nom de la personne."; nom.focus(); return; }
+    const sansMotif = cons.manque(); if (sansMotif) { err.textContent = "Indiquez pourquoi l’objet ne sera pas rendu."; sansMotif.focus(); return; }
     // Interdit d'entrée : un second clic pour passer outre (consigne de la Direction, par exemple).
     if (!x && ident.signales().some(y => y.motif === "interdit") && go.dataset.confirme !== "1") {
       go.dataset.confirme = "1"; go.textContent = "Interdit d’entrée : enregistrer quand même"; err.textContent = "Cette personne est interdite d’entrée. Refusez-la, ou cliquez à nouveau pour noter son entrée malgré tout."; return;
@@ -8048,7 +8112,7 @@ function openSecuEntree(x, back, pre) {
     delete data.id;
     if (await secuEnregistrer("securiteEntrees", rid, data)) {
       const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
-      toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.${data.consigne.length ? ` Ticket de consigne : ${consigneTicket({ id: rid })}.` : ""}`);
+      toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.${data.consigne.length ? ` Ticket de consigne : ${consigneTicket({ id: rid })}.` : ""}${retenus(data).length ? ` Retenu, ne sera pas rendu : ${consigneTxt(retenus(data))}.` : ""}`);
       if (!x && d.attendu) secuArrivee(d.attendu, rid, data);
       if (back) back(); else closeDialog();
     } else go.disabled = false;
@@ -8069,16 +8133,18 @@ async function secuSortie(x, opts) {
   opts = opts || {};
   const noter = async rendre => {
     const data = Object.assign({}, x, { sortie: nowISO(), sortiePar: S.agentName || "" }, rendre && enConsigne(x) ? { consigneRendue: { at: nowISO(), par: S.agentName || "" } } : {}); delete data.id;
-    if (await secuEnregistrer("securiteEntrees", x.id, data)) { toast(`Sortie de ${x.nom} notée à ${hhmm(data.sortie)}.${enConsigne(x) ? rendre ? " Objets de la consigne rendus." : " Objets toujours en consigne." : ""}`, enConsigne(x) && !rendre); return true; }
+    if (await secuEnregistrer("securiteEntrees", x.id, data)) { toast(`Sortie de ${x.nom} notée à ${hhmm(data.sortie)}.${enConsigne(x) ? rendre ? " Objets de la consigne rendus." : " Objets toujours en consigne." : ""}${aRemettre(x) ? ` Retenu, non rendu : ${consigneTxt(retenus(x))}.` : ""}`, enConsigne(x) && !rendre); return true; }
     return false;
   };
   if (!enConsigne(x) || opts.rendre) return noter(!!opts.rendre);
   return new Promise(fin => {
     const choisir = async (rendre, b) => { b.disabled = true; const ok = await noter(rendre); closeDialog(); fin(ok); };
     openDialog({ eyebrow: "Sécurité · sortie", title: `Sortie de ${x.nom}`,
-      body: [h("p", { style: "margin:0" }, "Objets en consigne (ticket ", h("strong", { text: consigneTicket(x) }), ") : ", h("strong", { text: consigneTxt(x.consigne) }), "."),
-        h("p", { class: "hint", style: "margin:6px 0 0", text: "Rendez-les avant qu’elle ne parte. S’ils restent à la consigne, ils seront signalés jusqu’à ce qu’ils soient rendus." })],
-      foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); fin(false); }, text: "Annuler" }), h("span", { class: "spacer" }),
+      body: [h("p", { style: "margin:0" }, "Objets en consigne (ticket ", h("strong", { text: consigneTicket(x) }), ") : ", h("strong", { text: consigneTxt(rendables(x)) }), "."),
+        retenus(x).length ? h("p", { style: "margin:6px 0 0" }, "Retenus, ne sont pas rendus : ", h("strong", { text: retenusTxt(x) }), ".") : null,
+        h("p", { class: "hint", style: "margin:6px 0 0", text: "Rendez-les avant qu’elle ne parte. S’ils restent à la consigne, ils seront signalés jusqu’à ce qu’ils soient rendus. Un objet qui ne doit pas être rendu : « Retenir un objet »." })],
+      foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); fin(false); }, text: "Annuler" }),
+        h("button", { class: "btn ghost small", type: "button", id: "so-retenir", onclick: () => secuRetenir(x, async y => { fin(y ? await secuSortie(y, opts) : false); }), text: "Retenir un objet" }), h("span", { class: "spacer" }),
         h("button", { class: "btn ghost small", type: "button", id: "so-garder", onclick: ev => choisir(false, ev.currentTarget), text: "Sortie sans les rendre" }),
         h("button", { class: "btn small", type: "button", id: "so-rendre", onclick: ev => choisir(true, ev.currentTarget), text: "Objets rendus : noter la sortie" })] });
   });
@@ -8092,7 +8158,8 @@ function openSecuEntreeVue(id) {
       ["Arrivée", fmtDateTime(new Date(x.arrivee))], ["Sortie", x.sortie ? (x.sortieOubliee ? `heure inconnue · close le ${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " par " + x.sortiePar : ""}` : `${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " · notée par " + x.sortiePar : ""}`) : "pas encore notée"],
       x.naissance ? ["Date de naissance", x.naissance] : null,
       ["Pièce d’identité", x.pieceVue ? (x.numero ? `${SECU_PIECES[x.piece] ? SECU_PIECES[x.piece] + " vu" : "vue"} · n° ${x.numero}` : "vue") : "non vérifiée"],
-      (x.consigne || []).length ? ["Consigne", `${consigneTxt(x.consigne)} · ticket ${consigneTicket(x)} · ${x.consigneRendue ? `rendus le ${fmtDateTime(new Date(x.consigneRendue.at))}${x.consigneRendue.par ? " par " + x.consigneRendue.par : ""}` : x.sortie ? "NON RÉCUPÉRÉS" : "en consigne"}`] : null,
+      rendables(x).length ? ["Consigne", `${consigneTxt(rendables(x))} · ticket ${consigneTicket(x)} · ${x.consigneRendue ? `rendus le ${fmtDateTime(new Date(x.consigneRendue.at))}${x.consigneRendue.par ? " par " + x.consigneRendue.par : ""}` : x.sortie ? "NON RÉCUPÉRÉS" : "en consigne"}`] : null,
+      retenus(x).length ? ["Objets retenus", `${retenusTxt(x)} · ticket ${consigneTicket(x)} · retenus le ${fmtDateTime(new Date(retenus(x)[0].retenu.at))}${retenus(x)[0].retenu.par ? " par " + retenus(x)[0].retenu.par : ""} · ${x.consigneRemise ? `${(SECU_REMISE[x.consigneRemise.a] || "remis").toLowerCase()} le ${fmtDateTime(new Date(x.consigneRemise.at))}${x.consigneRemise.par ? " par " + x.consigneRemise.par : ""}${x.consigneRemise.note ? " (" + x.consigneRemise.note + ")" : ""}` : "à remettre"}`] : null,
       ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
       secuSignale(x.nom, x.numero).map(y => secuSignalCarte(y, { voir: true })),
       (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null],
@@ -8100,6 +8167,8 @@ function openSecuEntreeVue(id) {
       resp ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteEntrees", x)) { toast("Entrée supprimée."); closeDialog(); } }, text: "Supprimer" }) : null,
       h("span", { class: "spacer" }),
       secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuEntree(x, reopen), text: "Modifier" }) : null,
+      secuEcrit() && enConsigne(x) ? h("button", { class: "btn ghost small", type: "button", id: "se-retenir", onclick: () => secuRetenir(x, y => { if (y) openSecuEntreeVue(id); }), text: "Retenir un objet" }) : null,
+      secuEcrit() && aRemettre(x) ? h("button", { class: "btn ghost small", type: "button", id: "se-remettre", onclick: () => secuRemettre(x), text: "Objets retenus : remise" }) : null,
       secuEcrit() && enConsigne(x) ? h("button", { class: "btn ghost small", type: "button", id: "se-rendre", onclick: async ev => { ev.currentTarget.disabled = true; if (await secuRendreConsigne(x)) closeDialog(); }, text: "Objets rendus" }) : null,
       secuEcrit() && !x.sortie ? h("button", { class: "btn small", type: "button", onclick: async () => { if (await secuSortie(x)) closeDialog(); }, text: "Noter la sortie" }) : null] });
 }
@@ -8397,6 +8466,8 @@ function mainCourante(du, au) {
   ent.filter(e => dans(e.arrivee)).forEach(e => ev.push({ t: e.arrivee, txt: `Entrée de ${e.nom}${e.qualite ? " (" + e.qualite + ")" : ""}`, sub: [SECU_MOTIFS[e.motif] || "", e.visite ? "voit " + e.visite : "", e.pieceVue ? "" : "pièce non vue", secuSignale(e.nom, e.numero).length ? "personne signalée" : ""].filter(Boolean).join(" · "), agent: e.agent }));
   ent.filter(e => e.sortie && dans(e.sortie)).forEach(e => ev.push({ t: e.sortie, txt: `Sortie de ${e.nom}`, sub: [e.sortieOubliee ? "close en fin de service, heure inconnue" : "", enConsigne(e) ? "sans récupérer sa consigne " + consigneTicket(e) : ""].filter(Boolean).join(" · "), agent: e.sortiePar || "" }));
   ent.filter(e => (e.consigne || []).length && dans(e.arrivee)).forEach(e => ev.push({ t: e.arrivee, txt: `Consigne ${consigneTicket(e)} : ${consigneTxt(e.consigne)} déposé(s) par ${e.nom}`, sub: "", agent: e.agent || "" }));
+  ent.forEach(e => { const r = retenus(e); if (r.length && dans(r[0].retenu.at)) ev.push({ t: r[0].retenu.at, txt: `Consigne ${consigneTicket(e)} : ${consigneTxt(r)} retenu(s), non rendu(s) à ${e.nom}`, sub: r.map(o => o.retenu.motif).filter((m, i, a) => a.indexOf(m) === i).join(" · "), agent: r[0].retenu.par || "" }); });
+  ent.filter(e => e.consigneRemise && dans(e.consigneRemise.at)).forEach(e => ev.push({ t: e.consigneRemise.at, txt: `Consigne ${consigneTicket(e)} : objets retenus de ${e.nom} · ${(SECU_REMISE[e.consigneRemise.a] || "remis").toLowerCase()}`, sub: e.consigneRemise.note || "", agent: e.consigneRemise.par || "" }));
   ent.filter(e => e.consigneRendue && dans(e.consigneRendue.at)).forEach(e => ev.push({ t: e.consigneRendue.at, txt: `Consigne ${consigneTicket(e)} rendue à ${e.nom}`, sub: "", agent: e.consigneRendue.par || "" }));
   const ctl = secuListe("securiteControles").filter(c => dans(c.date));
   ctl.forEach(c => ev.push({ t: c.date, txt: `Contrôle d’identité de ${c.nom} : ${((SECU_RESULTATS[c.resultat] || SECU_RESULTATS.conforme)[0]).toLowerCase()}`, sub: [c.lieu, SECU_CTRL_MOTIFS[c.motif] || ""].filter(Boolean).join(" · "), agent: c.agent, muted: false }));
@@ -8550,11 +8621,21 @@ function renderSecurite() {
     const cons = ent.filter(enConsigne).filter(x => trouve(x.nom, consigneTicket(x))).sort((a, b) => (!!b.sortie - !!a.sortie) || String(a.arrivee).localeCompare(String(b.arrivee)));
     const ligneCons = x => h("li", { class: x.sortie ? "secu-signale" : null },
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuEntreeVue(x.id), text: `${consigneTicket(x)} · ${x.nom}` }),
-        h("span", { class: "meta", text: `${consigneTxt(x.consigne)} · déposés ${quandSecu(x.arrivee)}` })),
+        h("span", { class: "meta", text: `${consigneTxt(rendables(x))} · déposés ${quandSecu(x.arrivee)}` })),
       chip(x.sortie ? ["Non récupérés", "bad"] : ["Dans les locaux", "info"]),
       w ? h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.currentTarget.disabled = true; secuRendreConsigne(x); }, text: "Rendus" }) : h("span", {}));
-    corps = [cons.length ? h("div", { class: "secu-consigne" }, h("h4", { class: "mini-title", style: "margin:0 0 6px", text: `En consigne (${cons.length})${cons.some(x => x.sortie) ? ` · ${cons.filter(x => x.sortie).length} non récupérée${plural(cons.filter(x => x.sortie).length)}` : ""}` }),
-        h("ul", { class: "ent-list", id: "secu-consigne-l" }, cons.map(ligneCons))) : null,
+    // Objets retenus (à ne pas rendre) : jusqu'à leur remise.
+    const ret = ent.filter(aRemettre).filter(x => trouve(x.nom, consigneTicket(x))).sort((a, b) => String(a.arrivee).localeCompare(String(b.arrivee)));
+    const ligneRet = x => h("li", {},
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuEntreeVue(x.id), text: `${consigneTicket(x)} · ${x.nom}` }),
+        h("span", { class: "meta", text: `${retenusTxt(x)} · retenus ${quandSecu(retenus(x)[0].retenu.at)}` })),
+      chip(["Retenu · ne pas rendre", "bad"]),
+      w ? h("button", { class: "btn ghost small", type: "button", onclick: () => secuRemettre(x), text: "Remise" }) : h("span", {}));
+    corps = [cons.length || ret.length ? h("div", { class: "secu-consigne" },
+        cons.length ? h("h4", { class: "mini-title", style: "margin:0 0 6px", text: `En consigne (${cons.length})${cons.some(x => x.sortie) ? ` · ${cons.filter(x => x.sortie).length} non récupérée${plural(cons.filter(x => x.sortie).length)}` : ""}` }) : null,
+        cons.length ? h("ul", { class: "ent-list", id: "secu-consigne-l" }, cons.map(ligneCons)) : null,
+        ret.length ? h("h4", { class: "mini-title", style: `margin:${cons.length ? "12px" : "0"} 0 6px`, text: `Objets retenus, à ne pas rendre (${ret.length})` }) : null,
+        ret.length ? h("ul", { class: "ent-list", id: "secu-retenus-l" }, ret.map(ligneRet)) : null) : null,
       h("div", { class: "secu-titre" }, h("h4", { class: "mini-title", style: "margin:0", text: `Visiteurs attendus aujourd’hui (${attJour.length})` }),
         w ? h("button", { class: "btn ghost small", type: "button", id: "secu-attendu", onclick: () => openSecuAttendu(null), text: "Annoncer un visiteur" }) : null),
       attJour.length ? h("ul", { class: "ent-list", id: "secu-attendus" }, attJour.map(ligneAtt)) : h("p", { class: "muted", text: "Personne n’est annoncé pour aujourd’hui." }),
