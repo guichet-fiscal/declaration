@@ -150,6 +150,19 @@
         rows.set("delais/" + id, { collection: "delais", id, data: { entrepriseId: e.id, entrepriseNom: e.data.nom, decls: args.p_decls, mode: args.p_mode, nb: args.p_mode === "plusieurs" ? args.p_nb : undefined, jours: args.p_mode === "report" ? args.p_jours : undefined, motif: args.p_motif, statut: "attente", enLigne: true, at: iso() } });
         return { data: { id }, error: null };
       }
+      // Disponibilités (mise à jour 51) ; __sans51 = script absent.
+      if (name === "mes_disponibilites") {
+        if (window.__sans51) return { data: null, error: { message: "Could not find the function public.mes_disponibilites in the schema cache", code: "PGRST202" } };
+        const f = fonc(); if (!f) return { data: null, error: { message: "Votre compte n’est relié à aucune fiche de fonctionnaire en service." } };
+        const cle = "rh/dispo-" + f.id, cur = rows.get(cle);
+        if (!args || args.p_data == null) return { data: cur ? cur.data : {}, error: null };
+        const ok = x => /^([01]\d|2[0-3]):[0-5]\d$/.test(x || "");
+        const hebdo = args.p_data.hebdo || [], ponct = args.p_data.ponctuelles || [];
+        if (hebdo.some(x => !(x.j >= 1 && x.j <= 7) || !ok(x.de) || !ok(x.a) || x.de === x.a)) return { data: null, error: { message: "Plage de la semaine incomplète : un jour, une heure de début et une heure de fin différentes." } };
+        const data = { type: "disponibilites", fid: f.id, nom: f.data.nom, hebdo: hebdo.map(x => ({ j: Number(x.j), de: x.de, a: x.a })), ponctuelles: ponct.map(x => ({ date: x.date, de: x.de, a: x.a })), note: String(args.p_data.note || "").trim().slice(0, 300), majLe: iso() };
+        rows.set(cle, { collection: "rh", id: "dispo-" + f.id, data });
+        return { data, error: null };
+      }
       // Visiteurs annoncés depuis Mon espace (mise à jour 50) ; __sans50 = script absent.
       if (name === "annoncer_attendus_perso" || name === "mes_attendus") {
         if (window.__sans50) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };

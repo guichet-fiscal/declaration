@@ -1275,6 +1275,26 @@ button.orga-p{cursor:pointer}button.orga-p:hover{border-color:var(--rule);backgr
 .carte-pro{display:block;width:100%;max-width:640px;margin:0 auto;border-radius:18px;box-shadow:0 10px 30px rgba(19,27,44,.22)}
 .sig-apercu{display:block;width:100%;height:auto;aspect-ratio:1170/320;background:#fff;border:1px solid var(--rule);border-radius:8px}
 .sig-service{display:grid;gap:6px}
+.dispo-l{display:grid;gap:6px}
+.dispo-r{display:grid;grid-template-columns:minmax(0,150px) 110px auto 110px auto;gap:6px;align-items:center}
+@media (max-width:560px){.dispo-r{grid-template-columns:1fr 1fr auto}.dispo-r > :first-child{grid-column:1/-1}.dispo-r > span{display:none}}
+.dispo-table-wrap{overflow-x:auto;margin-top:8px}
+.dispo-table{width:100%;border-collapse:collapse;font-size:13px}
+.dispo-table th,.dispo-table td{border-bottom:1px solid var(--rule);padding:7px 8px;text-align:left;vertical-align:top}
+.dispo-table thead th{font-weight:600;color:var(--ink-2);white-space:nowrap}
+.dispo-table thead th.auj{color:var(--accent)}
+.dispo-table tbody th{font-weight:500;min-width:150px}
+.dispo-table tbody th .meta{display:block;font-weight:400}
+.dispo-table td{color:var(--ink-2);white-space:nowrap}
+.dispo-table td.dispo-oui{color:var(--ink);background:color-mix(in srgb,var(--ok) 10%,transparent)}
+.dispo-table td.dispo-abs{color:var(--bad)}
+.dispo-table tr.dispo-vide th .meta{color:var(--warn)}
+.ev-dispo{margin:-4px 0 0}
+.ev-inv input[type=checkbox]{width:auto;flex:none;margin:0}
+.ev-inv-n{display:flex;flex-direction:column;min-width:0}
+.ev-inv-dispo{font-size:11.5px;color:var(--ink-2)}
+.ev-inv-dispo:empty{display:none}
+.ev-inv-dispo.d-dispo{color:var(--ok)}.ev-inv-dispo.d-partiel{color:var(--warn)}.ev-inv-dispo.d-absent{color:var(--bad)}
 .avatar{--av:36px;--av-h:210;width:var(--av);height:var(--av);flex:none;border-radius:50%;display:inline-grid;place-items:center;overflow:hidden;
   background:color-mix(in srgb,hsl(var(--av-h) 55% 52%) 22%,var(--sheet)) center/cover no-repeat;color:color-mix(in srgb,hsl(var(--av-h) 60% 34%) 75%,var(--ink));
   font-weight:650;font-size:calc(var(--av) * .38);line-height:1;letter-spacing:.02em;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 10%,transparent)}
@@ -1655,6 +1675,7 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="annuaire" hidden><div id="rh-annuaire"></div></div>
     <div data-rh-vue="organigramme" hidden><div id="rh-organigramme"></div></div>
     <div data-rh-vue="service" hidden><div id="rh-service"></div></div>
+    <div data-rh-vue="dispos" hidden><div id="rh-dispos"></div></div>
     <div data-rh-vue="entretiens" hidden><div id="rh-entretiens"></div></div>
     <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
     <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
@@ -7326,6 +7347,7 @@ async function chargerPerso() {
     S.persoErr = null; S.espacePerso = (r1.data || []).map(persoVersEv);
   } catch (e) { S.persoErr = e.message || "erreur"; }
   await chargerMesAttendus();
+  await chargerMesDispos();
 }
 // Visiteurs annoncés depuis Mon espace (mise à jour 50) : null tant que le script manque.
 async function chargerMesAttendus() {
@@ -9266,13 +9288,13 @@ function renderEspace() {
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openMonEntretien(e), text: `${ENT_TYPES[e.type] || "Entretien"} du ${jourTxt(e.date)}` }),
         h("span", { class: "meta", text: e.par ? "avec " + e.par : "" })),
       e.vuParAgentLe ? chip(["Lu", "ok"]) : h("button", { class: "btn small", type: "button", onclick: () => openMonEntretien(e), text: "Lire" }), h("span", {}))))) : null;
-  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardEnt, cardContrat, cardSanc, cardAnnu), h("div", { class: "es-col-d" }, cardMsg, cardDag, cardAg, cardNotes, cardAbs)));
+  fill(box, cartePremiersPas(fid), kpis, h("div", { class: "dash-grid" }, h("div", { class: "es-col-g" }, cardPayes, cardHeures, cardEnt, cardContrat, cardSanc, cardAnnu), h("div", { class: "es-col-d" }, cardMsg, cardDag, cardAg, carteDispos(), cardNotes, cardAbs)));
   // Première ouverture sur cet appareil : le guide.
   if (!accueilVu(fid) && !S.accueilMontre && !dlg.open) { S.accueilMontre = true; setTimeout(() => { if (!dlg.open && S.tab === "espace") openAccueil(0); }, 500); }
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["service", "Tableau de service"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["entretiens", "Entretiens"], ["notes", "Notes de service"], ["annuaire", "Annuaire"], ["organigramme", "Organigramme"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["service", "Tableau de service"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["entretiens", "Entretiens"], ["notes", "Notes de service"], ["annuaire", "Annuaire"], ["organigramme", "Organigramme"], ["dispos", "Disponibilités"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
   const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length : 0;
@@ -9297,6 +9319,7 @@ function renderEncadrement() {
   else if (v === "entretiens") renderEntretiensEquipe();
   else if (v === "annuaire") fill($("#rh-annuaire"), annuaireVue(annuaireListe(), { recherche: true }));
   else if (v === "service") renderTableauService();
+  else if (v === "dispos") renderDispos();
   else if (v === "organigramme") fill($("#rh-organigramme"), organigrammeVue(annuaireListe(), { ouvrir: fid => openAgent(fid) }));
 }
 // Tableau de service : la semaine de chaque fonctionnaire en un coup d'œil (absences, rendez-vous où il
@@ -9528,6 +9551,152 @@ function openEvenement(e, o) {
       }, text: "Annuler le rendez-vous" }) : null,
       w && e.statut !== "annule" ? h("button", { class: "btn small", type: "button", onclick: () => openEvForm(e), text: "Modifier" }) : null] });
 }
+/* ---------- Disponibilités des fonctionnaires (supabase/v51_disponibilites.sql) ---------- */
+// Chacun indique dans Mon espace ses plages de la semaine (une plage peut passer minuit) et des plages
+// ponctuelles datées ; l'encadrement les voit (Personnel → Disponibilités) et en fixant un rendez-vous :
+// qui est disponible à l'heure choisie, créneaux communs aux invités. Une absence l'emporte.
+// Document « rh/dispo-<fiche> », écrit par mes_disponibilites().
+const DISPO_JOURS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"];
+const DISPO_ETATS = { dispo: ["Disponible", "ok"], partiel: ["En partie", "warn"], indispo: ["Pas disponible", "muted"], absent: ["Absent", "bad"], inconnu: ["Non renseigné", "muted"] };
+const dispoDoc = fid => (S.rh || {})["dispo-" + fid] || null;
+const dispoMin = x => { const [a, b] = String(x || "").split(":").map(Number); return a * 60 + (b || 0); };
+const minHeure = m => `${pad(Math.floor((m % 1440) / 60))}:${pad(m % 60)}`;
+const isoJour = k => { const d = new Date(k + "T12:00:00"); return ((d.getDay() + 6) % 7) + 1; };
+const jourDecale = (k, n) => { const d = new Date(k + "T12:00:00"); d.setDate(d.getDate() + n); return jourCle(d); };
+const plageTxt = p => `${p.de}–${p.a}${dispoMin(p.a) <= dispoMin(p.de) && dispoMin(p.a) > 0 ? " (lendemain)" : ""}`;
+const dispoRenseigne = d => !!d && ((d.hebdo || []).length + (d.ponctuelles || []).length) > 0;
+// Intervalles du jour « k » en minutes depuis 0 h (la fin peut dépasser 1 440), plages de la veille qui passent minuit comprises.
+function plagesDuJour(d, k) {
+  if (!d) return [];
+  const iv = p => { const a = dispoMin(p.de), b = dispoMin(p.a); return [a, b > a ? b : b + 1440]; };
+  const veille = jourDecale(k, -1), j = isoJour(k), jv = isoJour(veille), out = [];
+  const deVeille = p => dispoMin(p.a) <= dispoMin(p.de) && dispoMin(p.a) > 0;
+  for (const p of d.hebdo || []) { if (p.j === j) out.push(iv(p)); if (p.j === jv && deVeille(p)) out.push([0, dispoMin(p.a)]); }
+  for (const p of d.ponctuelles || []) { if (p.date === k) out.push(iv(p)); if (p.date === veille && deVeille(p)) out.push([0, dispoMin(p.a)]); }
+  // Fusion des intervalles qui se touchent.
+  out.sort((x, y) => x[0] - y[0]);
+  const m = []; for (const x of out) { const l = m[m.length - 1]; if (l && x[0] <= l[1]) l[1] = Math.max(l[1], x[1]); else m.push(x.slice()); }
+  return m;
+}
+const absentLe = (fid, k) => (S.absences || []).some(a => a.fid === fid && a.statut !== "annulee" && a.du <= k && a.au >= k);
+function dispoA(fid, debut, fin) {
+  const k = jourCle(debut);
+  if (absentLe(fid, k)) return "absent";
+  const d = dispoDoc(fid); if (!dispoRenseigne(d)) return "inconnu";
+  const s = debut.getHours() * 60 + debut.getMinutes(), e = s + (fin && fin > debut ? Math.max(15, Math.round((fin - debut) / 60000)) : 60);
+  const ivs = plagesDuJour(d, k);
+  if (ivs.some(([a, b]) => a <= s && b >= e)) return "dispo";
+  if (ivs.some(([a, b]) => a < e && b > s)) return "partiel";
+  return "indispo";
+}
+// Créneaux du jour où tous les fonctionnaires donnés sont disponibles (30 min au moins).
+function creneauxCommuns(fids, k) {
+  if (!fids.length) return [];
+  let com = [[0, 2880]];
+  for (const fid of fids) {
+    if (absentLe(fid, k)) return [];
+    const ivs = plagesDuJour(dispoDoc(fid), k), n = [];
+    for (const [a, b] of com) for (const [c, d] of ivs) { const x = Math.max(a, c), y = Math.min(b, d); if (y > x) n.push([x, y]); }
+    com = n; if (!com.length) return [];
+  }
+  return com.filter(([a, b]) => b - a >= 30 && a < 1440);
+}
+const ivTxt = ([a, b]) => `${minHeure(a)}–${b === 1440 ? "minuit" : minHeure(b)}${b > 1440 ? " (lendemain)" : ""}`;
+// Mon espace.
+async function chargerMesDispos() {
+  let r; try { r = await S.sb.rpc("mes_disponibilites"); } catch (e) { r = { error: e }; }
+  S.mesDispos = !r || r.error ? null : r.data || {};
+}
+function carteDispos() {
+  if (!S.mesDispos) return null;
+  const d = S.mesDispos, auj = jourCle(new Date());
+  const heb = DISPO_JOURS.map((l, i) => [l, (d.hebdo || []).filter(p => p.j === i + 1)]).filter(([, l]) => l.length);
+  const pon = (d.ponctuelles || []).filter(p => p.date >= auj).sort((x, y) => (x.date + x.de).localeCompare(y.date + y.de));
+  return h("div", { class: "card", id: "es-dispos" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Mes disponibilités" }),
+      h("p", { class: "sub", text: "Quand vous pouvez être en service : la Direction et les RH en tiennent compte pour fixer les rendez-vous." })),
+      h("button", { class: "btn small", type: "button", id: "es-dispo-modifier", onclick: openMesDispos, text: dispoRenseigne(d) ? "Modifier" : "Indiquer mes disponibilités" })),
+    dispoRenseigne(d) ? h("ul", { class: "ent-list", id: "es-dispos-l" }, heb.map(([l, ps]) => h("li", {}, h("strong", { text: l }), h("span", { class: "meta", text: ps.map(plageTxt).join(", ") }), h("span", {})))
+      .concat(pon.map(p => h("li", {}, h("strong", { text: jourTxt(p.date) }), h("span", { class: "meta", text: plageTxt(p) }), chip(["Ponctuelle", "info"]))))) : h("p", { class: "muted", text: "Rien d’indiqué pour l’instant." }),
+    d.note ? h("p", { class: "hint", style: "margin:8px 0 0", text: d.note }) : null);
+}
+function openMesDispos() {
+  const d = S.mesDispos || {}, lignesH = [], lignesP = [];
+  const heure = (v, lab) => { const x = h("input", { type: "time", "aria-label": lab, step: "900" }); x.value = v || ""; return x; };
+  const boxH = h("div", { class: "dispo-l", id: "dp-hebdo" }), boxP = h("div", { class: "dispo-l", id: "dp-ponct" });
+  const ajouterH = p => {
+    p = p || {}; const j = h("select", { "aria-label": "Jour" }, DISPO_JOURS.map((l, i) => h("option", { value: String(i + 1), text: l }))); j.value = String(p.j || 1);
+    const L = { j, de: heure(p.de || "21:00", "De"), a: heure(p.a || "23:00", "À") };
+    L.row = h("div", { class: "dispo-r" }, j, L.de, h("span", { class: "muted", text: "à" }), L.a, h("button", { class: "btn ghost small", type: "button", text: "Retirer", onclick: () => { L.row.remove(); lignesH.splice(lignesH.indexOf(L), 1); } }));
+    lignesH.push(L); boxH.appendChild(L.row);
+  };
+  const ajouterP = p => {
+    p = p || {}; const date = h("input", { type: "date", "aria-label": "Date", min: jourCle(new Date()), max: jourDecale(jourCle(new Date()), 60) }); date.value = p.date || jourCle(new Date());
+    const L = { date, de: heure(p.de || "21:00", "De"), a: heure(p.a || "23:00", "À") };
+    L.row = h("div", { class: "dispo-r" }, date, L.de, h("span", { class: "muted", text: "à" }), L.a, h("button", { class: "btn ghost small", type: "button", text: "Retirer", onclick: () => { L.row.remove(); lignesP.splice(lignesP.indexOf(L), 1); } }));
+    lignesP.push(L); boxP.appendChild(L.row);
+  };
+  (d.hebdo || []).slice().sort((x, y) => x.j - y.j || dispoMin(x.de) - dispoMin(y.de)).forEach(ajouterH);
+  (d.ponctuelles || []).filter(p => p.date >= jourCle(new Date())).forEach(ajouterP);
+  const note = h("textarea", { id: "dp-note", rows: "2", maxlength: "300", placeholder: "Facultatif : ex. pas disponible pendant les partiels, plutôt après 22 h" }); note.value = d.note || "";
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", id: "dp-ok", text: "Enregistrer" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const hebdo = lignesH.map(L => ({ j: Number(L.j.value), de: L.de.value, a: L.a.value })), ponctuelles = lignesP.map(L => ({ date: L.date.value, de: L.de.value, a: L.a.value }));
+    const faux = hebdo.concat(ponctuelles).find(p => !/^\d\d:\d\d$/.test(p.de) || !/^\d\d:\d\d$/.test(p.a) || p.de === p.a || ("date" in p && !p.date));
+    if (faux) { err.textContent = "Chaque plage a besoin d’une heure de début et d’une heure de fin différentes (et d’une date pour les ponctuelles)."; return; }
+    go.disabled = true;
+    let r; try { r = await S.sb.rpc("mes_disponibilites", { p_data: { hebdo, ponctuelles, note: note.value.trim() } }); } catch (x) { r = { error: x }; }
+    if (r.error) { err.textContent = /mes_disponibilites|schema cache/i.test(r.error.message || "") ? "Pas encore possible : la Direction doit exécuter supabase/v51_disponibilites.sql." : r.error.message || "Disponibilités non enregistrées."; go.disabled = false; return; }
+    S.mesDispos = r.data || {}; toast("Disponibilités enregistrées : l’encadrement les voit pour fixer les rendez-vous."); closeDialog(); renderEspace();
+  });
+  openDialog({ eyebrow: "Mon espace", title: "Mes disponibilités", wide: true,
+    body: [h("p", { style: "margin:0", text: "Les créneaux où vous pouvez être en service. Une plage qui finit après minuit (22:00 à 01:00) compte jusqu’au lendemain. Vos absences signalées l’emportent." }),
+      h("div", { class: "field" }, h("span", { class: "lbl", text: "Chaque semaine" }), boxH, h("div", {}, h("button", { class: "btn ghost small", type: "button", id: "dp-plus-h", onclick: () => ajouterH(), text: "Ajouter une plage" }))),
+      h("div", { class: "field" }, h("span", { class: "lbl", text: "En plus, certains jours (60 jours au plus)" }), boxP, h("div", {}, h("button", { class: "btn ghost small", type: "button", id: "dp-plus-p", onclick: () => ajouterP(), text: "Ajouter un jour" }))),
+      field("dp-note", "Précision pour l’encadrement", note), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
+// Personnel → Disponibilités : la semaine, une ligne par fonctionnaire ; « Qui est disponible ? ».
+function renderDispos() {
+  const box = $("#rh-dispos"); if (!box) return;
+  const debut = S.dispoSemaine || (() => { const k = jourCle(new Date()); return jourDecale(k, 1 - isoJour(k)); })();
+  const jours = [0, 1, 2, 3, 4, 5, 6].map(i => jourDecale(debut, i)), auj = jourCle(new Date());
+  const l = foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  const nRens = l.filter(f => dispoRenseigne(dispoDoc(f.id))).length;
+  const cell = (f, k) => {
+    if (absentLe(f.id, k)) return h("td", { class: "dispo-abs", text: "Absent" });
+    const ivs = plagesDuJour(dispoDoc(f.id), k).filter(([a]) => a < 1440);
+    return h("td", { class: ivs.length ? "dispo-oui" : null, text: ivs.map(ivTxt).join(" · ") || "—" });
+  };
+  // Qui est disponible ?
+  const qd = h("input", { type: "date", id: "dq-date" }); qd.value = S.dispoQ ? S.dispoQ.date : auj;
+  const qh = h("input", { type: "time", id: "dq-heure", step: "900" }); qh.value = S.dispoQ ? S.dispoQ.heure : "21:00";
+  const qn = h("select", { id: "dq-duree" }, [[30, "30 min"], [60, "1 h"], [90, "1 h 30"], [120, "2 h"]].map(([v, t]) => h("option", { value: String(v), text: t }))); qn.value = S.dispoQ ? String(S.dispoQ.duree) : "60";
+  const res = h("div", { id: "dq-res" });
+  const chercher = () => {
+    S.dispoQ = { date: qd.value, heure: qh.value, duree: Number(qn.value) };
+    if (!qd.value || !qh.value) { fill(res, null); return; }
+    const deb = new Date(`${qd.value}T${qh.value}:00`), fin = new Date(deb.getTime() + Number(qn.value) * 60000);
+    const g = { dispo: [], partiel: [], absent: [], indispo: [], inconnu: [] };
+    for (const f of l) g[dispoA(f.id, deb, fin)].push(f.nom);
+    fill(res, h("ul", { class: "ent-list" }, ["dispo", "partiel", "indispo", "absent", "inconnu"].filter(k => g[k].length).map(k => h("li", {},
+      h("div", { style: "min-width:0" }, h("strong", { text: `${DISPO_ETATS[k][0]} (${g[k].length})` }), h("span", { class: "meta", text: g[k].join(", ") })), chip(DISPO_ETATS[k]), h("span", {})))));
+  };
+  [qd, qh, qn].forEach(x => x.addEventListener("change", chercher));
+  fill(box, h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Qui est disponible ?" }), h("p", { class: "sub", text: "Choisissez le jour, l’heure et la durée du rendez-vous." }))),
+      h("div", { class: "row2", style: "grid-template-columns:repeat(3,minmax(0,1fr))" }, field("dq-date", "Jour", qd), field("dq-heure", "Heure", qh), field("dq-duree", "Durée", qn)), res),
+    h("div", { class: "card", style: "margin-top:16px" }, h("div", { class: "card-head" },
+        h("div", {}, h("h3", { text: `Semaine du ${jourTxt(debut)}` }), h("p", { class: "sub", text: `${nRens} fonctionnaire${plural(nRens)} sur ${l.length} ont indiqué leurs disponibilités (Mon espace → Mes disponibilités).` })),
+        h("div", { class: "seg", role: "group", "aria-label": "Semaine" }, h("button", { type: "button", onclick: () => { S.dispoSemaine = jourDecale(debut, -7); renderDispos(); }, text: "‹ Précédente" }),
+          h("button", { type: "button", onclick: () => { S.dispoSemaine = null; renderDispos(); }, text: "Cette semaine" }), h("button", { type: "button", onclick: () => { S.dispoSemaine = jourDecale(debut, 7); renderDispos(); }, text: "Suivante ›" }))),
+      h("div", { class: "dispo-table-wrap" }, h("table", { class: "dispo-table", id: "dispo-table" },
+        h("thead", {}, h("tr", {}, h("th", { text: "Fonctionnaire" }), jours.map(k => h("th", { class: k === auj ? "auj" : null, text: new Date(k + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }) })))),
+        h("tbody", {}, l.map(f => { const d = dispoDoc(f.id); return h("tr", { class: dispoRenseigne(d) ? null : "dispo-vide" },
+          h("th", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openAgent(f.id), text: f.nom || "—" }), d && d.note ? h("span", { class: "meta", text: d.note }) : !dispoRenseigne(d) ? h("span", { class: "meta", text: "non renseigné" }) : null),
+          jours.map(k => cell(f, k))); }))))));
+  chercher();
+}
 function openEvForm(e, jour) {
   if (!encadrant()) return;
   const v = Object.assign({ titre: "", type: "reunion", journee: false, lieu: "", description: "", audience: "tous", participants: [], reponseDemandee: true }, e || {});
@@ -9547,16 +9716,41 @@ function openEvForm(e, jour) {
   const visiteurs = h("input", { id: "ev-visiteurs", autocomplete: "off", maxlength: "300", placeholder: "Ex. : Jean DUPONT, Marie MARTIN (facultatif)" });
   visiteurs.value = e ? attendusDe(e.id).filter(a => a.statut !== "annule").map(a => a.nom).join(", ") : "";
   const sel = new Set(v.participants || []);
-  const liste = h("div", { class: "ev-invites" }, foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr")).map(f => {
-    const cb = h("input", { type: "checkbox", value: f.id }); cb.checked = sel.has(f.id);
-    cb.addEventListener("change", () => { if (cb.checked) sel.add(f.id); else sel.delete(f.id); });
-    return h("label", { class: "ev-inv" }, cb, h("span", { text: f.nom }));
+  // Disponibilités (mise à jour 51) : une pastille par fonctionnaire à l'heure choisie, créneaux communs aux invités.
+  const actifs = foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  const pastilles = new Map(), cases = new Map();
+  const dispoInfo = h("div", { class: "ev-dispo", id: "ev-dispo" });
+  const moment = () => { if (!date.value || journee.checked || !hd.value) return null; const d1 = new Date(`${date.value}T${hd.value}:00`), d2 = hf.value ? new Date(`${date.value}T${hf.value}:00`) : null; if (d2 && d2 <= d1) d2.setDate(d2.getDate() + 1); return [d1, d2]; };
+  const liste = h("div", { class: "ev-invites" }, actifs.map(f => {
+    const cb = h("input", { type: "checkbox", value: f.id }); cb.checked = sel.has(f.id); cases.set(f.id, cb);
+    cb.addEventListener("change", () => { if (cb.checked) sel.add(f.id); else sel.delete(f.id); majDispo(); });
+    const pt = h("span", { class: "ev-inv-dispo" }); pastilles.set(f.id, pt);
+    return h("label", { class: "ev-inv" }, cb, h("span", { class: "ev-inv-n" }, h("span", { text: f.nom }), pt));
   }));
+  function majDispo() {
+    const m = moment(), etats = {};
+    for (const f of actifs) {
+      const k = m ? dispoA(f.id, m[0], m[1]) : null, pt = pastilles.get(f.id);
+      etats[f.id] = k; pt.textContent = k ? DISPO_ETATS[k][0] : ""; pt.className = "ev-inv-dispo" + (k ? " d-" + k : "");
+    }
+    if (!m) { fill(dispoInfo, journee.checked ? null : h("p", { class: "hint", style: "margin:0", text: "Choisissez le jour et l’heure : le guichet montre qui est disponible." })); return; }
+    const n = k => actifs.filter(f => etats[f.id] === k).length, nd = n("dispo"), np = n("partiel"), na = n("absent"), ni = n("inconnu");
+    const invites = [...sel], com = aud.value === "agents" && invites.length ? creneauxCommuns(invites, date.value) : [];
+    const pasLa = aud.value === "agents" ? invites.filter(id => !["dispo"].includes(etats[id])).map(id => (foncOf(id) || {}).nom).filter(Boolean) : [];
+    fill(dispoInfo,
+      h("p", { style: "margin:0", text: `À cette heure : ${nd} disponible${plural(nd)}${np ? `, ${np} en partie` : ""}${na ? `, ${na} absent${plural(na)}` : ""}${ni ? `, ${ni} sans disponibilités indiquées` : ""}.` }),
+      aud.value === "agents" && invites.length ? h("p", { class: "hint", style: "margin:4px 0 0", text: (pasLa.length ? `Pas (ou pas entièrement) disponibles : ${pasLa.join(", ")}. ` : "Tous les invités sont disponibles. ") + (com.length ? `Créneaux où tous le sont ce jour-là : ${com.map(ivTxt).join(", ")}.` : "Aucun créneau commun à tous ce jour-là.") }) : null,
+      nd ? h("button", { class: "btn ghost small", type: "button", id: "ev-inviter-dispos", style: "margin-top:6px", onclick: () => {
+        aud.value = "agents"; for (const f of actifs) { const c = cases.get(f.id), oui = etats[f.id] === "dispo"; c.checked = oui; if (oui) sel.add(f.id); else sel.delete(f.id); }
+        sync(); majDispo(); toast(`${nd} fonctionnaire${plural(nd)} disponible${plural(nd)} invité${plural(nd)}.`);
+      }, text: `Inviter les ${nd} disponible${plural(nd)}` }) : null);
+  }
   const invRow = h("div", { class: "field" }, h("span", { class: "lbl", text: "Invités" }), liste);
   const heuresRow = h("div", { class: "row2" }, field("ev-hd", "Début", hd), field("ev-hf", "Fin", hf));
   const finRow = field("ev-datefin", "Jusqu’au", dateFin);
   const sync = () => { invRow.hidden = aud.value !== "agents"; heuresRow.hidden = journee.checked; finRow.hidden = !journee.checked; };
-  aud.addEventListener("change", sync); journee.addEventListener("change", sync); sync();
+  aud.addEventListener("change", () => { sync(); majDispo(); }); journee.addEventListener("change", () => { sync(); majDispo(); }); sync();
+  [date, hd, hf].forEach(x => x.addEventListener("change", majDispo)); majDispo();
   const err = h("span", { class: "err", "aria-live": "polite" });
   const go = h("button", { class: "btn ink small", type: "button", text: e ? "Enregistrer" : "Ajouter à l’agenda" });
   go.addEventListener("click", async () => {
@@ -9589,7 +9783,7 @@ function openEvForm(e, jour) {
       h("div", { class: "row2" }, field("ev-date", "Date", date), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, journee, h("span", { text: "Toute la journée" }))),
       heuresRow, finRow, field("ev-lieu", "Lieu", lieu), field("ev-desc", "Description", desc),
       h("div", { class: "row2" }, field("ev-aud", "Pour qui", aud), h("label", { class: "switch", style: "align-self:end;min-height:42px" }, rep, h("span", { text: "Demander s’ils seront présents" }))),
-      invRow,
+      dispoInfo, invRow,
       h("div", { class: "field" }, h("label", { for: "ev-visiteurs", text: "Visiteurs extérieurs attendus" }), visiteurs,
         h("span", { class: "hint", text: "Séparés par des virgules. L’accueil les attend à l’heure du rendez-vous et vous prévient dans votre espace à leur arrivée." })),
       err],
