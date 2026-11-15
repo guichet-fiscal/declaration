@@ -1223,6 +1223,10 @@ button.ts-p{cursor:pointer}
 .d-releves{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px;padding:10px 12px;border:1px dashed var(--rule);border-radius:10px;background:var(--paper)}
 .d-releves p{margin:0;flex:1 1 320px;font-size:13.5px;line-height:1.45}.d-releves .meta{display:block}
 .chrono-f{margin:0 0 10px}
+.consigne-l{display:grid;gap:6px}
+.consigne-r{display:grid;grid-template-columns:minmax(0,170px) minmax(0,1fr) 64px auto;gap:6px;align-items:center}
+@media (max-width:560px){.consigne-r{grid-template-columns:1fr 64px auto}.consigne-r input:not([type=number]){grid-column:1/-1;grid-row:2}}
+.secu-consigne{margin:0 0 14px;padding:10px 12px;border:1px solid var(--rule);border-radius:8px}
 .tvs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 12px;align-items:end}
 .tvs-grid label{font-size:12.5px}
 .nc-deja{margin-top:10px;padding:10px 12px;border-left:3px solid var(--warn);background:var(--warn-soft);border-radius:6px;display:grid;gap:8px;font-size:13.5px}
@@ -4778,6 +4782,8 @@ function todoItems() {
     }
     const cj = creneauxDuJour();
     add(cj.length, `Rendez-vous de paiement aujourd’hui`, cj.slice(0, 3).map(c => `${hhmm(c.debut)} ${c.entrepriseNom || "?"}`).join(", "), () => allerA("convocations"), "info");
+    const nr = secuListe("securiteEntrees").filter(x => x.sortie && enConsigne(x));
+    add(nr.length, `Consigne : objets non récupérés`, nr.slice(0, 3).map(x => `${consigneTicket(x)} ${x.nom}`).join(", "), () => { S.secuVue = "entrees"; allerA("securite"); });
     const so = secuOubliees();
     add(so.length, `Sortie${plural(so.length)} oubliée${plural(so.length)} au registre des entrées`, `Dans les locaux depuis plus de ${secuOubliH()} h : ${so.slice(0, 3).map(x => x.nom).join(", ")}`, () => { S.secuVue = "entrees"; allerA("securite"); });
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
@@ -7690,6 +7696,35 @@ const quandSecu = iso => { const d = new Date(iso); if (isNaN(d)) return "—"; 
 const secuDate = el => { const d = el.value ? new Date(el.value) : new Date(); return isNaN(d) ? nowISO() : d.toISOString(); };
 
 // Entrées dans la Préfecture. « pre » : identité reprise d'un contrôle (nom, naissance, numéro, photos).
+/* ---------- Consigne : armes et objets déposés à l'entrée ---------- */
+// Déposés à l'arrivée (sorte, description, nombre), avec un ticket « C-… » ; rendus à la sortie. Une personne
+// sortie sans les avoir récupérés reste signalée (« Objets non récupérés ») jusqu'à ce qu'ils soient rendus.
+const SECU_CONSIGNE = { poing: "Arme de poing", longue: "Arme longue", blanche: "Arme blanche", intermediaire: "Matraque, Taser", munitions: "Munitions", telephone: "Téléphone", sac: "Sac", autre: "Autre objet" };
+const consigneTicket = x => "C-" + String(x.id || "").slice(-4).toUpperCase();
+const consigneTxt = l => (l || []).map(o => `${SECU_CONSIGNE[o.type] || "Objet"}${o.desc ? " (" + o.desc + ")" : ""}${Number(o.n) > 1 ? " × " + o.n : ""}`).join(", ");
+const enConsigne = x => !!x && (x.consigne || []).length > 0 && !x.consigneRendue;
+function champConsigne(l) {
+  const box = h("div", { class: "consigne-l", id: "se-consigne" }), lignes = [];
+  const ajouter = o => {
+    o = o || {};
+    const type = h("select", { "aria-label": "Objet déposé" }, Object.entries(SECU_CONSIGNE).map(([k, t]) => h("option", { value: k, text: t }))); type.value = o.type || "poing";
+    const desc = h("input", { maxlength: "60", placeholder: "Modèle, couleur… (facultatif)", "aria-label": "Description de l’objet" }); desc.value = o.desc || "";
+    const n = h("input", { type: "number", min: "1", max: "99", step: "1", inputmode: "numeric", "aria-label": "Nombre" }); n.value = String(o.n || 1);
+    const L = { type, desc, n };
+    L.row = h("div", { class: "consigne-r" }, type, desc, n, h("button", { class: "btn ghost small", type: "button", text: "Retirer", onclick: () => { L.row.remove(); lignes.splice(lignes.indexOf(L), 1); } }));
+    lignes.push(L); box.appendChild(L.row);
+  };
+  (l || []).forEach(ajouter);
+  const el = h("div", { class: "field" }, h("label", { text: "Consigne : armes et objets déposés" }), box,
+    h("div", {}, h("button", { class: "btn ghost small", type: "button", id: "se-consigne-plus", onclick: () => { ajouter(); box.lastChild.querySelector("input").focus(); }, text: "Ajouter un objet" })),
+    h("span", { class: "hint", text: "Rendus à la sortie. Donnez à la personne le numéro de ticket inscrit sur son entrée." }));
+  return { el, valeur: () => lignes.map(L => ({ type: L.type.value, desc: L.desc.value.trim(), n: Math.max(1, Math.min(99, Math.round(Number(L.n.value) || 1))) })) };
+}
+async function secuRendreConsigne(x) {
+  const data = Object.assign({}, x, { consigneRendue: { at: nowISO(), par: S.agentName || "" } }); delete data.id;
+  if (await secuEnregistrer("securiteEntrees", x.id, data)) { toast(`Objets rendus à ${x.nom} (ticket ${consigneTicket(x)}).`); return true; }
+  return false;
+}
 function openSecuEntree(x, back, pre) {
   if (!secuEcrit()) return;
   const v = x || {}, d = pre || {};
@@ -7702,11 +7737,12 @@ function openSecuEntree(x, back, pre) {
   const numero = h("input", { autocomplete: "off", maxlength: "40", placeholder: "Facultatif" }); numero.value = v.numero || d.numero || ""; if (!v.numero && d.piece) numero.dataset.piece = d.piece;
   const arrivee = h("input", { type: "datetime-local" }); arrivee.value = toLocalInput(v.arrivee ? new Date(v.arrivee) : new Date());
   const note = h("textarea", { rows: "2", maxlength: "500" }); note.value = v.note || "";
+  const cons = champConsigne(v.consigne);
   let ident;
   const photos = secuChampPhotos(v.photos, "Photo de la pièce d’identité ou du permis de conduire : choisissez ou prenez une photo, ou collez une capture (Ctrl + V). Pour une nouvelle personne, la pièce est lue et remplit l’identité.",
     { lire: b => ident.lire(b), nouvelle: f => ident.nouvelle(f) });
   // Encore dans les locaux : sa sortie d'abord, plutôt qu'une seconde entrée ouverte.
-  const sortieAvant = (p, dedans) => !dedans || x ? null : h("button", { class: "btn small", type: "button", text: "Noter sa sortie d’abord", onclick: async ev => { ev.currentTarget.disabled = true; await secuSortie(dedans); ident.majFiche(); } });
+  const sortieAvant = (p, dedans) => !dedans || x ? null : h("button", { class: "btn small", type: "button", text: "Noter sa sortie d’abord", onclick: async ev => { ev.currentTarget.disabled = true; await secuSortie(dedans, { rendre: true }); ident.majFiche(); } });
   ident = secuIdentite({ nom, naissance, numero, qualite, photos, sauf: v.id, actionConnu: sortieAvant });
   for (const p of d.photos || []) photos.reprendre(p);
   if (d.fichiers && d.fichiers.length) photos.ajouterFichiers(d.fichiers);
@@ -7725,12 +7761,12 @@ function openSecuEntree(x, back, pre) {
     const ph = await photos.envoyer("securiteEntrees", rid);
     if (!ph) { go.disabled = false; return; }
     const data = Object.assign({}, x || {}, x ? {} : secuAuteur(), { nom: nom.value.trim(), qualite: qualite.value.trim(), naissance: naissance.value.trim(), motif: motif.value, precision: precision.value.trim(), visite: visite.value.trim(),
-      numero: numero.value.trim(), piece: pieceDe(numero, x), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null },
+      numero: numero.value.trim(), piece: pieceDe(numero, x), pieceVue: ph.length > 0 || !!numero.value.trim(), photos: ph, arrivee: secuDate(arrivee), note: note.value.trim(), consigne: cons.valeur(), sortie: (x && x.sortie) || null, at: (x && x.at) || nowISO(), modifieLe: x ? nowISO() : null },
       !x && d.controle ? { controle: d.controle } : {}, !x && d.attendu ? { attendu: d.attendu } : {});
     delete data.id;
     if (await secuEnregistrer("securiteEntrees", rid, data)) {
       const ret = photos.retirees(); if (ret.length) { try { await S.sb.storage.from("securite").remove(ret); } catch (e) { /* laissées */ } }
-      toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.`);
+      toast(x ? "Entrée modifiée." : `Entrée de ${data.nom} enregistrée.${data.consigne.length ? ` Ticket de consigne : ${consigneTicket({ id: rid })}.` : ""}`);
       if (!x && d.attendu) secuArrivee(d.attendu, rid, data);
       if (back) back(); else closeDialog();
     } else go.disabled = false;
@@ -7742,12 +7778,28 @@ function openSecuEntree(x, back, pre) {
       photos.el,
       h("div", { class: "row2" }, field("se-motif", "Motif de la venue", motif), field("se-precision", "Précision", precision)),
       h("div", { class: "row2" }, field("se-visite", "Personne ou service visité", visite), field("se-arrivee", "Arrivée", arrivee)),
+      cons.el,
       field("se-note", "Note", note), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" }), h("span", { class: "spacer" }), go] });
 }
-async function secuSortie(x) {
-  const data = Object.assign({}, x, { sortie: nowISO(), sortiePar: S.agentName || "" }); delete data.id;
-  if (await secuEnregistrer("securiteEntrees", x.id, data)) toast(`Sortie de ${x.nom} notée à ${hhmm(data.sortie)}.`);
+// Sortie : des objets en consigne ? On demande s'ils sont rendus (opts.rendre : rendus d'office).
+async function secuSortie(x, opts) {
+  opts = opts || {};
+  const noter = async rendre => {
+    const data = Object.assign({}, x, { sortie: nowISO(), sortiePar: S.agentName || "" }, rendre && enConsigne(x) ? { consigneRendue: { at: nowISO(), par: S.agentName || "" } } : {}); delete data.id;
+    if (await secuEnregistrer("securiteEntrees", x.id, data)) { toast(`Sortie de ${x.nom} notée à ${hhmm(data.sortie)}.${enConsigne(x) ? rendre ? " Objets de la consigne rendus." : " Objets toujours en consigne." : ""}`, enConsigne(x) && !rendre); return true; }
+    return false;
+  };
+  if (!enConsigne(x) || opts.rendre) return noter(!!opts.rendre);
+  return new Promise(fin => {
+    const choisir = async (rendre, b) => { b.disabled = true; const ok = await noter(rendre); closeDialog(); fin(ok); };
+    openDialog({ eyebrow: "Sécurité · sortie", title: `Sortie de ${x.nom}`,
+      body: [h("p", { style: "margin:0" }, "Objets en consigne (ticket ", h("strong", { text: consigneTicket(x) }), ") : ", h("strong", { text: consigneTxt(x.consigne) }), "."),
+        h("p", { class: "hint", style: "margin:6px 0 0", text: "Rendez-les avant qu’elle ne parte. S’ils restent à la consigne, ils seront signalés jusqu’à ce qu’ils soient rendus." })],
+      foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); fin(false); }, text: "Annuler" }), h("span", { class: "spacer" }),
+        h("button", { class: "btn ghost small", type: "button", id: "so-garder", onclick: ev => choisir(false, ev.currentTarget), text: "Sortie sans les rendre" }),
+        h("button", { class: "btn small", type: "button", id: "so-rendre", onclick: ev => choisir(true, ev.currentTarget), text: "Objets rendus : noter la sortie" })] });
+  });
 }
 function openSecuEntreeVue(id) {
   const x = secuListe("securiteEntrees").find(y => y.id === id); if (!x) return;
@@ -7757,14 +7809,17 @@ function openSecuEntreeVue(id) {
     body: [kv([["Qualité", x.qualite || "—"], ["Motif", (SECU_MOTIFS[x.motif] || "—") + (x.precision ? " · " + x.precision : "")], ["Personne ou service visité", x.visite || "—"],
       ["Arrivée", fmtDateTime(new Date(x.arrivee))], ["Sortie", x.sortie ? (x.sortieOubliee ? `heure inconnue · close le ${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " par " + x.sortiePar : ""}` : `${fmtDateTime(new Date(x.sortie))}${x.sortiePar ? " · notée par " + x.sortiePar : ""}`) : "pas encore notée"],
       x.naissance ? ["Date de naissance", x.naissance] : null,
-      ["Pièce d’identité", x.pieceVue ? (x.numero ? `${SECU_PIECES[x.piece] ? SECU_PIECES[x.piece] + " vu" : "vue"} · n° ${x.numero}` : "vue") : "non vérifiée"], ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
+      ["Pièce d’identité", x.pieceVue ? (x.numero ? `${SECU_PIECES[x.piece] ? SECU_PIECES[x.piece] + " vu" : "vue"} · n° ${x.numero}` : "vue") : "non vérifiée"],
+      (x.consigne || []).length ? ["Consigne", `${consigneTxt(x.consigne)} · ticket ${consigneTicket(x)} · ${x.consigneRendue ? `rendus le ${fmtDateTime(new Date(x.consigneRendue.at))}${x.consigneRendue.par ? " par " + x.consigneRendue.par : ""}` : x.sortie ? "NON RÉCUPÉRÉS" : "en consigne"}`] : null,
+      ["Enregistrée par", x.agent || "—"], x.note ? ["Note", x.note] : null]),
       secuSignale(x.nom, x.numero).map(y => secuSignalCarte(y, { voir: true })),
       (x.photos || []).length ? sec("Photos", h("div", { class: "secu-photos" }, x.photos.map(p => secuMiniature(p)))) : null],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
       resp ? h("button", { class: "btn ghost small danger", type: "button", onclick: async ev => { if (await secuConfirmer(ev.currentTarget, "securiteEntrees", x)) { toast("Entrée supprimée."); closeDialog(); } }, text: "Supprimer" }) : null,
       h("span", { class: "spacer" }),
       secuEcrit() ? h("button", { class: "btn ghost small", type: "button", onclick: () => openSecuEntree(x, reopen), text: "Modifier" }) : null,
-      secuEcrit() && !x.sortie ? h("button", { class: "btn small", type: "button", onclick: async () => { await secuSortie(x); closeDialog(); }, text: "Noter la sortie" }) : null] });
+      secuEcrit() && enConsigne(x) ? h("button", { class: "btn ghost small", type: "button", id: "se-rendre", onclick: async ev => { ev.currentTarget.disabled = true; if (await secuRendreConsigne(x)) closeDialog(); }, text: "Objets rendus" }) : null,
+      secuEcrit() && !x.sortie ? h("button", { class: "btn small", type: "button", onclick: async () => { if (await secuSortie(x)) closeDialog(); }, text: "Noter la sortie" }) : null] });
 }
 
 // Contrôles d'identité
@@ -8058,7 +8113,9 @@ function mainCourante(du, au) {
   const dans = iso => { const t = new Date(iso).getTime(); return t >= du.getTime() && t <= au.getTime(); };
   const ent = secuListe("securiteEntrees"), ev = [];
   ent.filter(e => dans(e.arrivee)).forEach(e => ev.push({ t: e.arrivee, txt: `Entrée de ${e.nom}${e.qualite ? " (" + e.qualite + ")" : ""}`, sub: [SECU_MOTIFS[e.motif] || "", e.visite ? "voit " + e.visite : "", e.pieceVue ? "" : "pièce non vue", secuSignale(e.nom, e.numero).length ? "personne signalée" : ""].filter(Boolean).join(" · "), agent: e.agent }));
-  ent.filter(e => e.sortie && dans(e.sortie)).forEach(e => ev.push({ t: e.sortie, txt: `Sortie de ${e.nom}`, sub: e.sortieOubliee ? "close en fin de service, heure inconnue" : "", agent: e.sortiePar || "" }));
+  ent.filter(e => e.sortie && dans(e.sortie)).forEach(e => ev.push({ t: e.sortie, txt: `Sortie de ${e.nom}`, sub: [e.sortieOubliee ? "close en fin de service, heure inconnue" : "", enConsigne(e) ? "sans récupérer sa consigne " + consigneTicket(e) : ""].filter(Boolean).join(" · "), agent: e.sortiePar || "" }));
+  ent.filter(e => (e.consigne || []).length && dans(e.arrivee)).forEach(e => ev.push({ t: e.arrivee, txt: `Consigne ${consigneTicket(e)} : ${consigneTxt(e.consigne)} déposé(s) par ${e.nom}`, sub: "", agent: e.agent || "" }));
+  ent.filter(e => e.consigneRendue && dans(e.consigneRendue.at)).forEach(e => ev.push({ t: e.consigneRendue.at, txt: `Consigne ${consigneTicket(e)} rendue à ${e.nom}`, sub: "", agent: e.consigneRendue.par || "" }));
   const ctl = secuListe("securiteControles").filter(c => dans(c.date));
   ctl.forEach(c => ev.push({ t: c.date, txt: `Contrôle d’identité de ${c.nom} : ${((SECU_RESULTATS[c.resultat] || SECU_RESULTATS.conforme)[0]).toLowerCase()}`, sub: [c.lieu, SECU_CTRL_MOTIFS[c.motif] || ""].filter(Boolean).join(" · "), agent: c.agent, muted: false }));
   const rap = secuListe("securiteRapports").filter(r => dans(r.date) && r.type !== "main_courante");
@@ -8198,7 +8255,7 @@ function renderSecurite() {
     const ligne = x => { const sg = secuSignale(x.nom, x.numero)[0];
       return h("li", { class: sg && !x.sortie ? "secu-signale" : oubliees.has(x.id) ? "secu-retard" : x.sortie ? null : "secu-present" },
       h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuEntreeVue(x.id), text: `${x.nom}${x.qualite ? " · " + x.qualite : ""}` }),
-        h("span", { class: "meta", text: [SECU_MOTIFS[x.motif] || "", x.visite ? "voit " + x.visite : "", "arrivé " + quandSecu(x.arrivee), x.sortie ? (x.sortieOubliee ? "sortie notée en fin de service" : "sorti à " + hhmm(x.sortie)) : "", x.agent].filter(Boolean).join(" · ") })),
+        h("span", { class: "meta", text: [SECU_MOTIFS[x.motif] || "", x.visite ? "voit " + x.visite : "", enConsigne(x) ? "consigne " + consigneTicket(x) : "", "arrivé " + quandSecu(x.arrivee), x.sortie ? (x.sortieOubliee ? "sortie notée en fin de service" : "sorti à " + hhmm(x.sortie)) : "", x.agent].filter(Boolean).join(" · ") })),
       sg ? chip(SECU_SIGNAL[sg.motif] || SECU_SIGNAL.autre) : oubliees.has(x.id) ? chip([`Depuis plus de ${secuOubliH()} h`, "warn"]) : chip(x.pieceVue ? ["Pièce vue", "ok"] : ["Pièce non vue", "warn"]),
       !x.sortie && w ? h("button", { class: "btn ghost small", type: "button", onclick: () => secuSortie(x), text: "Sortie" }) : h("span", {})); };
     const att = secuAttendus(), attJour = att.jour.filter(a => trouve(a.nom, a.hote, a.qualite));
@@ -8207,7 +8264,16 @@ function renderSecurite() {
         h("span", { class: "meta", text: [`prévu ${quandSecu(a.date)}`, a.hote ? "voit " + a.hote : "", a.objet].filter(Boolean).join(" · ") })),
       secuSignale(a.nom).length ? chip(SECU_SIGNAL[secuSignale(a.nom)[0].motif] || SECU_SIGNAL.autre) : chip(attenduRetard(a) ? ["En retard", "warn"] : ["Attendu", "info"]),
       w ? h("button", { class: "btn small", type: "button", onclick: () => secuAccueillir(a), text: "Arrivé" }) : h("span", {}));
-    corps = [h("div", { class: "secu-titre" }, h("h4", { class: "mini-title", style: "margin:0", text: `Visiteurs attendus aujourd’hui (${attJour.length})` }),
+    // Consigne : objets encore déposés, d'abord ceux des personnes déjà sorties.
+    const cons = ent.filter(enConsigne).filter(x => trouve(x.nom, consigneTicket(x))).sort((a, b) => (!!b.sortie - !!a.sortie) || String(a.arrivee).localeCompare(String(b.arrivee)));
+    const ligneCons = x => h("li", { class: x.sortie ? "secu-signale" : null },
+      h("div", { style: "min-width:0" }, h("button", { class: "linkbtn", type: "button", onclick: () => openSecuEntreeVue(x.id), text: `${consigneTicket(x)} · ${x.nom}` }),
+        h("span", { class: "meta", text: `${consigneTxt(x.consigne)} · déposés ${quandSecu(x.arrivee)}` })),
+      chip(x.sortie ? ["Non récupérés", "bad"] : ["Dans les locaux", "info"]),
+      w ? h("button", { class: "btn ghost small", type: "button", onclick: ev => { ev.currentTarget.disabled = true; secuRendreConsigne(x); }, text: "Rendus" }) : h("span", {}));
+    corps = [cons.length ? h("div", { class: "secu-consigne" }, h("h4", { class: "mini-title", style: "margin:0 0 6px", text: `En consigne (${cons.length})${cons.some(x => x.sortie) ? ` · ${cons.filter(x => x.sortie).length} non récupérée${plural(cons.filter(x => x.sortie).length)}` : ""}` }),
+        h("ul", { class: "ent-list", id: "secu-consigne-l" }, cons.map(ligneCons))) : null,
+      h("div", { class: "secu-titre" }, h("h4", { class: "mini-title", style: "margin:0", text: `Visiteurs attendus aujourd’hui (${attJour.length})` }),
         w ? h("button", { class: "btn ghost small", type: "button", id: "secu-attendu", onclick: () => openSecuAttendu(null), text: "Annoncer un visiteur" }) : null),
       attJour.length ? h("ul", { class: "ent-list", id: "secu-attendus" }, attJour.map(ligneAtt)) : h("p", { class: "muted", text: "Personne n’est annoncé pour aujourd’hui." }),
       att.prochains.length ? h("details", { class: "secu-prochains" }, h("summary", { text: `Les 7 prochains jours (${att.prochains.length})` }), h("ul", { class: "ent-list" }, att.prochains.map(ligneAtt))) : null,
