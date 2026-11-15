@@ -150,6 +150,34 @@
         rows.set("delais/" + id, { collection: "delais", id, data: { entrepriseId: e.id, entrepriseNom: e.data.nom, decls: args.p_decls, mode: args.p_mode, nb: args.p_mode === "plusieurs" ? args.p_nb : undefined, jours: args.p_mode === "report" ? args.p_jours : undefined, motif: args.p_motif, statut: "attente", enLigne: true, at: iso() } });
         return { data: { id }, error: null };
       }
+      if (["reclamer", "retirer_reclamation", "reclamations_entreprise"].includes(name)) {
+        if (window.__sans49) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
+        const e = ent(); if (!e) return { data: null, error: { message: "Lien inconnu ou coupé." } };
+        const mes = () => [...rows.values()].filter(r => r.collection === "reclamations" && r.data.entrepriseId === e.id);
+        if (name === "reclamations_entreprise") return { data: mes().map(r => { const x = Object.assign({ id: r.id }, r.data); delete x.decidePar; delete x.decideParNom; return x; }).sort((x, y) => String(y.at).localeCompare(String(x.at))), error: null };
+        if (name === "retirer_reclamation") { const r = rows.get("reclamations/" + args.p_id); if (!r || r.data.entrepriseId !== e.id || r.data.statut !== "attente") return { data: false, error: null }; r.data = Object.assign({}, r.data, { statut: "retiree", retireeLe: iso() }); return { data: true, error: null }; }
+        const motif = String(args.p_motif || "").trim();
+        if (motif.length < 20) return { data: null, error: { message: "Expliquez pourquoi vous contestez (20 caractères au moins)." } };
+        if (mes().filter(r => r.data.statut === "attente").length >= 3) return { data: null, error: { message: "Trois réclamations attendent déjà la réponse de la Direction." } };
+        if (mes().some(r => r.data.statut === "attente" && r.data.cible.id === args.p_id)) return { data: null, error: { message: "Une réclamation sur ce dossier attend déjà la réponse de la Direction." } };
+        let cible;
+        if (args.p_kind === "decl") {
+          const d = rows.get("declarations/" + args.p_id), dec = rows.get("decisions/" + args.p_id);
+          if (!d || d.data.entrepriseId !== e.id || !dec || dec.data.statut !== "validee") return { data: null, error: { message: "Seul un avis émis et pas encore payé peut être contesté." } };
+          cible = { kind: "decl", id: args.p_id, periode: d.data.periode, montant: dec.data.montant != null ? dec.data.montant : d.data.total };
+        } else {
+          const pn = rows.get("penalites/" + args.p_id);
+          if (!pn || pn.data.entrepriseId !== e.id || pn.data.statut !== "due") return { data: null, error: { message: "Seule une pénalité encore à payer peut être contestée." } };
+          cible = { kind: "pen", id: args.p_id, type: pn.data.type, motif: pn.data.motif, montant: pn.data.montant };
+        }
+        if (args.p_montant != null && args.p_montant >= cible.montant) return { data: null, error: { message: "Le montant que vous proposez doit être inférieur à celui du dossier." } };
+        const id = "rc" + Date.now();
+        const data = { entrepriseId: e.id, entrepriseNom: e.data.nom, cible, motif, statut: "attente", enLigne: true, at: iso() };
+        if (args.p_preuve) data.preuve = args.p_preuve;
+        if (args.p_montant != null) data.montantPropose = Math.round(args.p_montant);
+        rows.set("reclamations/" + id, { collection: "reclamations", id, data });
+        return { data: { id, at: data.at }, error: null };
+      }
       if (name === "creneaux_entreprise" || name === "reserver_creneau" || name === "annuler_creneau") {
         if (window.__sans43) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
         const e = ent(); if (!e) return { data: null, error: name === "creneaux_entreprise" ? null : { message: "Lien inconnu ou coupé." } };
