@@ -2810,6 +2810,13 @@ table.es-payes{min-width:0;width:100%}
             <div id="k-new"></div>
             <ul class="ent-list" id="k-list"></ul>
           </div>
+          <div class="card" id="card-coherence">
+            <h3>Contrôle de cohérence</h3>
+            <p class="sub">Le guichet relit le registre et signale ce qui ne colle pas : enveloppe ou payes au-delà de leur budget, semaine de paye jamais versée, rappels dus depuis plus de 3 semaines, demande accordée sans montant, deux avis pour la même période, échéancier différent de l’avis, entreprise ou compte Discord en double, Trésor dans le rouge. Les points arrivent dans « À traiter » et, une fois par semaine, au salon de la Direction.</p>
+            <div class="paste-row" style="margin-top:14px">
+              <button class="btn ghost" type="button" id="b-coherence">Lancer le contrôle</button>
+            </div>
+          </div>
           <div class="card" id="card-erreurs" hidden>
             <h3>Erreurs remontées</h3>
             <p class="sub">Quand le guichet plante chez quelqu’un, il le note tout seul : ce qui s’est passé, dans quel onglet, sur quel navigateur et quel appareil. Rien de ce que la personne a tapé n’est envoyé. Un mois d’historique, visible de la Direction seulement.</p>
@@ -4260,6 +4267,7 @@ function subscribe() {
   db.doc("meta/sauvegardeAuto").onSnapshot(s => { S.sauvegardeAutoMeta = s.exists ? (s.data() || null) : null; S.loaded.add("sauvegardeAuto"); schedule(); }, onDbError);
   db.doc("meta/classement").onSnapshot(s => { S.classementMeta = s.exists ? (s.data() || null) : null; S.loaded.add("classementMeta"); schedule(); }, onDbError);
   db.doc("meta/relancesAuto").onSnapshot(s => { S.relAutoMeta = s.exists ? (s.data() || null) : null; S.loaded.add("relAutoMeta"); schedule(); }, onDbError);
+  db.doc("meta/coherence").onSnapshot(s => { S.coherenceMeta = s.exists ? (s.data() || null) : null; S.loaded.add("coherenceMeta"); schedule(); }, onDbError);
   const col = (name, fn) => db.collection(name).onSnapshot(s => { fn(s); S.loaded.add(name); schedule(); }, onDbError);
   col("entreprises", s => { S.entreprises = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("declarations", s => { S.declarations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -4374,6 +4382,7 @@ function render() {
   relancesAuto();
   sauvegardeAuto();
   bilanMoisAuto();
+  coherenceAuto();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -4795,6 +4804,8 @@ function todoItems() {
     add(so.length, `Sortie${plural(so.length)} oubliée${plural(so.length)} au registre des entrées`, `Dans les locaux depuis plus de ${secuOubliH()} h : ${so.slice(0, 3).map(x => x.nom).join(", ")}`, () => { S.secuVue = "entrees"; allerA("securite"); });
     const lg = ptActifs().filter(p => !p.fin && ptLong(p));
     add(lg.length, `Service${plural(lg.length)} ouvert${plural(lg.length)} depuis plus de 12 h`, lg.slice(0, 3).map(ptNom).join(", "), () => allerA(ptFerme() ? "payes" : "pointeuse"));
+    const coh = coherence();
+    add(coh.length, `Contrôle de cohérence : ${coh.length} point${plural(coh.length)} à vérifier`, coh.slice(0, 2).map(x => x.titre).join(" ; ") + (coh.length > 2 ? "…" : ""), openCoherence);
   }
   const vh = (S.vehicules || []).filter(v => vehActive(v).length);
   add(vh.length, `Véhicule${plural(vh.length)} à examiner`, vh.slice(0, 3).map(v => v.entrepriseNom).join(", "), () => { S.vehFilter = "exam"; allerA("vehicules"); });
@@ -12632,6 +12643,105 @@ async function sauvegardeAuto() {
     } else signalerErreur("discord", res.error, { details: { salon: "sauvegardes", document: "sauvegarde de la semaine" } });
   } finally { S.sauvegardeEnCours = false; }
 }
+
+/* ---------- Contrôle de cohérence ---------- */
+// Le guichet relit le registre et signale ce qui ne colle pas : un chiffre au-delà de son budget, un oubli,
+// un doublon. Chaque point dit quoi vérifier et ouvre le dossier. Repris dans « À traiter » (Direction) et,
+// une fois par semaine, au salon de la Direction quand il y a quelque chose à vérifier.
+function coherence() {
+  const out = [], now = new Date(), add = (k, titre, detail, go) => out.push({ k, titre, detail, go });
+  const essai = fn => { try { fn(); } catch (e) { /* un point illisible n'empêche pas les autres */ } };
+  const mois = [moisKey(now), moisPrec(moisKey(now))].filter(Boolean);
+  // Enveloppes des services dépassées (ce mois-ci et le précédent).
+  essai(() => { for (const m of mois) for (const svc of envServices([m])) {
+    const cap = envCap(svc, m); if (!cap) continue;
+    const st = envStats(svc, m);
+    if (st.accorde > cap + 1) add("enveloppe", `Enveloppe ${svc} dépassée ${m === mois[0] ? "ce mois-ci" : "en " + moisNom(m)}`, `${money(st.accorde)} engagés pour ${money(cap)} prévus : ${money(st.accorde - cap)} de trop`, () => { S.envMois = m; allerA("enveloppes"); renderEnvPage(true); });
+  } });
+  // Payes du mois au-delà de leur budget (demandes « salaires », sinon le réglage).
+  essai(() => { for (const m of mois) {
+    const sal = salairesMois(m), bm = sal || Math.max(0, Math.round(Number(payeCfg().budgetMois) || 0)), v = payesImpute(payeSvc(), m).total;
+    if (bm > 0 && v > bm + 1) add("payesBudget", `Payes ${deMois(m)} au-delà du budget`, `${money(v)} versés pour ${money(bm)} de budget${sal ? "" : " (réglage)"} : ${money(v - bm)} à couvrir par un complément « salaires »`, () => allerA("payes"));
+  } });
+  // Semaines de paye jamais versées (avant la semaine passée, déjà dans « À traiter »).
+  essai(() => {
+    const versees = payesVersees().map(p => p.id).sort(); if (!versees.length) return;
+    let k = semPrec(semPrec(semKey(now)));
+    for (let i = 0; i < 8 && k >= versees[0]; i++, k = semPrec(k)) {
+      if (payeVersee(payeOf(k))) continue;
+      const kk = k, x = payeCalc(kk), n = x.lignes.filter(l => l.heures > 0).length;
+      if (n) add("payeOubliee", `Paye de la semaine ${(bounds(kk) || {}).week} jamais versée`, `${n} agent${plural(n)} avec des heures · ${money(x.total)}`, () => { S.payeSem = kk; allerA("payes"); });
+    }
+  });
+  // Rappels de paye dus depuis plus de 3 semaines.
+  essai(() => {
+    const lim = semKey(new Date(now.getTime() - 21 * 864e5)), l = rappelsDus().filter(r => r.semaine && String(r.semaine) < lim);
+    if (l.length) add("rappels", `Rappel${plural(l.length)} de paye dû${plural(l.length)} depuis plus de 3 semaines`, `${l.length} rappel${plural(l.length)} · ${money(l.reduce((t, r) => t + r.reste, 0))} : ${[...new Set(l.map(r => r.nom || "?"))].slice(0, 3).join(", ")}${l.length > 3 ? "…" : ""}`, () => allerA("payes"));
+  });
+  // Demandes accordées sans montant : rien n'est déduit de l'enveloppe ni du Trésor.
+  essai(() => { for (const dm of S.demandes) if (["accordee", "partielle"].includes(aStatus(dm)) && !(Number((S.arbitrages[dm.id] || {}).montantAccorde) > 0))
+    add("demande", `Demande ${dmNo(dm)} accordée sans montant`, `${dm.service || "—"} · ${dm.objet || "—"} : la somme accordée est vide, rien n’est déduit de l’enveloppe ni du Trésor`, () => openDem(dm.id)); });
+  // Deux avis pour la même entreprise et la même semaine.
+  essai(() => {
+    const g = new Map();
+    for (const d of S.declarations) if (["validee", "payee"].includes(dStatus(d))) { const k = entKey(d) + "|" + d.periode; if (!g.has(k)) g.set(k, []); g.get(k).push(d); }
+    for (const l of g.values()) if (l.length > 1) add("avis", `Deux avis pour la même période : ${l[0].entrepriseNom || "?"}`, `${periodPlain(l[0].periode)} : ${l.map(d => `${dossierNo("DF", d.id)} (${money(dMontant(d))})`).join(", ")}`, () => openDecl(l[0].id));
+  });
+  // Échéancier qui ne fait plus le montant de l'avis (avis rectifié après coup, par exemple).
+  essai(() => { for (const d of S.declarations) {
+    if (dStatus(d) !== "validee") continue;
+    const e = echOf(d); if (!e) continue;
+    const s = e.echeances.reduce((t, x) => t + (Number(x.montant) || 0), 0), du = Math.max(0, dMontant(d) - dCredit(d));
+    if (Math.abs(s - du) > 1) add("echeancier", `Échéancier différent de l’avis : ${d.entrepriseNom || "?"}`, `${dossierNo("DF", d.id)} : ${money(s)} en échéances pour ${money(du)} dus`, () => openDecl(d.id));
+  } });
+  // Même compte Discord sur deux fiches actives : l'espace agent et les alertes n'iraient qu'à une.
+  essai(() => {
+    const g = new Map();
+    for (const f of S.fonctionnaires || []) { const id = String(f.discordId || "").trim(); if (f.actif === false || !id) continue; if (!g.has(id)) g.set(id, []); g.get(id).push(f); }
+    for (const l of g.values()) if (l.length > 1) add("discord", `Même compte Discord sur ${l.length} fiches`, `${l.map(f => f.nom || "?").join(", ")} : l’espace agent et les alertes ne vont qu’à une seule`, () => openAgent(l[0].id));
+  });
+  // Entreprise en double (deux fiches actives au même nom).
+  essai(() => {
+    const g = new Map();
+    for (const e of activeEnts()) { const k = norm(e.nom); if (!k) continue; if (!g.has(k)) g.set(k, []); g.get(k).push(e); }
+    for (const l of g.values()) if (l.length > 1) add("entreprise", `Entreprise en double : ${l[0].nom}`, `${l.length} fiches actives au même nom : ses déclarations peuvent aller sur l’une ou l’autre`, () => openFiche(l[0]));
+  });
+  // Trésor dans le rouge.
+  essai(() => { const t = treasury(); if (t.solde < 0) add("tresor", "Trésor dans le rouge", `Solde de ${money(t.solde)} : les dépenses dépassent le budget de départ, les dotations et les recettes`, () => allerA("economie")); });
+  return out;
+}
+function openCoherence() {
+  if (!canAgent()) return;
+  const l = coherence(), m = S.coherenceMeta;
+  openDialog({ eyebrow: "Contrôle de cohérence", title: l.length ? `${l.length} point${plural(l.length)} à vérifier` : "Rien à signaler", wide: true,
+    body: [h("p", { class: "sub", style: "margin:0 0 12px", text: "Le guichet relit le registre : enveloppes et payes au-delà de leur budget, semaines de paye oubliées, rappels anciens, demandes accordées sans montant, avis en double, échéanciers, entreprises et comptes Discord en double, Trésor." }),
+      l.length ? h("ul", { class: "ent-list", id: "coh-l" }, l.map(x => h("li", {},
+        h("div", { style: "min-width:0" }, h("strong", { text: x.titre }), h("span", { class: "meta", text: x.detail })),
+        h("span", {}),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => { closeDialog(); x.go(); }, text: "Ouvrir" }))))
+        : h("div", { class: "empty", id: "coh-l", text: "Les chiffres du registre se tiennent : rien à vérifier." }),
+      m && m.at ? h("p", { class: "hint", style: "margin-top:12px", text: `Contrôle de la semaine fait le ${longDate(new Date(m.at))}${m.byNom ? " (" + m.byNom + ")" : ""} : ${m.points ? m.points + " point" + plural(m.points) + (autoOn("coherence") ? ", publiés au salon de la Direction" : "") : "rien à signaler"}.` }) : null],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
+$("#b-coherence").addEventListener("click", openCoherence);
+// Une fois par semaine : le contrôle est noté (meta/coherence) et, s'il y a des points, publié au salon de la Direction.
+async function coherenceAuto() {
+  if (S.coherenceEnCours || !writer() || !autoOn("coherence")) return;
+  if (!["config", "coherenceMeta", "demandes", "arbitrages", "declarations", "decisions", "echeanciers", "contrats", "payes", "rappels", "fonctionnaires", "entreprises"].every(n => S.loaded.has(n))) return;
+  const k = semKey(new Date());
+  if (S.coherenceMeta && String(S.coherenceMeta.semaine || "") >= k) return;
+  S.coherenceEnCours = true;
+  try {
+    const l = coherence();
+    if (!(await write(() => S.db.doc("meta/coherence").set({ semaine: k, at: nowISO(), by: S.uid || null, byNom: S.agentName || "", points: l.length, cles: l.map(x => x.k) })))) return;
+    if (!l.length) return;
+    let txt = `🔎 **Contrôle de cohérence** · ${periodPlain(k).toLowerCase()} : ${l.length} point${plural(l.length)} à vérifier au guichet (À traiter → Contrôle de cohérence).`, n = 0;
+    for (const x of l) { const ligne = `\n• **${x.titre}** : ${x.detail}`; if (txt.length + ligne.length > 1850) break; txt += ligne; n++; }
+    if (n < l.length) txt += `\n… et ${l.length - n} autre${plural(l.length - n)} au guichet.`;
+    const res = await postDiscord("direction", { content: txt });
+    if (!res.ok) signalerErreur("discord", res.error, { details: { salon: "direction", document: "contrôle de cohérence" } });
+  } finally { S.coherenceEnCours = false; }
+}
 $("#btn-backup").addEventListener("click", doBackup);
 $("#b-save").addEventListener("click", doBackup);
 
@@ -14721,10 +14831,11 @@ const DISCORD_AUTO = [
   ["sauvegardes", "Sauvegarde complète du registre chaque semaine, en fichier compressé (salon des sauvegardes ou, à défaut, de la Direction)", "sauvegardes"],
   ["classement", "Classement des heures et bilan du personnel de la semaine passée, le lundi, dès que toutes les heures sont saisies (salon des agents)", "agents"],
   ["alertesAgents", "Alertes aux fonctionnaires : messages, agenda, notes de service, paye versée (salon des alertes du personnel)", "personnel"],
-  ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"]
+  ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"],
+  ["coherence", "Contrôle de cohérence de la semaine : budgets dépassés, oublis, doublons, seulement s’il y a des points à vérifier (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["relancesAuto", "bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe"]);
+const AUTO_DEFAUT = new Set(["relancesAuto", "bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe", "coherence"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
   return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : ch === "sauvegardes" ? w.direction || "" : "");

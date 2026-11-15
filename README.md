@@ -585,6 +585,8 @@ Chaque statut suit la vie du dossier, partout (tableau de bord, Entreprises, Rec
 - **Fin d’un contrôle** : chaque avis suspendu retrouve exactement son état d’avant ; une déclaration qui n’avait pas encore d’avis reçoit le sien, publié normalement.
 - **Pénalités** : une seule pénalité de retard par déclaration, aucune en taxation d’office (sa majoration la remplace) ; les majorations d’un avis rejeté ou remis à valider sont annulées.
 
+**Contrôle de cohérence** : le guichet relit le registre et signale ce qui ne colle pas, avec un bouton **Ouvrir** vers le dossier : enveloppe d’un service ou payes du mois au-delà de leur budget (ce mois-ci et le précédent), semaine de paye jamais versée (avant la semaine passée), rappels de paye dus depuis plus de 3 semaines, demande accordée sans montant, deux avis pour la même entreprise et la même période, échéancier qui ne fait plus le montant de l’avis, entreprise ou compte Discord en double sur des fiches actives, Trésor dans le rouge. Les points arrivent dans **À traiter** de la Direction ; le contrôle se lance aussi à la main (**Réglages → Sauvegardes et export → Contrôle de cohérence**). Une fois par semaine, la première session de la Direction le note et, s’il y a des points, les publie au salon de la Direction (publication « Contrôle de cohérence », cochée par défaut dans Réglages → Discord).
+
 Les **Réglages** sont rangés en rubriques (Calendrier et taux, Barèmes, Exonération, Recouvrement, Entreprises, Services publics, Discord, Accès, Sauvegardes et export) ; la dernière ouverte est retenue. La recherche rapide trouve aussi une rubrique (« webhook », « enveloppe »…).
 
 ## Clôturer une semaine
