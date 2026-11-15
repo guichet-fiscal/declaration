@@ -66,7 +66,7 @@
   }
   window.supabase = { createClient: () => ({
     auth: {
-      getSession: async () => ({ data: { session: { user: { id: "uid-" + DID, user_metadata: { full_name: NOM } }, access_token: "t" } } }),
+      getSession: async () => ({ data: { session: { user: { id: "uid-" + DID, user_metadata: { full_name: NOM, name: String(NOM).toLowerCase().replace(/\s+/g, "") + "#0" } }, access_token: "t" } } }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
       signOut: async () => ({ error: null }), signInWithOAuth: async () => ({ error: null })
     },

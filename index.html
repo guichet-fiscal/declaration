@@ -1273,6 +1273,8 @@ button.orga-p{cursor:pointer}button.orga-p:hover{border-color:var(--rule);backgr
 .orga-n{display:grid;gap:1px;min-width:0}.orga-n strong{font-size:13.5px;font-weight:600}.orga-n .meta{font-size:12px}
 @media (max-width:640px){.orga-niv{grid-template-columns:1fr}}
 .carte-pro{display:block;width:100%;max-width:640px;margin:0 auto;border-radius:18px;box-shadow:0 10px 30px rgba(19,27,44,.22)}
+.sig-apercu{display:block;width:100%;height:auto;aspect-ratio:1170/320;background:#fff;border:1px solid var(--rule);border-radius:8px}
+.sig-service{display:grid;gap:6px}
 .avatar{--av:36px;--av-h:210;width:var(--av);height:var(--av);flex:none;border-radius:50%;display:inline-grid;place-items:center;overflow:hidden;
   background:color-mix(in srgb,hsl(var(--av-h) 55% 52%) 22%,var(--sheet)) center/cover no-repeat;color:color-mix(in srgb,hsl(var(--av-h) 60% 34%) 75%,var(--ink));
   font-weight:650;font-size:calc(var(--av) * .38);line-height:1;letter-spacing:.02em;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 10%,transparent)}
@@ -1597,7 +1599,7 @@ table.es-payes{min-width:0;width:100%}
           <p class="sub" id="espace-sub">Votre fiche, vos payes et vos heures, vos échanges avec l’encadrement.</p>
         </div>
       </div>
-      <div class="toolbar"><button class="btn ghost" type="button" id="espace-carte">Ma carte professionnelle</button><button class="btn ghost" type="button" id="espace-guide">Guide</button><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
+      <div class="toolbar"><button class="btn ghost" type="button" id="espace-carte">Ma carte professionnelle</button><button class="btn ghost" type="button" id="espace-signature">Ma signature</button><button class="btn ghost" type="button" id="espace-guide">Guide</button><button class="btn ghost" type="button" id="espace-notifs">Notifications sur cet appareil</button></div>
     </div>
     <div id="espace-main"></div>
   </section>
@@ -1628,6 +1630,7 @@ table.es-payes{min-width:0;width:100%}
       </div>
       <div class="toolbar">
         <button class="btn ghost" type="button" id="rh-annonce" hidden>Annoncer Mon espace</button>
+        <button class="btn ghost" type="button" id="rh-signatures" hidden>Signatures des agents</button>
         <button class="btn ghost" type="button" id="rh-modele" hidden>Modèle de contrat</button>
         <button class="btn" type="button" id="rh-new" hidden>Ajouter un fonctionnaire</button>
       </div>
@@ -4028,7 +4031,7 @@ async function init() {
   try { ({ data: { session } } = await sb.auth.getSession()); } catch (e) { session = null; }
   if (location.search) { try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* adresse inchangée */ } }
   if (!session) { if (oauthError) showGate("erreur", oauthError); else showGate("login"); return; }
-  S.uid = session.user.id;
+  S.uid = session.user.id; S.userMeta = session.user.user_metadata || {};
   viderErreurs();
   const { data: acces, error } = await sb.rpc("mon_acces");
   if (error) { showGate("erreur", error.message); return; }
@@ -6761,7 +6764,7 @@ function renderPersonnel() {
   renderEncadrement();
   if ((S.rhEspace || "effectif") !== "effectif") return;
   const w = rhWriter();
-  $("#rh-new").hidden = !w; $("#rh-modele").hidden = !w; $("#rh-annonce").hidden = !(canAgent() && writer());
+  $("#rh-new").hidden = !w; $("#rh-modele").hidden = !w; $("#rh-signatures").hidden = !w; $("#rh-annonce").hidden = !(canAgent() && writer());
   if (!S.connected || !S.loaded.has("fonctionnaires")) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
   const tous = foncs().slice().sort((a, b) => String(a.nom || "").localeCompare(String(b.nom || ""), "fr"));
   const actifs = tous.filter(f => f.actif !== false), retires = tous.filter(f => f.actif === false);
@@ -6972,6 +6975,170 @@ async function openCarte(fid, back) {
     foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }) : h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
       h("a", { class: "btn ghost small", href: url, download: fname + ".png", text: "Télécharger" }), copier] });
 }
+/* ---------- Signature des agents ---------- */
+// Bloc de signature à coller au bas des documents et des courriels : logos du serveur (comme sur la carte
+// professionnelle ; pas d'emblème réel de l'État), nom, fonction, adresse électronique, service, Discord,
+// photo de profil. Chacun la fait dans Mon espace ; la Direction et les RH la font pour un agent (fiche) ou
+// pour tous d'un coup (Personnel → Signatures des agents). Ce qu'on change à la main reste sur l'appareil.
+const SIG_DOMAINE = "gouvgprp.fr";
+const SIG_SERVICE = ["Préfecture de Police", "Préfecture de la région Ile-de-France", "Préfecture de la zone de défense et de sécurité de Paris"];
+const signatureCle = fid => "gf-signature-" + fid;
+function sigEmail(nom) {
+  const n = nomCarte(nom), slug = x => norm(x).replace(/[^a-z0-9]+/g, "");
+  const p = slug(String(n.prenom || "").split(/\s+/)[0] || ""), f = slug(n.nom);
+  return `${p ? p + "." : ""}${f || "agent"}@${SIG_DOMAINE}`;
+}
+// Valeurs du guichet (fiche, dernier contrat, compte Discord de la session pour sa propre signature).
+function sigDefauts(f, espace) {
+  const poste = ((espace ? S.espace.contrats : ctrsOf(f.id)) || []).map(x => x.poste).find(Boolean) || "";
+  const md = (espace && S.userMeta) || {};
+  return { nom: String(f.nom || "").replace(/^[^|]*\|\s*/, "").trim(), fonction: poste || f.grade || "", email: sigEmail(f.nom), service: SIG_SERVICE.slice(),
+    discord: String(md.name || md.user_name || md.preferred_username || "").replace(/#\d+$/, ""), photo: true };
+}
+function sigReglages(f, espace) {
+  let mien = {}; try { mien = JSON.parse(localStorage.getItem(signatureCle(f.id)) || "{}") || {}; } catch (e) { /* sans stockage */ }
+  const d = sigDefauts(f, espace), r = Object.assign({}, d, mien);
+  r.service = [0, 1, 2].map(i => (Array.isArray(mien.service) && mien.service[i] != null ? mien.service[i] : d.service[i]) || "");
+  return r;
+}
+async function sigCanvas(f, d) {
+  try { await Promise.all(['700 21px "Archivo"', '400 16px "Archivo"', '700 19px "Archivo"'].map(x => document.fonts.load(x))); } catch (e) { /* polices de secours */ }
+  const at = d.photo ? photoProfilAt(f.id) : "", url = at && S.sb ? await photoProfilUrl(f.id, at) : null;
+  const [logoRF, logoPP, photo] = await Promise.all([ctrImage("assets/contrat-logo.png"), ctrImage("assets/logo-prefecture.png"), url ? ctrImage(url) : Promise.resolve(null)]);
+  const avecRond = !!d.photo, W = 1170, H = 320, sc = 2, ink = "#16181d", ink2 = "#2b2f38", trait = "#2c3170";
+  const F = '"Archivo", "Segoe UI", Arial, sans-serif';
+  const c = document.createElement("canvas"); c.width = W * sc; c.height = H * sc;
+  const g = c.getContext("2d"); g.scale(sc, sc);
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
+  // Logos dans leur cadre.
+  const bx = 20, by = 18, bw = 196, bh = 266, mid = by + 130;
+  if (logoRF) { const lw = bw - 26, lh = lw * logoRF.height / logoRF.width; g.drawImage(logoRF, bx + 13, by + (mid - by - lh) / 2, lw, lh); }
+  if (logoPP) { const s = 118; g.drawImage(logoPP, bx + (bw - s) / 2, mid + (by + bh - mid - s) / 2, s, s); }
+  g.strokeStyle = ink; g.lineWidth = 2; g.strokeRect(bx, by, bw, bh); g.beginPath(); g.moveTo(bx, mid); g.lineTo(bx + bw, mid); g.stroke();
+  // Textes.
+  const tx = 238, maxW = (avecRond ? 860 : W - 30) - tx;
+  const ecrire = (txt, y, poids, taille, couleur) => {
+    if (!txt) return; let t = taille; g.font = `${poids} ${t}px ${F}`;
+    while (g.measureText(txt).width > maxW && t > 11) { t -= 0.5; g.font = `${poids} ${t}px ${F}`; }
+    g.fillStyle = couleur; g.fillText(txt, tx, y);
+  };
+  g.textBaseline = "alphabetic";
+  ecrire(d.nom, 46, 700, 21, ink); ecrire(d.fonction, 78, 400, 16, ink2); ecrire(d.email, 102, 400, 16, ink2);
+  ecrire(d.service[0], 184, 700, 19, ink); ecrire(d.service[1], 213, 400, 16, ink2); ecrire(d.service[2], 238, 400, 16, ink2);
+  if (d.discord) {
+    // Pastille « @ » (pas le logo de Discord), puis l'identifiant.
+    g.fillStyle = "#5865f2"; g.beginPath(); g.arc(tx + 11, 267, 11, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#ffffff"; g.font = `700 14px ${F}`; g.textAlign = "center"; g.fillText("@", tx + 11, 272); g.textAlign = "left";
+    g.fillStyle = ink2; g.font = `400 16px ${F}`; g.fillText(d.discord, tx + 30, 273);
+  }
+  // Photo ronde (ou initiales).
+  if (avecRond) {
+    const cx = 1020, cy = 152, r = 142;
+    g.save(); g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip();
+    if (photo) { const s = Math.max(2 * r / photo.width, 2 * r / photo.height), w = photo.width * s, hh = photo.height * s; g.drawImage(photo, cx - w / 2, cy - r + (2 * r - hh) * 0.3, w, hh); }
+    else { g.fillStyle = `hsl(${teinte(f.nom)} 45% 82%)`; g.fillRect(cx - r, cy - r, 2 * r, 2 * r); g.fillStyle = `hsl(${teinte(f.nom)} 45% 28%)`; g.font = `700 92px ${F}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(initiales(f.nom), cx, cy + 4); g.textAlign = "left"; g.textBaseline = "alphabetic"; }
+    g.restore();
+    g.strokeStyle = ink; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  }
+  // Filet du bas.
+  g.strokeStyle = trait; g.lineWidth = 1.5; g.beginPath(); g.moveTo(15, 300); g.lineTo(W - 15, 300); g.stroke();
+  return c;
+}
+const sigFichier = d => "signature-" + (norm(d.nom || "agent").replace(/\s+/g, "-") || "agent") + ".png";
+function openSignature(fid, back) {
+  const espace = !!(S.espace && S.espace.fid === fid);
+  const f = espace ? Object.assign({ id: fid }, S.espace.fonctionnaire) : foncOf(fid);
+  if (!f) return;
+  const d = sigReglages(f, espace), def = sigDefauts(f, espace);
+  const inp = (id, v, ph, max) => { const x = h("input", { id, autocomplete: "off", maxlength: String(max || 90), placeholder: ph || "" }); x.value = v || ""; return x; };
+  const nom = inp("sig-nom", d.nom, "Prénom et nom"), fonction = inp("sig-fonction", d.fonction, "Ex. : Sous-préfète de police de Paris", 110);
+  const email = inp("sig-email", d.email, "prenom.nom@" + SIG_DOMAINE), discord = inp("sig-discord", d.discord, "Identifiant Discord (facultatif)", 40);
+  const serv = d.service.map((v, i) => inp("sig-service-" + i, v, i ? "Facultatif" : "Ex. : Préfecture de Police", 90));
+  const photo = h("input", { type: "checkbox", id: "sig-photo" }); photo.checked = d.photo !== false;
+  const apercu = h("img", { class: "sig-apercu", id: "sig-apercu", alt: "Aperçu de la signature" });
+  const dl = h("a", { class: "btn ghost small", id: "sig-dl", download: sigFichier(d), text: "Télécharger" });
+  let canvas = null, tour = 0, minuteur = 0;
+  const valeurs = () => ({ nom: nom.value.trim(), fonction: fonction.value.trim(), email: email.value.trim(), discord: discord.value.trim().replace(/^@/, ""), service: serv.map(x => x.value.trim()), photo: photo.checked });
+  const dessiner = async () => {
+    const n = ++tour, v = valeurs();
+    let cv; try { cv = await sigCanvas(f, v); } catch (e) { toast("Impossible de dessiner la signature dans ce navigateur.", true); return; }
+    if (n !== tour) return;
+    canvas = cv; const u = cv.toDataURL("image/png"); apercu.src = u; dl.href = u; dl.download = sigFichier(v);
+    // Ce qui diffère des valeurs du guichet reste sur cet appareil.
+    const diff = {}; for (const k of ["nom", "fonction", "email", "discord", "photo"]) if (v[k] !== def[k]) diff[k] = v[k];
+    if (v.service.some((x, i) => x !== def.service[i])) diff.service = v.service;
+    try { if (Object.keys(diff).length) localStorage.setItem(signatureCle(fid), JSON.stringify(diff)); else localStorage.removeItem(signatureCle(fid)); } catch (e) { /* sans stockage */ }
+  };
+  const plusTard = () => { clearTimeout(minuteur); minuteur = setTimeout(dessiner, 250); };
+  [nom, fonction, email, discord, ...serv].forEach(x => x.addEventListener("input", plusTard)); photo.addEventListener("change", dessiner);
+  const copier = h("button", { class: "btn ink small", type: "button", id: "sig-copier", text: "Copier l’image", onclick: () => {
+    if (!canvas) return;
+    try { navigator.clipboard.write([new ClipboardItem({ "image/png": new Promise(res => canvas.toBlob(res, "image/png")) })]).then(() => toast("Signature copiée : collez-la au bas de votre document avec Ctrl + V."), () => toast("Le navigateur a refusé la copie : téléchargez-la.", true)); }
+    catch (e) { toast("Ce navigateur ne sait pas copier une image : téléchargez-la.", true); }
+  } });
+  const remettre = h("button", { class: "btn ghost small", type: "button", text: "Valeurs du guichet", onclick: () => {
+    nom.value = def.nom; fonction.value = def.fonction; email.value = def.email; discord.value = def.discord; serv.forEach((x, i) => { x.value = def.service[i]; }); photo.checked = true; dessiner();
+  } });
+  openDialog({ eyebrow: espace ? "Mon espace" : "Personnel de la Préfecture", title: espace ? "Ma signature" : `Signature de ${f.nom || "l’agent"}`, wide: true,
+    body: [apercu,
+      h("div", { class: "row2" }, field("sig-nom", "Nom affiché", nom), field("sig-fonction", "Fonction", fonction)),
+      h("div", { class: "row2" }, field("sig-email", "Adresse électronique", email), field("sig-discord", "Discord", discord)),
+      h("div", { class: "field" }, h("label", { for: "sig-service-0", text: "Service" }), h("div", { class: "sig-service" }, serv)),
+      h("label", { class: "switch" }, photo, h("span", { text: photoProfilAt(fid) ? "Avec la photo de profil" : "Avec la photo de profil (initiales tant qu’il n’y en a pas)" })),
+      h("p", { class: "hint", style: "margin:0", text: `À coller au bas de vos documents et courriels (« Copier l’image », puis Ctrl + V), ou à joindre. Les changements faits ici restent sur cet appareil ; la fonction vient du dernier contrat (sinon du grade), l’adresse du nom (${SIG_DOMAINE}).` })],
+    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }) : h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }),
+      remettre, h("span", { class: "spacer" }), dl, copier] });
+  dessiner();
+}
+// Archive ZIP sans compression (les PNG le sont déjà) : pour télécharger toutes les signatures d'un coup.
+function zipSansCompression(fichiers) {
+  const T = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; T[n] = c >>> 0; }
+  const crc = a => { let c = 0xFFFFFFFF; for (let i = 0; i < a.length; i++) c = T[(c ^ a[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const enc = new TextEncoder(), dt = new Date(), heure = (dt.getHours() << 11) | (dt.getMinutes() << 5) | (dt.getSeconds() >> 1), jour = ((dt.getFullYear() - 1980) << 9) | ((dt.getMonth() + 1) << 5) | dt.getDate();
+  const parts = [], central = []; let off = 0;
+  for (const f of fichiers) {
+    const nm = enc.encode(f.nom), c = crc(f.data), n = f.data.length;
+    const l = new DataView(new ArrayBuffer(30));
+    l.setUint32(0, 0x04034b50, true); l.setUint16(4, 20, true); l.setUint16(6, 0x0800, true); l.setUint16(10, heure, true); l.setUint16(12, jour, true);
+    l.setUint32(14, c, true); l.setUint32(18, n, true); l.setUint32(22, n, true); l.setUint16(26, nm.length, true);
+    parts.push(new Uint8Array(l.buffer), nm, f.data);
+    const e = new DataView(new ArrayBuffer(46));
+    e.setUint32(0, 0x02014b50, true); e.setUint16(4, 20, true); e.setUint16(6, 20, true); e.setUint16(8, 0x0800, true); e.setUint16(12, heure, true); e.setUint16(14, jour, true);
+    e.setUint32(16, c, true); e.setUint32(20, n, true); e.setUint32(24, n, true); e.setUint16(28, nm.length, true); e.setUint32(42, off, true);
+    central.push(new Uint8Array(e.buffer), nm);
+    off += 30 + nm.length + n;
+  }
+  const taille = central.reduce((s, x) => s + x.length, 0), fin = new DataView(new ArrayBuffer(22));
+  fin.setUint32(0, 0x06054b50, true); fin.setUint16(8, fichiers.length, true); fin.setUint16(10, fichiers.length, true); fin.setUint32(12, taille, true); fin.setUint32(16, off, true);
+  return new Blob([...parts, ...central, new Uint8Array(fin.buffer)], { type: "application/zip" });
+}
+function openSignaturesTous() {
+  if (!rhWriter()) return;
+  const l = foncs().filter(f => f.actif !== false).sort((a, b) => String(a.nom).localeCompare(String(b.nom), "fr"));
+  const etat = h("p", { class: "hint", id: "sigs-etat", style: "margin:0", text: "" });
+  const tout = h("button", { class: "btn ink small", type: "button", id: "sigs-zip", text: `Tout télécharger (${l.length})` });
+  tout.addEventListener("click", async () => {
+    tout.disabled = true; const fichiers = [], noms = new Set();
+    for (const [i, f] of l.entries()) {
+      etat.textContent = `Signature ${i + 1} sur ${l.length} : ${f.nom}…`;
+      try {
+        const d = sigReglages(f, false), cv = await sigCanvas(f, d), b = await new Promise(res => cv.toBlob(res, "image/png"));
+        let nm = sigFichier(d); for (let k = 2; noms.has(nm); k++) nm = sigFichier(d).replace(/\.png$/, `-${k}.png`);
+        noms.add(nm); fichiers.push({ nom: nm, data: new Uint8Array(await b.arrayBuffer()) });
+      } catch (e) { /* une signature qui échoue n'arrête pas les autres */ }
+    }
+    const a = h("a", { href: URL.createObjectURL(zipSansCompression(fichiers)), download: "signatures-agents.zip" }); document.body.appendChild(a); a.click(); a.remove();
+    etat.textContent = `${fichiers.length} signature${plural(fichiers.length)} dans signatures-agents.zip.`; tout.disabled = false;
+  });
+  openDialog({ eyebrow: "Personnel de la Préfecture", title: "Signatures des agents", wide: true,
+    body: [h("p", { style: "margin:0", text: "Chaque fonctionnaire a sa signature dans Mon espace (« Ma signature »). Ici, celle de chacun avec les valeurs du guichet : nom de la fiche, fonction du dernier contrat (sinon le grade), adresse tirée du nom, photo de profil. Ouvrez-en une pour l’ajuster avant de l’envoyer." }),
+      h("ul", { class: "ent-list", id: "sigs-l" }, l.map(f => h("li", {},
+        h("div", { style: "min-width:0;display:flex;gap:10px;align-items:center" }, avatar(f.id, f.nom, 32), h("div", { style: "min-width:0" }, h("strong", { text: f.nom || "Sans nom" }), h("span", { class: "meta", text: sigReglages(f, false).fonction || "—" }))),
+        h("span", { class: "meta", text: sigEmail(f.nom) }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => openSignature(f.id, openSignaturesTous), text: "Signature" })))),
+      etat],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }), tout] });
+}
 // Fiche RH d'un fonctionnaire : identité, grade, contrats ; la paye reste dans l'onglet Payes.
 function openAgent(fid, back) {
   const f = foncOf(fid); if (!f) return;
@@ -6980,7 +7147,8 @@ function openAgent(fid, back) {
   openDialog({ eyebrow: "Personnel de la Préfecture", title: f.nom || "Sans nom", stampEl: f.actif === false ? stamp(["RETIRÉ", "muted"]) : null,
     body: [
       h("div", { class: "profil-tete" }, avatar(f.id, f.nom, 72), peutPhotoProfil(f.id) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openPhotoProfil(f.id, f.nom, reopen), text: f.photoAt ? "Changer la photo" : "Ajouter une photo" }) : null,
-        h("button", { class: "btn ghost small", type: "button", onclick: () => openCarte(f.id, reopen), text: "Carte professionnelle" })),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => openCarte(f.id, reopen), text: "Carte professionnelle" }),
+        h("button", { class: "btn ghost small", type: "button", id: "ag-signature", onclick: () => openSignature(f.id, reopen), text: "Signature" })),
       kv([["Grade", f.grade || "—"], ["Taux horaire", taux ? `${money(taux)} de l’heure` : "pas dans le barème"],
         ["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"],
         ["Entré", f.at ? `le ${longDate(new Date(f.at))}${f.byNom ? " · fiche créée par " + f.byNom : ""}` : "—"],
@@ -7005,6 +7173,7 @@ function openAgent(fid, back) {
 $("#rh-new").addEventListener("click", () => openFoncForm(null));
 $("#rh-annonce").addEventListener("click", () => openAnnonceEspace());
 $("#rh-modele").addEventListener("click", () => openCtrModele());
+$("#rh-signatures").addEventListener("click", () => openSignaturesTous());
 $("#rh-q").addEventListener("input", () => renderPersonnel());
 
 /* ---------- Encadrement des fonctionnaires : messages, agenda, absences, notes de service ---------- */
@@ -24126,6 +24295,7 @@ $("#espace-notifs").addEventListener("click", openNotifs);
 $("#espace-guide").addEventListener("click", () => openAccueil(0));
 $("#j-consult").addEventListener("click", () => openConsultations());
 $("#espace-carte").addEventListener("click", () => { const fid = (S.espace && S.espace.fid) || S.monFid; if (fid) openCarte(fid); else toast("Votre compte n’est relié à aucune fiche de fonctionnaire.", true); });
+$("#espace-signature").addEventListener("click", () => { const fid = (S.espace && S.espace.fid) || S.monFid; if (fid) openSignature(fid); else toast("Votre compte n’est relié à aucune fiche de fonctionnaire.", true); });
 
 // Un clic sur une notification ouvre le dossier : « #ouvrir=collection/id ».
 function ouvrirDossier(spec) {
