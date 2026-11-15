@@ -6919,10 +6919,47 @@ function nomCarte(nom) {
   const prenom = mots.filter(w => grands.length ? !grands.includes(w) : w !== mots.slice(-1)[0]).join(" ");
   return { nom: nomF, prenom };
 }
+// Signatures de la carte : celle du titulaire et celle du plus haut gradé en service (taux le plus élevé du
+// barème ; Préfet de région au 15 nov.). Une signature manuscrite importée (profils/signature-<fiche>.png,
+// par la Direction ou les RH) remplace le nom écrit à la main (police Allura, comme pour les contrats).
+const SIG_MAIN = new Map();
+function signatureMainUrl(fid) {
+  if (!fid || !S.sb) return Promise.resolve(null);
+  if (!SIG_MAIN.has(fid)) SIG_MAIN.set(fid, (async () => { try { const { data } = await S.sb.storage.from("profils").download("signature-" + fid + ".png"); return data ? URL.createObjectURL(data) : null; } catch (e) { return null; } })());
+  return SIG_MAIN.get(fid);
+}
+function tauxBareme(g) {
+  const src = S.config && S.config.payes ? S.config.payes : S.espace && S.espace.bareme;
+  const x = payeCfgFrom(src).grades.find(z => norm(z.nom) === norm(g)); return x ? x.taux : 0;
+}
+function autoriteCarte() {
+  let best = null;
+  for (const p of annuaireListe()) { const t = tauxBareme(p.grade); if (t > 0 && (!best || t > best.t || (t === best.t && String(p.nom).localeCompare(String(best.p.nom), "fr") < 0))) best = { p, t }; }
+  return best ? best.p : null;
+}
+const nomSigne = nom => String(nom || "").replace(/^[^|]*\|\s*/, "").trim().split(/\s+/).map(w => w === w.toUpperCase() && w.length > 1 ? w.charAt(0) + w.slice(1).toLowerCase() : w).join(" ");
+function importerSignatureMain(fid, nom, apres) {
+  const inp = h("input", { type: "file", accept: "image/*" });
+  inp.addEventListener("change", async () => {
+    const file = inp.files && inp.files[0]; if (!file) return;
+    let img; try { img = await createImageBitmap(file); } catch (e) { toast("Image illisible : choisissez une photo ou une capture de la signature.", true); return; }
+    const s = Math.min(1, 900 / img.width, 300 / img.height), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * s)); c.height = Math.max(1, Math.round(img.height * s));
+    const g = c.getContext("2d"); g.drawImage(img, 0, 0, c.width, c.height);
+    // Fond clair rendu transparent : la signature se pose sur la carte.
+    try { const d = g.getImageData(0, 0, c.width, c.height), px = d.data; for (let i = 0; i < px.length; i += 4) { const m = Math.min(px[i], px[i + 1], px[i + 2]); if (m > 225) px[i + 3] = 0; else if (m > 180) px[i + 3] = Math.round(px[i + 3] * (225 - m) / 45); } g.putImageData(d, 0, 0); } catch (e) { /* image gardée telle quelle */ }
+    const blob = await new Promise(r => c.toBlob(r, "image/png"));
+    const { error } = await S.sb.storage.from("profils").upload("signature-" + fid + ".png", blob, { upsert: true, contentType: "image/png" });
+    if (error) { toast(error.message || "Signature non enregistrée.", true); return; }
+    SIG_MAIN.delete(fid); toast(`Signature de ${nom} enregistrée : elle remplace le nom écrit à la main.`); if (apres) apres();
+  });
+  inp.click();
+}
 async function carteCanvas(f, poste) {
   try { await Promise.all(['800 40px "Archivo"', '700 18px "Archivo"', '400 17px "Archivo"', '600 17px "IBM Plex Mono"'].map(x => document.fonts.load(x))); } catch (e) { /* polices de secours */ }
-  const at = photoProfilAt(f.id), url = at && S.sb ? await photoProfilUrl(f.id, at) : null;
-  const [logoRF, logoPP, photo] = await Promise.all([ctrImage("assets/contrat-logo.png"), ctrImage("assets/logo-prefecture.png"), url ? ctrImage(url) : Promise.resolve(null)]);
+  const at = photoProfilAt(f.id), url = at && S.sb ? await photoProfilUrl(f.id, at) : null, aut = autoriteCarte();
+  const img = u => u ? ctrImage(u) : Promise.resolve(null);
+  const [logoRF, logoPP, photo, sigTit, sigAut, manuscrite] = await Promise.all([ctrImage("assets/contrat-logo.png"), ctrImage("assets/logo-prefecture.png"), url ? ctrImage(url) : Promise.resolve(null),
+    signatureMainUrl(f.id).then(img), aut ? signatureMainUrl(aut.id).then(img) : Promise.resolve(null), ctrPoliceSignature().catch(() => false)]);
   const W = 1012, H = 638, sc = 2, R = 30, navy = "#14275a", rouge = "#c8102e", ink = "#122229", ink2 = "#4b5d63";
   const Fo = { disp: '"Archivo", "Arial Narrow", Arial, sans-serif', body: '"Archivo", Arial, sans-serif', mono: '"IBM Plex Mono", Consolas, monospace' };
   const c = document.createElement("canvas"); c.width = W * sc; c.height = H * sc;
@@ -6942,7 +6979,7 @@ async function carteCanvas(f, poste) {
   g.textAlign = "left";
   g.fillStyle = navy; g.fillRect(0, 132, W, 6); g.fillStyle = rouge; g.fillRect(0, 141, W, 2);
   // Photo.
-  const px = 44, py = 172, pw = 236, ph = 290;
+  const px = 44, py = 164, pw = 236, ph = 258;
   g.save(); rond(px, py, pw, ph, 14); g.clip();
   if (photo) { const s = Math.max(pw / photo.width, ph / photo.height), w = photo.width * s, hh = photo.height * s; g.drawImage(photo, px + (pw - w) / 2, py + (ph - hh) * 0.3, w, hh); }
   else { g.fillStyle = `hsl(${teinte(f.nom)} 45% 82%)`; g.fillRect(px, py, pw, ph); g.fillStyle = `hsl(${teinte(f.nom)} 45% 28%)`; g.font = `800 96px ${Fo.disp}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(initiales(f.nom), px + pw / 2, py + ph / 2); g.textAlign = "left"; g.textBaseline = "alphabetic"; }
@@ -6956,13 +6993,28 @@ async function carteCanvas(f, poste) {
     while (g.measureText(val).width > maxW && t > 14) { t -= 1; g.font = `${mono ? 600 : 700} ${t}px ${mono ? Fo.mono : Fo.body}`; }
     g.fillStyle = ink; g.fillText(val, x0, y + taille + 8);
   };
-  champ("Nom", n.nom || "—", 190, 40);
-  champ("Prénom", n.prenom || "—", 262, 28);
-  champ("Grade", f.grade || "—", 322, 24);
-  if (poste) champ("Poste", poste, 378, 22);
-  const half = (maxW - 20) / 2;
-  champ("Matricule", matricule(f), 434, 22, true);
-  g.save(); g.translate(half + 20, 0); champ("En fonction depuis", f.at ? new Date(f.at).toLocaleDateString("fr-FR") : "—", 434, 22, true); g.restore();
+  // Poste affiché seulement s'il dit autre chose que le grade (place laissée aux signatures).
+  const avecPoste = !!poste && norm(poste) !== norm(f.grade), half = (maxW - 20) / 2;
+  const Y = avecPoste ? [174, 238, 290, 338, 386] : [180, 252, 312, null, 372], T = avecPoste ? [36, 24, 20, 18, 18] : [38, 26, 22, 0, 20];
+  champ("Nom", n.nom || "—", Y[0], T[0]);
+  champ("Prénom", n.prenom || "—", Y[1], T[1]);
+  champ("Grade", f.grade || "—", Y[2], T[2]);
+  if (avecPoste) champ("Poste", poste, Y[3], T[3]);
+  champ("Matricule", matricule(f), Y[4], T[4], true);
+  g.save(); g.translate(half + 20, 0); champ("En fonction depuis", f.at ? new Date(f.at).toLocaleDateString("fr-FR") : "—", Y[4], T[4], true); g.restore();
+  // Signatures : le titulaire à gauche, le plus haut gradé à droite.
+  g.fillStyle = "rgba(20,39,90,.16)"; g.fillRect(44, 440, W - 88, 1);
+  // Police manuscrite vraiment chargée (document.fonts.check répond oui quand la police n'existe pas) ; sinon italique.
+  const allura = manuscrite && [...(document.fonts || [])].some(ff => /Allura/.test(ff.family) && ff.status === "loaded");
+  const signer = (x, w, lab, imgSig, nom, sous) => {
+    g.fillStyle = ink2; g.font = `700 11.5px ${Fo.body}`; sp("1.4px"); g.fillText(lab.toUpperCase(), x, 462); sp("0px");
+    if (imgSig) { const hh = Math.min(50, imgSig.height), ww = Math.min(w, imgSig.width * hh / imgSig.height), h2 = ww * imgSig.height / imgSig.width; g.drawImage(imgSig, x, 470 + (50 - h2) / 2, ww, h2); }
+    else { let t = 40; const fnt = () => allura ? `${t}px "Allura", cursive` : `italic 400 ${Math.round(t * 0.72)}px Georgia, "Times New Roman", serif`;
+      g.font = fnt(); while (g.measureText(nom).width > w && t > 22) { t -= 2; g.font = fnt(); } g.fillStyle = "#1c2f6b"; g.fillText(nom, x, 512); }
+    if (sous) { g.fillStyle = ink2; g.font = `500 12.5px ${Fo.body}`; g.fillText(sous, x, 536); }
+  };
+  signer(44, 400, "Signature du titulaire", sigTit, nomSigne(f.nom), "");
+  if (aut) signer(560, W - 44 - 560, aut.grade || "L’autorité", sigAut, nomSigne(aut.nom), aut.nom);
   // Pied : bande bleue.
   g.fillStyle = rouge; g.fillRect(0, H - 92, W, 2); g.fillStyle = navy; g.fillRect(0, H - 86, W, 86);
   g.fillStyle = "#ffffff"; g.font = `600 15px ${Fo.body}`;
@@ -6983,7 +7035,7 @@ async function openCarte(fid, back) {
   const f = espace ? Object.assign({ id: fid }, S.espace.fonctionnaire) : foncOf(fid);
   if (!f) return;
   const poste = ((espace ? S.espace.contrats : ctrsOf(fid)) || []).map(x => x.poste).find(Boolean) || "";
-  let c;
+  let c; const aut = autoriteCarte();
   try { c = await carteCanvas(f, poste); } catch (e) { toast("Impossible de dessiner la carte dans ce navigateur.", true); return; }
   const url = c.toDataURL("image/png"), fname = "carte-professionnelle-" + norm(nomCarte(f.nom).nom || "agent").replace(/\s+/g, "-");
   const copier = h("button", { class: "btn ink small", type: "button", text: "Copier l’image", onclick: () => {
@@ -6992,7 +7044,11 @@ async function openCarte(fid, back) {
   } });
   openDialog({ eyebrow: espace ? "Mon espace" : "Personnel de la Préfecture", title: espace ? "Ma carte professionnelle" : `Carte professionnelle de ${f.nom || "l’agent"}`, wide: true,
     body: [h("img", { class: "carte-pro", src: url, alt: `Carte professionnelle de ${f.nom || "l’agent"}` }),
-      h("p", { class: "hint", style: "margin:0", text: [photoProfilAt(fid) ? "" : "Sans photo de profil, la carte porte les initiales. ", "Elle reprend le grade et la photo du moment : refaites-la après un changement."].join("") })],
+      h("p", { class: "hint", style: "margin:0", text: [photoProfilAt(fid) ? "" : "Sans photo de profil, la carte porte les initiales. ", "Elle reprend le grade et la photo du moment : refaites-la après un changement. ",
+        aut ? `Signée par le titulaire et par ${aut.nom} (${aut.grade}, le plus haut gradé en service) : leur nom écrit à la main, ou leur signature si la Direction l’a importée.` : "Signée par le titulaire."].join("") }),
+      rhWriter() ? h("div", { class: "row-actions" },
+        h("button", { class: "btn ghost small", type: "button", id: "carte-sig-titulaire", onclick: () => importerSignatureMain(f.id, f.nom, () => openCarte(fid, back)), text: `Importer la signature de ${nomSigne(f.nom)}` }),
+        aut && aut.id !== f.id ? h("button", { class: "btn ghost small", type: "button", id: "carte-sig-autorite", onclick: () => importerSignatureMain(aut.id, aut.nom, () => openCarte(fid, back)), text: `Importer la signature de ${nomSigne(aut.nom)}` }) : null) : null],
     foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }) : h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
       h("a", { class: "btn ghost small", href: url, download: fname + ".png", text: "Télécharger" }), copier] });
 }
