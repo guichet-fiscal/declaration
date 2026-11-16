@@ -5968,6 +5968,19 @@ function renderPayes(force) {
     bl.push(h("span", { class: "warn", id: "py-depasse" }, `Cette semaine coûte ${money(x.totalDu)} pour ${money(b.dispo)} de budget : payes à ${pctC(x.coef)}, ${money(x.totalDu - x.totalVerse)} en rappels. `,
       w && comp > 0 ? h("button", { class: "linkbtn", type: "button", onclick: () => preparerDemandeSalaires(bp.m, comp, true), text: `Préparer un complément de ${money(comp)}` }) : null));
   }
+  // Rappels pas entièrement versés alors que la semaine est payée en entier : ils ne prennent que ce qui reste
+  // du budget de la semaine, lui-même une part du reste du mois (signalé par Joachim le 16 nov.).
+  const rapIn = (x.rappels || []).filter(r => r.inclus), rapDu = rapIn.reduce((t, r) => t + r.du, 0), rapVe = rapIn.reduce((t, r) => t + r.verse, 0);
+  if (!x.versee && x.coef >= 1 && rapDu > rapVe + 1) {
+    const besoin = x.totalVerse + rapDu, manque = Math.max(0, besoin - Math.max(0, b.reste)), bp = besoinPayes(b.mois || moisDe(k)), comp = arrondiHaut(Math.max(manque, bp.manque), 10000);
+    bl.push(h("span", { class: "warn", id: "py-rappels-place" },
+      `Rappels : ${money(rapDu)} dus, ${money(rapVe)} versés cette semaine. Ils passent après les payes de la semaine, avec ce qui reste de son budget (${money(Math.max(0, b.dispo - x.totalVerse))}). `,
+      b.n > 1 && b.limite === "lisse" ? `Le reste du mois est partagé entre ${b.n} semaines : un complément « salaires » n’ajoute qu’1/${b.n} de son montant à celle-ci. ` : "",
+      w && !manque ? h("button", { class: "linkbtn", type: "button", id: "py-rappels-tout", onclick: async () => { if (await payeSet(k, { budgetImpose: besoin })) toast(`Budget de la semaine porté à ${money(besoin)} : tous les rappels sont versés, ${money(rapDu)} pris sur les semaines suivantes du mois.`); },
+        text: `Verser tous les rappels cette semaine (budget de la semaine : ${money(besoin)}, pris sur les semaines suivantes)` }) : null,
+      w && manque ? h("span", {}, `Il manque ${money(manque)} au budget du mois pour tout verser cette semaine. `,
+        h("button", { class: "linkbtn", type: "button", onclick: () => preparerDemandeSalaires(bp.m, comp, true), text: `Préparer un complément de ${money(comp)}` })) : null));
+  }
   fill($("#py-budget"), h("div", { class: "py-budget" }, bl));
   renderConseilPayes();
   renderPrevision(k);
