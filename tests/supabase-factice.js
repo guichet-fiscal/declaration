@@ -15,7 +15,7 @@
       select() { if (st.op !== "select") st.wantSelect = true; return b; },
       order() { return b; }, limit() { return b; }, single() { st.one = true; return b; }, maybeSingle() { st.one = true; return b; },
       range(a, z) { st.range = [a, z]; return b; },
-      eq(k, v) { st.filters.push([k, v]); return b; }, gte() { return b; }, lte() { return b; }, in() { return b; }, neq() { return b; }, gt(k, v) { st.gt = [k, v]; return b; }, not() { return b; },
+      eq(k, v) { st.filters.push([k, v]); return b; }, gte() { return b; }, lte() { return b; }, in(k, v) { st.ins = [k, v]; return b; }, neq() { return b; }, gt(k, v) { st.gt = [k, v]; return b; }, not() { return b; },
       insert(p) { st.op = "insert"; st.payload = p; return b; }, upsert(p) { st.op = "upsert"; st.payload = p; return b; },
       update(p) { st.op = "update"; st.payload = p; return b; }, delete() { st.op = "delete"; return b; },
       then(res, rej) { return run().then(res, rej); }
@@ -53,7 +53,7 @@
         return ok(ROLE === "direction" ? (window.__consultations || []).slice().sort((x, y) => String(y.at).localeCompare(String(x.at))) : []);
       }
       // Journal de l'essai : window.__journal (lignes de la table journal).
-      if (table === "journal" && st.op === "select") return ok((window.__journal || []).slice());
+      if (table === "journal" && st.op === "select") return ok((window.__journal || []).filter(j => st.filters.every(([k, v]) => j[k] === v) && (!st.ins || st.ins[1].includes(j[st.ins[0]]))));
       // Salons Discord de l'essai (window.__discord = { webhooks, auto }) : adresses servies par l'essai lui-même.
       if (table === "parametres_prives" && st.op === "select") return ok(window.__discord ? [{ cle: "discord", valeur: window.__discord }] : []);
       if (table !== "registre") return ok(st.op === "select" ? [] : null);

@@ -5962,6 +5962,7 @@ function renderPayes(force) {
     if (b.limite === "enveloppe") bl.push(h("span", { class: "warn", text: `Limité par l’enveloppe ${c.service} : il n’y reste que ${money(b.envReste)}` }));
     if (w) bl.push(h("button", { class: "linkbtn", type: "button", onclick: () => openPayeBudget(k), text: "Changer le budget de la semaine" }));
   }
+  if (histOk() && x.p) bl.push(h("button", { class: "linkbtn", type: "button", id: "py-historique", onclick: () => openHistorique(["payes"], k, `Paye de la ${periodLabel(k).toLowerCase()}`), text: "Historique de la semaine" }));
   // Avant de verser : la semaine dépasse son budget → le complément du mois, ou un budget de semaine plus haut.
   if (!x.versee && x.coef < 1 && x.totalDu > 0) {
     const bp = besoinPayes(b.mois || moisDe(k)), comp = arrondiHaut(bp.manque, 10000);
@@ -7253,7 +7254,8 @@ function openAgent(fid, back) {
     body: [
       h("div", { class: "profil-tete" }, avatar(f.id, f.nom, 72), peutPhotoProfil(f.id) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openPhotoProfil(f.id, f.nom, reopen), text: f.photoAt ? "Changer la photo" : "Ajouter une photo" }) : null,
         h("button", { class: "btn ghost small", type: "button", onclick: () => openCarte(f.id, reopen), text: "Carte professionnelle" }),
-        h("button", { class: "btn ghost small", type: "button", id: "ag-signature", onclick: () => openSignature(f.id, reopen), text: "Signature" })),
+        h("button", { class: "btn ghost small", type: "button", id: "ag-signature", onclick: () => openSignature(f.id, reopen), text: "Signature" }),
+        boutonHistorique(["fonctionnaires"], f.id, `Fiche de ${f.nom || "l’agent"}`, reopen)),
       kv([["Grade", f.grade || "—"], ["Taux horaire", taux ? `${money(taux)} de l’heure` : "pas dans le barème"],
         ["Compte Discord", f.discordId ? h("span", { class: "mono", text: f.discordId }) : "aucun"],
         ["Entré", f.at ? `le ${longDate(new Date(f.at))}${f.byNom ? " · fiche créée par " + f.byNom : ""}` : "—"],
@@ -11982,6 +11984,7 @@ function openDecl(id) {
     if (xo) body.unshift(h("div", { class: "notice", style: "margin:0;border-left-color:var(--warn)" }, h("div", {}, h("strong", { text: "Exonération non appliquée. " }),
       `${periodPlain(d.periode)} est la période ${xo.rang} sur ${xo.sur} d’exonération de ${d.entrepriseNom} (impôt −${pct(xo.tauxIS)}, cotisations −${pct(xo.tauxCot)}), mais la déclaration a été calculée sans. `,
       ag && !locked ? h("button", { class: "btn ghost small", type: "button", style: "margin-top:8px", onclick: () => startEditDecl(d, `Exonération de début d’activité non appliquée au dépôt (période ${xo.rang} sur ${xo.sur})`), text: "Recalculer avec l’exonération" }) : null))); }
+  { const hb = boutonHistorique(["declarations", "decisions", "echeanciers"], id, `Déclaration ${dossierNo("DF", id)} · ${d.entrepriseNom || ""}`, () => openDecl(id)); if (hb) foot.unshift(hb); }
   openDialog({ eyebrow: `Déclaration ${dossierNo("DF", id)} · ${periodLabel(d.periode)}`, title: d.entrepriseNom || "Sans nom", stampEl: stamp(DSTAT[st] || DSTAT.soumise), body, foot });
 }
 // Remplacement d'une déclaration par sa rectificative : l'ancienne est rejetée en gardant sa décision
@@ -14437,6 +14440,7 @@ function openFiche(e, opts) {
     e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openAttestation(e, reopen), text: "Attestation de régularité" }) : null,
     e.fermetureAdm && e.actif === false ? h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(fermetureDoc(e), reopen), text: "Arrêté de fermeture" }) : null,
     canAgent() ? h("button", { class: "btn ghost small", type: "button", onclick: () => newControle(e), text: "Contrôle fiscal" }) : null,
+    e.id ? boutonHistorique(["entreprises"], e.id, `Fiche ${e.nom}`, reopen) : null,
     h("span", { class: "spacer" }),
     h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })].filter(Boolean);
   openDialog({
@@ -19406,7 +19410,29 @@ function restorable(e) {
 }
 const RESTORABLE = new Set(["delais", "reclamations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
-function openRestore(e) {
+// Historique d'un dossier : ses lignes du journal, avec « Restaurer » ou « Annuler » comme dans le journal, sans
+// avoir à le chercher dans l'onglet Journal (Direction).
+const histOk = () => writer() && ["direction", "inspecteur"].includes(S.role); // lecture du journal : Direction et inspection
+async function openHistorique(cols, id, titre, back) {
+  if (!histOk() || !S.sb) return;
+  let r; try { r = await S.sb.from("journal").select("id,at,auteur,discord_id,action,collection,doc_id,avant,apres").in("collection", cols).eq("doc_id", id).order("at", { ascending: false }).limit(80); } catch (x) { r = { error: x }; }
+  if (r.error) { toast(tableMissing(r.error) ? "Le journal n’est pas installé dans la base." : "Historique illisible : " + (r.error.message || "erreur"), true); return; }
+  const l = (r.data || []).filter(e => cols.includes(e.collection) && e.doc_id === id).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  if (!Array.isArray(S.journal)) S.journal = [];
+  for (const e of l) if (!S.journal.some(x => x.id === e.id)) S.journal.push(e); // pour les dossiers liés de la restauration
+  const reopen = () => openHistorique(cols, id, titre, back);
+  openDialog({ eyebrow: "Historique du dossier", title: titre, wide: true,
+    body: [l.length ? h("ul", { class: "ent-list", id: "hist-l" }, l.map(e => { const diffs = e.action === "modification" ? diffRows(e.avant, e.apres) : [];
+        return h("li", {}, h("div", { style: "min-width:0" }, h("strong", { text: `${fmtDateTime(new Date(e.at))} · ${jWho(e)}` }), h("span", { class: "meta", text: describe(e) }),
+            diffs.length ? h("details", {}, h("summary", { text: "Détail des changements" }), h("div", { class: "diff" }, diffs.slice(0, 30).map(t => h("span", { text: t })))) : null),
+          h("span", { class: "chip t-" + ({ ajout: "info", modification: "muted", suppression: "bad" }[e.action] || "muted"), text: capFirst(e.action) }),
+          restorable(e) ? h("button", { class: "btn ghost small", type: "button", onclick: () => openRestore(e, reopen), text: e.action === "ajout" ? "Annuler" : "Rétablir l’état d’avant" }) : h("span", {})); }))
+      : h("p", { class: "muted", text: "Aucune trace de ce dossier dans le journal (les 80 dernières actions sont montrées)." }),
+      h("p", { class: "hint", style: "margin:0", text: "« Rétablir l’état d’avant » remet le dossier tel qu’il était juste avant cette action ; les changements faits depuis sont alors perdus." })],
+    foot: [back ? h("button", { class: "btn ghost small", type: "button", onclick: back, text: "Retour" }) : null, h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
+const boutonHistorique = (cols, id, titre, back) => histOk() && id ? h("button", { class: "btn ghost small", type: "button", "data-historique": cols[0] + "/" + id, onclick: () => openHistorique(cols, id, titre, back), text: "Historique" }) : null;
+function openRestore(e, back) {
   const path = jPath(e);
   const current = S.db.peek(path);
   const target = e.action === "ajout" ? null : e.avant;
@@ -19430,7 +19456,7 @@ function openRestore(e) {
       else await S.db.doc(path).set(target || {});
       for (const b of $$("input[data-jid]", dlg)) if (b.checked) { const x = linked.find(y => String(y.id) === b.dataset.jid); if (x) await S.db.doc(jPath(x)).set(x.avant); }
     });
-    if (ok) { closeDialog(); toast(e.action === "ajout" ? "Ajout annulé." : "Dossier restauré."); setTimeout(loadJournal, 700); }
+    if (ok) { closeDialog(); toast(e.action === "ajout" ? "Ajout annulé." : "Dossier restauré."); setTimeout(loadJournal, 700); if (back) setTimeout(back, 800); }
     else go.disabled = false;
   });
   openDialog({
