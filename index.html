@@ -4976,6 +4976,8 @@ function todoItems() {
     const echP = echeancesPersonnel().filter(x => x.type !== "objectif");
     add(echP.length, `Fin${plural(echP.length)} de période d’essai ou de CDD`, echP.slice(0, 3).map(x => `${x.f.nom} : ${x.type === "essai" ? "essai" : "CDD"} ${x.passe ? "terminé" : x.quand}`).join(", "), () => { S.rhEspace = "bord"; allerA("personnel"); });
     if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
+    const pl = paiementsLus();
+    add(pl.length, `Virement${plural(pl.length)} à la Préfecture lu${plural(pl.length)} sur les relevés, à encaisser`, pl.slice(0, 3).map(v => `${v.e.nom} : ${money(v.montant)}`).join(", "), openPaiementsLus, "info");
     const rca = (S.reclamations || []).filter(x => x.statut === "attente");
     add(rca.length, `Réclamation${plural(rca.length)} d’entreprise à examiner`, rca.slice(0, 3).map(x => `${x.entrepriseNom} : ${rcCibleTxt(x)}`).join(", "), () => openReclamation(rca[0].id));
     const dla = (S.delais || []).filter(x => x.statut === "attente");
@@ -14372,7 +14374,7 @@ function openFiche(e, opts) {
     w ? h("button", { class: "btn ghost small", type: "button", onclick: () => openJustice(e), text: "Transmettre à la justice" }) : null,
     w && e.id && e.patron ? h("button", { class: "btn ghost small", type: "button", onclick: () => openInterdiction(e, reopen), text: "Interdire de gérer" }) : null,
     w && e.id ? h("button", { class: "btn ghost small", type: "button", onclick: () => openRescrit(e, null, reopen), text: "Rescrit" }) : null].filter(Boolean);
-  const aVoir = [relancesSection(e, reopen),
+  const aVoir = [paiementsLusSection(e, reopen), relancesSection(e, reopen),
     sm.alerts.length ? sec("Alertes sur la dernière déclaration", reasonsEl(sm.alerts, sm.last, reopen),
       writer() && sm.last ? h("button", { class: "btn ghost small", type: "button", style: "justify-self:start;margin-top:6px", onclick: () => classerAlerte(sm.last, reopen), text: "Classer l’alerte" }) : null) : null,
     liensSection(e, reopen),
@@ -16543,6 +16545,11 @@ function rcDossiers(e, opts) {
       d.suspendu = true; d.statut = `L’entreprise conteste ${rcCibleTxt(rcA)} (le ${dateCourte(rcA.at)}) : « ${rcA.motif} ». Le recouvrement attend la réponse.`;
       d.suivant = dir ? { text: "Répondre à la réclamation", fn: () => openReclamation(rcA.id) } : null; d.attente = !dir;
     }
+    const plA = !tj && writer() ? paiementsLus().find(v => v.e.id === e.id && v.items.some(i => free.some(y => sameItem(i, y)))) : null;
+    if (plA) {
+      d.statut = `${plTxt(plA)} : il correspond à ${plCible(plA)}. ` + d.statut;
+      d.suivant = { text: "Encaisser le virement", fn: () => encaisserLu(plA, back) }; d.attente = false;
+    }
     if (!med && !tj && (!d.suivant || d.etape === 0)) d.autres.push({ text: "Mettre en demeure tout de suite", aide: "Sans attendre la fin du délai de la relance", fn: () => relanceOne(xf, "paiement", "mise_en_demeure", { back }), envoi: true });
     d.autres.push(...lettre(last));
     if (!convPendingOf(e).length) d.autres.push({ text: "Organiser une collecte", aide: "Le transporteur de fonds passe chercher l’argent", fn: () => openConvForm(e, { motif: "collecte" }) });
@@ -17182,6 +17189,99 @@ async function encaisserItems(items, note, exact) {
     else { const p = S.penalites.find(y => y.id === x.id); if (p && p.statut === "due" && await setPenaltyStatus(p, "payee")) rec += Number(p.montant) || 0; }
   }
   return rec;
+}
+
+/* ---------- Virements lus sur les relevés ---------- */
+// Un relevé de compte montre un virement à la Préfecture du montant d'une somme encore due (avis,
+// échéances en retard, pénalité, prêt) ou du total de ce que l'entreprise doit : le guichet propose de
+// l'encaisser, ou de l'écarter si ce n'est pas ce paiement. Relevés des trois dernières semaines ; un
+// virement déjà rapproché d'un encaissement du même montant n'est pas reproposé.
+const PL_JOURS = 21;
+function encaissementsFaits() {
+  const enc = [];
+  for (const d of S.declarations) { const dec = S.decisions[d.id], ec = echOf(d); if (ec) ec.echeances.forEach(x => { if (x.payee && x.paidAt) enc.push({ e: d.entrepriseId, t: Date.parse(x.paidAt), m: Number(x.montant) || 0, p: x.paidAt }); }); else if (dec && dec.paidAt) enc.push({ e: d.entrepriseId, t: Date.parse(dec.paidAt), m: dMontant(d) - dCredit(d), p: dec.paidAt }); }
+  for (const p of S.penalites || []) if (p.paidAt) enc.push({ e: p.entrepriseId, t: Date.parse(p.paidAt), m: Number(p.montant) || 0, p: p.paidAt });
+  for (const p of S.prets || []) for (const x of p.echeances || []) if (x.payee && x.paidAt) enc.push({ e: p.entrepriseId, t: Date.parse(x.paidAt), m: Number(x.montant) || 0, p: x.paidAt });
+  // Plusieurs sommes encaissées d'un coup : un seul virement.
+  const gr = new Map();
+  for (const x of enc) { const k = x.e + "|" + x.p; gr.set(k, (gr.get(k) || []).concat([x])); }
+  for (const l of gr.values()) if (l.length > 1) enc.push({ e: l[0].e, t: l[0].t, m: l.reduce((t, x) => t + x.m, 0), p: l[0].p });
+  return enc.filter(x => Number.isFinite(x.t));
+}
+function paiementsLus() {
+  const sig = S.rendu + "|" + (S.releves || []).length;
+  if (S.plCache && S.plCache.sig === sig) return S.plCache.l;
+  const depuis = Date.now() - PL_JOURS * 864e5, vus = new Set(), traites = new Set(), vir = [], out = [];
+  for (const r of S.relevesBruts || S.releves || []) for (const k of Object.keys(r.paiementsVus || {})) traites.add(r.entrepriseId + "|" + k);
+  for (const r of S.releves || []) {
+    const e = r.entrepriseId && S.entreprises.find(x => x.id === r.entrepriseId);
+    if (!e) continue;
+    for (const m of mvtsRel(r)) {
+      if (!(m.montant < 0) || m.t < depuis || !/pr[ée]fecture/i.test(m.libelle)) continue;
+      const k = mvtKey(m), ek = e.id + "|" + k;
+      if (vus.has(ek)) continue; // le même mouvement sur deux relevés qui se chevauchent
+      vus.add(ek);
+      if (!traites.has(ek)) vir.push({ e, r, m, k, t: m.t, montant: -m.montant });
+    }
+  }
+  vir.sort((a, b) => a.t - b.t);
+  const enc = encaissementsFaits(), pris = new Set(), dusDe = new Map();
+  const debut = x => { const d = x.kind === "decl" ? S.declarations.find(y => y.id === x.id) : null; return new Date((d && d.createdAt) || x.since || 0).getTime() || 0; };
+  for (const v of vir) {
+    const j = enc.findIndex((x, i) => !pris.has(i) && x.e === v.e.id && Math.abs(x.m - v.montant) < 2 && x.t >= v.t - 36e5 && x.t <= v.t + 7 * 864e5);
+    if (j >= 0) { pris.add(j); continue; }
+    if (!dusDe.has(v.e.id)) dusDe.set(v.e.id, unpaidItems(v.e).concat(aEchoirItems(v.e)).filter(x => !x.solidaire && x.montant > 0));
+    const dus = dusDe.get(v.e.id).filter(x => !x.lu && debut(x) <= v.t + 36e5);
+    const un = dus.find(x => Math.abs(x.montant - v.montant) < 2);
+    const items = un ? [un] : dus.length > 1 && Math.abs(dus.reduce((t, x) => t + x.montant, 0) - v.montant) < 2 ? dus : null;
+    if (!items) continue;
+    items.forEach(x => { x.lu = true; }); // une dette, un virement
+    out.push(Object.assign(v, { items }));
+  }
+  out.sort((a, b) => b.t - a.t);
+  S.plCache = { sig, l: out };
+  return out;
+}
+const plCible = v => v.items.length > 1 ? `tout ce qu’elle doit (${v.items.map(i => i.ref).join(", ")})` : `${v.items[0].label} (${v.items[0].ref})`;
+const plTxt = v => `Virement de ${money(v.montant)} à la Préfecture le ${jourHeure(new Date(v.t))}${v.m.libelle ? ` (« ${v.m.libelle} »)` : ""}, lu sur le relevé ${dossierNo("RC", v.r.id)}`;
+async function marquerLu(v, etat) {
+  const raw = (S.relevesBruts || []).find(x => x.id === v.r.id) || v.r;
+  const pv = Object.assign({}, raw.paiementsVus || {}, { [v.k]: { etat, at: nowISO(), par: S.agentName || "" } });
+  return write(() => S.db.doc("releves/" + v.r.id).update({ paiementsVus: pv }));
+}
+async function encaisserLu(v, back) {
+  if (!writer()) return false;
+  const rec = await encaisserItems(v.items, `${plTxt(v)}.`, false);
+  if (!rec) { toast("Rien à encaisser : la somme n’est plus due.", true); return false; }
+  await marquerLu(v, "encaisse");
+  S.plCache = null;
+  toast(`${money(rec)} encaissés : ${v.e.nom}.`);
+  if (back) back(); else render();
+  return true;
+}
+function plLigne(v, reopen) {
+  const enc = h("button", { class: "btn ink small", type: "button", "data-pl": "encaisser", text: v.items.length > 1 ? `Encaisser ${money(v.montant)}` : `Encaisser ${v.items[0].ref}` });
+  enc.addEventListener("click", async () => { enc.disabled = true; if (!(await encaisserLu(v, reopen))) enc.disabled = false; });
+  const non = h("button", { class: "btn ghost small", type: "button", "data-pl": "ecarter", text: "Ce n’est pas ce paiement" });
+  non.addEventListener("click", async () => {
+    if (non.dataset.ok !== "1") { non.dataset.ok = "1"; non.textContent = "Confirmer : ne plus le proposer"; return; }
+    non.disabled = true; if (await marquerLu(v, "ecarte")) { S.plCache = null; toast("Virement écarté."); (reopen || render)(); } else non.disabled = false;
+  });
+  return h("li", { class: "pl-ligne" }, h("div", { style: "min-width:0" }, h("strong", { text: `${v.e.nom} · ${money(v.montant)}` }),
+      h("span", { class: "meta", text: `${plTxt(v)}. Correspond à ${plCible(v)}.` })),
+    h("div", { class: "rc-dos-a" }, writer() ? enc : null, h("button", { class: "btn ghost small", type: "button", onclick: () => openReleveVue(v.r.id, reopen), text: "Voir le relevé" }), writer() ? non : null));
+}
+function openPaiementsLus() {
+  const l = paiementsLus(), reopen = () => (paiementsLus().length ? openPaiementsLus() : closeDialog());
+  openDialog({ eyebrow: "Recouvrement", title: "Virements lus sur les relevés", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: `Des relevés de compte des ${PL_JOURS} derniers jours montrent un virement à la Préfecture du montant d’une somme encore due. Vérifiez qu’il est bien arrivé, puis encaissez : la quittance part comme d’habitude.` }),
+      l.length ? h("ul", { class: "ent-list", id: "pl-l" }, l.map(v => plLigne(v, reopen))) : h("p", { class: "muted", text: "Aucun virement à encaisser." })],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
+function paiementsLusSection(e, reopen) {
+  if (!e || !e.id) return null;
+  const l = paiementsLus().filter(v => v.e.id === e.id);
+  return l.length ? sec("Virements lus sur ses relevés", h("ul", { class: "ent-list", id: "pl-fiche" }, l.map(v => plLigne(v, reopen)))) : null;
 }
 
 /* ---------- Convocations ---------- */
