@@ -1656,6 +1656,7 @@ table.es-payes{min-width:0;width:100%}
         <button class="btn ghost" type="button" id="secu-entree">Nouvelle entrée</button>
         <button class="btn ghost" type="button" id="secu-controle">Nouveau contrôle</button>
         <button class="btn ghost" type="button" id="secu-courante">Main courante</button>
+        <button class="btn ghost" type="button" id="secu-semaine">Rapport de la semaine</button>
         <button class="btn" type="button" id="secu-rapport">Nouveau rapport</button>
       </div>
     </div>
@@ -4330,6 +4331,7 @@ function subscribe() {
   const db = S.db;
   db.doc("config/main").onSnapshot(s => { S.config = s.exists ? (s.data() || {}) : {}; S.loaded.add("config"); renormaliserReleves(); schedule(); }, onDbError);
   db.doc("meta/sauvegarde").onSnapshot(s => { S.backupMeta = s.exists ? (s.data() || null) : null; schedule(); }, onDbError);
+  db.doc("meta/rapportSecu").onSnapshot(s => { S.rapportSecuMeta = s.exists ? (s.data() || null) : null; S.loaded.add("rapportSecuMeta"); schedule(); }, onDbError);
   db.doc("meta/bilan").onSnapshot(s => { S.bilanMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilan"); schedule(); }, onDbError);
   db.doc("meta/communique").onSnapshot(s => { S.communiqueMeta = s.exists ? (s.data() || null) : null; S.loaded.add("communique"); schedule(); }, onDbError);
   db.doc("meta/bilanMois").onSnapshot(s => { S.bilanMoisMeta = s.exists ? (s.data() || null) : null; S.loaded.add("bilanMois"); schedule(); }, onDbError);
@@ -4455,6 +4457,7 @@ function render() {
   sauvegardeAuto();
   bilanMoisAuto();
   coherenceAuto();
+  rapportSecuAuto();
 }
 function fillSelect(sel, options, preferred) {
   const curV = sel.value;
@@ -8826,6 +8829,82 @@ function mainCourante(du, au) {
   const parRes = Object.keys(SECU_RESULTATS).map(k => [k, ctl.filter(c => (c.resultat || "conforme") === k).length]).filter(([, n]) => n);
   return { ev, restent, entrees: ent.filter(e => dans(e.arrivee)).length, ctl, parRes, rap };
 }
+// Rapport de sécurité de la semaine : affluence par heure et par jour, contrôles non conformes, personnes
+// signalées venues, objets retenus, rapports et sorties oubliées. En image ; posté le lundi à la Direction.
+function rapportSecu(k) {
+  const b = bounds(k), t0 = b.start.getTime(), t1 = b.end.getTime();
+  const dans = iso => { const t = new Date(iso).getTime(); return t >= t0 && t <= t1; };
+  const ent = secuListe("securiteEntrees").filter(e => dans(e.arrivee)), ctl = secuListe("securiteControles").filter(c => dans(c.date));
+  const parH = new Map(), ctlH = new Map(), parJ = [0, 0, 0, 0, 0, 0, 0];
+  ent.forEach(e => { const d = new Date(e.arrivee); parH.set(d.getHours(), (parH.get(d.getHours()) || 0) + 1); parJ[(d.getDay() + 6) % 7]++; });
+  ctl.forEach(c => { const hh = new Date(c.date).getHours(); ctlH.set(hh, (ctlH.get(hh) || 0) + 1); });
+  const pic = [...parH.entries()].sort((x, y) => y[1] - x[1] || x[0] - y[0])[0] || null;
+  const nonConf = ctl.filter(c => (c.resultat || "conforme") !== "conforme").sort((x, y) => String(x.date).localeCompare(String(y.date)));
+  // Personne signalée venue : signalement déjà posé à son arrivée, pas encore levé.
+  const sig = secuListe("securiteSignalements"), vus = [];
+  for (const e of ent) {
+    const n = numPiece(e.numero);
+    const s0 = sig.find(s => (!s.at || s.at <= e.arrivee) && (signalActif(s) || (s.leveLe && s.leveLe > e.arrivee)) && (memeSecu(s.nom, e.nom) || (n.length >= 5 && numPiece(s.numero) === n)));
+    if (s0) vus.push({ e, s: s0 });
+  }
+  const ret = secuListe("securiteEntrees").filter(e => retenus(e).some(o => o.retenu && dans(o.retenu.at)));
+  const rap = secuListe("securiteRapports").filter(r => dans(r.date) && r.type !== "main_courante");
+  return { k, b, ent, ctl, parH, ctlH, parJ, pic, nonConf, vus, ret, rap, personnes: new Set(ent.map(e => cleNom(e.nom))).size, oubliees: ent.filter(e => e.sortieOubliee).length,
+    parRes: Object.keys(SECU_RESULTATS).map(r => [r, ctl.filter(c => (c.resultat || "conforme") === r).length]).filter(([, n]) => n) };
+}
+function rapportSecuDoc(k) {
+  const x = rapportSecu(k), hh = n => `${pad(n)} h`;
+  const heures = [...new Set([...x.parH.keys(), ...x.ctlH.keys()])].sort((a, b) => ((a + 18) % 24) - ((b + 18) % 24)); // la journée commence à 6 h
+  const rows = heures.map(n => ({ cells: [`${hh(n)} – ${hh((n + 1) % 24)}`, String(x.parH.get(n) || 0), String(x.ctlH.get(n) || 0)] }));
+  const jourPic = x.parJ.indexOf(Math.max(...x.parJ));
+  const notes = [
+    x.nonConf.length ? "Contrôles non conformes : " + x.nonConf.map(c => `${c.nom} (${SECU_RESULTATS[c.resultat][0].toLowerCase()}, ${fmtDateTime(new Date(c.date))}${c.agent ? ", " + c.agent : ""})`).join(" ; ") + "." : "",
+    x.vus.length ? "Personnes signalées venues : " + x.vus.map(v => `${v.e.nom} (${((SECU_SIGNAL[v.s.motif] || SECU_SIGNAL.autre)[0]).toLowerCase()}, ${fmtDateTime(new Date(v.e.arrivee))})`).join(" ; ") + "." : "",
+    x.ret.length ? "Objets retenus : " + x.ret.map(e => `${consigneTicket(e)} · ${consigneTxt(retenus(e))} de ${e.nom} (${retenus(e).map(o => o.retenu.motif).filter(Boolean).join(", ") || "sans motif"}${e.consigneRemise ? ", " + (SECU_REMISE[e.consigneRemise.a] || "remis").toLowerCase() : ", en consigne"})`).join(" ; ") + "." : ""
+  ].filter(Boolean);
+  return {
+    entete: "PRÉFECTURE DE POLICE · SERVICE DE LA PROTECTION", kind: "RAPPORT DE SÉCURITÉ", no: `RS-${k.replace("-", "")}`, tableFirst: false, date: "Établi le " + longDate(new Date()) + " à " + hhmm(new Date()),
+    meta: [["Période", `${periodPlain(k)} (du ${x.b.start.toLocaleDateString("fr-FR")} au ${x.b.end.toLocaleDateString("fr-FR")})`], ["Entrées", `${x.ent.length} · ${x.personnes} personne${plural(x.personnes)}`],
+      ["Heure la plus chargée", x.pic ? `${hh(x.pic[0])} – ${hh((x.pic[0] + 1) % 24)} (${x.pic[1]} entrée${plural(x.pic[1])})` : "—"], ["Jour le plus chargé", x.ent.length ? `${DISPO_JOURS[jourPic].toLowerCase()} (${x.parJ[jourPic]} entrée${plural(x.parJ[jourPic])})` : "—"],
+      ["Contrôles d’identité", x.ctl.length ? `${x.ctl.length} · ${x.parRes.map(([r, n]) => `${n} ${SECU_RESULTATS[r][0].toLowerCase()}`).join(", ")}` : "aucun"], ["Non conformes", String(x.nonConf.length)],
+      ["Personnes signalées venues", String(x.vus.length)], ["Objets retenus", String(x.ret.length)],
+      ["Rapports", x.rap.length ? `${x.rap.length} · ${Object.entries(x.rap.reduce((o, r) => { const t = (SECU_RAPPORTS[r.type] || "Autre").toLowerCase(); o[t] = (o[t] || 0) + 1; return o; }, {})).map(([t, n]) => `${n} ${t}`).join(", ")}` : "aucun"],
+      ["Sorties oubliées", String(x.oubliees)]],
+    lines: [], total: ["Entrées de la semaine", String(x.ent.length)],
+    stamp: x.nonConf.length || x.vus.length ? ["À EXAMINER", "warn"] : x.ent.length || x.ctl.length ? ["RAS", "ok"] : ["AUCUNE ACTIVITÉ", "muted"],
+    table: rows.length ? { title: "Affluence par heure", head: ["Heure", "Entrées", "Contrôles"], cols: [0, 0.6, 0.8], align: ["left", "right", "right"], mono: [1, 2], rows } : null,
+    noteTitle: notes.length ? "À retenir" : "", note: notes.join("\n"),
+    footer: "Rapport hebdomadaire du service de la protection de la Préfecture de police. Document interne : il ne se publie pas hors du service.",
+    discord: { channel: "direction", text: `🛡️ **Rapport de sécurité** · ${periodPlain(k).toLowerCase()} : ${x.ent.length} entrée${plural(x.ent.length)}, ${x.ctl.length} contrôle${plural(x.ctl.length)} dont ${x.nonConf.length} non conforme${plural(x.nonConf.length)}, ${x.vus.length} personne${plural(x.vus.length)} signalée${plural(x.vus.length)} venue${plural(x.vus.length)}, ${x.ret.length} objet${plural(x.ret.length)} retenu${plural(x.ret.length)}.` }
+  };
+}
+function openRapportSecu(k) {
+  if (!secuAcces()) return;
+  k = k || semPrec(semKey(new Date()));
+  const x = rapportSecu(k), prev = semPrec(k), next = semKey(new Date(bounds(k).end.getTime() + 864e5));
+  const nav = h("div", { class: "seg", role: "group", "aria-label": "Semaine" }, h("button", { type: "button", onclick: () => openRapportSecu(prev), text: "‹ Précédente" }),
+    next <= semKey(new Date()) ? h("button", { type: "button", onclick: () => openRapportSecu(next), text: "Suivante ›" }) : null);
+  openDialog({ eyebrow: "Sécurité · rapport de la semaine", title: periodPlain(k) + (k === semKey(new Date()) ? " (en cours)" : ""), wide: true,
+    body: [nav, h("p", { class: "hint", id: "rs-resume", style: "margin:0", text: `${x.ent.length} entrée${plural(x.ent.length)} (${x.personnes} personne${plural(x.personnes)}), ${x.ctl.length} contrôle${plural(x.ctl.length)} dont ${x.nonConf.length} non conforme${plural(x.nonConf.length)}, ${x.vus.length} personne${plural(x.vus.length)} signalée${plural(x.vus.length)} venue${plural(x.vus.length)}, ${x.ret.length} objet${plural(x.ret.length)} retenu${plural(x.ret.length)}${x.pic ? `. Heure la plus chargée : ${pad(x.pic[0])} h (${x.pic[1]} entrée${plural(x.pic[1])})` : ""}.` }),
+      h("p", { class: "hint", style: "margin:0", text: autoOn("rapportSecu") ? "Le rapport de la semaine passée part tout seul le lundi au salon de la Direction (Réglages → Discord)." : "Envoi automatique du lundi : à cocher dans Réglages → Discord (salon de la Direction)." })],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }),
+      writer() && hookFor("direction") ? h("button", { class: "btn ghost small", type: "button", id: "rs-publier", onclick: async ev => { ev.currentTarget.disabled = true; await publishDoc(rapportSecuDoc(k), "Rapport de sécurité :"); }, text: "Publier à la Direction" }) : null,
+      h("button", { class: "btn small", type: "button", id: "rs-image", onclick: () => showDocImage(rapportSecuDoc(k), () => openRapportSecu(k)), text: "Voir l’image" })] });
+}
+async function rapportSecuAuto() {
+  if (S.rapportSecuEnCours || !writer() || !autoOn("rapportSecu")) return;
+  if (!["config", "rapportSecuMeta", ...SECU_COLS].every(n => S.loaded.has(n))) return;
+  const k = semPrec(semKey(new Date()));
+  if (!bounds(k) || keyStart(k) < startTime()) return;
+  if (S.rapportSecuMeta && String(S.rapportSecuMeta.semaine || "") >= k) return;
+  S.rapportSecuEnCours = true;
+  try {
+    const x = rapportSecu(k);
+    if (!(await write(() => S.db.doc("meta/rapportSecu").set({ semaine: k, at: nowISO(), by: S.uid || null, byNom: S.agentName || "", entrees: x.ent.length, controles: x.ctl.length })))) return;
+    if (!x.ent.length && !x.ctl.length && !x.rap.length) return; // semaine sans activité : rien à poster
+    await publishDoc(rapportSecuDoc(k), `Rapport de sécurité de ${periodPlain(k).toLowerCase()} :`);
+  } finally { S.rapportSecuEnCours = false; }
+}
 const periodeTxt = (du, au) => jourCle(du) === jourCle(au) ? `${du.toLocaleDateString("fr-FR")} de ${hhmm(du)} à ${hhmm(au)}` : `du ${du.toLocaleDateString("fr-FR")} ${hhmm(du)} au ${au.toLocaleDateString("fr-FR")} ${hhmm(au)}`;
 function mainCouranteDoc(du, au) {
   const m = mainCourante(du, au), max = 40;
@@ -9028,6 +9107,7 @@ $("#secu-entree").addEventListener("click", () => openSecuEntree(null));
 $("#secu-controle").addEventListener("click", () => openSecuControle(null));
 $("#secu-rapport").addEventListener("click", () => openSecuRapport(null));
 $("#secu-courante").addEventListener("click", () => openMainCourante());
+$("#secu-semaine").addEventListener("click", () => openRapportSecu());
 
 /* ---------- Guide du guichet, selon le rôle ---------- */
 // Direction, Inspection, ressources humaines : ce que chacun peut faire, rubrique par rubrique, avec un
@@ -15717,10 +15797,11 @@ const DISCORD_AUTO = [
   ["classement", "Classement des heures et bilan du personnel de la semaine passée, le lundi, dès que toutes les heures sont saisies (salon des agents)", "agents"],
   ["alertesAgents", "Alertes aux fonctionnaires : messages, agenda, notes de service, paye versée (salon des alertes du personnel)", "personnel"],
   ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"],
-  ["coherence", "Contrôle de cohérence de la semaine : budgets dépassés, oublis, doublons, seulement s’il y a des points à vérifier (salon de la Direction)", "direction"]
+  ["coherence", "Contrôle de cohérence de la semaine : budgets dépassés, oublis, doublons, seulement s’il y a des points à vérifier (salon de la Direction)", "direction"],
+  ["rapportSecu", "Rapport de sécurité de la semaine passée, le lundi : affluence par heure, contrôles non conformes, personnes signalées vues, objets retenus (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["relancesAuto", "bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe", "coherence"]);
+const AUTO_DEFAUT = new Set(["relancesAuto", "bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe", "coherence", "rapportSecu"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
   return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : ch === "sauvegardes" ? w.direction || "" : "");
