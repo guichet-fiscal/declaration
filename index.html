@@ -12081,6 +12081,11 @@ function openDecl(id) {
       mine && ex.ecart != null ? ["Écart inexpliqué", (ex.ecart > 0 ? "+" : "") + money(ex.ecart), "tot"] : null])));
   }
   // Modifications faites après l'avis : motif, auteur, montant avant et après.
+  if (d.taxationOffice && (d.taxationOffice.calcul || d.taxationOffice.baseTexte)) {
+    const to = d.taxationOffice;
+    body.push(sec("Calcul de l’imposition d’office", h("p", { class: "hint", style: "margin:0 0 6px", text: `Base : ${to.baseTexte || to.baseLabel || "—"}.${to.corrige ? " Montants corrigés ensuite par la Direction." : ""}` }),
+      to.calcul ? kv(to.calcul.map(x => [x.l, x.v == null ? "" : money(x.v)])) : null));
+  }
   if ((d.modifs || []).length) body.push(sec("Modifications après l’avis", h("ul", { class: "notes" }, d.modifs.map((m, i) => {
     const apres = i + 1 < d.modifs.length ? d.modifs[i + 1].avant.total : d.total;
     return h("li", {}, h("span", { class: "meta", text: `${fmtDateTime(new Date(m.at))} · ${m.par || "—"} · ${money(m.avant && m.avant.total)} → ${money(apres)}` }), h("p", { class: "prewrap", text: m.motif }));
@@ -12835,7 +12840,10 @@ async function submitDecl(e) {
     declarant: $("#d-decl").value.trim(), note: $("#d-note").value.trim(),
     tauxIS: r.tauxIS, tauxCot: r.tauxCot, majPct: late ? Number(c.majoration) || 0 : 0,
     bareme: r.detail ? "progressif" : "unique", detail: r.detail, exoneration: r.exoneration, bonus: r.bonus || null, mecenat: r.mecenat || null, compensation: rcomp.compensation || null, taxeVehicules: r.taxeVehicules || null,
-    taxationOffice: tax ? { relanceId: tax.relanceId, base: tax.base, majoration: Number(c.majoration) || 0 }
+    taxationOffice: tax ? Object.assign({ relanceId: tax.relanceId, base: tax.base, majoration: Number(c.majoration) || 0 }, (() => {
+        const x = (tax.estimations || []).find(y => y.id === tax.estimation);
+        return x ? { estimation: x.id, baseLabel: x.label, baseTexte: x.texte, calcul: x.calcul || null, corrige: Math.round(ca) !== x.ca || Math.round(ch) !== x.ch || Math.round(ms) !== x.ms } : {};
+      })())
       : repl && repl.taxationOffice ? Object.assign({}, repl.taxationOffice, { rectifiee: true })
       : editing0 && editing0.taxationOffice ? editing0.taxationOffice : null,
     salaries: sal ? sal.map(x => ({ nom: x.nom, salaire: Math.round(x.salaire) })) : null,
@@ -14131,6 +14139,13 @@ function avisDoc(d) {
     footer: st === "validee" ? `À régler auprès de la Préfecture de police, Direction des impôts et cotisations, ${due ? "avant le " + longDate(due) : e ? "selon l’échéancier ci-dessous" : "dès réception de cet avis"}${pa.some(y => !y.x.payee) ? ", remboursement du prêt compris" : ""}. Un retard de paiement peut entraîner une pénalité.` : "Préfecture de police · Direction des impôts et cotisations.",
     discord: { channel: "entreprises", mentions: [entMention(entOf(d))], text: `**Avis d’imposition ${rc ? "rectifié " : ""}${dossierNo("DF", d.id)}** · ${d.entrepriseNom} · ${periodPlain(d.periode)} : ${money(tot)} ${st === "payee" ? "réglés" : st === "validee" ? "à régler" + (due ? " avant le " + longDate(due) : e ? " selon l’échéancier" : "") : "(" + (DSTAT[st] || DSTAT.soumise)[0].toLowerCase() + ")"}${dontPret}${rc ? ` (au lieu de ${money(rc.ancienMontant)}). Motif : ${rc.motif}` : ""}.` }
   };
+  const to = d.taxationOffice;
+  if (to && to.calcul && to.calcul.length) {
+    const rows = to.calcul.map(x => ({ cells: [x.l, x.v == null ? "" : money(x.v)], strong: !!x.fort }));
+    if (to.corrige) rows.push({ cells: ["Montants corrigés par la Direction d’après ses constats (voir ci-dessus)", ""], muted: true });
+    doc.table = { title: "Calcul de l’imposition d’office", head: ["Élément retenu", "Montant"], cols: [0, 0.8], align: ["left", "right"], mono: [1], rows };
+  }
+  if (to) doc.legal = `Imposition établie d’office après mise en demeure restée sans réponse (art. L66 et L68 du livre des procédures fiscales)${to.baseTexte ? ", sur la base " + deBase(to.baseTexte) : ""}. Il appartient à l’entreprise de prouver que l’imposition est exagérée (art. L193 du LPF) : elle peut la contester depuis son espace, preuves à l’appui.`;
   if (e) doc.table = { title: "Échéancier de paiement", head: ["Échéance", "Date limite", "Montant", "État"], rows: e.echeances.map(x => [`${x.n} / ${e.echeances.length}`, longDate(new Date(x.date)), money(x.montant), x.payee ? "Payée" : (new Date(x.date).getTime() < Date.now() ? "En retard" : "À venir")]) };
   return doc;
 }
@@ -17180,7 +17195,7 @@ function estimationReleves(e, k) {
 function majDeclReleves() {
   const box = $("#d-releves"); if (!box) return;
   const e = findEnt($("#d-ent").value.trim()), k = $("#d-per").value;
-  const x = e && k && !S.editDecl ? estimationReleves(e, k) : null;
+  const x = e && k && !S.editDecl && !S.taxOffice ? estimationReleves(e, k) : null; // taxation d'office : sa propre base (bandeau)
   // Même résumé : rien à redessiner (un clic sur le bouton ne doit pas tomber dans le vide).
   const cle = x ? JSON.stringify([e.id, k, x.ca, x.ch, x.ms, x.nb, x.n, x.entier]) : "";
   if (box.dataset.cle === cle) return;
@@ -17196,10 +17211,68 @@ function majDeclReleves() {
     }, text: "Préremplir d’après les relevés" }));
   box.hidden = false;
 }
+// Taxation d'office d'après les encaissements, comme l'administration avec les relevés bancaires obtenus par son
+// droit de communication (art. L81 et suivants du LPF) : tout ce qui est entré sur le compte pendant la période
+// est une recette, dépôts d'espèces compris, sauf un prêt, un remboursement ou une aide ; les paiements à son nom
+// vus sur les comptes d'autres entreprises aussi. Charges admises : ce qui est payé à d'autres (factures,
+// achats) ; ni les retraits d'espèces, ni l'argent versé au patron, ni les impôts payés à la Préfecture.
+const RETRAIT_RE = /\bretraits?\b/i, DEPOT_RE = /d[ée]p[ôo]ts?\b/i;
+function encaissementsOffice(e, k) {
+  const f = e && e.id ? fenetreDecl(e, k) : null;
+  if (!f) return null;
+  const { t0, t1 } = f, dans = m => m.t > t0 && m.t <= t1, abs = l => Math.round(l.reduce((t, m) => t + Math.abs(m.montant), 0));
+  const couv = couvertures(e).filter(([a, b]) => b > t0 && a < t1), entier = couvert(e, t0, t1);
+  const mv = mvtsOf(e).filter(dans);
+  const recus = mv.filter(m => m.montant > 0 && !NON_RECETTE_RE.test(m.libelle)), nonRec = mv.filter(m => m.montant > 0 && NON_RECETTE_RE.test(m.libelle));
+  const especes = recus.filter(m => CASH_RE.test(m.libelle) || DEPOT_RE.test(m.libelle));
+  const autres = paiementsVers(e).filter(p => dans(p) && !recus.some(m => Math.abs(m.montant - p.montant) < 0.5 && Math.abs(m.t - p.t) <= 3 * 6e4));
+  if (!couv.length && !autres.length) return null; // rien de relevé sur la période
+  const patronK = new Set(signauxPatron(e).flatMap(x => x.mvts.map(mvtKey)));
+  const deb = mv.filter(m => m.montant < 0), pref = deb.filter(m => /pr[ée]fecture/i.test(m.libelle));
+  const sal = deb.filter(m => !pref.includes(m) && SALAIRE_RE.test(m.libelle));
+  const retraits = deb.filter(m => !pref.includes(m) && !sal.includes(m) && RETRAIT_RE.test(m.libelle));
+  const patron = deb.filter(m => !pref.includes(m) && !sal.includes(m) && !retraits.includes(m) && patronK.has(mvtKey(m)));
+  const charges = deb.filter(m => !pref.includes(m) && !sal.includes(m) && !retraits.includes(m) && !patron.includes(m));
+  // Salaires par bénéficiaire (nom tiré du libellé), pour la déclaration salarié par salarié.
+  const parNom = new Map();
+  for (const m of sal) { const n = String(contrepartie(m.libelle) || m.libelle).replace(/\b(salaires?|paies?|primes?|virements?|vir|de|du|des|pour|à|au)\b/gi, " ").replace(/[·:—–-]+/g, " ").replace(/\s+/g, " ").trim() || "Salarié (relevé)"; parNom.set(n, (parNom.get(n) || 0) + Math.abs(m.montant)); }
+  const benef = parNom;
+  const salL = [...parNom.entries()].map(([nom, v]) => ({ nom, salaire: Math.round(v) }));
+  const vAutres = Math.round(autres.reduce((t, p) => t + p.montant, 0)), ca = abs(recus) + vAutres, ch = abs(charges), ms = abs(sal), quand = t => fmtDateTime(new Date(t));
+  const nb = n => ` (${n} mouvement${plural(n)})`;
+  const calcul = [{ l: "Encaissements sur le compte" + nb(recus.length), v: abs(recus) }];
+  if (especes.length) calcul.push({ l: "dont dépôts et paiements en espèces" + nb(especes.length), v: abs(especes) });
+  if (autres.length) calcul.push({ l: `Paiements à son nom vus sur les comptes d’autres entreprises (${autres.length})`, v: vAutres });
+  calcul.push({ l: "Chiffre d’affaires retenu", v: ca, fort: true }, { l: "Charges admises : paiements à d’autres" + nb(charges.length), v: ch }, { l: "Salaires repérés" + nb(sal.length), v: ms });
+  if (retraits.length) calcul.push({ l: "Non déduits : retraits d’espèces" + nb(retraits.length), v: abs(retraits) });
+  if (patron.length) calcul.push({ l: "Non déduit : argent versé au patron" + nb(patron.length), v: abs(patron) });
+  if (pref.length) calcul.push({ l: "Non déduits : paiements à la Préfecture" + nb(pref.length), v: abs(pref) });
+  if (nonRec.length) calcul.push({ l: "Non comptés en recettes : prêts, remboursements, aides" + nb(nonRec.length), v: abs(nonRec) });
+  const per = `entre le ${quand(t0)} et le ${quand(t1)}`;
+  return { id: "encaissements", label: "Encaissements du compte", ca, ch, ms, nb: benef.size || (sal.length ? 1 : 0), sal: salL.length ? salL : null, entier, couvert: couv.length > 0, calcul, t0, t1,
+    texte: ca > 0 ? `les encaissements du compte ${per} (${recus.length + autres.length} encaissement${plural(recus.length + autres.length)}${entier ? "" : ", période relevée en partie seulement"})`
+      : `aucun encaissement sur le compte ${per}${entier ? " (période entièrement relevée)" : " (période relevée en partie)"}` };
+}
+// Sans encaissement relevé sur la période : la dernière activité constatée sur le compte (8 semaines au plus),
+// plutôt que la dernière déclaration, qui peut être fausse. L'entreprise prouve le contraire (art. L193 du LPF).
+function activiteConstatee(e, k) {
+  let kk = k;
+  for (let i = 0; i < 8; i++) {
+    kk = prevKey(kk);
+    if (!bounds(kk) || keyStart(kk) < startTime()) break;
+    const x = encaissementsOffice(e, kk);
+    if (x && x.ca > 0) return Object.assign({}, x, { id: "activite", label: `Activité constatée (${periodPlain(kk).toLowerCase()})`, de: kk,
+      calcul: [{ l: `Activité constatée en ${periodPlain(kk).toLowerCase()}, dernière semaine où le compte montre des encaissements`, v: null }].concat(x.calcul),
+      texte: `l’activité constatée sur le compte en ${periodPlain(kk).toLowerCase()} : ${x.texte}` });
+  }
+  return null;
+}
 function estimationsOffice(e, k) {
   const out = [], run = semainesNonDeclarees(e, k), ik = Math.max(0, run.indexOf(k));
-  const er = estimationReleves(e, k);
-  if (er && er.entier) out.push(er);
+  const enc = encaissementsOffice(e, k), act = activiteConstatee(e, k);
+  if (enc && enc.ca > 0) out.push(enc);
+  if (act) out.push(act);
+  if (enc && enc.ca <= 0) out.push(Object.assign({}, enc, { label: "Aucun encaissement relevé" }));
   // La plus longue suite de semaines non déclarées autour de k dont les soldes de début et de fin sont connus.
   let bc = null;
   for (let i = 0; i <= ik && !bc; i++) for (let j = run.length; j > ik && !bc; j--) bc = baseCompte(e, run.slice(i, j));
@@ -17215,13 +17288,15 @@ function montantEstime(x, rate) {
   const r = compute(x.ca, x.ch, x.ms, false, cfg(), x.nb, null);
   return Math.max(1, Math.round(((Number(r.impot) || 0) + (Number(r.cotisations) || 0)) * (1 + (Number(rate) || 0) / 100)));
 }
+// « sur la base de les encaissements » → « sur la base des encaissements ».
+const deBase = t => /^les /i.test(t) ? "des " + t.slice(4) : /^le /i.test(t) ? "du " + t.slice(3) : /^[aeéèêiouyh]/i.test(t) ? "d’" + t : "de " + t;
 function appliquerEstimation(x) {
   if (!S.taxOffice) return;
   S.taxOffice.estimation = x.id;
   $("#d-ca").value = String(x.ca); $("#d-ch").value = String(x.ch); $("#d-ms").value = String(x.ms); $("#d-nb").value = String(x.nb);
   if (salMode()) setSalaries(x.sal || []);
   const rl = S.taxOffice.relanceId ? S.relances.find(r => r.id === S.taxOffice.relanceId) : null;
-  $("#d-note").value = `Imposition établie d’office après la mise en demeure ${rl ? rlNo(rl) : ""} restée sans réponse, sur la base de ${x.texte}.`.replace("demeure  restée", "demeure restée");
+  $("#d-note").value = `Imposition établie d’office après la mise en demeure ${rl ? rlNo(rl) : ""} restée sans réponse, sur la base ${deBase(x.texte)}.`.replace("demeure  restée", "demeure restée");
   taxBanner();
   renderDeclPreview();
 }
