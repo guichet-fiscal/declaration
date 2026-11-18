@@ -4215,6 +4215,11 @@ async function dvExecuter(v) {
     for (const id of p.relances || []) await write(() => S.db.doc("relances/" + id).delete());
     return null;
   }
+  if (v.action === "controle_supprime") {
+    const ct = (S.controles || []).find(x => x.id === c.id);
+    if (!ct) return "Le contrôle n’existe plus.";
+    return await supprimerControle(ct);
+  }
   if (v.action === "pret_accorde") {
     const cur = (S.prets || []).find(x => x.id === c.id);
     if (!cur || cur.statut !== "demande") return "Le prêt n’est plus une demande : rien à verser.";
@@ -20925,6 +20930,27 @@ async function addPieces(c, files, legende) {
   if (n && await saveControleList(c, "pieces", l => l.concat(pieces), `${n} pièce${plural(n)} ajoutée${plural(n)}.`)) return true;
   return false;
 }
+// Supprimable : ouvert, proposé ou classé sans suite, sans redressement mis en recouvrement ni saisie conservatoire.
+const ctrlSupprimable = c => ["ouvert", "propose", "sans_suite"].includes(c.statut) && !(S.penalites || []).some(p => p.controleId === c.id) && !consOf(c).length;
+async function supprimerControle(c0) {
+  const c = (S.controles || []).find(x => x.id === c0.id);
+  if (!c) return "Le contrôle n’existe plus.";
+  if (!ctrlSupprimable(c)) return "Ce contrôle a déjà des suites (redressement, saisie, justice) : il ne peut plus être supprimé.";
+  // Avis suspendus par le contrôle : remis dans leur état d'avant (sans nouvel envoi).
+  for (const did of c.suspendus || []) {
+    const d = S.declarations.find(x => x.id === did);
+    if (!d || dStatus(d) !== "controle") continue;
+    const before = (c.avant || {})[did] || "validee";
+    if (before === "soumise") await write(() => S.db.doc("decisions/" + did).delete());
+    else await decide(d, "validee", dMontant(d), (S.decisions[did] || {}).note || "", { quiet: true });
+  }
+  if (!(await write(() => S.db.doc("controles/" + c.id).delete()))) return "Suppression refusée.";
+  // Pièces : effacées, sauf celles qu'un autre contrôle reprend.
+  const autres = new Set((S.controles || []).filter(x => x.id !== c.id).flatMap(x => (x.pieces || []).map(p => p.path)));
+  const paths = (c.pieces || []).map(p => p.path).filter(x => x && !autres.has(x));
+  if (paths.length && S.sb) { try { await S.sb.storage.from("pieces").remove(paths); } catch (e) { /* pièces laissées */ } }
+  return null;
+}
 function openControle(id) {
   const c0 = S.controles.find(x => x.id === id);
   if (!c0) return;
@@ -21113,6 +21139,19 @@ function openControle(id) {
     }
   };
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(avisVerifDoc(c0), reopen), text: "Avis de vérification" })];
+  // Contrôle ouvert ou classé par erreur : la Direction peut le supprimer (pas après un redressement ni la justice).
+  if (dir && S.role === "direction" && ctrlSupprimable(c0)) {
+    const sup = h("button", { class: "btn ghost small", type: "button", id: "cf-supprimer", text: dvRequis() ? "Demander la suppression" : "Supprimer le contrôle" });
+    sup.addEventListener("click", async () => {
+      if (sup.dataset.ok !== "1") { sup.dataset.ok = "1"; sup.className = "btn danger small"; sup.textContent = dvRequis() ? "Confirmer la demande" : "Confirmer la suppression"; return; }
+      sup.disabled = true;
+      if (dvRequis()) { if (await dvDemander("controle_supprime", `Supprimer le contrôle ${dossierNo("CF", c0.id)} de ${c0.entrepriseNom || "?"} (${(c0.periodes || []).map(periodPlain).join(", ").toLowerCase()})`, { collection: "controles", id: c0.id })) closeDialog(); else sup.disabled = false; return; }
+      const er = await supprimerControle(c0);
+      if (er) { toast(er, true); sup.disabled = false; return; }
+      toast(`Contrôle ${dossierNo("CF", c0.id)} supprimé.`); closeDialog();
+    });
+    foot.push(sup);
+  }
   if (c.statut !== "ouvert" && c.proposeLe) foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(propositionDoc(c0), reopen), text: "Proposition" }));
   if (c.statut === "recouvre") foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(amrDoc(c0, pen), reopen), text: "Avis de mise en recouvrement" }));
   foot.push(h("span", { class: "spacer" }));

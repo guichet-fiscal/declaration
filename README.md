@@ -220,6 +220,8 @@ S’y ajoutent les signaux de la surveillance des comptes (voir plus bas), dont 
 
 **Rouvrir un contrôle** classé sans suite par erreur : bouton « Rouvrir le contrôle » sur le contrôle, avec un motif obligatoire, ajouté aux notes. Les avis non payés redeviennent suspendus jusqu’à la fin du contrôle.
 
+**Supprimer un contrôle** ouvert ou classé par erreur (Direction) : bouton « Supprimer le contrôle » (deux clics), tant qu’il n’a ni redressement mis en recouvrement, ni saisie conservatoire, ni transmission à la justice. Les avis qu’il suspendait reviennent dans leur état d’avant (sans nouvel envoi), ses pièces sont effacées (sauf celles reprises par un autre contrôle). Le Journal en garde la trace (« Restaurer » remet la fiche du contrôle, pas les pièces). Avec la double validation, c’est une demande qu’un autre membre de la Direction valide.
+
 Une alerte n’est pas une preuve : c’est une raison de faire un contrôle en RP.
 
 ### Heure de Paris
@@ -282,7 +284,7 @@ Les joueurs n’ont pas besoin d’accès : ils déclarent sur Discord.
 
 Si plus personne n’a le rôle Direction, un propriétaire du projet Supabase peut le redonner dans **Table Editor → agents → Insert row**.
 
-**Double validation** (Réglages → Accès) : annuler une pénalité, supprimer une déclaration, retirer une entreprise du registre, accorder et verser un prêt d’au moins 500 000 € (seuil réglable) : quand un membre de la Direction le fait, le geste n’est pas fait tout de suite. Une demande part ; un **autre** membre de la Direction la voit dans « À traiter » (**Gestes sensibles à valider**) et **Valide** (le geste se fait à son nom) ou **Refuse**. Le demandeur voit sa demande en attente et peut la **retirer** ; le bouton du dossier indique « … à valider ». Un gros prêt est enregistré comme demande, versé à la validation. Les comptes cochés « Agissent seuls » (le Directeur FP par défaut) font ces gestes sans validation. Le réglage s’éteint d’une case. C’est un contrôle du guichet : la base ne l’impose pas. Demandes dans la collection `validations` (journal et sauvegardes).
+**Double validation** (Réglages → Accès) : annuler une pénalité, supprimer une déclaration ou un contrôle fiscal, retirer une entreprise du registre, accorder et verser un prêt d’au moins 500 000 € (seuil réglable) : quand un membre de la Direction le fait, le geste n’est pas fait tout de suite. Une demande part ; un **autre** membre de la Direction la voit dans « À traiter » (**Gestes sensibles à valider**) et **Valide** (le geste se fait à son nom) ou **Refuse**. Le demandeur voit sa demande en attente et peut la **retirer** ; le bouton du dossier indique « … à valider ». Un gros prêt est enregistré comme demande, versé à la validation. Les comptes cochés « Agissent seuls » (le Directeur FP par défaut) font ces gestes sans validation. Le réglage s’éteint d’une case. C’est un contrôle du guichet : la base ne l’impose pas. Demandes dans la collection `validations` (journal et sauvegardes).
 
 ## Espace entreprise
 
