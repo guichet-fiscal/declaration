@@ -182,6 +182,34 @@
         }
         return { data: noms.length, error: null };
       }
+      // « J'ai payé » (mise à jour 52) ; __sans52 = script absent.
+      if (["annoncer_paiement", "retirer_paiement_annonce", "paiements_annonces_entreprise"].includes(name)) {
+        if (window.__sans52) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
+        const e = ent(); if (!e) return { data: null, error: { message: "Lien inconnu ou coupé." } };
+        const mes = () => [...rows.values()].filter(r => r.collection === "paiementsAnnonces" && r.data.entrepriseId === e.id);
+        if (name === "paiements_annonces_entreprise") return { data: mes().map(r => { const x = Object.assign({ id: r.id }, r.data); delete x.decidePar; delete x.decideParNom; delete x.noteInterne; return x; }).sort((x, y) => String(y.at).localeCompare(String(x.at))), error: null };
+        if (name === "retirer_paiement_annonce") { const r = rows.get("paiementsAnnonces/" + args.p_id); if (!r || r.data.entrepriseId !== e.id || r.data.statut !== "attente") return { data: false, error: null }; r.data = Object.assign({}, r.data, { statut: "retire", retireLe: iso() }); return { data: true, error: null }; }
+        const its = Array.isArray(args.p_items) ? args.p_items : [];
+        if (!its.length) return { data: null, error: { message: "Cochez ce que vous avez payé." } };
+        if (!(args.p_montant > 0)) return { data: null, error: { message: "Indiquez le montant versé." } };
+        const q = new Date(args.p_quand).getTime();
+        if (!Number.isFinite(q)) return { data: null, error: { message: "Indiquez quand vous avez payé." } };
+        if (q > Date.now() + 6e5) return { data: null, error: { message: "La date du paiement est dans le futur." } };
+        if (!["virement", "especes", "autre"].includes(args.p_moyen)) return { data: null, error: { message: "Dites comment vous avez payé." } };
+        if (mes().filter(r => r.data.statut === "attente").length >= 3) return { data: null, error: { message: "Trois paiements annoncés attendent déjà la vérification de la Préfecture." } };
+        for (const it of its) {
+          if (mes().some(r => r.data.statut === "attente" && (r.data.items || []).some(y => y.kind === it.kind && y.id === it.id))) return { data: null, error: { message: "Un paiement de cette somme attend déjà la vérification de la Préfecture." } };
+          if (it.kind === "decl") { const d = rows.get("declarations/" + it.id), dec = rows.get("decisions/" + it.id); if (!d || d.data.entrepriseId !== e.id || !dec || dec.data.statut !== "validee") return { data: null, error: { message: "Cet avis n’est plus à payer." } }; }
+          else if (it.kind === "pen") { const pn = rows.get("penalites/" + it.id); if (!pn || pn.data.entrepriseId !== e.id || pn.data.statut !== "due") return { data: null, error: { message: "Cette pénalité n’est plus à payer." } }; }
+          else if (it.kind !== "pret") return { data: null, error: { message: "Somme inconnue." } };
+        }
+        const id = "pa" + Date.now();
+        const data = { entrepriseId: e.id, entrepriseNom: e.data.nom, items: its, montant: Math.round(args.p_montant), quand: new Date(q).toISOString(), moyen: args.p_moyen, statut: "attente", enLigne: true, at: iso() };
+        if (args.p_preuve) data.preuve = args.p_preuve;
+        if (args.p_note) data.note = args.p_note;
+        rows.set("paiementsAnnonces/" + id, { collection: "paiementsAnnonces", id, data });
+        return { data: { id, at: data.at }, error: null };
+      }
       if (["reclamer", "retirer_reclamation", "reclamations_entreprise"].includes(name)) {
         if (window.__sans49) return { data: null, error: { message: `Could not find the function public.${name} in the schema cache`, code: "PGRST202" } };
         const e = ent(); if (!e) return { data: null, error: { message: "Lien inconnu ou coupé." } };

@@ -4339,6 +4339,7 @@ function subscribe() {
   col("convocations", s => { S.convocations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("delais", s => { S.delais = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("reclamations", s => { S.reclamations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("paiementsAnnonces", s => { S.paiementsAnnonces = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("validations", s => { S.validations = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("creneaux", s => { S.creneaux = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("contrats", s => { S.contrats = s.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(c => voitReserves() || !estReserve(ctService(c))); });
@@ -4976,7 +4977,9 @@ function todoItems() {
     const echP = echeancesPersonnel().filter(x => x.type !== "objectif");
     add(echP.length, `Fin${plural(echP.length)} de période d’essai ou de CDD`, echP.slice(0, 3).map(x => `${x.f.nom} : ${x.type === "essai" ? "essai" : "CDD"} ${x.passe ? "terminé" : x.quand}`).join(", "), () => { S.rhEspace = "bord"; allerA("personnel"); });
     if (S.admin && S.erreursNouvelles) add(S.erreursNouvelles, `Erreur${plural(S.erreursNouvelles)} remontée${plural(S.erreursNouvelles)} par le guichet`, "Nouvelles depuis votre dernière visite : quoi, où, quel navigateur", openErreurs, "bad");
-    const pl = paiementsLus();
+    const paa = (S.paiementsAnnonces || []).filter(x => x.statut === "attente");
+    add(paa.length, `Paiement${plural(paa.length)} annoncé${plural(paa.length)} par les entreprises, à vérifier`, paa.slice(0, 3).map(x => `${x.entrepriseNom} : ${money(x.montant)}`).join(", "), () => openPaiementAnnonce(paa[0].id));
+    const pl = encOk() ? paiementsLus() : [];
     add(pl.length, `Virement${plural(pl.length)} à la Préfecture lu${plural(pl.length)} sur les relevés, à encaisser`, pl.slice(0, 3).map(v => `${v.e.nom} : ${money(v.montant)}`).join(", "), openPaiementsLus, "info");
     const rca = (S.reclamations || []).filter(x => x.statut === "attente");
     add(rca.length, `Réclamation${plural(rca.length)} d’entreprise à examiner`, rca.slice(0, 3).map(x => `${x.entrepriseNom} : ${rcCibleTxt(x)}`).join(", "), () => openReclamation(rca[0].id));
@@ -13280,7 +13283,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["delais", "reclamations", "validations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["delais", "reclamations", "paiementsAnnonces", "validations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -14224,6 +14227,10 @@ function chronoEvenements(e) {
     if (r.vueLe) add(r.vueLe, "lettre", "Lettre ouverte par l’entreprise", rlNo(r), "muted", o);
     if (r.accuseLe) add(r.accuseLe, "lettre", "Lettre lue par l’entreprise (« J’ai pris connaissance »)", rlNo(r), "ok", o);
   }
+  for (const pa of (S.paiementsAnnonces || []).filter(x => sameEnt(x, e))) {
+    add(pa.at, "pay", `Paiement annoncé · ${money(pa.montant)}`, `${paMoyen(pa)} le ${jourHeure(pa.quand)} · ${paItemsTxt(pa)}`, "", () => openPaiementAnnonce(pa.id));
+    if (pa.decideLe) add(pa.decideLe, "pay", pa.statut === "encaisse" ? "Paiement annoncé : encaissé" : "Paiement annoncé : non retrouvé", pa.reponse || paItemsTxt(pa), pa.statut === "encaisse" ? "ok" : "bad", () => openPaiementAnnonce(pa.id));
+  }
   for (const rc of (S.reclamations || []).filter(x => sameEnt(x, e))) {
     add(rc.at, "pay", `Réclamation · ${rcCibleTxt(rc)}`, `« ${rc.motif || ""} »`, "", () => openReclamation(rc.id));
     if (rc.decideLe) add(rc.decideLe, "pay", `Réclamation : ${rcIssue(rc).toLowerCase()}`, rc.reponse || rcCibleTxt(rc), rc.statut === "maintenue" ? "" : "ok", () => openReclamation(rc.id));
@@ -14576,7 +14583,7 @@ async function loadJournal() {
   S.journalLoaded = true;
   renderJournal();
 }
-const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", rescrits: "RF", signalements: "SG", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); if (e.collection === "alertes" && /^mv-/.test(String(e.doc_id))) return ""; return p ? dossierNo(p, e.doc_id) : ""; };
+const jNo = e => { const p = { declarations: "DF", decisions: "DF", echeanciers: "DF", demandes: "DM", arbitrages: "DM", penalites: "PN", relances: "RL", attestations: "AT", controles: "CF", saisies: "SA", transmissions: "TJ", interdictions: "IG", rescrits: "RF", signalements: "SG", alertes: "DF", releves: "RC", soupcons: "DS", prets: "PR", vehicules: "VS", convocations: "CV", contrats: "CT", conventions: "CP", prestations: "PS", paiementsAnnonces: "PA", versements: "VA", fonctionnaires: "FO", rappels: "RP", pointages: "PT" }[e.collection]; if (e.collection === "payes") return pyNo(e.doc_id); if (e.collection === "alertes" && /^mv-/.test(String(e.doc_id))) return ""; return p ? dossierNo(p, e.doc_id) : ""; };
 // Auteur d'une ligne du journal : l'agent (nom des accès), sinon le fonctionnaire dont la fiche porte ce
 // compte Discord (gestes faits depuis Mon espace), sinon l'envoi automatique, l'espace entreprise, ou une
 // modification faite directement dans la base (script SQL), qui n'a pas de compte.
@@ -14813,6 +14820,10 @@ function describe(e) {
       if (x === "suppression") return `a supprimé le rapport « ${v.titre || "?"} »`;
       if (a.luLe && !b.luLe) return `a lu le rapport « ${v.titre || "?"} »`;
       return `a modifié le rapport « ${v.titre || "?"} »`;
+    case "paiementsAnnonces":
+      if (x === "ajout") return `${v.entrepriseNom || "Une entreprise"} annonce un paiement de ${money(v.montant)} (${paItemsTxt(v)})`;
+      if (a.statut !== b.statut) return a.statut === "retire" ? `${v.entrepriseNom || "L’entreprise"} a retiré son paiement annoncé` : a.statut === "encaisse" ? `a encaissé le paiement annoncé par ${v.entrepriseNom || "?"} (${money(a.montantEncaisse)})` : a.statut === "refuse" ? `n’a pas retrouvé le paiement annoncé par ${v.entrepriseNom || "?"}` : `a remis à vérifier le paiement annoncé par ${v.entrepriseNom || "?"}`;
+      return `a modifié le paiement annoncé par ${v.entrepriseNom || "?"}`;
     case "reclamations":
       if (x === "ajout") return `${v.entrepriseNom || "Une entreprise"} conteste ${rcCibleTxt(v)}`;
       if (a.statut !== b.statut) return a.statut === "retiree" ? `${v.entrepriseNom || "Une entreprise"} a retiré sa réclamation (${rcCibleTxt(v)})` : `a répondu à la réclamation de ${v.entrepriseNom || "?"} : ${rcIssue(v).toLowerCase()} (${rcCibleTxt(v)})`;
@@ -16545,7 +16556,12 @@ function rcDossiers(e, opts) {
       d.suspendu = true; d.statut = `L’entreprise conteste ${rcCibleTxt(rcA)} (le ${dateCourte(rcA.at)}) : « ${rcA.motif} ». Le recouvrement attend la réponse.`;
       d.suivant = dir ? { text: "Répondre à la réclamation", fn: () => openReclamation(rcA.id) } : null; d.attente = !dir;
     }
-    const plA = !tj && writer() ? paiementsLus().find(v => v.e.id === e.id && v.items.some(i => free.some(y => sameItem(i, y)))) : null;
+    const paA = !dlA && !tj && !rcA ? paiementAnnonceDe(e, free) : null;
+    if (paA) {
+      d.suspendu = true; d.statut = `L’entreprise dit avoir payé ${money(paA.montant)} le ${jourHeure(paA.quand)} (${paMoyen(paA).toLowerCase()}). Le recouvrement attend la vérification.`;
+      d.suivant = dir ? { text: "Vérifier le paiement", fn: () => openPaiementAnnonce(paA.id) } : null; d.attente = !dir;
+    }
+    const plA = !tj && !paA && encOk() ? paiementsLus().find(v => v.e.id === e.id && v.items.some(i => free.some(y => sameItem(i, y)))) : null;
     if (plA) {
       d.statut = `${plTxt(plA)} : il correspond à ${plCible(plA)}. ` + d.statut;
       d.suivant = { text: "Encaisser le virement", fn: () => encaisserLu(plA, back) }; d.attente = false;
@@ -16577,6 +16593,8 @@ function rcDossiers(e, opts) {
       statut: dlB ? `L’entreprise demande à ${delaiTxt(dlB)} (le ${dateCourte(dlB.at)}) : « ${dlB.motif} ».` : last ? `Rappel envoyé le ${dateCourte(last.at)}.` : "Délai de paiement en cours.", suivant: dlB && dir ? { text: "Répondre à la demande de délai", fn: () => openDelai(dlB.id) } : null,
       autres: [{ text: last ? "Envoyer un autre rappel" : "Envoyer un rappel", aide: "Avant la date limite, sans menace", fn: () => relanceOne(x, "paiement", "relance", { echeance: ae[0].exigible, back }), envoi: true }].concat(lettre(last).slice(0, 1), fiche) });
     const rcB = !dlB ? reclamationDe(e, ae) : null;
+    const paB = !dlB && !rcB ? paiementAnnonceDe(e, ae) : null;
+    if (paB) { const y = out[out.length - 1]; y.suspendu = true; y.attente = !dir; y.statut = `L’entreprise dit avoir payé ${money(paB.montant)} le ${jourHeure(paB.quand)} (${paMoyen(paB).toLowerCase()}).`; y.suivant = dir ? { text: "Vérifier le paiement", fn: () => openPaiementAnnonce(paB.id) } : null; }
     if (rcB) { const y = out[out.length - 1]; y.suspendu = true; y.attente = !dir; y.statut = `L’entreprise conteste ${rcCibleTxt(rcB)} (le ${dateCourte(rcB.at)}) : « ${rcB.motif} ».`; y.suivant = dir ? { text: "Répondre à la réclamation", fn: () => openReclamation(rcB.id) } : null; }
   }
   // Lettre en attente de réponse : « Rappeler » à portée de main (une fois par jour). Dernier envoi à
@@ -17197,6 +17215,7 @@ async function encaisserItems(items, note, exact) {
 // l'encaisser, ou de l'écarter si ce n'est pas ce paiement. Relevés des trois dernières semaines ; un
 // virement déjà rapproché d'un encaissement du même montant n'est pas reproposé.
 const PL_JOURS = 21;
+const encOk = () => writer() && S.role === "direction"; // encaisser : la Direction
 function encaissementsFaits() {
   const enc = [];
   for (const d of S.declarations) { const dec = S.decisions[d.id], ec = echOf(d); if (ec) ec.echeances.forEach(x => { if (x.payee && x.paidAt) enc.push({ e: d.entrepriseId, t: Date.parse(x.paidAt), m: Number(x.montant) || 0, p: x.paidAt }); }); else if (dec && dec.paidAt) enc.push({ e: d.entrepriseId, t: Date.parse(dec.paidAt), m: dMontant(d) - dCredit(d), p: dec.paidAt }); }
@@ -17235,6 +17254,7 @@ function paiementsLus() {
     const un = dus.find(x => Math.abs(x.montant - v.montant) < 2);
     const items = un ? [un] : dus.length > 1 && Math.abs(dus.reduce((t, x) => t + x.montant, 0) - v.montant) < 2 ? dus : null;
     if (!items) continue;
+    if (paiementAnnonceDe(v.e, items)) continue; // vérifié avec le paiement annoncé
     items.forEach(x => { x.lu = true; }); // une dette, un virement
     out.push(Object.assign(v, { items }));
   }
@@ -17250,7 +17270,7 @@ async function marquerLu(v, etat) {
   return write(() => S.db.doc("releves/" + v.r.id).update({ paiementsVus: pv }));
 }
 async function encaisserLu(v, back) {
-  if (!writer()) return false;
+  if (!encOk()) return false;
   const rec = await encaisserItems(v.items, `${plTxt(v)}.`, false);
   if (!rec) { toast("Rien à encaisser : la somme n’est plus due.", true); return false; }
   await marquerLu(v, "encaisse");
@@ -17269,7 +17289,7 @@ function plLigne(v, reopen) {
   });
   return h("li", { class: "pl-ligne" }, h("div", { style: "min-width:0" }, h("strong", { text: `${v.e.nom} · ${money(v.montant)}` }),
       h("span", { class: "meta", text: `${plTxt(v)}. Correspond à ${plCible(v)}.` })),
-    h("div", { class: "rc-dos-a" }, writer() ? enc : null, h("button", { class: "btn ghost small", type: "button", onclick: () => openReleveVue(v.r.id, reopen), text: "Voir le relevé" }), writer() ? non : null));
+    h("div", { class: "rc-dos-a" }, encOk() ? enc : null, h("button", { class: "btn ghost small", type: "button", onclick: () => openReleveVue(v.r.id, reopen), text: "Voir le relevé" }), encOk() ? non : null));
 }
 function openPaiementsLus() {
   const l = paiementsLus(), reopen = () => (paiementsLus().length ? openPaiementsLus() : closeDialog());
@@ -17282,6 +17302,101 @@ function paiementsLusSection(e, reopen) {
   if (!e || !e.id) return null;
   const l = paiementsLus().filter(v => v.e.id === e.id);
   return l.length ? sec("Virements lus sur ses relevés", h("ul", { class: "ent-list", id: "pl-fiche" }, l.map(v => plLigne(v, reopen)))) : null;
+}
+
+/* ---------- Paiements annoncés (« J'ai payé ») ---------- */
+// Mise à jour 52 : depuis son espace, le patron annonce un paiement (sommes réglées, montant, quand, comment,
+// preuve). La Direction vérifie (le guichet cherche le virement sur ses relevés) : elle encaisse en un clic
+// ou dit pourquoi elle ne le retrouve pas. Pendant la vérification, ces sommes ne sont pas relancées.
+const paNo = pa => dossierNo("PA", pa.id);
+const PA_MOYENS = { virement: "Virement", especes: "Espèces remises à un agent", autre: "Autre moyen" };
+const paMoyen = pa => PA_MOYENS[pa.moyen] || "Paiement";
+const paItemsTxt = pa => (pa.items || []).map(i => i.ref || i.label || i.id).join(", ") || "—";
+const paIssue = pa => ({ attente: "En vérification", encaisse: pa.deja ? "Déjà encaissé" : `Encaissé (${money(pa.montantEncaisse)})`, refuse: "Paiement non retrouvé", retire: "Retiré par l’entreprise" })[pa.statut] || String(pa.statut || "");
+const PA_STAMP = { attente: ["À VÉRIFIER", "warn"], encaisse: ["ENCAISSÉ", "ok"], refuse: ["NON RETROUVÉ", "bad"], retire: ["RETIRÉ", "muted"] };
+const paiementsAnnoncesEnAttente = e => (S.paiementsAnnonces || []).filter(x => x.statut === "attente" && sameEnt(x, e));
+const paiementAnnonceDe = (e, items) => paiementsAnnoncesEnAttente(e).find(pa => (pa.items || []).some(i => items.some(y => y.kind === i.kind && y.id === i.id))) || null;
+// Ce qui reste dû aujourd'hui sur une somme annoncée payée.
+function paDu(i) {
+  if (i.kind === "decl") { const d = S.declarations.find(x => x.id === i.id); if (!d || dStatus(d) !== "validee") return 0; return echOf(d) && i.plan ? Math.min(dReste(d), echRetardMontant(d)) : dReste(d); }
+  if (i.kind === "pen") { const p = (S.penalites || []).find(x => x.id === i.id); return p && p.statut === "due" ? Number(p.montant) || 0 : 0; }
+  const p = (S.prets || []).find(x => x.id === i.id); if (!p) return 0;
+  const l = Array.isArray(i.idx) ? i.idx.map(k => (p.echeances || [])[k]).filter(x => x && !x.payee) : pretDues(p);
+  return l.reduce((t, x) => t + (Number(x.montant) || 0), 0);
+}
+// Le virement sur les relevés de l'entreprise : même montant (à 2 € près), deux jours autour de l'heure annoncée.
+function paVirement(pa, e) {
+  const T = new Date(pa.quand).getTime(), out = [];
+  for (const r of e && e.id ? relevesOf(e) : []) for (const m of mvtsRel(r))
+    if (m.montant < 0 && Math.abs(-m.montant - pa.montant) < 2 && Math.abs(m.t - T) <= 2 * 864e5 && /pr[ée]fecture/i.test(m.libelle)) out.push({ r, m, k: mvtKey(m) });
+  return out.sort((a, b) => Math.abs(a.m.t - T) - Math.abs(b.m.t - T))[0] || null;
+}
+function openPaiementAnnonce(id) {
+  const pa = (S.paiementsAnnonces || []).find(x => x.id === id); if (!pa) return;
+  const e = entOf(pa) || { nom: pa.entrepriseNom }, dir = encOk(), att = pa.statut === "attente", reopen = () => openPaiementAnnonce(id);
+  const items = (pa.items || []).map(i => Object.assign({}, i, { du: paDu(i) })), totDu = items.reduce((t, i) => t + i.du, 0);
+  const vir = paVirement(pa, e), rels = e.id ? relevesOf(e) : [];
+  const cbs = items.map((i, n) => { const cb = h("input", { type: "checkbox", id: "pa-it-" + n, "data-i": String(n), disabled: !att || !dir || i.du <= 0 }); cb.checked = i.du > 0; return cb; });
+  const lien = i => i.kind === "decl" ? () => openDecl(i.id) : i.kind === "pret" ? () => openPret(i.id) : () => { if (e.id) openFiche(e); };
+  const liste = h("ul", { class: "rl-pick", id: "pa-items" }, items.map((i, n) => h("li", {},
+    h("label", { class: "switch", for: "pa-it-" + n }, cbs[n], h("strong", { text: `${i.ref || ""} · ${i.label || i.kind}` })),
+    h("span", { class: "meta" }, i.du > 0 ? `reste ${money(i.du)}` : "plus rien à payer", " · ", h("button", { class: "linkbtn", type: "button", onclick: lien(i), text: "ouvrir" })))));
+  const ecart = Math.round(pa.montant - totDu);
+  const reponse = h("textarea", { id: "pa-reponse", rows: "2", maxlength: "500", placeholder: "Pour un refus : pourquoi le paiement n’est pas retrouvé (montant, date, rien sur le relevé…). L’entreprise le lit dans son espace et au salon des relances." });
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const choisis = () => cbs.map((cb, n) => cb.checked ? items[n] : null).filter(Boolean);
+  const finir = async (statut, extra, txt) => {
+    const r = Object.assign({}, pa, { statut, decideLe: nowISO(), decidePar: S.uid || null, decideParNom: S.agentName || "" }, extra); delete r.id;
+    if (!(await write(() => S.db.doc("paiementsAnnonces/" + pa.id).set(r)))) return false;
+    if (hookFor("relances") && txt) {
+      const m = entMention(e), res = await postDiscord("relances", { content: `**Paiement annoncé ${paNo(pa)}** · ${e.nom || pa.entrepriseNom}${m ? " " + m : ""} : ${txt}` });
+      if (!res.ok) signalerErreur("discord", res.error, { details: { salon: "relances", document: "réponse à un paiement annoncé" } });
+    }
+    return true;
+  };
+  const enc = h("button", { class: "btn ink small", type: "button", id: "pa-encaisser", text: totDu > 0 ? "Encaisser les sommes cochées" : "Classer : déjà encaissé" });
+  enc.addEventListener("click", async () => {
+    err.textContent = "";
+    const l = choisis();
+    if (totDu > 0 && !l.length) { err.textContent = "Cochez ce que vous encaissez."; return; }
+    enc.disabled = true;
+    const note = `Paiement annoncé ${paNo(pa)} : ${paMoyen(pa).toLowerCase()} du ${jourHeure(pa.quand)}${vir ? `, lu sur le relevé ${dossierNo("RC", vir.r.id)}` : ""}`;
+    const rec = totDu > 0 ? await encaisserItems(l, note, false) : 0;
+    if (totDu > 0 && !rec) { err.textContent = "Rien n’a été encaissé : ces sommes ne sont plus dues."; enc.disabled = false; return; }
+    const rep = reponse.value.trim();
+    if (!(await finir("encaisse", Object.assign({ montantEncaisse: rec, encaisses: l.map(i => i.ref || i.id) }, totDu > 0 ? {} : { deja: true }, rep ? { reponse: rep } : {}),
+      totDu > 0 ? `${money(rec)} reçus et encaissés (${l.map(i => i.ref || i.id).join(", ")}). Merci.${rep ? " " + rep : ""}` : null))) { enc.disabled = false; return; }
+    if (vir) { await marquerLu({ r: vir.r, k: vir.k }, "encaisse"); S.plCache = null; }
+    toast(totDu > 0 ? `${money(rec)} encaissés : ${e.nom || pa.entrepriseNom}.` : "Paiement annoncé classé.");
+    reopen();
+  });
+  const non = h("button", { class: "btn ghost small", type: "button", id: "pa-refuser", text: "Paiement non retrouvé" });
+  non.addEventListener("click", async () => {
+    err.textContent = "";
+    const rep = reponse.value.trim();
+    if (rep.length < 10) { err.textContent = "Dites à l’entreprise pourquoi le paiement n’est pas retrouvé (une phrase au moins)."; reponse.focus(); return; }
+    non.disabled = true;
+    if (!(await finir("refuse", { reponse: rep }, `paiement de ${money(pa.montant)} du ${jourHeure(pa.quand)} non retrouvé. ${rep} Les sommes restent à payer.`))) { non.disabled = false; return; }
+    toast("Réponse envoyée : paiement non retrouvé.");
+    reopen();
+  });
+  const relTxt = vir ? `Virement de ${money(-vir.m.montant)} à la Préfecture le ${jourHeure(new Date(vir.m.t))}${vir.m.libelle ? ` (« ${vir.m.libelle} »)` : ""}, lu sur le relevé ${dossierNo("RC", vir.r.id)}.`
+    : pa.moyen === "virement" ? (rels.length ? `Aucun virement de ce montant sur ses relevés autour de cette date (dernier relevé le ${fmtDateTime(new Date(rels[0].at))}).` : "Aucun relevé de son compte : faites-en un pour vérifier.") : null;
+  openDialog({ eyebrow: `Recouvrement · paiement annoncé ${paNo(pa)}`, title: e.nom || pa.entrepriseNom, stampEl: stamp(PA_STAMP[pa.statut] || PA_STAMP.attente), wide: true,
+    body: [kv([["Montant annoncé", money(pa.montant) + (att && totDu > 0 && Math.abs(ecart) >= 2 ? ` · ${ecart > 0 ? "plus" : "moins"} que les ${money(totDu)} dus` : "")],
+      ["Payé le", `${fmtDateTime(new Date(pa.quand))} · ${paMoyen(pa)}`],
+      pa.note ? ["Mot de l’entreprise", pa.note] : null,
+      pa.preuve ? ["Preuve", h("a", { href: pa.preuve, target: "_blank", rel: "noopener noreferrer", text: pa.preuve })] : null,
+      relTxt ? ["Sur ses relevés", vir ? h("span", {}, relTxt + " ", h("button", { class: "linkbtn", type: "button", onclick: () => openReleveVue(vir.r.id, reopen), text: "Voir le relevé" })) : relTxt] : null,
+      ["Annoncé le", fmtDateTime(new Date(pa.at)) + (pa.enLigne ? " depuis l’espace entreprise" : "")],
+      pa.decideLe ? ["Réponse", `${paIssue(pa)} le ${fmtDateTime(new Date(pa.decideLe))}${pa.decideParNom ? " par " + pa.decideParNom : ""}${pa.reponse ? " · " + pa.reponse : ""}`] : null,
+      pa.retireLe ? ["Retiré le", fmtDateTime(new Date(pa.retireLe))] : null]),
+      h("div", { class: "field" }, h("span", { class: "lbl", text: att && dir ? "Sommes à encaisser" : "Sommes réglées" }), liste),
+      att && dir && Math.abs(ecart) >= 2 && totDu > 0 ? h("p", { class: "hint warn", style: "margin:0", text: ecart < 0 ? "Le montant annoncé ne couvre pas tout : décochez ce qui n’est pas payé, ou encaissez seulement si vous avez bien reçu le tout." : "Le montant annoncé dépasse ce qui est dû : le surplus n’est pas encaissé." }) : null,
+      att && dir ? field("pa-reponse", "Message à l’entreprise (obligatoire pour un refus)", reponse) : null,
+      att && !dir ? h("p", { class: "hint", style: "margin:0", text: "La Direction vérifie le paiement. En attendant, ces sommes ne sont pas relancées." }) : null,
+      att && dir ? err : null],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Fermer" }), h("span", { class: "spacer" }), att && dir ? non : null, att && dir ? enc : null] });
 }
 
 /* ---------- Convocations ---------- */
@@ -19508,7 +19623,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["delais", "reclamations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["delais", "reclamations", "paiementsAnnonces", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 // Historique d'un dossier : ses lignes du journal, avec « Restaurer » ou « Annuler » comme dans le journal, sans
 // avoir à le chercher dans l'onglet Journal (Direction).
@@ -25226,6 +25341,7 @@ function searchIndex() {
   for (const p of payesVersees()) push("Paye", pyNo(p.id), `${pyNo(p.id)} · ${periodLabel(p.id)}`, `${(p.lignes || []).length} agent${plural((p.lignes || []).length)} · ${money(payeTotal(p))} versés${p.reprise ? " · reprise de " + (p.reprise.no || "la demande") : ""}`, "paye salaires", () => { S.payeSem = p.id; showTab("payes"); try { history.replaceState(null, "", "#payes"); } catch (e) { /* sans historique */ } renderPayes(true); }, p.verseeLe);
   for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
   // Recouvrement : réclamations et demandes de délai venues de l'espace entreprise.
+  for (const pa of S.paiementsAnnonces || []) push("Paiement annoncé", paNo(pa), `${paNo(pa)} · ${pa.entrepriseNom}`, `${money(pa.montant)} · ${paItemsTxt(pa)} · ${paIssue(pa)}`, pa.note, () => openPaiementAnnonce(pa.id), pa.at);
   for (const rc of S.reclamations || []) push("Réclamation", rcNo(rc), `${rcNo(rc)} · ${rc.entrepriseNom}`, `${rcCibleTxt(rc)} · ${rcIssue(rc)}`, rc.motif, () => openReclamation(rc.id), rc.at);
   for (const dl of S.delais || []) push("Demande de délai", "", `Délai · ${dl.entrepriseNom}`, `${(dl.decls || []).length} avis · ${({ attente: "en attente", accordee: "accordé", refusee: "refusé", annulee: "annulée" })[dl.statut] || dl.statut || ""}`, dl.motif || "", () => openDelai(dl.id), dl.at);
   // Personnel : matricule de la carte, contrats de travail, sanctions, rendez-vous de l'agenda.
@@ -25720,6 +25836,7 @@ async function chargerEspace() {
   await chargerCreneauxPortail();
   await chargerDelaisPortail();
   await chargerReclamationsPortail();
+  await chargerPaiementsPortail();
   await chargerVehiculesPortail();
   renderPortail();
 }
@@ -25845,6 +25962,74 @@ function openReclamationPortail() {
       h("p", { class: "hint", style: "margin:0", text: "La Préfecture maintient, réduit ou annule le montant, et vous répond ici. En attendant, ce dossier n’est pas relancé ; s’il est maintenu, il redevient à payer comme avant." }), err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
 }
+// « J'ai payé » (mise à jour 52 ; sans elle, le bouton n'apparaît pas) : le patron annonce un paiement, la
+// Préfecture le vérifie et l'encaisse ; en attendant, ces sommes ne sont pas relancées.
+async function chargerPaiementsPortail() {
+  let r;
+  try { r = await S.sb.rpc("paiements_annonces_entreprise", { p_jeton: S.portail.jeton }); } catch (err) { r = { error: err }; }
+  S.portail.paiements = !r || r.error || !Array.isArray(r.data) ? null : r.data;
+}
+const paPortailSur = x => (S.portail.paiements || []).find(pa => pa.statut === "attente" && (pa.items || []).some(i => i.kind === x.kind && i.id === x.id)) || null;
+const payables = e => unpaidItems(e).filter(x => !x.solidaire).concat(aEchoirItems(e)).filter(x => x.montant > 0 && !paPortailSur(x));
+function paiementPortailBloc(e) {
+  const l = S.portail.paiements;
+  if (!l || e.actif === false) return null;
+  const att = l.filter(x => x.statut === "attente"), rec = l.filter(x => x.decideLe && Date.now() - new Date(x.decideLe).getTime() < 14 * 864e5), py = payables(e);
+  const retirer = pa => async ev => {
+    const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer le retrait"; return; }
+    b.disabled = true; let r; try { r = await S.sb.rpc("retirer_paiement_annonce", { p_jeton: S.portail.jeton, p_id: pa.id }); } catch (x) { r = { error: x }; }
+    if (r.error) { toast(r.error.message || "Retrait refusé.", true); b.disabled = false; return; }
+    toast("Annonce retirée."); await chargerPaiementsPortail(); renderPortail();
+  };
+  if (!att.length && !rec.length && !py.length) return null;
+  return h("div", { class: "pt-delai", id: "pt-paiements" },
+    att.length || rec.length ? h("ul", { class: "ent-list", id: "pt-pa-l" }, att.concat(rec).map(pa => h("li", {},
+      h("div", { style: "min-width:0" }, h("strong", { text: `Paiement de ${money(pa.montant)} du ${fmtDateTime(new Date(pa.quand))}` }),
+        h("span", { class: "meta", text: pa.statut === "attente" ? `${paItemsTxt(pa)} : la Préfecture le vérifie. Ces sommes ne sont pas relancées en attendant.`
+          : pa.statut === "encaisse" ? `Encaissé le ${fmtDateTime(new Date(pa.decideLe))}${pa.montantEncaisse ? ` (${money(pa.montantEncaisse)})` : ""}. Merci.${pa.reponse ? " " + pa.reponse : ""}`
+          : `Non retrouvé le ${fmtDateTime(new Date(pa.decideLe))} : ${pa.reponse || "contactez la Préfecture."} Les sommes restent à payer.` })),
+      chip(pa.statut === "attente" ? ["En vérification", "warn"] : pa.statut === "encaisse" ? ["Encaissé", "ok"] : ["Non retrouvé", "bad"]),
+      pa.statut === "attente" ? h("button", { class: "btn ghost small", type: "button", onclick: retirer(pa), text: "Retirer" }) : h("span", {})))) : null,
+    py.length && att.length < 3 ? h("p", { class: "muted", text: "Vous avez déjà payé ? Dites-le : la Préfecture vérifie et encaisse, sans vous relancer en attendant." }) : null,
+    py.length && att.length < 3 ? h("button", { class: "btn small", type: "button", id: "pt-pa-btn", onclick: openPaiementPortail, text: "J’ai payé" }) : null);
+}
+function openPaiementPortail() {
+  const e = S.portail.e, py = payables(e);
+  if (!py.length) return;
+  const mt = h("input", { id: "pp-montant", type: "number", min: "1", step: "1", inputmode: "numeric" });
+  let mtTouche = false;
+  mt.addEventListener("input", () => { mtTouche = true; });
+  const cbs = py.map((x, i) => { const cb = h("input", { type: "checkbox", id: "pp-" + i }); cb.checked = py.length === 1; cb.addEventListener("change", () => { if (!mtTouche) mt.value = String(cbs.reduce((t, c, k) => t + (c.checked ? py[k].montant : 0), 0) || ""); }); return cb; });
+  if (py.length === 1) mt.value = String(py[0].montant);
+  const pad2 = n => String(n).padStart(2, "0"), now = new Date();
+  const quand = h("input", { id: "pp-quand", type: "datetime-local", value: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}T${pad2(now.getHours())}:${pad2(now.getMinutes())}` });
+  const moyen = h("select", { id: "pp-moyen" }, Object.entries(PA_MOYENS).map(([k, t]) => h("option", { value: k, text: t })));
+  const preuve = h("input", { id: "pp-preuve", type: "url", placeholder: "https://… (capture du virement, reçu)", autocomplete: "off" });
+  const note = h("textarea", { id: "pp-note", rows: "2", maxlength: "300", placeholder: "Facultatif : à qui vous avez remis l’argent, libellé du virement…" });
+  const err = h("p", { class: "err", "aria-live": "polite" });
+  const go = h("button", { class: "btn ink small", type: "button", id: "pp-ok", text: "Envoyer" });
+  go.addEventListener("click", async () => {
+    const l = py.filter((x, i) => cbs[i].checked), v = Math.round(Number(mt.value)), q = new Date(quand.value), pv = preuve.value.trim();
+    if (!l.length) { err.textContent = "Cochez ce que vous avez payé."; return; }
+    if (!(v > 0)) { err.textContent = "Indiquez le montant versé."; mt.focus(); return; }
+    if (!Number.isFinite(q.getTime())) { err.textContent = "Indiquez quand vous avez payé."; quand.focus(); return; }
+    if (q.getTime() > Date.now() + 10 * 6e4) { err.textContent = "La date du paiement est dans le futur."; quand.focus(); return; }
+    if (pv && !/^https?:\/\//i.test(pv)) { err.textContent = "La preuve doit être un lien (https://…)."; preuve.focus(); return; }
+    go.disabled = true; err.textContent = "";
+    const items = l.map(x => Object.assign({ kind: x.kind, id: x.id, ref: x.ref, label: x.label, montant: Math.round(x.montant) }, x.plan ? { plan: true } : {}, Array.isArray(x.idx) ? { idx: x.idx } : {}, x.avis ? { avis: x.avis } : {}));
+    let r; try { r = await S.sb.rpc("annoncer_paiement", { p_jeton: S.portail.jeton, p_items: items, p_montant: v, p_quand: q.toISOString(), p_moyen: moyen.value, p_preuve: pv || null, p_note: note.value.trim() || null }); } catch (y) { r = { error: y }; }
+    if (r.error) { err.textContent = r.error.message || "Annonce refusée."; go.disabled = false; return; }
+    toast("Paiement annoncé : la Préfecture le vérifie et vous répond ici."); closeDialog(); await chargerPaiementsPortail(); renderPortail();
+  });
+  openDialog({ eyebrow: "Espace entreprise", title: "J’ai payé", wide: true,
+    body: [h("div", { class: "field" }, h("span", { class: "lbl", text: "Ce que vous avez payé" }), h("ul", { class: "rl-pick" }, py.map((x, i) => h("li", {},
+        h("label", { class: "switch", for: "pp-" + i }, cbs[i], h("strong", { text: `${x.ref} · ${x.label}` })), h("span", { class: "meta", text: money(x.montant) }))))),
+      h("div", { class: "row2" }, h("div", { class: "field" }, h("label", { for: "pp-montant", text: "Montant versé" }), h("div", { class: "money", "data-cur": cfg().devise || "€" }, mt)), field("pp-quand", "Quand", quand)),
+      h("div", { class: "row2" }, field("pp-moyen", "Comment", moyen), field("pp-preuve", "Lien d’une preuve (facultatif)", preuve)),
+      field("pp-note", "Un mot (facultatif)", note),
+      h("p", { class: "hint", style: "margin:0", text: "La Préfecture vérifie le paiement, puis l’encaisse : vous recevez la quittance comme d’habitude. En attendant, ces sommes ne sont pas relancées. Une annonce fausse peut être sanctionnée." }), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: closeDialog, text: "Annuler" }), h("span", { class: "spacer" }), go] });
+}
 // Créneaux de paiement (mise à jour 43 ; sans elle, la carte n'apparaît pas).
 async function chargerCreneauxPortail() {
   let r;
@@ -25924,11 +26109,11 @@ function renderPortail() {
   const ip = unpaidItems(e), ae = aEchoirItems(e), items = ip.map(x => Object.assign({ late: true }, x)).concat(ae), tot = items.reduce((t, x) => t + x.montant, 0);
   const cardPay = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "À payer" })),
     items.length ? h("ul", { class: "ent-list", id: "pt-pay" }, items.map(x => h("li", {},
-      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${x.label}` }), h("span", { class: "meta", text: `${x.ref}${x.late ? " · délai de paiement dépassé" : x.exigible ? " · à payer avant le " + fmtDateTime(new Date(x.exigible)) : ""}${rcPortailSur(x) ? " · contesté : en attente de la réponse de la Préfecture" : ""}` })),
+      h("div", { style: "min-width:0" }, h("span", { style: "font-weight:600", text: `${x.label}` }), h("span", { class: "meta", text: `${x.ref}${x.late ? " · délai de paiement dépassé" : x.exigible ? " · à payer avant le " + fmtDateTime(new Date(x.exigible)) : ""}${rcPortailSur(x) ? " · contesté : en attente de la réponse de la Préfecture" : ""}${S.portail.paiements && paPortailSur(x) ? " · paiement annoncé : vérification en cours" : ""}` })),
       chip(x.late ? ["En retard", "bad"] : ["À payer", "warn"]), h("span", { class: "num", style: "font-weight:700", text: money(x.montant) })))) : h("p", { class: "muted", style: "margin:0", text: "Rien à payer pour l’instant." }),
     items.length ? h("div", { class: "pt-total" }, h("span", { text: "Total" }), h("span", { class: "num", text: money(tot) })) : null,
     items.length ? h("p", { class: "hint", style: "margin:8px 0 0", text: "Réglez ces sommes auprès de la Direction des impôts et cotisations de la Préfecture de police. Une somme en retard est relancée, puis majorée." }) : null,
-    delaiPortailBloc(e), reclamationPortailBloc(e));
+    paiementPortailBloc(e), delaiPortailBloc(e), reclamationPortailBloc(e));
   // Déclarations déposées
   const ds = declsOf(e).slice().sort((a, b) => String(b.periode).localeCompare(String(a.periode)) || byCreatedDesc(a, b));
   const cardDecl = h("div", { class: "card" }, h("div", { class: "card-head" }, h("h3", { text: "Vos déclarations" })),
