@@ -3806,7 +3806,7 @@ function applyRole() {
   if (known && S.role !== "agent" && ((!w && S.tab === "reglages") || (!ag && ["declaration", "demande"].includes(S.tab)))) showTab("dashboard");
   navSync();
   $("#logout").hidden = !S.sb || !S.uid;
-  $("#btn-search").hidden = !S.connected || ["pointeuse", "rh", "agent"].includes(S.role);
+  $("#btn-search").hidden = !S.connected || S.role === "pointeuse" || (S.role === "agent" && !secuAcces());
   $("#notif-btn").hidden = !S.connected || !S.role || S.role === "pointeuse";
   $("#guide-btn").hidden = !(guideRole() || (S.connected && S.role === "agent"));
   $$("#s-save, #s-svc-save, #s-bar-save, #x-save, #r-save, #bl-save, #vh-save, #e-add, #b-file, #a-add").forEach(b => { b.disabled = !w; });
@@ -16336,7 +16336,7 @@ function openDelai(id) {
 // Le patron conteste, depuis son espace, un avis émis pas encore payé ou une pénalité à payer : motif, lien
 // d'une preuve, montant qu'il estime juste. La Direction maintient, réduit ou annule, avec une réponse publiée
 // au salon des relances. Pendant la réclamation, le recouvrement de ce dossier attend la réponse.
-const rcNo = rc => dossierNo("RC", rc.id);
+const rcNo = rc => dossierNo("RE", rc.id); // RC est déjà le préfixe des relevés
 function rcCibleTxt(rc) {
   const c = (rc && rc.cible) || {};
   if (c.kind === "decl") return `l’avis ${dossierNo("DF", c.id)}${c.periode ? " (" + periodPlain(c.periode).toLowerCase() + ")" : ""}`;
@@ -25099,6 +25099,23 @@ function searchIndex() {
   for (const f of S.fonctionnaires || []) push("Fonctionnaire", "", f.nom || "Agent", `${f.grade || "sans grade"}${f.actif === false ? " · retiré des effectifs" : ""}`, [f.discordId, f.note].join(" "), () => openFonc(f.id), f.at);
   for (const p of payesVersees()) push("Paye", pyNo(p.id), `${pyNo(p.id)} · ${periodLabel(p.id)}`, `${(p.lignes || []).length} agent${plural((p.lignes || []).length)} · ${money(payeTotal(p))} versés${p.reprise ? " · reprise de " + (p.reprise.no || "la demande") : ""}`, "paye salaires", () => { S.payeSem = p.id; showTab("payes"); try { history.replaceState(null, "", "#payes"); } catch (e) { /* sans historique */ } renderPayes(true); }, p.verseeLe);
   for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
+  // Recouvrement : réclamations et demandes de délai venues de l'espace entreprise.
+  for (const rc of S.reclamations || []) push("Réclamation", rcNo(rc), `${rcNo(rc)} · ${rc.entrepriseNom}`, `${rcCibleTxt(rc)} · ${rcIssue(rc)}`, rc.motif, () => openReclamation(rc.id), rc.at);
+  for (const dl of S.delais || []) push("Demande de délai", "", `Délai · ${dl.entrepriseNom}`, `${(dl.decls || []).length} avis · ${({ attente: "en attente", accordee: "accordé", refusee: "refusé", annulee: "annulée" })[dl.statut] || dl.statut || ""}`, dl.motif || "", () => openDelai(dl.id), dl.at);
+  // Personnel : matricule de la carte, contrats de travail, sanctions, rendez-vous de l'agenda.
+  for (const f of S.fonctionnaires || []) if (f.actif !== false) push("Carte professionnelle", matricule(f), `${matricule(f)} · ${f.nom || "Agent"}`, f.grade || "", "matricule carte", () => (S.role === "rh" ? openAgent(f.id) : openFonc(f.id)), f.at);
+  for (const c of S.contratsTravail || []) if (c.ref) push("Contrat de travail", c.ref, `${c.ref} · ${c.nom || "Agent"}`, `${c.type || "Contrat"} · ${c.poste || ""} · ${c.statut === "signe" ? "signé" : "à signer"}`, "contrat travail", () => openCtr(c.id), c.at);
+  for (const x of S.sanctions || []) push("Sanction", "", `Sanction · ${x.nom || "Agent"}`, `${x.type || ""} · ${x.statut === "vigueur" ? "en vigueur" : x.statut || ""} · ${x.at ? fmtDate(new Date(x.at)) : ""}`, x.motif || "", () => openSanction(x.id), x.at);
+  for (const e of S.agenda || []) push("Rendez-vous", "", e.titre || "Rendez-vous", `${e.debut ? fmtDateTime(new Date(e.debut)) : ""}${e.lieu ? " · " + e.lieu : ""}${e.statut === "annule" ? " · annulé" : ""}`, [e.description, (e.visiteurs || []).join(" ")].join(" "), () => openEvenement(e), e.debut);
+  // Sécurité : personnes passées à l'accueil (nom, naissance, numéro de pièce), signalements, visiteurs attendus, tickets de consigne.
+  if (secuAcces()) {
+    for (const p of secuPersonnes().values()) push("Personne (sécurité)", "", p.nom, secuResume(p), [p.numero, p.naissance].join(" "), () => { S.secuVue = p.controles && !p.entrees ? "controles" : "entrees"; S.secuQ = p.nom; allerA("securite"); }, p.t);
+    for (const x of secuListe("securiteSignalements")) push("Personne signalée", "", x.nom || "—", `${(SECU_SIGNAL[x.motif] || SECU_SIGNAL.autre)[0]}${signalActif(x) ? "" : " · levé"}`, [x.numero, x.consigne].join(" "), () => openSecuSignalVue(x.id), x.at);
+    for (const x of secuListe("securiteAttendus")) push("Visiteur attendu", "", x.nom || "—", `${x.date ? fmtDateTime(new Date(x.date)) : ""}${x.hote ? " · voit " + x.hote : ""} · ${x.statut === "arrive" ? "arrivé" : x.statut === "annule" ? "annulé" : "attendu"}`, x.objet || "", () => openSecuAttenduVue(x.id), x.date);
+    for (const x of secuListe("securiteEntrees")) if ((x.consigne || []).length) push("Consigne", consigneTicket(x), `${consigneTicket(x)} · ${x.nom}`, `${consigneTxt(x.consigne)} · ${enConsigne(x) ? "en consigne" : aRemettre(x) ? "retenu" : "rendus"}`, "consigne ticket", () => openSecuEntreeVue(x.id), x.arrivee);
+  }
+  // RH et agents de la protection : seulement ce qui les concerne.
+  if (["rh", "agent"].includes(S.role)) { const ok = new Set(["Fonctionnaire", "Carte professionnelle", "Contrat de travail", "Sanction", "Rendez-vous", "Personne (sécurité)", "Personne signalée", "Visiteur attendu", "Consigne"]); return out.filter(x => ok.has(x.t)); }
   return out;
 }
 function runSearch(q) {
@@ -25116,9 +25133,9 @@ function runSearch(q) {
   return { hits: hits.slice(0, 40), total: hits.length };
 }
 function openSearch() {
-  if (!S.connected) return;
+  if (!S.connected || S.role === "pointeuse" || (S.role === "agent" && !secuAcces())) return;
   if (dlg.open) { const cur = $("#q-in"); if (cur) { cur.focus(); cur.select(); return; } closeDialog(); }
-  const inp = h("input", { id: "q-in", type: "search", autocomplete: "off", spellcheck: "false", enterkeyhint: "go", "aria-label": "Rechercher", "aria-controls": "q-list", placeholder: "Entreprise, patron, semaine ou numéro : DF-…, CF-…, AT-…" });
+  const inp = h("input", { id: "q-in", type: "search", autocomplete: "off", spellcheck: "false", enterkeyhint: "go", "aria-label": "Rechercher", "aria-controls": "q-list", placeholder: ["rh", "agent"].includes(S.role) ? (S.role === "rh" ? "Agent, matricule PP-…, contrat CT-…, personne contrôlée…" : "Nom, numéro de pièce, ticket de consigne C-…") : "Entreprise, patron, agent, personne, numéro : DF-…, CF-…, PP-…, C-…" });
   const count = h("p", { class: "hint", id: "q-count", "aria-live": "polite", style: "margin:8px 0 0" });
   const list = h("ul", { class: "search-list", id: "q-list" });
   let res = [];

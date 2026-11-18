@@ -50,7 +50,7 @@ module.exports = {
     t.ok(dec && dec.montant === 6000 && dec.statut === "validee" && dec.rectifie && dec.rectifie.ancienMontant === 12400, "avis réduit à 6 000 € (ancien montant noté)", JSON.stringify(dec).slice(0, 300));
     const r1 = (await lignes(d, "reclamations")).find((x) => x.id === "rc1") || {};
     t.ok(r1.statut === "reduite" && r1.montantRetenu === 6000 && !!r1.decideLe, "réclamation : réduite", JSON.stringify(r1).slice(0, 200));
-    const post = d.webhooks.find((w) => /Réclamation RC-/.test(w.corps));
+    const post = d.webhooks.find((w) => /Réclamation RE-/.test(w.corps));
     t.ok(post && /montant réduit de 12\s400\s€ à 6\s000\s€/.test(post.corps), "réponse au salon des relances", post ? post.corps.slice(0, 300) : "rien");
 
     // La pénalité : annulée.
@@ -61,7 +61,7 @@ module.exports = {
     await d.locator("#rc-reponse").fill("Dépôt à l’heure vérifié : pénalité annulée.");
     await d.locator("#rc-ok").click(); await pause(d, 1000);
     const pn = await d.evaluate(() => (window.__rows.get("penalites/pn1") || {}).data);
-    t.ok(pn && pn.statut === "annulee" && /Réclamation RC-/.test(pn.motifAnnulation || ""), "pénalité annulée", JSON.stringify(pn).slice(0, 200));
+    t.ok(pn && pn.statut === "annulee" && /Réclamation RE-/.test(pn.motifAnnulation || ""), "pénalité annulée", JSON.stringify(pn).slice(0, 200));
     t.sansErreur(d);
 
     // 3. Le patron lit la réponse.
