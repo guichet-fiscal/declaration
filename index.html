@@ -5584,7 +5584,11 @@ function payeBudget(k, p) {
   const c = payeCfg(), m = moisDe(k), sal = salairesMois(m), bm = sal > 0 ? sal : Math.max(0, Math.round(Number(c.budgetMois) || 0));
   const deja = payesDuMois(m).filter(x => x.id !== k).reduce((t, x) => t + payeTotal(x), 0) - rembMois(m) + aPartMois(m), reste = bm - deja;
   const semaines = semainesDuMois(m).filter(w => w === k || (w > k && !payeVersee(payeOf(w))));
-  const n = Math.max(1, semaines.length), lisse = Math.max(0, Math.floor(reste / n));
+  // Rappels en priorité (réglage) : la part de la semaine prend d'abord les rappels dus des semaines passées,
+  // puis sa part du reste ; les semaines suivantes se partagent ce qui reste ensuite.
+  const prio = !!c.rappelsPriorite && !payeVersee(p), excl = new Set((p && p.rappelsExclus) || []);
+  const rapPrio = prio ? Math.min(Math.max(0, reste), rappelsDus().filter(r => String(r.semaine) < k && !excl.has(r.id)).reduce((t, r) => t + r.reste, 0)) : 0;
+  const n = Math.max(1, semaines.length), lisse = Math.max(0, rapPrio + Math.floor((reste - rapPrio) / n));
   // Place dans l'enveloppe : ce qui y reste, plus ce qui reste de la demande « salaires » (déjà déduite).
   const cap = envCap(c.service, m), used = (envUse(m)[norm(c.service)] || 0) - (payeVersee(p) && !sal ? payeTotal(p) : 0);
   const envReste = cap ? Math.max(0, cap - used) + Math.max(0, sal - deja) : null;
@@ -5592,7 +5596,7 @@ function payeBudget(k, p) {
   let dispo = lisse, limite = "lisse";
   if (imp != null) { dispo = Math.min(imp, Math.max(0, reste)); limite = imp > Math.max(0, reste) ? "mois" : "impose"; }
   if (envReste != null && envReste < dispo) { dispo = envReste; limite = "enveloppe"; }
-  return { mois: m, budgetMois: bm, salaires: sal, salairesDm: sal ? salairesDemandes(m).map(dm => dmNo(dm)) : [], deja, reste, semaines, n, lisse, envCap: cap || 0, envReste, impose: imp, dispo: Math.max(0, dispo), limite };
+  return { mois: m, budgetMois: bm, salaires: sal, salairesDm: sal ? salairesDemandes(m).map(dm => dmNo(dm)) : [], deja, reste, semaines, n, lisse, envCap: cap || 0, envReste, impose: imp, dispo: Math.max(0, dispo), limite, prio, rapPrio };
 }
 function payeCalc(k) {
   const p = payeOf(k);
@@ -5604,13 +5608,21 @@ function payeCalc(k) {
   }
   const lignes = payeLignesPrep(k, p), budget = payeBudget(k, p);
   const totalDu = lignes.reduce((t, l) => t + l.brut, 0);
-  const coef = totalDu > budget.dispo ? (totalDu ? budget.dispo / totalDu : 1) : 1;
+  const excl = new Set((p && p.rappelsExclus) || []), dus = rappelsDus().filter(r => String(r.semaine) < k);
+  const totR = dus.filter(r => !excl.has(r.id)).reduce((t, r) => t + r.reste, 0);
+  // Par défaut, les rappels passent après les payes de la semaine, avec ce qui reste du budget ; avec le
+  // réglage « rappels en priorité », ils passent d'abord et la semaine prend ce qui reste.
+  let coef, coefRappels;
+  if (budget.prio) {
+    coefRappels = totR > budget.dispo ? (totR ? budget.dispo / totR : 1) : 1;
+    const resteL = Math.max(0, budget.dispo - (coefRappels < 1 ? budget.dispo : totR));
+    coef = totalDu > resteL ? (totalDu ? resteL / totalDu : 1) : 1;
+  } else {
+    coef = totalDu > budget.dispo ? (totalDu ? budget.dispo / totalDu : 1) : 1;
+  }
   lignes.forEach(l => { l.verse = coef < 1 ? Math.floor(l.brut * coef) : l.brut; l.reste = l.brut - l.verse; });
   const totalVerse = lignes.reduce((t, l) => t + l.verse, 0);
-  // Les rappels passent après les payes de la semaine, avec ce qui reste du budget.
-  const excl = new Set((p && p.rappelsExclus) || []), dus = rappelsDus().filter(r => String(r.semaine) < k);
-  const left = Math.max(0, budget.dispo - totalVerse), totR = dus.filter(r => !excl.has(r.id)).reduce((t, r) => t + r.reste, 0);
-  const coefRappels = coef < 1 ? 0 : totR > left ? (totR ? left / totR : 1) : 1;
+  if (!budget.prio) { const left = Math.max(0, budget.dispo - totalVerse); coefRappels = coef < 1 ? 0 : totR > left ? (totR ? left / totR : 1) : 1; }
   const rappels = dus.map(r => ({ rid: r.id, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif, du: r.reste, inclus: !excl.has(r.id), verse: excl.has(r.id) ? 0 : coefRappels < 1 ? Math.floor(r.reste * coefRappels) : r.reste }));
   const totalRappels = rappels.reduce((t, r) => t + r.verse, 0);
   // Trop-perçus : retenus sur ce que l'agent touche cette semaine (paye et rappels), les plus anciens d'abord.
@@ -5672,7 +5684,7 @@ function payeVerserDlg(k) {
       lignes: now.lignes.filter(l => l.heures > 0 || l.brut > 0).map(payeLigneSnap),
       rappels: now.rappels.filter(r => r.inclus && r.verse > 0).map(r => ({ rid: r.rid, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif || "", du: r.du, verse: r.verse })),
       retenues: now.retenues.filter(r => r.inclus && r.retenu > 0).map(r => ({ rid: r.rid, fid: r.fid, nom: r.nom, semaine: r.semaine, motif: r.motif || "", du: r.du, retenu: r.retenu })),
-      budget: { mois: b.mois, budgetMois: b.budgetMois, deja: b.deja, reste: b.reste, semaines: b.n, lisse: b.lisse, envCap: b.envCap, envReste: b.envReste, impose: b.impose, dispo: b.dispo, limite: b.limite },
+      budget: { mois: b.mois, budgetMois: b.budgetMois, deja: b.deja, reste: b.reste, semaines: b.n, lisse: b.lisse, envCap: b.envCap, envReste: b.envReste, impose: b.impose, dispo: b.dispo, limite: b.limite, prio: !!b.prio, rapPrio: b.rapPrio || 0 },
       bareme: { plafondHeures: payeCfg().plafondHeures, payeMax: payeCfg().payeMax },
       coef: now.coef, coefRappels: now.coefRappels, totalDu: now.totalDu, totalVerse: now.totalVerse, totalRappels: now.totalRappels, totalRetenues: now.totalRetenues,
       saisie: (p && p.saisie) || {}, rappelsExclus: (p && p.rappelsExclus) || [], retenuesExclues: (p && p.retenuesExclues) || [], budgetImpose: p && p.budgetImpose != null ? p.budgetImpose : null,
@@ -5971,11 +5983,12 @@ function renderPayes(force) {
   // Avant de verser : la semaine dépasse son budget → le complément du mois, ou un budget de semaine plus haut.
   if (!x.versee && x.coef < 1 && x.totalDu > 0) {
     const bp = besoinPayes(b.mois || moisDe(k)), comp = arrondiHaut(bp.manque, 10000);
-    bl.push(h("span", { class: "warn", id: "py-depasse" }, `Cette semaine coûte ${money(x.totalDu)} pour ${money(b.dispo)} de budget : payes à ${pctC(x.coef)}, ${money(x.totalDu - x.totalVerse)} en rappels. `,
+    bl.push(h("span", { class: "warn", id: "py-depasse" }, b.prio && x.totalRappels > 0 ? `Rappels versés d’abord (${money(x.totalRappels)}) ; la semaine coûte ${money(x.totalDu)} pour les ${money(Math.max(0, b.dispo - x.totalRappels))} qui restent : payes à ${pctC(x.coef)}, ${money(x.totalDu - x.totalVerse)} en rappels. `
+      : `Cette semaine coûte ${money(x.totalDu)} pour ${money(b.dispo)} de budget : payes à ${pctC(x.coef)}, ${money(x.totalDu - x.totalVerse)} en rappels. `,
       w && comp > 0 ? h("button", { class: "linkbtn", type: "button", onclick: () => preparerDemandeSalaires(bp.m, comp, true), text: `Préparer un complément de ${money(comp)}` }) : null));
   }
   // Rappels pas entièrement versés alors que la semaine est payée en entier : ils ne prennent que ce qui reste
-  // du budget de la semaine, lui-même une part du reste du mois (signalé par Joachim le 16 nov.).
+  // du budget de la semaine, lui-même une part du reste du mois (signalé le 16 nov.).
   const rapIn = (x.rappels || []).filter(r => r.inclus), rapDu = rapIn.reduce((t, r) => t + r.du, 0), rapVe = rapIn.reduce((t, r) => t + r.verse, 0);
   if (!x.versee && x.coef >= 1 && rapDu > rapVe + 1) {
     const besoin = x.totalVerse + rapDu, manque = Math.max(0, besoin - Math.max(0, b.reste)), bp = besoinPayes(b.mois || moisDe(k)), comp = arrondiHaut(Math.max(manque, bp.manque), 10000);
@@ -5985,8 +5998,17 @@ function renderPayes(force) {
       w && !manque ? h("button", { class: "linkbtn", type: "button", id: "py-rappels-tout", onclick: async () => { if (await payeSet(k, { budgetImpose: besoin })) toast(`Budget de la semaine porté à ${money(besoin)} : tous les rappels sont versés, ${money(rapDu)} pris sur les semaines suivantes du mois.`); },
         text: `Verser tous les rappels cette semaine (budget de la semaine : ${money(besoin)}, pris sur les semaines suivantes)` }) : null,
       w && manque ? h("span", {}, `Il manque ${money(manque)} au budget du mois pour tout verser cette semaine. `,
-        h("button", { class: "linkbtn", type: "button", onclick: () => preparerDemandeSalaires(bp.m, comp, true), text: `Préparer un complément de ${money(comp)}` })) : null));
+        h("button", { class: "linkbtn", type: "button", onclick: () => preparerDemandeSalaires(bp.m, comp, true), text: `Préparer un complément de ${money(comp)}` })) : null,
+      w && !b.prio && !manque && b.limite === "lisse" ? h("span", {}, " Ou, chaque semaine : ", h("button", { class: "linkbtn", type: "button", id: "py-rappels-prio", onclick: async ev => {
+        const bt = ev.currentTarget; if (bt.dataset.ok !== "1") { bt.dataset.ok = "1"; bt.textContent = "Confirmer : rappels toujours versés en premier"; return; }
+        bt.disabled = true;
+        const payes = Object.assign({}, (S.config || {}).payes || {}, { rappelsPriorite: true });
+        if (await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { payes, updatedAt: nowISO() })))) toast("Réglage enregistré : les rappels passent avant les payes de la semaine.");
+        else bt.disabled = false;
+      }, text: "verser les rappels en priorité" })) : null));
   }
+  if (!x.versee && b.prio && b.rapPrio > 0) bl.push(h("span", { id: "py-prio" }, `Rappels en priorité : ${money(b.rapPrio)} dus passent d’abord, comptés en plus de la part de la semaine. `,
+    w ? h("button", { class: "linkbtn", type: "button", onclick: openPayeReglages, text: "Réglage" }) : null));
   fill($("#py-budget"), h("div", { class: "py-budget" }, bl));
   renderConseilPayes();
   renderPrevision(k);
@@ -6049,7 +6071,7 @@ function renderPayes(force) {
         return h("tr", {}, h("td", { text: r.nom }), h("td", { text: "S" + ((bounds(r.semaine) || {}).week || "?") }), h("td", { text: r.motif || "" }),
           h("td", { class: "num", text: money(r.du) }), h("td", { class: "num", text: money(r.verse) }), h("td", {}, cb));
       })))),
-    !x.versee && x.coefRappels < 1 && x.rappels.some(r => r.inclus) ? h("p", { class: "hint", text: x.coef < 1 ? "Le budget ne couvre pas les payes de la semaine : les rappels attendent une prochaine paye." : `Il ne reste que ${money(Math.max(0, b.dispo - x.totalVerse))} pour les rappels : ils sont versés à ${Math.round(x.coefRappels * 100)} %, le reste attend.` }) : null] : [],
+    !x.versee && x.coefRappels < 1 && x.rappels.some(r => r.inclus) ? h("p", { class: "hint", text: b.prio ? `Rappels en priorité : le budget de la semaine (${money(b.dispo)}) ne couvre pas tous les rappels dus ; ils sont versés à ${Math.round(x.coefRappels * 100)} %, le reste attend.` : x.coef < 1 ? "Le budget ne couvre pas les payes de la semaine : les rappels attendent une prochaine paye." : `Il ne reste que ${money(Math.max(0, b.dispo - x.totalVerse))} pour les rappels : ils sont versés à ${Math.round(x.coefRappels * 100)} %, le reste attend.` }) : null] : [],
     // Trop-perçus retenus sur cette paye
     (x.retenues || []).length ? [h("h4", { style: "margin:16px 0 6px", text: x.versee ? "Trop-perçus retenus sur cette paye" : "Trop-perçus à retenir sur cette paye" }),
       h("div", { class: "tbl-wrap", style: "margin-top:0" }, h("table", { class: "compact" },
@@ -6163,6 +6185,7 @@ function openPayeReglages() {
   const bud = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" }); bud.value = String(c.budgetMois);
   const plaf = h("input", { type: "number", min: "0", step: "0.5", inputmode: "decimal" }); plaf.value = String(c.plafondHeures);
   const max = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric" }); max.value = String(c.payeMax);
+  const prio = h("input", { type: "checkbox", id: "py-r-prio" }); prio.checked = !!c.rappelsPriorite;
   const rowsBox = h("div", { class: "art-rows" }), rows = [];
   const addRow = g => {
     const nom = h("input", { autocomplete: "off", placeholder: "Grade", "aria-label": "Grade" }), taux = h("input", { type: "number", min: "0", step: "1", inputmode: "numeric", "aria-label": "Taux horaire" });
@@ -6203,7 +6226,7 @@ function openPayeReglages() {
     if (primes.some(x => !complet(x))) { err.textContent = "Chaque palier de prime a besoin d’un nombre d’heures et d’un montant."; return; }
     if (new Set(primes.map(x => x.heures)).size !== primes.length) { err.textContent = "Deux paliers de prime demandent le même nombre d’heures."; return; }
     go.disabled = true;
-    const payes = Object.assign({}, (S.config || {}).payes || {}, { service: svc.value, budgetMois: B, plafondHeures: P, payeMax: M, grades: grades.map(g => ({ nom: g.nom, taux: g.taux })),
+    const payes = Object.assign({}, (S.config || {}).payes || {}, { service: svc.value, budgetMois: B, plafondHeures: P, payeMax: M, rappelsPriorite: prio.checked, grades: grades.map(g => ({ nom: g.nom, taux: g.taux })),
       primes: primes.map(x => ({ nom: x.nom || `Prime ${x.heures} h`, heures: x.heures, montant: x.montant })).sort((a, b) => b.heures - a.heures) });
     if (!(await write(() => S.db.doc("config/main").set(Object.assign({}, S.config, { payes, updatedAt: nowISO() }))))) { go.disabled = false; return; }
     // Grade renommé : les fiches des agents suivent.
@@ -6214,6 +6237,7 @@ function openPayeReglages() {
     body: [h("div", { class: "row2" }, field("py-r-svc", "Enveloppe imputée", svc), h("div", { class: "field" }, h("label", { for: "py-r-bud", text: "Budget des payes par mois" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(bud, { id: "py-r-bud" })),
       h("span", { class: "hint", text: "Sert pour un mois sans demande « salaires » de la Préfecture. Avec une demande accordée, le budget du mois est le total de ses demandes « salaires » : pour l’augmenter, faites une demande de complément." }))),
       h("div", { class: "row2" }, field("py-r-plaf", "Heures payées au plus par semaine", plaf), h("div", { class: "field" }, h("label", { for: "py-r-max", text: "Paye maximum par semaine" }), h("div", { class: "money", "data-cur": cur() }, Object.assign(max, { id: "py-r-max" })))),
+      h("label", { class: "switch", for: "py-r-prio" }, prio, h("span", {}, h("strong", { text: "Verser les rappels en priorité" }), h("span", { class: "meta", style: "display:block", text: "Les rappels dus des semaines passées sont payés d’abord, sur le budget de la semaine, qui les compte en plus de sa part du mois ; sinon, ils ne prennent que ce qui reste après les payes de la semaine." }))),
       h("h4", { style: "margin:14px 0 2px", text: "Grades et taux horaires" }), h("p", { class: "hint", style: "margin:0", text: "Du premier grade au plus haut. Le taux horaire multiplie les heures de service de l’agent." }),
       rowsBox, h("button", { class: "btn ghost small", type: "button", onclick: () => addRow(null), text: "Ajouter un grade" }),
       h("h4", { style: "margin:14px 0 2px", text: "Primes de présence" }), h("p", { class: "hint", style: "margin:0", text: `Pour chaque palier : son nom, les heures de service à atteindre dans la semaine, le montant. Le palier le plus haut atteint s’ajoute au salaire, sans dépasser la paye maximum. À partir de la semaine ${(bounds(c.primesDepuis) || {}).week || c.primesDepuis}.` }),
