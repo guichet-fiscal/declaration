@@ -14249,6 +14249,16 @@ async function createEcheancier(d, n) {
   if (ok) toast(`Paiement en ${n} fois accordé.`);
   return ok;
 }
+async function reporterPaiement(d, k) {
+  const dt = new Date(String(k || "") + "T23:59:00");
+  if (!Number.isFinite(dt.getTime()) || dt.getTime() <= Date.now()) { toast("Choisissez une date à venir.", true); return false; }
+  const total = Math.max(0, dMontant(d) - dCredit(d));
+  if (!(total > 0)) { toast("Rien à payer sur cet avis.", true); return false; }
+  const ok = await write(() => S.db.doc("echeanciers/" + d.id).set({ declId: d.id, entrepriseId: d.entrepriseId || null, entrepriseNom: d.entrepriseNom, total, report: true,
+    echeances: [{ n: 1, date: dt.toISOString(), montant: total, payee: false, paidAt: null }], createdAt: nowISO(), by: S.uid || null }));
+  if (ok) toast(`Paiement reporté au ${longDate(dt)} : pas de relance avant.`);
+  return ok;
+}
 async function payEcheance(d, idx) {
   const e = echOf(d);
   if (!e) return false;
@@ -14318,10 +14328,15 @@ function echeancierSection(d, reopen) {
   }
   if (!w || st !== "validee") return null;
   const sel = h("select", { id: "ech-n", style: "width:auto" }, [2, 3, 4, 5, 6].map(n => h("option", { value: String(n), text: `${n} fois` })));
-  return sec("Paiement en plusieurs fois",
+  // Reporter : tout payer en une fois, plus tard (l'avis n'est plus relancé avant cette date).
+  const jour = h("input", { type: "date", id: "ech-report", style: "width:auto", min: jourDecale(jourCle(new Date()), 1) }); jour.value = jourDecale(jourCle(new Date()), 7);
+  return sec("Délai de paiement",
     h("div", { class: "paste-row" },
-      h("label", { for: "ech-n", class: "hint", text: `Une échéance par ${cfg().periodicite === "mois" ? "mois" : "semaine"}, la première aujourd’hui :` }), sel,
-      h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await createEcheancier(d, Number(sel.value))) reopen(); }, text: "Échelonner le paiement" })));
+      h("label", { for: "ech-n", class: "hint", text: `En plusieurs fois, une échéance par ${cfg().periodicite === "mois" ? "mois" : "semaine"}, la première aujourd’hui :` }), sel,
+      h("button", { class: "btn ghost small", type: "button", onclick: async () => { if (await createEcheancier(d, Number(sel.value))) reopen(); }, text: "Échelonner le paiement" })),
+    h("div", { class: "paste-row", style: "margin-top:6px" },
+      h("label", { for: "ech-report", class: "hint", text: "Ou en une fois, plus tard, avant le :" }), jour,
+      h("button", { class: "btn ghost small", type: "button", id: "ech-reporter", onclick: async () => { if (await reporterPaiement(d, jour.value)) reopen(); }, text: "Reporter le paiement" })));
 }
 
 /* ---------- Fiche entreprise ---------- */
