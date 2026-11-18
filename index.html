@@ -1297,6 +1297,16 @@ button.orga-p{cursor:pointer}button.orga-p:hover{border-color:var(--rule);backgr
 .perm-table td.perm-warn button{background:var(--warn-soft)}.perm-table td.perm-warn button small{color:var(--warn)}
 .perm-table td.perm-bad button{background:var(--bad-soft)}.perm-table td.perm-bad button small{color:var(--bad)}
 .perm-table td.perm-passe button{opacity:.55}
+.age-barre{display:flex;gap:2px;height:22px;margin:14px 0 4px;border-radius:4px;overflow:hidden;background:var(--sheet)}
+.age-barre span{display:block;min-width:3px;background:var(--c)}
+.age-l{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 16px;margin:10px 0 0;padding:0;list-style:none}
+.age-l li{display:grid;grid-template-columns:12px 1fr;gap:2px 8px;align-items:baseline;font-size:13px}
+.age-l li::before{content:"";width:12px;height:12px;border-radius:3px;background:var(--c);grid-row:span 2;align-self:center}
+.age-l b{font-family:var(--f-mono);font-weight:600}.age-l .meta{grid-column:2}
+.age-t td.num,.age-t th.num{white-space:nowrap}
+.age-t td.vieux{color:var(--bad);font-weight:600}
+.rc-tendance .es-bar{background:var(--bad);opacity:.85}.rc-tendance .es-col:last-child .es-bar{opacity:1}
+.rc-tendance .es-col:hover .es-bar{opacity:1;outline:2px solid var(--sheet)}
 .perm-heures{display:flex;align-items:center;gap:6px;flex:0 0 auto}.perm-heures select{width:auto;min-width:0;padding-right:28px}
 .perm-legende{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;font-size:12.5px;color:var(--ink-2)}
 .perm-legende span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
@@ -1829,6 +1839,7 @@ table.es-payes{min-width:0;width:100%}
     </div>
     <div class="seg rc-seg" id="rc-seg" role="group" aria-label="Rubriques du recouvrement">
       <button type="button" data-rc="afaire" aria-pressed="true">À faire<span class="count"></span></button>
+      <button type="button" data-rc="impayes" aria-pressed="false">Impayés<span class="count"></span></button>
       <button type="button" data-rc="poursuites" aria-pressed="false">Saisies et justice<span class="count"></span></button>
       <button type="button" data-rc="comptes" aria-pressed="false">Comptes<span class="count"></span></button>
       <button type="button" data-rc="controles" aria-pressed="false">Contrôles<span class="count"></span></button>
@@ -1836,6 +1847,7 @@ table.es-payes{min-width:0;width:100%}
       <button type="button" data-rc="historique" aria-pressed="false">Lettres envoyées<span class="count"></span></button>
     </div>
     <div data-rc-vue="afaire"><div id="rc-afaire"><div class="empty">Chargement…</div></div></div>
+    <div data-rc-vue="impayes" hidden><div id="rc-impayes"><div class="empty">Chargement…</div></div></div>
     <div data-rc-vue="poursuites" hidden>
     <div class="dash-grid">
       <div class="card">
@@ -16859,7 +16871,97 @@ function rcMore(key, n) {
     h("button", { class: "linkbtn", type: "button", onclick: () => { S.rcAll[key] = !S.rcAll[key]; renderRecouvrement(); }, text: S.rcAll[key] ? "Réduire" : n - RC_LIMIT === 1 ? "Afficher la dernière" : `Afficher les ${n - RC_LIMIT} autres` }));
 }
 const majDone = i => S.penalites.some(p => p.declId === i.id && p.type === "majoration" && p.statut !== "annulee");
-const RC_VUES = ["afaire", "poursuites", "comptes", "controles", "clotures", "historique"];
+/* ---------- Impayés par ancienneté ---------- */
+// Les sommes échues encore dues, par âge depuis leur date d'exigibilité ; par entreprise ; l'encours échu à
+// la fin de chacune des 8 dernières semaines (avis et pénalités) ; et le taux de recouvrement des avis émis.
+const AGE_TR = [{ de: 0, a: 7, l: "Moins de 7 jours", c: 38 }, { de: 7, a: 15, l: "7 à 14 jours", c: 60 }, { de: 15, a: 31, l: "15 à 30 jours", c: 80 }, { de: 31, a: Infinity, l: "Plus de 30 jours", c: 100 }];
+const ageCouleur = t => `color-mix(in srgb, var(--bad) ${AGE_TR[t].c}%, var(--sheet))`;
+function impayesParAge() {
+  const now = Date.now(), lignes = [];
+  for (const e of S.entreprises) for (const it of unpaidItems(e)) {
+    if (it.solidaire || !(it.montant > 0)) continue;
+    let ex = new Date(it.since || now).getTime() + (it.kind === "pret" ? 0 : payDelayMs());
+    if (it.kind === "decl" && it.plan) { const d = S.declarations.find(x => x.id === it.id), r = d ? echRetard(d) : []; if (r.length) ex = new Date(r[0].date).getTime(); }
+    const j = Math.max(0, Math.floor((now - ex) / 864e5));
+    lignes.push({ e, it, j, t: AGE_TR.findIndex(x => j >= x.de && j < x.a) });
+  }
+  const parE = new Map();
+  for (const l of lignes) {
+    const x = parE.get(l.e.id) || { e: l.e, total: 0, parT: [0, 0, 0, 0], max: 0, n: 0 };
+    x.total += l.it.montant; x.parT[l.t] += l.it.montant; x.max = Math.max(x.max, l.j); x.n++;
+    parE.set(l.e.id, x);
+  }
+  const total = lignes.reduce((t, l) => t + l.it.montant, 0);
+  return { lignes, total, parT: AGE_TR.map((_, i) => lignes.filter(l => l.t === i).reduce((t, l) => t + l.it.montant, 0)), nT: AGE_TR.map((_, i) => lignes.filter(l => l.t === i).length),
+    ageMoyen: total ? lignes.reduce((t, l) => t + l.j * l.it.montant, 0) / total : 0,
+    ents: [...parE.values()].sort((a, b) => b.total - a.total || b.max - a.max) };
+}
+// Encours échu à la fin de chaque semaine et recouvrement des avis émis chaque semaine (montants d'aujourd'hui).
+function impayesTendance(n) {
+  const ks = recentKeys(n).reverse(), now = Date.now(), dl = payDelayMs();
+  const dettes = []; // { du, paye, montant }
+  const emis = [];   // { at, montant, paye, aTemps }
+  for (const d of S.declarations) {
+    const dec = S.decisions[d.id]; if (!dec || !dec.at || !["validee", "payee"].includes(dec.statut)) continue;
+    const ec = echOf(d), at = new Date(dec.at).getTime(), du = at + dl;
+    if (ec) for (const x of ec.echeances || []) dettes.push({ du: new Date(x.date).getTime(), paye: x.payee && x.paidAt ? new Date(x.paidAt).getTime() : null, montant: Number(x.montant) || 0 });
+    else dettes.push({ du, paye: dec.statut === "payee" ? new Date(dec.paidAt || dec.at).getTime() : null, montant: dec.statut === "payee" ? Math.max(0, dMontant(d) - dCredit(d)) : dReste(d) });
+    const m = Math.max(0, dMontant(d) - dCredit(d)), pt = dec.statut === "payee" ? new Date(dec.paidAt || dec.at).getTime() : null;
+    if (m > 0) emis.push({ at, montant: m, paye: dec.statut === "payee" ? m : ec ? (ec.echeances || []).filter(x => x.payee).reduce((t, x) => t + (Number(x.montant) || 0), 0) : 0, aTemps: !ec && pt != null && pt <= du ? m : 0 });
+  }
+  for (const p of S.penalites || []) if (["due", "payee"].includes(p.statut)) dettes.push({ du: new Date(p.createdAt || 0).getTime() + dl, paye: p.statut === "payee" ? new Date(p.paidAt || p.createdAt).getTime() : null, montant: Number(p.montant) || 0 });
+  return ks.map(k => {
+    const b = bounds(k), T = Math.min(now, b.end.getTime()), t0 = b.start.getTime(), t1 = b.end.getTime();
+    const encours = dettes.filter(x => x.du <= T && (x.paye == null || x.paye > T)).reduce((t, x) => t + x.montant, 0);
+    const em = emis.filter(x => x.at >= t0 && x.at <= t1), sum = f => em.reduce((t, x) => t + f(x), 0);
+    return { k, encours, emis: sum(x => x.montant), paye: sum(x => x.paye), aTemps: sum(x => x.aTemps), n: em.length, enCours: now <= t1 };
+  });
+}
+function renderImpayes() {
+  const box = $("#rc-impayes"); if (!box) return;
+  const a = impayesParAge(), tend = impayesTendance(8), emis8 = tend.reduce((t, x) => t + x.emis, 0), paye8 = tend.reduce((t, x) => t + x.paye, 0);
+  const mk = (label, value, sub, tn) => h("div", { class: "kpi" + (tn ? " " + tn : "") }, h("span", { class: "l", text: label }), h("span", { class: "v", text: value }), h("span", { class: "s", text: sub }));
+  const vieux = a.parT[3];
+  const kpis = h("div", { class: "minis", id: "imp-kpis" },
+    mk("Impayé échu", money(a.total), `${a.ents.length} entreprise${plural(a.ents.length)} · ${a.lignes.length} somme${plural(a.lignes.length)}`, a.total ? "warn" : ""),
+    mk("Plus de 30 jours", money(vieux), a.total ? `${Math.round(vieux / a.total * 100)} % de l’impayé` : "rien", vieux ? "bad" : ""),
+    mk("Âge moyen", a.total ? `${Math.round(a.ageMoyen)} j` : "—", "pondéré par les montants, depuis la date limite de paiement"),
+    mk("Recouvrement", emis8 ? pctC(paye8 / emis8) : "—", emis8 ? `des avis émis sur 8 semaines (${money(paye8)} sur ${money(emis8)})` : "aucun avis émis", emis8 && paye8 / emis8 < .8 ? "warn" : ""));
+  // Ancienneté : une barre découpée par tranche d'âge (du plus récent au plus ancien), et sa légende chiffrée.
+  const barre = a.total ? h("div", { class: "age-barre", role: "img", "aria-label": AGE_TR.map((x, i) => `${x.l} : ${money(a.parT[i])}`).join(" ; ") },
+    AGE_TR.map((x, i) => a.parT[i] > 0 ? h("span", { style: `--c:${ageCouleur(i)};flex:${a.parT[i]} 1 0`, title: `${x.l} : ${money(a.parT[i])} (${a.nT[i]} somme${plural(a.nT[i])})` }) : null)) : null;
+  const legende = h("ul", { class: "age-l", id: "imp-tranches" }, AGE_TR.map((x, i) => h("li", { style: `--c:${ageCouleur(i)}` }, h("span", {}, `${x.l} `, h("b", { text: money(a.parT[i]) })),
+    h("span", { class: "meta", text: `${a.nT[i]} somme${plural(a.nT[i])}${a.total ? ` · ${Math.round(a.parT[i] / a.total * 100)} %` : ""}` }))));
+  const cardAge = h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Ancienneté des impayés" }),
+      h("p", { class: "sub", text: "Sommes échues encore dues (avis, échéances en retard, pénalités, prêts), par âge depuis leur date limite de paiement." }))),
+    a.total ? [barre, legende] : h("p", { class: "muted", style: "margin:8px 0 0", text: "Aucune somme échue : rien n’est en retard de paiement." }));
+  // Par entreprise
+  const lim = S.rcAll.imp ? 500 : 12;
+  const cardEnt = a.ents.length ? h("div", { class: "card", style: "margin-top:16px" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Par entreprise" }), h("p", { class: "sub", text: "Les plus gros impayés d’abord. Le nom ouvre la fiche." }))),
+    h("div", { class: "tbl-wrap" }, h("table", { class: "compact age-t", id: "imp-ents" },
+      h("thead", {}, h("tr", {}, h("th", { text: "Entreprise" }), h("th", { class: "num", text: "Total" }), AGE_TR.map(x => h("th", { class: "num", text: x.l.replace("Moins de ", "< ").replace("Plus de ", "> ") })), h("th", { class: "num", text: "La plus ancienne" }))),
+      h("tbody", {}, a.ents.slice(0, lim).map(x => h("tr", {}, h("td", {}, h("button", { class: "linkbtn", type: "button", onclick: () => openFiche(x.e), text: x.e.nom })),
+        h("td", { class: "num", text: money(x.total) }), x.parT.map((v, i) => h("td", { class: "num" + (i === 3 && v > 0 ? " vieux" : ""), text: v ? money(v) : "—" })),
+        h("td", { class: "num" + (x.max > 30 ? " vieux" : ""), text: `${x.max} j` })))))),
+    a.ents.length > 12 ? h("div", { class: "reg-foot" }, h("button", { class: "linkbtn", type: "button", onclick: () => { S.rcAll.imp = !S.rcAll.imp; renderImpayes(); }, text: S.rcAll.imp ? "Réduire" : `Afficher les ${a.ents.length - 12} autres` })) : null) : null;
+  // Tendance : encours échu à la fin de chaque semaine (une seule série, l'échelle part de zéro).
+  const maxE = Math.max(1, ...tend.map(x => x.encours));
+  const lab = x => `S${(bounds(x.k) || {}).week}`;
+  const cardTend = h("div", { class: "card", style: "margin-top:16px" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Semaine après semaine" }),
+      h("p", { class: "sub", text: "Impayé échu à la fin de chaque semaine (aujourd’hui pour la semaine en cours), avis et pénalités ; puis ce que sont devenus les avis émis chaque semaine." }))),
+    h("div", { class: "es-barres rc-tendance", id: "imp-tendance", role: "img", "aria-label": tend.map(x => `${lab(x)} : ${money(x.encours)}`).join(" ; ") },
+      tend.map((x, i) => h("div", { class: "es-col", title: `${periodPlain(x.k)}${x.enCours ? " (en cours)" : ""} : ${money(x.encours)} échus impayés` },
+        h("span", { class: "es-val", text: i === tend.length - 1 || x.encours === maxE ? money(x.encours) : "" }),
+        h("div", { class: "es-bar", style: `height:${Math.max(x.encours ? 1.5 : 0, x.encours / maxE * 100).toFixed(1)}%` }),
+        h("span", { class: "es-lab", text: lab(x) })))),
+    h("div", { class: "tbl-wrap", style: "margin-top:10px" }, h("table", { class: "compact age-t", id: "imp-recouvrement" },
+      h("thead", {}, h("tr", {}, ["Avis émis", "Montant", "Payé", "dont à temps", "Taux"].map((t, i) => h("th", { class: i ? "num" : null, text: t })))),
+      h("tbody", {}, tend.slice().reverse().filter(x => x.n).map(x => h("tr", {}, h("td", { text: `${periodPlain(x.k)} (${x.n})` }), h("td", { class: "num", text: money(x.emis) }), h("td", { class: "num", text: money(x.paye) }),
+        h("td", { class: "num", text: money(x.aTemps) }), h("td", { class: "num" + (x.emis && x.paye / x.emis < .8 && !x.enCours ? " vieux" : ""), text: x.emis ? pctC(x.paye / x.emis) : "—" })))))),
+    h("p", { class: "hint", style: "margin:6px 0 0", text: "Montants d’aujourd’hui : un avis rectifié depuis compte pour son nouveau montant. « À temps » : payé avant la date limite de paiement (hors paiement en plusieurs fois)." }));
+  fill(box, kpis, h("div", { style: "margin-top:16px" }, cardAge), cardEnt, cardTend);
+}
+const RC_VUES = ["afaire", "impayes", "poursuites", "comptes", "controles", "clotures", "historique"];
 function renderRecouvrement() {
   if (S.tab !== "recouvrement") return;
   const vue = RC_VUES.includes(S.rcVue) ? S.rcVue : "afaire";
@@ -16870,9 +16972,11 @@ function renderRecouvrement() {
   renderClotures();
   renderControles();
   renderComptes();
+  if (vue === "impayes") renderImpayes();
   const n = renderRcAFaire() || { afaire: 0 };
   const cnt = (k, v) => { const el = $(`#rc-seg button[data-rc="${k}"] .count`); if (el) el.textContent = v ? String(v) : ""; };
   cnt("afaire", n.afaire);
+  cnt("impayes", impayes().filter(x => x.items.some(i => !i.solidaire)).length);
   cnt("poursuites", S.saisies.filter(saisieOpen).length + S.transmissions.filter(justiceEnCours).length);
   cnt("controles", (S.controles || []).filter(x => x.statut === "ouvert" || x.statut === "propose").length);
 
