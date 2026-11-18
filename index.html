@@ -21912,7 +21912,7 @@ function pretsAvis(d) {
   const st = dStatus(d), b = bounds(nextKeyOf(d.periode)), ouvert = st !== "payee" && st !== "rejetee" && !echOf(d) && !!princ && princ.id === d.id, out = [];
   for (const p of pretsOf(e)) (p.echeances || []).forEach((x, i) => {
     const t = new Date(x.date).getTime();
-    if (x.payee ? x.avisId === d.id : ouvert && b && p.statut === "en_cours" && !p.exigibleLe && t >= b.start.getTime() && t <= b.end.getTime()) out.push({ p, i, x });
+    if (x.payee ? x.avisId === d.id : ouvert && b && p.statut === "en_cours" && !p.exigibleLe && !x.horsAvis && t >= b.start.getTime() && t <= b.end.getTime()) out.push({ p, i, x });
   });
   return out.sort((a, c) => String(a.x.date).localeCompare(String(c.x.date)));
 }
@@ -22132,7 +22132,9 @@ function openPret(id) {
           if (!preuve) { toast("Joignez une capture ou un lien.", true); b.disabled = false; return; }
           if (await savePret(p, { justificatif: { at: nowISO(), byNom: S.agentName || "", preuve } }, "Justificatif enregistré.")) reopen(); else b.disabled = false;
         }, text: "Enregistrer le justificatif" }) : null)) : null,
-    p.refusMotif ? sec("Motif du refus", h("p", { class: "prewrap", style: "margin:0", text: p.refusMotif })) : null
+    p.refusMotif ? sec("Motif du refus", h("p", { class: "prewrap", style: "margin:0", text: p.refusMotif })) : null,
+    (p.reamenagements || []).length ? sec("Échéancier réaménagé", h("ul", { class: "notes", id: "pr-ream-l" }, p.reamenagements.slice().reverse().map(r => h("li", {},
+      h("span", { class: "meta", text: `${fmtDateTime(new Date(r.at))}${r.par ? " · " + r.par : ""}` }), h("span", { text: `${r.motif} (avant : ${(r.avant || []).map(x => `${money(x.montant)} le ${dateCourte(x.date)}`).join(", ")})` }))))) : null
   ];
   const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => showDocImage(conventionDoc(p), reopen), text: "Convention en image" }),
     h("button", { class: "btn ghost small", type: "button", onclick: () => openFiche(e), text: "Fiche de l’entreprise" }), h("span", { class: "spacer" })];
@@ -22141,6 +22143,7 @@ function openPret(id) {
     foot.push(h("button", { class: "btn ink small", type: "button", onclick: () => openPretForm(e, p), text: "Examiner et accorder" }));
   }
   if (dir && p.statut === "en_cours") {
+    if (!p.exigibleLe && pretReste(p) > 0) foot.push(h("button", { class: "btn ghost small", type: "button", id: "pr-reamenager", onclick: () => openReamenager(p), text: "Réaménager les échéances" }));
     if (!p.exigibleLe) foot.push(h("button", { class: justifEchu(p) ? "btn danger small" : "btn ghost small", type: "button", onclick: () => exigerPret(p), text: "Exiger le remboursement" }));
     foot.push(h("button", { class: "btn ghost small", type: "button", onclick: () => openAnticipe(p), text: p.exigibleLe ? "Encaisser le solde" : "Remboursement anticipé" }));
   }
@@ -22165,6 +22168,61 @@ function refuserPret(p) {
       }, text: "Refuser" })] });
 }
 // Exigibilité anticipée : tout le capital restant devient dû tout de suite (avec les intérêts déjà échus).
+// Réaménager les échéances (Direction) : les échéances pas encore payées sont remplacées par un nouvel
+// échéancier de même total (par exemple la moitié tout de suite, le reste une semaine plus tard), avec un motif.
+// Les nouvelles échéances se paient à leur date, pas avec un avis ; une échéance « maintenant » est exigible
+// aussitôt (saisie possible). L'ancien échéancier reste noté.
+function openReamenager(p) {
+  const cur = pretNow(p.id); if (!cur || cur.statut !== "en_cours" || cur.exigibleLe) { pretChanged(cur); return; }
+  const restes = (cur.echeances || []).filter(x => !x.payee), R = restes.reduce((t, x) => t + (Number(x.montant) || 0), 0);
+  if (!(R > 0)) return;
+  const box = h("div", { class: "art-rows", id: "pr-ream-rows" }), rows = [], err = h("p", { class: "err", "aria-live": "polite" });
+  const total = h("p", { class: "hint", id: "pr-ream-total", style: "margin:0" });
+  const majTotal = () => { const t = rows.reduce((a, r) => a + (Math.round(Number(r.mt.value)) || 0), 0); total.textContent = `Total : ${money(t)} sur ${money(R)} à répartir${t === R ? "." : ` : ${t > R ? "trop de " + money(t - R) : "il manque " + money(R - t)}.`}`; };
+  const ajouter = (date, montant) => {
+    const d = h("input", { type: "datetime-local", "aria-label": "Date limite" }); d.value = toLocalInput(date);
+    const mt = h("input", { type: "number", min: "1", step: "1", inputmode: "numeric", "aria-label": "Montant" }); mt.value = montant ? String(montant) : "";
+    const rm = h("button", { class: "btn ghost small art-rm", type: "button", "aria-label": "Retirer cette échéance", text: "×" });
+    const r = { d, mt }; r.el = h("div", { class: "art-row", style: "grid-template-columns:minmax(0,1fr) 170px 32px" }, d, h("div", { class: "money", "data-cur": cfg().devise || "€" }, mt), rm);
+    rm.addEventListener("click", () => { rows.splice(rows.indexOf(r), 1); r.el.remove(); majTotal(); });
+    mt.addEventListener("input", majTotal);
+    rows.push(r); box.append(r.el); majTotal();
+  };
+  const finJ = n => { const d = new Date(); d.setDate(d.getDate() + n); d.setHours(23, 59, 0, 0); return d; };
+  const moitie = (n) => { rows.splice(0).forEach(r => r.el.remove()); const a = Math.round(R / 2); ajouter(new Date(Date.now() - 6e4), a); ajouter(finJ(n), R - a); };
+  moitie(7);
+  const motif = h("textarea", { id: "pr-ream-motif", rows: "2", maxlength: "500", placeholder: "Ex. : entreprise restée sans dirigeant une partie de la période ; la moitié exigée tout de suite, le reste reporté d’une semaine." });
+  const go = h("button", { class: "btn ink small", type: "button", id: "pr-ream-ok", text: "Réaménager" });
+  go.addEventListener("click", async () => {
+    err.textContent = "";
+    const l = rows.map(r => ({ t: new Date(r.d.value).getTime(), m: Math.round(Number(r.mt.value)) }));
+    if (!l.length) { err.textContent = "Gardez au moins une échéance."; return; }
+    if (l.some(x => !Number.isFinite(x.t) || !(x.m > 0))) { err.textContent = "Chaque échéance a besoin d’une date et d’un montant."; return; }
+    if (l.reduce((a, x) => a + x.m, 0) !== R) { err.textContent = `Le total des échéances doit rester ${money(R)}.`; return; }
+    if (motif.value.trim().length < 10) { err.textContent = "Indiquez le motif (une phrase au moins)."; motif.focus(); return; }
+    const latest = pretNow(p.id);
+    if (!latest || latest.statut !== "en_cours" || latest.exigibleLe || JSON.stringify((latest.echeances || []).filter(x => !x.payee)) !== JSON.stringify(restes)) { pretChanged(latest); return; }
+    go.disabled = true;
+    l.sort((a, b) => a.t - b.t);
+    const I = restes.reduce((a, x) => a + (Number(x.interets) || 0), 0), C = R - I;
+    let cRest = C;
+    const neuves = l.map((x, i) => { const c = i === l.length - 1 ? cRest : Math.round(x.m * C / R); cRest -= c; return { date: new Date(x.t).toISOString(), montant: x.m, capital: c, interets: x.m - c, payee: false, paidAt: null, horsAvis: true }; });
+    const ech = (latest.echeances || []).filter(x => x.payee).concat(neuves).map((x, i) => Object.assign({}, x, { n: i + 1 }));
+    const r = { at: nowISO(), par: S.agentName || "", motif: motif.value.trim(), avant: restes.map(x => ({ n: x.n, date: x.date, montant: x.montant })) };
+    if (await savePret(latest, { echeances: ech, reamenagements: (latest.reamenagements || []).concat([r]) }, "Échéances réaménagées.")) {
+      const p2 = pretNow(p.id);
+      if (p2) autoPublish("prets", Object.assign(conventionDoc(p2), { kind: "ÉCHÉANCIER RÉAMÉNAGÉ", note: r.motif, noteTitle: "Motif",
+        discord: { channel: "entreprises", mentions: [entMention(entOf(p2))], text: `**Échéancier réaménagé du prêt ${pretNo(p2)}** · ${p2.entrepriseNom} : ${neuves.map(x => `${money(x.montant)} ${new Date(x.date).getTime() <= Date.now() ? "exigibles immédiatement" : "avant le " + longDate(new Date(x.date))}`).join(", puis ")}.` } }), "Échéancier réaménagé :");
+      openPret(p.id);
+    } else go.disabled = false;
+  });
+  openDialog({ eyebrow: `Prêt ${pretNo(cur)}`, title: "Réaménager les échéances · " + cur.entrepriseNom, wide: true,
+    body: [h("p", { style: "margin:0", text: `Reste à rembourser : ${money(R)} (${restes.map(x => `échéance ${x.n}, ${money(x.montant)} le ${dateCourte(x.date)}`).join(" ; ")}). Le nouvel échéancier garde ce total ; une date passée rend l’échéance exigible aussitôt.` }),
+      h("div", { style: "display:flex;gap:8px;flex-wrap:wrap" }, h("button", { class: "btn ghost small", type: "button", id: "pr-ream-moitie", onclick: () => moitie(7), text: "Moitié maintenant, le reste dans 7 jours" }),
+        h("button", { class: "btn ghost small", type: "button", onclick: () => ajouter(finJ(7), 0), text: "Ajouter une échéance" })),
+      box, total, field("pr-ream-motif", "Motif", motif), err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openPret(p.id), text: "Retour" }), h("span", { class: "spacer" }), go] });
+}
 function exigerPret(p) {
   const t = h("textarea", { id: "pr-exig", rows: "3", placeholder: "Motif : justificatif non fourni, fonds employés à un autre usage, impayés…" });
   if (justifEchu(p)) t.value = "Justificatif de l’achat non fourni dans le délai.";
