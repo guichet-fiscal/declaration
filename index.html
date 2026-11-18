@@ -1289,6 +1289,17 @@ button.orga-p{cursor:pointer}button.orga-p:hover{border-color:var(--rule);backgr
 .dispo-table td.dispo-oui{color:var(--ink);background:color-mix(in srgb,var(--ok) 10%,transparent)}
 .dispo-table td.dispo-abs{color:var(--bad)}
 .dispo-table tr.dispo-vide th .meta{color:var(--warn)}
+.perm-table td{padding:3px;white-space:normal}
+.perm-table td button{all:unset;box-sizing:border-box;display:block;width:100%;min-width:92px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:12.5px;line-height:1.3;color:var(--ink)}
+.perm-table td button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.perm-table td button small{display:block;color:var(--ink-2);font-size:11.5px}
+.perm-table td.perm-ok button{background:var(--ok-soft)}
+.perm-table td.perm-warn button{background:var(--warn-soft)}.perm-table td.perm-warn button small{color:var(--warn)}
+.perm-table td.perm-bad button{background:var(--bad-soft)}.perm-table td.perm-bad button small{color:var(--bad)}
+.perm-table td.perm-passe button{opacity:.55}
+.perm-heures{display:flex;align-items:center;gap:6px;flex:0 0 auto}.perm-heures select{width:auto;min-width:0;padding-right:28px}
+.perm-legende{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;font-size:12.5px;color:var(--ink-2)}
+.perm-legende span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;background:var(--c)}
 .ev-dispo{margin:-4px 0 0}
 .ev-inv input[type=checkbox]{width:auto;flex:none;margin:0}
 .ev-inv-n{display:flex;flex-direction:column;min-width:0}
@@ -9716,6 +9727,78 @@ function creneauxCommuns(fids, k) {
   }
   return com.filter(([a, b]) => b - a >= 30 && a < 1440);
 }
+// Tableau de permanence : pour chaque heure de la soirée, qui est disponible, et s'il y a au moins un agent
+// du service de la protection et un encadrant (grade de direction, d'inspection ou de délégation).
+const PERM_ENCADR = /directeur|directrice|inspecteur|inspectrice|d[ée]l[ée]gu[ée]|secr[ée]taire g[ée]n[ée]ral|pr[ée]f[eè]t|chef|responsable/i;
+const PERM_HEURES = { de: 20, a: 25 }; // 20 h → 1 h du matin
+function permPlages() {
+  let de = PERM_HEURES.de, a = PERM_HEURES.a;
+  try { const x = JSON.parse(localStorage.getItem("gf-permanence") || "null"); if (x && x.de >= 12 && x.de <= 23 && x.a > x.de && x.a <= 30) { de = x.de; a = x.a; } } catch (e) { /* sans stockage */ }
+  return { de, a };
+}
+function permCreneau(k, hh, l) {
+  const kk = hh >= 24 ? jourDecale(k, 1) : k, deb = new Date(`${kk}T${pad(hh % 24)}:00:00`), fin = new Date(deb.getTime() + 36e5);
+  const g = { dispo: [], partiel: [], absent: [], indispo: [], inconnu: [] };
+  for (const f of l) g[dispoA(f.id, deb, fin)].push(f);
+  const prot = g.dispo.filter(f => SECU_GRADE.test(f.grade || "")), enc = g.dispo.filter(f => PERM_ENCADR.test(f.grade || ""));
+  const ton = !g.dispo.length ? "bad" : !prot.length || !enc.length ? "warn" : "ok";
+  return { k, hh, deb, fin, g, prot, enc, ton, passe: fin.getTime() < Date.now() };
+}
+function permanenceCarte(debut, jours, l) {
+  const { de, a } = permPlages(), heures = []; for (let x = de; x < a; x++) heures.push(x);
+  const nRens = l.filter(f => dispoRenseigne(dispoDoc(f.id))).length;
+  const grille = heures.map(hh => jours.map(k => permCreneau(k, hh, l)));
+  const venir = grille.flat().filter(c => !c.passe), nb = t => venir.filter(c => (t === "prot" ? !c.prot.length : t === "enc" ? !c.enc.length : !c.g.dispo.length)).length;
+  const selDe = h("select", { id: "perm-de", "aria-label": "Début de la soirée" }, [16, 17, 18, 19, 20, 21, 22].map(x => h("option", { value: String(x), text: `${x} h` }))); selDe.value = String(de);
+  const selA = h("select", { id: "perm-a", "aria-label": "Fin de la soirée" }, [22, 23, 24, 25, 26, 27].map(x => h("option", { value: String(x), text: x >= 24 ? `${x - 24 === 0 ? "minuit" : x - 24 + " h"}` : `${x} h` }))); selA.value = String(a);
+  const regler = () => { const x = { de: Number(selDe.value), a: Math.max(Number(selDe.value) + 1, Number(selA.value)) }; try { localStorage.setItem("gf-permanence", JSON.stringify(x)); } catch (e) { /* sans stockage */ } renderDispos(); };
+  selDe.addEventListener("change", regler); selA.addEventListener("change", regler);
+  const cell = c => {
+    const manque = [!c.prot.length && c.g.dispo.length ? "sans protection" : "", !c.enc.length && c.g.dispo.length ? "sans encadrant" : ""].filter(Boolean).join(", ");
+    return h("td", { class: `perm-${c.ton}${c.passe ? " perm-passe" : ""}` }, h("button", { type: "button", "data-pc": `${c.k}|${c.hh}`, onclick: () => openPermanenceSoir(c.k, c.hh),
+      "aria-label": `${jourTxt(c.k)}, ${pad(c.hh % 24)} h : ${c.g.dispo.length} disponible${plural(c.g.dispo.length)}${manque ? ", " + manque : ""}` },
+      `${c.g.dispo.length} dispo`, h("small", { text: !c.g.dispo.length ? "personne" : manque || `${c.prot.length} prot. · ${c.enc.length} enc.` })));
+  };
+  return h("div", { class: "card", id: "perm-card", style: "margin-top:16px" },
+    h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Tableau de permanence" }),
+        h("p", { class: "sub", id: "perm-resume", text: nRens < 2 ? "Trop peu de disponibilités renseignées pour en tirer quelque chose : demandez aux fonctionnaires de remplir Mes disponibilités."
+          : `Cette semaine, à venir : ${nb("prot")} heure${plural(nb("prot"))} sans agent de la protection, ${nb("enc")} sans encadrant, ${nb("tous")} sans personne. Cliquez une case pour voir qui peut la couvrir.` })),
+      h("div", { class: "perm-heures" }, h("span", { class: "muted", text: "Soirée de" }), selDe, h("span", { class: "muted", text: "à" }), selA)),
+    h("div", { class: "dispo-table-wrap" }, h("table", { class: "dispo-table perm-table", id: "perm-table" },
+      h("thead", {}, h("tr", {}, h("th", { text: "Heure" }), jours.map(k => h("th", { class: k === jourCle(new Date()) ? "auj" : null, text: new Date(k + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }) })))),
+      h("tbody", {}, grille.map((row, i) => h("tr", {}, h("th", { text: `${pad(heures[i] % 24)}:00` }), row.map(cell)))))),
+    h("p", { class: "perm-legende" }, h("span", { style: "--c:var(--ok-soft)", text: "protection et encadrant disponibles" }), h("span", { style: "--c:var(--warn-soft)", text: "il manque l’un des deux" }), h("span", { style: "--c:var(--bad-soft)", text: "personne" })));
+}
+// « À surveiller » du tableau de bord RH : les heures de ce soir encore à venir sans protection ou sans encadrant
+// (dès que trois fonctionnaires au moins ont rempli leurs disponibilités).
+function permCeSoir(l) {
+  if (l.filter(f => dispoRenseigne(dispoDoc(f.id))).length < 3) return null;
+  const { de, a } = permPlages(), k = jourCle(new Date()), cs = [];
+  for (let x = de; x < a; x++) { const c = permCreneau(k, x, l); if (!c.passe) cs.push(c); }
+  const sp = cs.filter(c => !c.prot.length), se = cs.filter(c => !c.enc.length);
+  if (!sp.length && !se.length) return null;
+  const hs = l2 => l2.map(c => `${c.hh % 24} h`).join(", ");
+  return [`Ce soir : ${sp.length ? `${sp.length} heure${plural(sp.length)} sans agent de la protection` : ""}${sp.length && se.length ? ", " : ""}${se.length ? `${se.length} sans encadrant` : ""}`,
+    [sp.length ? `protection : ${hs(sp)}` : "", se.length ? `encadrement : ${hs(se)}` : ""].filter(Boolean).join(" · ") + ". Qui peut couvrir : tableau de permanence.",
+    () => { S.rhEspace = "dispos"; S.dispoSemaine = null; renderPersonnel(); setTimeout(() => { const el = $("#perm-card"); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 60); }];
+}
+function openPermanenceSoir(k, hh) {
+  const l = foncs().filter(f => f.actif !== false), c = permCreneau(k, hh, l);
+  const nom = f => h("button", { class: "linkbtn", type: "button", onclick: () => openAgent(f.id, () => openPermanenceSoir(k, hh)), text: f.nom || "—" });
+  const liste = (fs, vide) => fs.length ? h("ul", { class: "ent-list" }, fs.map(f => { const st = dispoA(f.id, c.deb, c.fin);
+    return h("li", {}, h("div", { style: "min-width:0" }, nom(f), h("span", { class: "meta", text: f.grade || "—" })), chip(DISPO_ETATS[st]), h("span", {})); })) : h("p", { class: "muted", style: "margin:0", text: vide });
+  // Pour couvrir : ceux du bon grade qui ne sont pas absents ce jour-là, disponibles en partie d'abord, puis sans disponibilités renseignées.
+  const ordre = { partiel: 0, inconnu: 1, indispo: 2 };
+  const couvrir = re => l.filter(f => re.test(f.grade || "") && !c.g.dispo.includes(f) && !c.g.absent.includes(f)).sort((x, y) => ordre[dispoA(x.id, c.deb, c.fin)] - ordre[dispoA(y.id, c.deb, c.fin)]);
+  openDialog({ eyebrow: "Tableau de permanence", title: `${majuscule(jourTxt(k))}, ${pad(hh % 24)}:00–${pad((hh + 1) % 24)}:00${hh >= 24 ? " (après minuit)" : ""}`, wide: true,
+    body: [sec(`Disponibles (${c.g.dispo.length})`, liste(c.g.dispo, "Personne n’a indiqué être disponible à cette heure.")),
+      !c.prot.length ? sec("Pour couvrir la protection", liste(couvrir(SECU_GRADE), "Aucun agent de la protection à solliciter (absents ou aucun dans l’annuaire).")) : null,
+      !c.enc.length ? sec("Pour couvrir l’encadrement", liste(couvrir(PERM_ENCADR), "Aucun encadrant à solliciter.")) : null,
+      c.g.partiel.length ? sec(`En partie (${c.g.partiel.length})`, liste(c.g.partiel, "")) : null,
+      c.g.absent.length ? sec(`Absents (${c.g.absent.length})`, h("p", { class: "muted", style: "margin:0", text: c.g.absent.map(f => f.nom).join(", ") })) : null,
+      h("p", { class: "hint", style: "margin:0", text: "« En partie » : disponible une partie de l’heure. « Non renseigné » : n’a pas rempli Mes disponibilités, à contacter." })],
+    foot: [h("span", { class: "spacer" }), h("button", { class: "btn small", type: "button", onclick: closeDialog, text: "Fermer" })] });
+}
 const ivTxt = ([a, b]) => `${minHeure(a)}–${b === 1440 ? "minuit" : minHeure(b)}${b > 1440 ? " (lendemain)" : ""}`;
 // Mon espace.
 async function chargerMesDispos() {
@@ -9801,6 +9884,7 @@ function renderDispos() {
   [qd, qh, qn].forEach(x => x.addEventListener("change", chercher));
   fill(box, h("div", { class: "card" }, h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Qui est disponible ?" }), h("p", { class: "sub", text: "Choisissez le jour, l’heure et la durée du rendez-vous." }))),
       h("div", { class: "row2", style: "grid-template-columns:repeat(3,minmax(0,1fr))" }, field("dq-date", "Jour", qd), field("dq-heure", "Heure", qh), field("dq-duree", "Durée", qn)), res),
+    permanenceCarte(debut, jours, l),
     h("div", { class: "card", style: "margin-top:16px" }, h("div", { class: "card-head" },
         h("div", {}, h("h3", { text: `Semaine du ${jourTxt(debut)}` }), h("p", { class: "sub", text: `${nRens} fonctionnaire${plural(nRens)} sur ${l.length} ont indiqué leurs disponibilités (Mon espace → Mes disponibilités).` })),
         h("div", { class: "seg", role: "group", "aria-label": "Semaine" }, h("button", { type: "button", onclick: () => { S.dispoSemaine = jourDecale(debut, -7); renderDispos(); }, text: "‹ Précédente" }),
@@ -10099,6 +10183,7 @@ function renderBordRH() {
     actifs.some(f => arriveeManque(f).length) ? [`${actifs.filter(f => arriveeManque(f).length).length} dossier${plural(actifs.filter(f => arriveeManque(f).length).length)} d’arrivée incomplet${plural(actifs.filter(f => arriveeManque(f).length).length)}`,
       actifs.filter(f => arriveeManque(f).length).slice(0, 4).map(f => `${f.nom} (${arriveeManque(f).map(x => x.k === "discord" ? "Discord" : x.k === "carte" ? "carte" : x.k).join(", ")})`).join(", "), () => { S.rhEspace = "effectif"; S.rhVue = "incomplets"; renderPersonnel(); }] : null,
     sans.length ? [`${sans.length} agent${plural(sans.length)} sans heure de service depuis deux semaines`, sans.slice(0, 6).map(f => f.nom).join(", ") + (sans.length > 6 ? "…" : ""), () => { S.rhEspace = "effectif"; renderPersonnel(); }] : null,
+    permCeSoir(actifs),
     absEnCours.length ? [`${absEnCours.length} absent${plural(absEnCours.length)} aujourd’hui`, absEnCours.map(a => a.nom).join(", "), () => { S.rhEspace = "absences"; renderPersonnel(); }] : null,
     dags.length ? [`${dags.length} demande${plural(dags.length)} en attente`, dags.slice(0, 4).map(d => `${d.nom} (${(DAG_TYPES[d.type] || DAG_TYPES.autre).nom.toLowerCase()})`).join(", "), () => { S.rhEspace = "demandes"; renderPersonnel(); }] : null,
     objectifs.filter(o => o.echeance && o.echeance < auj).length ? [`${objectifs.filter(o => o.echeance && o.echeance < auj).length} objectif${plural(objectifs.filter(o => o.echeance && o.echeance < auj).length)} en retard`, objectifs.filter(o => o.echeance && o.echeance < auj).slice(0, 4).map(o => `${o.nom} : ${o.texte}`).join(" ; "), () => { S.rhEspace = "entretiens"; renderPersonnel(); }] : null
