@@ -10619,6 +10619,8 @@ const ARR_VISAS = [
   ["loi1901", "Loi du 1er juillet 1901 (associations)", "Vu la loi du 1er juillet 1901 relative au contrat d’association, notamment ses articles 2, 3, 5 et 7 ;"],
   ["decret1901", "Décret du 16 août 1901 (associations)", "Vu le décret du 16 août 1901 pris pour l’exécution de la loi du 1er juillet 1901 relative au contrat d’association ;"],
   ["csi_loteries", "CSI : loteries et tombolas", "Vu le code de la sécurité intérieure, notamment ses articles L. 322-1 à L. 322-6 ;"],
+  ["recepisse_asso", "Récépissé de déclaration de l’association", "Vu le récépissé de déclaration de création de l’association « {association} », délivré le {date} sous le n° {rna} ;"],
+  ["demande_tombola", "Demande d’autorisation de tombola", "Vu la demande présentée par le président de l’association « {association} » ;"],
   ["declaration_asso", "Déclaration de l’association et pièces jointes", "Vu la déclaration de création de l’association « {association} », accompagnée de ses statuts, de son règlement intérieur et du procès-verbal de son assemblée générale constitutive du {date} ;"]];
 const ARR_CONSID = [
   ["competence", "Compétence du préfet de police", "Considérant qu’en application de l’article L. 122-1 du code de la sécurité intérieure et de l’article 72 du décret n° 2004-374 du 29 avril 2004 susvisé, le préfet de police a la charge de l’ordre public à Paris, notamment la prévention des atteintes à la sécurité des personnes et des biens ;"],
@@ -10648,6 +10650,9 @@ const ARR_CONSID = [
   ["service", "Nécessités du service", "Considérant les nécessités du service ;"],
   ["representants", "Protection des représentants de l’État", "Considérant que des menaces ont été proférées à l’encontre de représentants de l’État et qu’il convient d’assurer leur protection ;"],
   ["proportion", "Mesures proportionnées", "Considérant que les mesures prévues par le présent arrêté, limitées dans le temps et dans l’espace, sont adaptées, nécessaires et proportionnées ;"],
+  ["tombola_loi", "Loteries : interdiction et exception", "Considérant qu’en application des articles L. 322-1 à L. 322-6 du code de la sécurité intérieure, les loteries sont prohibées, à l’exception des loteries d’objets mobiliers exclusivement destinées à des actes de bienfaisance, à l’encouragement des arts ou au financement d’activités sportives à but non lucratif, autorisées à Paris par le préfet de police ;"],
+  ["tombola_but", "Tombola : destination des fonds", "Considérant que les tombolas projetées par l’association « {association} » sont destinées à financer {affectation} ;"],
+  ["tombola_conditions", "Tombola : conditions présentées", "Considérant que les conditions d’organisation présentées (prix des billets, nature des lots, tirage public, compte rendu) permettent d’en assurer la sincérité et la transparence ;"],
   ["asso_loi", "Associations : déclaration à la préfecture de police", "Considérant qu’en application de l’article 5 de la loi du 1er juillet 1901 susvisée, toute association qui veut obtenir la capacité juridique doit être rendue publique par une déclaration à la préfecture du département où elle a son siège, et qu’à Paris cette déclaration est reçue par la préfecture de police ;"],
   ["asso_constituee", "Association constituée en assemblée générale", "Considérant que l’association « {association} » a été constituée le {date} lors de son assemblée générale constitutive, qui en a adopté les statuts et le règlement intérieur et a élu son bureau ;"],
   ["asso_dossier", "Dossier complet", "Considérant que le dossier déposé est complet et que les statuts sont signés par deux personnes chargées de l’administration de l’association ;"],
@@ -10702,6 +10707,13 @@ const ARR_ARTICLES = [
   ["asso_tombola", "Association : tombolas et loteries", "Toute tombola ou loterie organisée par l’association est soumise à l’autorisation préalable du préfet de police, conformément aux articles L. 322-1 à L. 322-6 du code de la sécurité intérieure. La demande précise la date et le lieu du tirage, le prix et le nombre des billets émis, la liste et la valeur des lots ainsi que l’affectation des sommes recueillies. Les lots sont exclusivement des objets mobiliers ; aucun ne peut consister en une somme d’argent."],
   ["asso_comptes", "Association : fonds et comptes", "Les fonds de l’association sont affectés aux seules actions prévues par ses statuts. L’association tient une comptabilité de ses recettes et de ses dépenses et en communique le bilan à la préfecture de police sur simple demande."],
   ["asso_dissolution", "Association : rappel de la dissolution judiciaire", "Une activité contraire aux lois, aux bonnes mœurs ou à l’objet déclaré expose l’association à une dissolution prononcée par le tribunal judiciaire, à la requête de tout intéressé ou du ministère public, conformément aux articles 3 et 7 de la loi du 1er juillet 1901 susvisée."],
+  ["tombola_auto", "Tombola : autorisation", "L’association « {association} » est autorisée à organiser des tombolas {periode}, dans les conditions fixées par le présent arrêté."],
+  ["tombola_annonce", "Tombola : annonce de chaque tombola", "Chaque tombola est annoncée à la préfecture de police au moins quarante-huit heures avant le début de la vente des billets, en précisant la date et le lieu du tirage, le nombre de billets émis ainsi que la liste et la valeur des lots."],
+  ["tombola_billets", "Tombola : billets", "Le prix des billets est fixé à {billets}. Chaque billet est numéroté et inscrit au registre des participants tenu par le trésorier de l’association ; seuls les billets payés participent au tirage."],
+  ["tombola_lots", "Tombola : lots", "Les lots sont exclusivement des objets mobiliers, provenant de dons de partenaires ou d’achats de l’association ; aucun lot ne peut consister en une somme d’argent ni être remboursé en argent. Les donateurs sont mentionnés, sauf s’ils souhaitent rester anonymes."],
+  ["tombola_tirage", "Tombola : tirage public", "Le tirage au sort est public et se déroule en présence d’au moins deux membres du bureau de l’association. Les résultats sont publiés et les lots remis aux gagnants sur présentation de leur billet."],
+  ["tombola_fonds", "Tombola : affectation des fonds et bilan", "Les sommes recueillies, déduction faite des frais d’organisation, sont exclusivement affectées à {affectation}. Le bilan de chaque tombola (billets vendus, recettes, lots remis, affectation des fonds) est transmis à la préfecture de police dans le mois qui suit le tirage."],
+  ["tombola_retrait", "Tombola : retrait de l’autorisation", "La présente autorisation peut être retirée à tout moment en cas de manquement à ses conditions ou de trouble à l’ordre public."],
   ["notification_asso", "Notification au président de l’association", "Le présent arrêté est notifié au président de l’association."],
   ["execution_cab", "Exécution (directeur de cabinet)", "Le directeur de cabinet du préfet de police est chargé de l’exécution du présent arrêté."]];
 // Ce qui ferme un arrêté : un article ajouté se place avant.
@@ -10748,6 +10760,9 @@ const ARR_MODELES = [
   { k: "association", cat: "asso", nom: "Création d’une association", desc: "Enregistrer une association loi 1901 d’après ses statuts et le procès-verbal de son assemblée constitutive : objet, bureau, changements à déclarer, tombolas.", service: "Cabinet du préfet",
     objet: "portant enregistrement de la déclaration de création de l’association « {association} »", visas: ["loi1901", "decret1901", "csi_loteries", "cgct", "decret2004", "nomination", "declaration_asso"],
     consid: ["asso_loi", "asso_constituee", "asso_dossier", "asso_objet"], articles: ["asso_creation", "asso_but", "asso_bureau", "asso_changements", "asso_tombola", "asso_comptes", "asso_dissolution", "notification_asso", "execution_cab", "publicite_simple"] },
+  { k: "tombola", cat: "asso", nom: "Autorisation de tombola", desc: "Autoriser une association à organiser des tombolas sur une période : billets, lots en objets, tirage public, annonce et bilan à la préfecture.", service: "Cabinet du préfet",
+    objet: "portant autorisation des tombolas organisées par l’association « {association} » {periode}", visas: ["loi1901", "csi_loteries", "cgct", "decret2004", "nomination", "recepisse_asso", "demande_tombola"],
+    consid: ["tombola_loi", "tombola_but", "tombola_conditions"], articles: ["tombola_auto", "tombola_annonce", "tombola_billets", "tombola_lots", "tombola_tirage", "tombola_fonds", "tombola_retrait", "notification_asso", "execution_cab", "publicite_simple"] },
   { k: "libre", cat: "libre", nom: "Arrêté libre", desc: "Une page presque blanche : les visas de base, un article à écrire, l’exécution et la publication.", service: "Cabinet du préfet",
     objet: "portant ", visas: ["cgct", "decret2004", "nomination"], consid: ["competence"], articles: ["", "execution", "publicite"] }];
 // Paramètres : remplissent les textes ; seuls ceux que les textes emploient sont demandés.
@@ -10765,6 +10780,9 @@ const ARR_CHAMPS = [
   ["reference", "Arrêté visé (n° et date)", "2026-00008 du 20 novembre 2026"],
   ["association", "Nom de l’association", "Amicale des sapeurs-pompiers du centre de secours de Ménilmontant"],
   ["siege", "Siège, avec « au », « à »…", "au centre de secours de Ménilmontant, Paris 20e"],
+  ["rna", "N° au registre des associations", "W751260001"],
+  ["billets", "Prix des billets", "500 € le billet ou 2 000 € les cinq billets"],
+  ["affectation", "Ce que financent les fonds", "ses actions d’entraide au profit des sapeurs-pompiers et de leurs familles"],
   ["date", "Date (assemblée constitutive…)", "", "date"],
   ["but", "Objet de l’association (une ligne par point)", "développer la cohésion et l’entraide entre ses membres ;\norganiser des événements festifs et solidaires.", "textarea"],
   ["bureau", "Bureau (une ligne par membre)", "M. Paul MORENTI, président ;\nM. Gabin MORENTI, trésorier.", "textarea"],
@@ -10773,7 +10791,8 @@ const ARR_CHAMPS = [
 // Ce que demande chaque paramètre quand il manque ; « debut » remplit {periode}, {debut} et {jour}.
 const ARR_PARAMS = { evenement: "l’événement", lieu: "le lieu", debut: "le début", fin: "la fin", periode: "le début (et la fin)", jour: "la date de début", perimetre: "le périmètre ou les voies", zone: "le territoire",
   personne: "la personne concernée", fonction: "la fonction", etablissement: "l’établissement", duree: "la durée", mission: "la mission", reference: "l’arrêté visé", faits: "les faits",
-  association: "le nom de l’association", siege: "le siège", date: "la date", but: "l’objet de l’association", bureau: "le bureau" };
+  association: "le nom de l’association", siege: "le siège", date: "la date", but: "l’objet de l’association", bureau: "le bureau",
+  rna: "le n° au registre des associations", billets: "le prix des billets", affectation: "ce que financent les fonds" };
 const ARR_CHAMP_DE = { periode: "debut", jour: "debut" };
 const ARR_CALCULES = new Set(["e"]); // accord : « nommé{e} » (Mme, la société… → e)
 const ARR_RECOURS = ["Si vous estimez devoir contester la présente décision, vous pouvez, dans un délai de deux mois à compter de sa notification ou de sa publication, former :",
@@ -10821,7 +10840,8 @@ function arrQuand(v, sansHeure) {
   return sansHeure ? j : `${j} à ${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
 }
 function arrValeurs(a) {
-  const p = a.params || {}, deb = arrQuand(p.debut), fin = arrQuand(p.fin), t = x => String(x || "").trim(), v = {};
+  // Début et fin à 0 h 00 : des jours entiers (« du samedi 21 novembre 2026 au jeudi 31 décembre 2026 »).
+  const p = a.params || {}, jours = /T00:00$/.test(p.debut || "") && (!p.fin || /T00:00$/.test(p.fin)), deb = arrQuand(p.debut, jours), fin = arrQuand(p.fin, jours), t = x => String(x || "").trim(), v = {};
   for (const [k] of ARR_CHAMPS) v[k] = t(p[k]);
   v.perimetre = v.perimetre.replace(/\s*\n\s*/g, " ; "); v.faits = v.faits.replace(/\s*\n\s*/g, " ; ").replace(/[.;]\s*$/, "");
   // Listes (objet, bureau d'une association) : une puce par ligne.
