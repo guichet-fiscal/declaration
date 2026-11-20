@@ -52,6 +52,13 @@ module.exports = {
     t.ok(/Parc des Princes/.test(a1.params && a1.params.lieu) && a1.articles.some((x) => /drone/.test(x.texte)), "paramètres et articles gardés");
     t.ok(await r.locator("#arr-pages canvas").first().isVisible({ timeout: 4000 }).catch(() => false), "fenêtre de l'arrêté : aperçu");
     t.egal(await r.locator("#arr-signer-prefet").count(), 0, "le rédacteur ne signe pas à la place du préfet");
+    // Modèle « Création d'une association » : ses propres paramètres.
+    await r.keyboard.press("Escape"); await pause(r, 200);
+    await r.locator("#arr-nouveau").click(); await pause(r, 300);
+    await r.locator('#arr-modeles [data-modele="association"]').click(); await pause(r, 500);
+    t.ok((await r.locator("#arr-p-association").isVisible()) && (await r.locator("#arr-p-bureau").isVisible()) && !(await r.locator("#arr-p-evenement").isVisible()) && (await r.locator("#arr-articles textarea").count()) === 10,
+      "modèle association : nom, siège, date, objet, bureau");
+    await r.keyboard.press("Escape"); await pause(r, 200);
     t.sansErreur(r);
 
     // 2. Un autre membre de la Direction : pas de signature pour le préfet.

@@ -10615,7 +10615,11 @@ const ARR_VISAS = [
   ["decret2004_deleg", "Décret de 2004 : délégations de signature", "Vu le décret n° 2004-374 du 29 avril 2004 modifié relatif aux pouvoirs des préfets, à l’organisation et à l’action des services de l’État dans les régions et départements, notamment son article 77 ;"],
   ["nomination", "Décret de nomination du préfet de police", "Vu le décret portant nomination du préfet de police ;"],
   ["arrete_vise", "Arrêté visé (par son numéro)", "Vu l’arrêté n° {reference} ;"],
-  ["communique", "Communiqué annonçant l’événement", "Vu le communiqué annonçant {evenement} ;"]];
+  ["communique", "Communiqué annonçant l’événement", "Vu le communiqué annonçant {evenement} ;"],
+  ["loi1901", "Loi du 1er juillet 1901 (associations)", "Vu la loi du 1er juillet 1901 relative au contrat d’association, notamment ses articles 2, 3, 5 et 7 ;"],
+  ["decret1901", "Décret du 16 août 1901 (associations)", "Vu le décret du 16 août 1901 pris pour l’exécution de la loi du 1er juillet 1901 relative au contrat d’association ;"],
+  ["csi_loteries", "CSI : loteries et tombolas", "Vu le code de la sécurité intérieure, notamment ses articles L. 322-1 à L. 322-6 ;"],
+  ["declaration_asso", "Déclaration de l’association et pièces jointes", "Vu la déclaration de création de l’association « {association} », accompagnée de ses statuts, de son règlement intérieur et du procès-verbal de son assemblée générale constitutive du {date} ;"]];
 const ARR_CONSID = [
   ["competence", "Compétence du préfet de police", "Considérant qu’en application de l’article L. 122-1 du code de la sécurité intérieure et de l’article 72 du décret n° 2004-374 du 29 avril 2004 susvisé, le préfet de police a la charge de l’ordre public à Paris, notamment la prévention des atteintes à la sécurité des personnes et des biens ;"],
   ["circulation_comp", "Compétence en matière de circulation", "Considérant qu’en application de l’article L. 2512-14 du code général des collectivités territoriales, le préfet de police peut réglementer, de manière permanente ou temporaire, les conditions de circulation et de stationnement afin d’assurer la sécurité des personnes et des biens ;"],
@@ -10643,7 +10647,11 @@ const ARR_CONSID = [
   ["abrogation", "Les circonstances ont cessé", "Considérant que les circonstances qui ont justifié l’arrêté n° {reference} ont cessé ;"],
   ["service", "Nécessités du service", "Considérant les nécessités du service ;"],
   ["representants", "Protection des représentants de l’État", "Considérant que des menaces ont été proférées à l’encontre de représentants de l’État et qu’il convient d’assurer leur protection ;"],
-  ["proportion", "Mesures proportionnées", "Considérant que les mesures prévues par le présent arrêté, limitées dans le temps et dans l’espace, sont adaptées, nécessaires et proportionnées ;"]];
+  ["proportion", "Mesures proportionnées", "Considérant que les mesures prévues par le présent arrêté, limitées dans le temps et dans l’espace, sont adaptées, nécessaires et proportionnées ;"],
+  ["asso_loi", "Associations : déclaration à la préfecture de police", "Considérant qu’en application de l’article 5 de la loi du 1er juillet 1901 susvisée, toute association qui veut obtenir la capacité juridique doit être rendue publique par une déclaration à la préfecture du département où elle a son siège, et qu’à Paris cette déclaration est reçue par la préfecture de police ;"],
+  ["asso_constituee", "Association constituée en assemblée générale", "Considérant que l’association « {association} » a été constituée le {date} lors de son assemblée générale constitutive, qui en a adopté les statuts et le règlement intérieur et a élu son bureau ;"],
+  ["asso_dossier", "Dossier complet", "Considérant que le dossier déposé est complet et que les statuts sont signés par deux personnes chargées de l’administration de l’association ;"],
+  ["asso_objet", "Objet licite", "Considérant que l’objet de l’association, tel qu’il est défini par ses statuts, n’est contraire ni aux lois ni aux bonnes mœurs et ne porte pas atteinte à l’ordre public ;"]];
 const ARR_ARTICLES = [
   ["perimetre", "Périmètre de protection et durée", "Un périmètre de protection est institué {periode}, à l’occasion de {evenement}, dans la zone délimitée par : {perimetre}."],
   ["interdits_perimetre", "Ce qui est interdit dans le périmètre", "Dans ce périmètre, sont interdits :\n- les rassemblements revendicatifs ;\n- le port, le transport et l’usage d’artifices de divertissement et d’articles pyrotechniques ;\n- le port et le transport d’armes, y compris factices, de munitions et d’objets pouvant constituer une arme ou servir de projectile au sens de l’article 132-75 du code pénal, ainsi que de bouteilles et de contenants en verre ;\n- l’accès des chiens dangereux mentionnés à l’article L. 211-12 du code rural et de la pêche maritime."],
@@ -10686,11 +10694,20 @@ const ARR_ARTICLES = [
   ["execution_rh", "Exécution (personnel)", "Le directeur des ressources humaines de la préfecture de police est chargé de l’exécution du présent arrêté, qui sera versé au dossier de l’intéressé{e}."],
   ["execution_deleg", "Exécution (délégation)", "{personne} est chargé{e} de l’exécution du présent arrêté."],
   ["publicite", "Entrée en vigueur et publication", "Le présent arrêté entre en vigueur dès son affichage aux portes de la préfecture de police. Il est publié au recueil des actes administratifs de la préfecture de police et consultable sur son site. Il est transmis au procureur de la République près le tribunal judiciaire de Paris et au maire de Paris."],
-  ["publicite_simple", "Publication", "Le présent arrêté est publié au recueil des actes administratifs de la préfecture de police."]];
+  ["publicite_simple", "Publication", "Le présent arrêté est publié au recueil des actes administratifs de la préfecture de police."],
+  ["asso_creation", "Association : enregistrement", "Il est donné acte de la déclaration de création de l’association dénommée « {association} », régie par la loi du 1er juillet 1901, dont le siège est fixé {siege}. L’association est inscrite au registre des associations de la préfecture de police à compter du {date}."],
+  ["asso_but", "Association : objet", "L’association a pour objet :\n{but}"],
+  ["asso_bureau", "Association : bureau", "Son bureau est composé comme suit :\n{bureau}"],
+  ["asso_changements", "Association : changements à déclarer (3 mois)", "Conformément à l’article 5 de la loi du 1er juillet 1901 susvisée, l’association fait connaître à la préfecture de police, dans les trois mois, tout changement survenu dans son administration ainsi que toute modification apportée à ses statuts, notamment le transfert de son siège et la composition de son bureau."],
+  ["asso_tombola", "Association : tombolas et loteries", "Toute tombola ou loterie organisée par l’association est soumise à l’autorisation préalable du préfet de police, conformément aux articles L. 322-1 à L. 322-6 du code de la sécurité intérieure. La demande précise la date et le lieu du tirage, le prix et le nombre des billets émis, la liste et la valeur des lots ainsi que l’affectation des sommes recueillies. Les lots sont exclusivement des objets mobiliers ; aucun ne peut consister en une somme d’argent."],
+  ["asso_comptes", "Association : fonds et comptes", "Les fonds de l’association sont affectés aux seules actions prévues par ses statuts. L’association tient une comptabilité de ses recettes et de ses dépenses et en communique le bilan à la préfecture de police sur simple demande."],
+  ["asso_dissolution", "Association : rappel de la dissolution judiciaire", "Une activité contraire aux lois, aux bonnes mœurs ou à l’objet déclaré expose l’association à une dissolution prononcée par le tribunal judiciaire, à la requête de tout intéressé ou du ministère public, conformément aux articles 3 et 7 de la loi du 1er juillet 1901 susvisée."],
+  ["notification_asso", "Notification au président de l’association", "Le présent arrêté est notifié au président de l’association."],
+  ["execution_cab", "Exécution (directeur de cabinet)", "Le directeur de cabinet du préfet de police est chargé de l’exécution du présent arrêté."]];
 // Ce qui ferme un arrêté : un article ajouté se place avant.
-const ARR_FIN = ["notification", "notification_agent", "execution", "execution_fermeture", "execution_rh", "execution_deleg", "publicite", "publicite_simple"];
+const ARR_FIN = ["notification", "notification_asso", "execution_cab", "notification_agent", "execution", "execution_fermeture", "execution_rh", "execution_deleg", "publicite", "publicite_simple"];
 const ARR_SERVICES = ["Cabinet du préfet", "Direction de l’ordre public et de la circulation", "Direction des transports et de la protection du public", "Direction des ressources humaines", "Secrétariat général de la zone de défense et de sécurité de Paris"];
-const ARR_CATS = [["ordre", "Ordre public et événements"], ["etab", "Établissements"], ["urgence", "Mesures d’urgence"], ["admin", "Administration et personnel"], ["libre", "Autre"]];
+const ARR_CATS = [["ordre", "Ordre public et événements"], ["etab", "Établissements"], ["urgence", "Mesures d’urgence"], ["admin", "Administration et personnel"], ["asso", "Associations"], ["libre", "Autre"]];
 const ARR_MODELES = [
   { k: "perimetre", cat: "ordre", nom: "Périmètre de protection", desc: "Événement sensible : périmètre (article L. 226-1), palpations et fouilles, armes, artifices et chiens dangereux interdits.", service: "Cabinet du préfet",
     objet: "instituant un périmètre de protection et des mesures de police à l’occasion de {evenement}", visas: ["cgct_circ", "cp", "cpp", "route", "rural", "csi_perimetre", "decret2004", "nomination"],
@@ -10728,6 +10745,9 @@ const ARR_MODELES = [
   { k: "abrogation", cat: "admin", nom: "Abrogation d’un arrêté", desc: "Mettre fin à un arrêté avant son terme ; signé, l’arrêté visé passe « abrogé » dans le guichet.", service: "Cabinet du préfet",
     objet: "portant abrogation de l’arrêté n° {reference}", visas: ["cgct", "decret2004", "arrete_vise", "nomination"],
     consid: ["competence", "abrogation"], articles: ["abrogation", "execution", "publicite"] },
+  { k: "association", cat: "asso", nom: "Création d’une association", desc: "Enregistrer une association loi 1901 d’après ses statuts et le procès-verbal de son assemblée constitutive : objet, bureau, changements à déclarer, tombolas.", service: "Cabinet du préfet",
+    objet: "portant enregistrement de la déclaration de création de l’association « {association} »", visas: ["loi1901", "decret1901", "csi_loteries", "cgct", "decret2004", "nomination", "declaration_asso"],
+    consid: ["asso_loi", "asso_constituee", "asso_dossier", "asso_objet"], articles: ["asso_creation", "asso_but", "asso_bureau", "asso_changements", "asso_tombola", "asso_comptes", "asso_dissolution", "notification_asso", "execution_cab", "publicite_simple"] },
   { k: "libre", cat: "libre", nom: "Arrêté libre", desc: "Une page presque blanche : les visas de base, un article à écrire, l’exécution et la publication.", service: "Cabinet du préfet",
     objet: "portant ", visas: ["cgct", "decret2004", "nomination"], consid: ["competence"], articles: ["", "execution", "publicite"] }];
 // Paramètres : remplissent les textes ; seuls ceux que les textes emploient sont demandés.
@@ -10743,11 +10763,17 @@ const ARR_CHAMPS = [
   ["duree", "Durée de la fermeture", "quinze jours"],
   ["mission", "Mission demandée", "le dépannage et l’enlèvement des véhicules accidentés"],
   ["reference", "Arrêté visé (n° et date)", "2026-00008 du 20 novembre 2026"],
+  ["association", "Nom de l’association", "Amicale des sapeurs-pompiers du centre de secours de Ménilmontant"],
+  ["siege", "Siège, avec « au », « à »…", "au centre de secours de Ménilmontant, Paris 20e"],
+  ["date", "Date (assemblée constitutive…)", "", "date"],
+  ["but", "Objet de l’association (une ligne par point)", "développer la cohésion et l’entraide entre ses membres ;\norganiser des événements festifs et solidaires.", "textarea"],
+  ["bureau", "Bureau (une ligne par membre)", "M. Paul MORENTI, président ;\nM. Gabin MORENTI, trésorier.", "textarea"],
   ["faits", "Faits constatés", "le 15 novembre 2026 vers 2 h, une rixe a éclaté devant l’établissement…", "textarea"],
   ["perimetre", "Périmètre ou voies concernées", "les voies suivantes : avenue du Parc des Princes, rue Claude-Farrère, boulevard d’Auteuil…", "textarea"]];
 // Ce que demande chaque paramètre quand il manque ; « debut » remplit {periode}, {debut} et {jour}.
 const ARR_PARAMS = { evenement: "l’événement", lieu: "le lieu", debut: "le début", fin: "la fin", periode: "le début (et la fin)", jour: "la date de début", perimetre: "le périmètre ou les voies", zone: "le territoire",
-  personne: "la personne concernée", fonction: "la fonction", etablissement: "l’établissement", duree: "la durée", mission: "la mission", reference: "l’arrêté visé", faits: "les faits" };
+  personne: "la personne concernée", fonction: "la fonction", etablissement: "l’établissement", duree: "la durée", mission: "la mission", reference: "l’arrêté visé", faits: "les faits",
+  association: "le nom de l’association", siege: "le siège", date: "la date", but: "l’objet de l’association", bureau: "le bureau" };
 const ARR_CHAMP_DE = { periode: "debut", jour: "debut" };
 const ARR_CALCULES = new Set(["e"]); // accord : « nommé{e} » (Mme, la société… → e)
 const ARR_RECOURS = ["Si vous estimez devoir contester la présente décision, vous pouvez, dans un délai de deux mois à compter de sa notification ou de sa publication, former :",
@@ -10798,6 +10824,9 @@ function arrValeurs(a) {
   const p = a.params || {}, deb = arrQuand(p.debut), fin = arrQuand(p.fin), t = x => String(x || "").trim(), v = {};
   for (const [k] of ARR_CHAMPS) v[k] = t(p[k]);
   v.perimetre = v.perimetre.replace(/\s*\n\s*/g, " ; "); v.faits = v.faits.replace(/\s*\n\s*/g, " ; ").replace(/[.;]\s*$/, "");
+  // Listes (objet, bureau d'une association) : une puce par ligne.
+  for (const k of ["but", "bureau"]) v[k] = v[k].split("\n").map(l => l.trim().replace(/^[-•–]\s*/, "")).filter(Boolean).map(l => "- " + l).join("\n");
+  v.date = p.date && !isNaN(new Date(p.date + "T12:00")) ? longDate(new Date(p.date + "T12:00")) : "";
   return Object.assign(v, { debut: deb, fin, periode: deb && fin ? `du ${deb} au ${fin}` : deb ? `à compter du ${deb}` : "", jour: arrQuand(p.debut, true),
     e: /^(mme|madame|mlle|mademoiselle|la|l’entreprise|l'entreprise)\b/i.test(v.personne) ? "e" : "" });
 }
@@ -10942,7 +10971,7 @@ async function arrPages(a) {
   if (String(a.proposition || "").trim()) { pw.y += 6; pw.p(arrRuns(T(a.proposition).trim(), /^Sur proposition\b/), { align: "justify", after: 9 }); }
   pw.y += 8;
   for (const c of a.considerants || []) if (String(c).trim()) pw.p(arrRuns(T(c).trim(), /^Considérant\b/), { align: "justify", after: 9 });
-  pw.ensure(120); pw.y += 14;
+  pw.ensure(240); pw.y += 14; // « ARRÊTE : » reste avec le début de l'article 1er
   pw.p([["ARRÊTE :", "b"]], { align: "center", size: 26, after: 20, color: pw.navy });
   let n = 0;
   const arts = a.articles || [], dernier = arts.map(x => x.t !== "titre" && !!String(x.texte || "").trim()).lastIndexOf(true);
