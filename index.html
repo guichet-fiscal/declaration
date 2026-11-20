@@ -1073,6 +1073,27 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
 @keyframes sheet-up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){dialog[open]{animation:none}}
 /* Contrats de travail : aperçu des pages A4 */
+.arr-items{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.arr-items li{display:grid;grid-template-columns:92px minmax(0,1fr) auto;gap:8px;align-items:start}
+.arr-etiq{font-size:12.5px;font-weight:650;color:var(--ink-3);padding-top:9px}
+.arr-items li.arr-titre .arr-etiq{color:var(--accent)}
+.arr-items textarea{resize:vertical;font-size:14px;line-height:1.45;min-height:0}
+.arr-liste select{max-width:460px}
+.arr-outils{display:flex;gap:4px;padding-top:2px}
+.arr-outils .icon-btn{width:28px;height:28px;font-size:15px}
+.arr-outils .icon-btn:disabled{opacity:.35;cursor:default}
+@media (max-width:620px){.arr-items li{grid-template-columns:minmax(0,1fr)}.arr-etiq{padding-top:0}}
+.arr-modeles{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.arr-modeles button{appearance:none;width:100%;height:100%;text-align:left;display:grid;align-content:start;gap:4px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:var(--r);padding:12px 14px;cursor:pointer;font:inherit}
+.arr-modeles button:hover,.arr-modeles button:focus-visible{border-color:var(--accent)}
+.arr-modeles strong{font-size:15px}
+.arr-modeles span{font-size:13px;color:var(--ink-2);line-height:1.4}
+.arr-modeles .meta{color:var(--ink-3);font-size:12px}
+.arr-pages{display:grid;gap:14px;justify-items:center;margin-top:6px}
+.arr-pages .ct-page{width:min(100%,780px)}
+.arr-banniere{display:block;margin:4px 0 10px}
+.arr-sig-qui{margin:0 0 6px;font-size:14px;color:var(--ink-2)}
+.arr-motif{display:grid;gap:8px;margin:4px 0}
 .ct-pages{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:4px}
 .ct-page{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 4px rgba(16,26,52,.10)}
 .ct-sig-apercu{min-height:48px;display:flex;align-items:center;padding:8px 12px;background:#fff;border:1px dashed var(--rule);border-radius:8px}
@@ -1701,6 +1722,7 @@ table.es-payes{min-width:0;width:100%}
     <div data-rh-vue="entretiens" hidden><div id="rh-entretiens"></div></div>
     <div data-rh-vue="sanctions" hidden><div id="rh-sanctions"></div></div>
     <div data-rh-vue="notes" hidden><div id="rh-notes"></div></div>
+    <div data-rh-vue="arretes" hidden><div id="rh-arretes"></div></div>
   </section>
 
   <!-- SERVICES PUBLICS : PAYES DE LA PRÉFECTURE -->
@@ -4396,6 +4418,7 @@ function subscribe() {
   col("sanctions", s => { S.sanctions = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("demandesAgents", s => { S.dags = s.docs.map(d => Object.assign({ id: d.id }, d.data())); majBadges(); });
   col("entretiens", s => { S.entretiens = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
+  col("arretes", s => { S.arretes = s.docs.map(d => Object.assign({ id: d.id }, d.data())); majBadges(); });
   for (const c of SECU_COLS) col(c, s => { S.secu = S.secu || {}; S.secu[c] = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
   col("pointages", s => { S.pointages = s.docs.map(d => Object.assign({ id: d.id }, d.data())); setTimeout(ptAlertes, 0); });
   col("sons", s => { S.sons = s.docs.map(d => Object.assign({ id: d.id }, d.data())); });
@@ -4974,6 +4997,8 @@ function todoItems() {
     const l = rappelCandidats(ep.k).filter(y => !y.deja);
     add(l.length, `Rappel avant la date limite · ${periodPlain(ep.k).toLowerCase()}`, `${l.length} entreprise${plural(l.length)} sans déclaration, à déposer avant le ${jourLimite(ep.lim)} à 23 h 59`, openRappelEcheance);
   }
+  const arS = (S.arretes || []).filter(a => a.statut === "a_signer" && arrEstPrefet(a));
+  add(arS.length, `Arrêté${plural(arS.length)} préfectora${arS.length > 1 ? "ux" : "l"} à signer`, arS.slice(0, 3).map(a => `n° ${arrNo(a)} ${arrCourt(a, 60)}`).join(" ; "), () => openArrete(arS[0].id), "bad");
   const sgr = sgRecus();
   add(sgr.length, `Signalement${plural(sgr.length)} reçu${plural(sgr.length)} en ligne`, sgr.slice(0, 3).map(x => "visant " + x.visee).join(", "), openSignalements);
   const rfa = (S.rescrits || []).filter(r => r.statut === "attente");
@@ -9517,10 +9542,10 @@ function renderEspace() {
 }
 
 /* Encadrement : vues de l'onglet Personnel */
-const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["service", "Tableau de service"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["entretiens", "Entretiens"], ["notes", "Notes de service"], ["annuaire", "Annuaire"], ["organigramme", "Organigramme"], ["dispos", "Disponibilités"]];
+const RH_ESPACES = [["effectif", "Effectif"], ["bord", "Tableau de bord"], ["messages", "Messagerie"], ["demandes", "Demandes"], ["agenda", "Agenda"], ["service", "Tableau de service"], ["absences", "Absences"], ["sanctions", "Sanctions"], ["entretiens", "Entretiens"], ["notes", "Notes de service"], ["annuaire", "Annuaire"], ["organigramme", "Organigramme"], ["dispos", "Disponibilités"], ["arretes", "Arrêtés"]];
 function majBadges() {
   const tb = $("#tab-btn-personnel"), te = $("#tab-btn-espace");
-  const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length : 0;
+  const n = ENCADRANTS.includes(S.role) ? msgsNonLusEquipe().length + absEnAttente().length + dagsEnAttente().length + (S.arretes || []).filter(a => a.statut === "a_signer" && arrEstPrefet(a)).length : 0;
   if (tb) { tb.dataset.n = n ? String(n) : ""; tb.setAttribute("aria-label", n ? `Personnel, ${n} à traiter` : "Personnel"); }
   const m = S.espace ? (S.espace.messages || []).filter(x => x.de === "equipe" && !x.luAgent).length : 0;
   if (te) { te.dataset.n = m ? String(m) : ""; te.setAttribute("aria-label", m ? `Mon espace, ${m} message${plural(m)} non lu${plural(m)}` : "Mon espace"); }
@@ -9529,7 +9554,8 @@ function renderEncadrement() {
   if (S.tab !== "personnel") return;
   let v = S.rhEspace || "effectif"; if (!RH_ESPACES.some(x => x[0] === v)) v = "effectif";
   const nMsg = msgsNonLusEquipe().length, nAbs = absEnAttente().length, nDag = dagsEnAttente().length;
-  const cnt = { messages: nMsg, absences: nAbs, demandes: nDag };
+  const nArr = (S.arretes || []).filter(a => a.statut === "a_signer" && arrEstPrefet(a)).length;
+  const cnt = { messages: nMsg, absences: nAbs, demandes: nDag, arretes: nArr };
   fill($("#rh-espaces"), h("div", { class: "seg", role: "group", "aria-label": "Rubriques du personnel" }, RH_ESPACES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === v), onclick: () => { S.rhEspace = k; renderPersonnel(); }, text: l }, cnt[k] ? h("span", { class: "count", text: String(cnt[k]) }) : null))));
   $$("#tab-personnel [data-rh-vue]").forEach(el => { el.hidden = el.dataset.rhVue !== v; });
   if (v === "messages") renderMessagerie();
@@ -9543,6 +9569,7 @@ function renderEncadrement() {
   else if (v === "annuaire") fill($("#rh-annuaire"), annuaireVue(annuaireListe(), { recherche: true }));
   else if (v === "service") renderTableauService();
   else if (v === "dispos") renderDispos();
+  else if (v === "arretes") renderArretes();
   else if (v === "organigramme") fill($("#rh-organigramme"), organigrammeVue(annuaireListe(), { ouvrir: fid => openAgent(fid) }));
 }
 // Tableau de service : la semaine de chaque fonctionnaire en un coup d'œil (absences, rendez-vous où il
@@ -10281,6 +10308,8 @@ function renderBordRH() {
       actifs.filter(f => arriveeManque(f).length).slice(0, 4).map(f => `${f.nom} (${arriveeManque(f).map(x => x.k === "discord" ? "Discord" : x.k === "carte" ? "carte" : x.k).join(", ")})`).join(", "), () => { S.rhEspace = "effectif"; S.rhVue = "incomplets"; renderPersonnel(); }] : null,
     sans.length ? [`${sans.length} agent${plural(sans.length)} sans heure de service depuis deux semaines`, sans.slice(0, 6).map(f => f.nom).join(", ") + (sans.length > 6 ? "…" : ""), () => { S.rhEspace = "effectif"; renderPersonnel(); }] : null,
     permCeSoir(actifs),
+    arretesAttente().length ? [`${arretesAttente().length} arrêté${plural(arretesAttente().length)} en attente de la signature du préfet`, arretesAttente().slice(0, 3).map(a => `n° ${arrNo(a)} (${arrNom((a.prefet || {}).nom) || "préfet"})`).join(", "), () => { S.rhEspace = "arretes"; S.arrVue = "a_signer"; renderPersonnel(); }] : null,
+    (S.arretes || []).some(a => a.statut === "brouillon" && a.renvoi) ? [`Arrêté${plural((S.arretes || []).filter(a => a.statut === "brouillon" && a.renvoi).length)} renvoyé${plural((S.arretes || []).filter(a => a.statut === "brouillon" && a.renvoi).length)} au rédacteur`, (S.arretes || []).filter(a => a.statut === "brouillon" && a.renvoi).slice(0, 3).map(a => `n° ${arrNo(a)} : ${a.renvoi.motif}`).join(" ; "), () => { S.rhEspace = "arretes"; S.arrVue = "brouillon"; renderPersonnel(); }] : null,
     absEnCours.length ? [`${absEnCours.length} absent${plural(absEnCours.length)} aujourd’hui`, absEnCours.map(a => a.nom).join(", "), () => { S.rhEspace = "absences"; renderPersonnel(); }] : null,
     dags.length ? [`${dags.length} demande${plural(dags.length)} en attente`, dags.slice(0, 4).map(d => `${d.nom} (${(DAG_TYPES[d.type] || DAG_TYPES.autre).nom.toLowerCase()})`).join(", "), () => { S.rhEspace = "demandes"; renderPersonnel(); }] : null,
     objectifs.filter(o => o.echeance && o.echeance < auj).length ? [`${objectifs.filter(o => o.echeance && o.echeance < auj).length} objectif${plural(objectifs.filter(o => o.echeance && o.echeance < auj).length)} en retard`, objectifs.filter(o => o.echeance && o.echeance < auj).slice(0, 4).map(o => `${o.nom} : ${o.texte}`).join(" ; "), () => { S.rhEspace = "entretiens"; renderPersonnel(); }] : null
@@ -10532,6 +10561,613 @@ function noteDoc(n) {
     footer: "Préfecture de police · à lire aussi dans votre espace du guichet.",
     discord: { channel: "agents", mentions: [], text: `**Note de service** · ${n.titre || ""}` } };
 }
+
+/* ---------- Arrêtés préfectoraux (supabase/v53_arretes.sql pour les ressources humaines) ---------- */
+// Rédigés par la Direction ou les RH à partir d'un modèle (périmètre de protection, interdiction de
+// manifester…) : visas, considérants et articles se choisissent dans une bibliothèque puis se modifient ;
+// les paramètres remplissent les textes ({evenement}, {lieu}, {periode}, {debut}, {fin}, {perimetre}, {zone}).
+// Le rédacteur signe et transmet ; le préfet choisi signe depuis sa propre session (signature importée sur
+// sa fiche, sinon son nom écrit à la main). Signé, l'arrêté se télécharge en PDF et se publie sur Discord.
+// Collection « arretes » : { annee, numero, modele, objet, autorite, params: { evenement, lieu, debut, fin,
+// perimetre, zone }, visas: [texte], proposition, considerants: [texte], articles: [{ t: "art"|"titre",
+// texte }], ville, redacteur: { fid, nom, qualite, discordId, signeLe }, prefet: { fid, nom, qualite,
+// discordId, signeLe }, statut: "brouillon"|"a_signer"|"signe"|"abroge", renvoi: { motif, par, le },
+// abrogation: { motif, par, le }, publieLe, publiePar, createdAt, byNom, modifieLe }.
+// Les n° 2026-00001 à 2026-00007 ont été pris avant le guichet : la numérotation de 2026 reprend à 00008.
+const ARR_DEPART = { 2026: 8 };
+const ARR_STAT = { brouillon: ["Brouillon", "muted"], a_signer: ["À signer par le préfet", "warn"], signe: ["Signé", "ok"], abroge: ["Abrogé", "bad"] };
+const ARR_VISAS = [
+  ["cgct", "Code général des collectivités territoriales", "Vu le code général des collectivités territoriales, notamment ses articles L. 2512-13, L. 2512-14 et L. 2215-1 ;"],
+  ["csi", "Code de la sécurité intérieure", "Vu le code de la sécurité intérieure, notamment ses articles L. 122-1, L. 211-1, L. 211-3, L. 211-4 et L. 226-1 ;"],
+  ["cpp", "Code de procédure pénale (contrôles d’identité)", "Vu le code de procédure pénale, notamment son article 78-2 ;"],
+  ["cp", "Code pénal (armes, menaces)", "Vu le code pénal, notamment ses articles 132-75 et 222-17 ;"],
+  ["defense", "Code de la défense", "Vu le code de la défense ;"],
+  ["aviation", "Code de l’aviation civile", "Vu le code de l’aviation civile ;"],
+  ["transports", "Code des transports (survol)", "Vu le code des transports, notamment son article L. 6211-4 ;"],
+  ["environnement", "Code de l’environnement (artifices)", "Vu le code de l’environnement, notamment ses articles L. 557-1 et suivants ;"],
+  ["energie", "Code de l’énergie (carburants)", "Vu le code de l’énergie ;"],
+  ["loi2010", "Loi sur la dissimulation du visage", "Vu la loi n° 2010-1192 du 11 octobre 2010 interdisant la dissimulation du visage dans l’espace public ;"],
+  ["decret2004", "Décret sur les pouvoirs des préfets", "Vu le décret n° 2004-374 du 29 avril 2004 modifié relatif aux pouvoirs des préfets, à l’organisation et à l’action des services de l’État dans les régions et départements ;"],
+  ["communique", "Communiqué annonçant l’événement", "Vu le communiqué annonçant {evenement} ;"]];
+const ARR_CONSID = [
+  ["competence", "Compétence du préfet de police", "Considérant qu’en application des articles L. 122-1 du code de la sécurité intérieure et L. 2512-13 du code général des collectivités territoriales, le préfet de police a la charge de l’ordre public à Paris ;"],
+  ["evenement", "L’événement : où et quand", "Considérant que {evenement} se tiendra {lieu} {periode} ;"],
+  ["affluence", "Affluence et risques", "Considérant que cet événement est susceptible de rassembler un public nombreux et qu’il appartient à l’autorité de police de prévenir tout trouble à l’ordre public et toute atteinte à la sécurité des personnes et des biens ;"],
+  ["terrorisme", "Menace terroriste (périmètre de protection)", "Considérant le niveau élevé de la menace terroriste et que l’événement, par son ampleur et sa nature, y est particulièrement exposé, ce qui justifie l’instauration d’un périmètre de protection au sens de l’article L. 226-1 du code de la sécurité intérieure ;"],
+  ["debordements", "Appels à manifester, débordements récents", "Considérant que des appels à des rassemblements non déclarés ont été relayés et que des violences et des dégradations ont été commises lors de rassemblements récents de même nature ;"],
+  ["nondeclare", "Manifestation non déclarée", "Considérant qu’aucune déclaration n’a été déposée dans les conditions prévues à l’article L. 211-1 du code de la sécurité intérieure ;"],
+  ["mobilisation", "Forces de l’ordre mobilisées", "Considérant que les forces de l’ordre sont fortement mobilisées et qu’il convient de prendre les mesures permettant de prévenir efficacement les troubles à l’ordre public ;"],
+  ["circulation", "Sécurité des usagers (circulation)", "Considérant qu’il convient, pour garantir la sécurité des participants et des usagers de la voie publique, d’adapter les conditions de circulation et de stationnement aux abords des lieux concernés ;"],
+  ["drones", "Risque des drones", "Considérant que l’usage d’aéronefs circulant sans personne à bord au-dessus ou à proximité de rassemblements présente un risque pour la sécurité des personnes et peut servir à des fins malveillantes ;"],
+  ["produits", "Artifices, carburants, engins incendiaires", "Considérant que des artifices, des engins incendiaires et des carburants achetés au détail ont été utilisés lors de troubles récents, notamment contre les forces de l’ordre, et qu’il y a lieu d’en restreindre la vente, le transport et l’usage ;"],
+  ["representants", "Protection des représentants de l’État", "Considérant que des menaces ont été proférées à l’encontre de représentants de l’État et qu’il convient d’assurer leur protection ;"],
+  ["proportion", "Mesures proportionnées", "Considérant que les mesures prévues par le présent arrêté, limitées dans le temps et dans l’espace, sont adaptées, nécessaires et proportionnées ;"]];
+const ARR_ARTICLES = [
+  ["perimetre", "Périmètre de protection et durée", "Un périmètre de protection est institué {periode}, à l’occasion de {evenement}, dans la zone délimitée par : {perimetre}."],
+  ["acces", "Accès au périmètre : palpations, fouilles", "L’accès au périmètre et la circulation à l’intérieur de celui-ci sont soumis à des points de contrôle. Les personnes qui refusent de se soumettre aux palpations de sécurité, à l’inspection visuelle ou à la fouille de leurs bagages se voient interdire l’accès au périmètre ou sont reconduites à l’extérieur de celui-ci."],
+  ["vehicules", "Visite des véhicules", "L’accès des véhicules au périmètre est subordonné à leur visite, avec le consentement de leur conducteur. À défaut, l’accès leur est refusé."],
+  ["circulation", "Circulation et stationnement, avec exemptions", "La circulation et le stationnement de tout véhicule sont interdits {periode} dans les voies suivantes : {perimetre}.\nCes interdictions ne s’appliquent pas :\n- aux véhicules de police, de gendarmerie, de secours et d’incendie ;\n- aux véhicules d’intérêt général prioritaires ;\n- aux véhicules des riverains justifiant de leur domicile dans la zone, pour y accéder ou en sortir."],
+  ["dispositifs", "Dispositifs physiques : barrières, plots", "Des dispositifs physiques (barrières, plots, véhicules) peuvent être installés pour matérialiser la zone et en filtrer les accès. Il est interdit de les déplacer, de les franchir sans autorisation ou de les dégrader."],
+  ["controles", "Contrôles d’identité", "Dans la zone et pendant la période fixées à l’article 1er, les officiers de police judiciaire et, sous leur responsabilité, les agents de police judiciaire peuvent procéder aux contrôles d’identité prévus à l’article 78-2 du code de procédure pénale."],
+  ["armes", "Port et transport d’armes", "Le port et le transport, sans motif légitime, d’armes et d’objets pouvant constituer une arme au sens de l’article 132-75 du code pénal, ainsi que de bouteilles et de contenants en verre, sont interdits dans la zone et pendant la période fixées à l’article 1er."],
+  ["visage", "Dissimulation du visage", "Il est interdit de dissimuler volontairement son visage afin de ne pas être identifié dans la zone et pendant la période fixées à l’article 1er, dans les conditions prévues par la loi n° 2010-1192 du 11 octobre 2010."],
+  ["rassemblements", "Rassemblements et manifestations", "Tout rassemblement, toute manifestation et tout cortège sont interdits {periode} dans le périmètre délimité par : {perimetre}."],
+  ["drones", "Survol par drones", "Le survol par tout aéronef circulant sans personne à bord (drone) est interdit {periode} au-dessus de la zone délimitée par : {perimetre}. Cette interdiction ne s’applique pas aux aéronefs des services de l’État engagés dans une mission de sécurité ou de secours."],
+  ["artifices", "Artifices de divertissement", "La vente, la cession, le port, le transport et l’utilisation d’artifices de divertissement et d’articles pyrotechniques sont interdits {periode} sur le territoire suivant : {zone}."],
+  ["carburants", "Carburants au détail", "La vente au détail, l’achat et le transport de carburants dans tout récipient transportable sont interdits {periode} sur le territoire suivant : {zone}, sauf nécessité dûment justifiée par le client et vérifiée par le distributeur."],
+  ["incendiaires", "Produits pour engins incendiaires", "La vente, l’achat, le port et le transport de produits inflammables ou chimiques pouvant servir à confectionner des engins incendiaires sont interdits {periode} sur le territoire suivant : {zone}."],
+  ["representants", "Protection des représentants de l’État", "Afin d’assurer la protection des représentants de l’État et des autorités présentes, l’accès aux abords immédiats de l’événement, {lieu}, est réservé {periode} aux personnes munies d’une accréditation ou d’une convocation."],
+  ["derogations", "Dérogations", "Des dérogations aux dispositions du présent arrêté peuvent être accordées par le préfet de police, au cas par cas, sur demande motivée."],
+  ["infractions", "Infractions", "Les infractions au présent arrêté sont constatées par procès-verbal et poursuivies conformément aux lois et règlements en vigueur."],
+  ["execution", "Exécution", "Le secrétaire général de la zone de défense et de sécurité de Paris, le directeur de cabinet et les directeurs des services de la préfecture de police sont chargés, chacun en ce qui le concerne, de l’exécution du présent arrêté."],
+  ["publicite", "Publication et voies de recours", "Le présent arrêté est publié au recueil des actes administratifs de la préfecture de police et affiché aux abords des lieux concernés. Il peut faire l’objet, dans un délai de deux mois à compter de sa publication, d’un recours gracieux auprès du préfet de police ou d’un recours contentieux devant le tribunal administratif de Paris."]];
+const ARR_MODELES = [
+  { k: "perimetre", nom: "Périmètre de protection", desc: "Événement sensible : périmètre (article L. 226-1), accès filtrés, palpations et fouilles, armes interdites.",
+    objet: "portant création d’un périmètre de protection à l’occasion de {evenement}", visas: ["cgct", "csi", "cpp", "cp", "decret2004"],
+    consid: ["competence", "evenement", "affluence", "terrorisme", "proportion"], articles: ["perimetre", "acces", "vehicules", "dispositifs", "controles", "armes", "derogations", "infractions", "execution", "publicite"] },
+  { k: "manifestation", nom: "Interdiction de manifester", desc: "Rassemblements et cortèges interdits sur un périmètre et une période ; visage dissimulé et armes interdits.",
+    objet: "portant interdiction de rassemblements et de manifestations {periode}", visas: ["cgct", "csi", "cp", "loi2010", "decret2004"],
+    consid: ["competence", "debordements", "nondeclare", "mobilisation", "proportion"], articles: ["rassemblements", "visage", "armes", "dispositifs", "infractions", "execution", "publicite"] },
+  { k: "circulation", nom: "Circulation et stationnement", desc: "Voies fermées à la circulation et au stationnement, avec les exemptions habituelles (secours, riverains).",
+    objet: "portant restrictions de la circulation et du stationnement à l’occasion de {evenement}", visas: ["cgct", "decret2004"],
+    consid: ["competence", "evenement", "circulation", "proportion"], articles: ["circulation", "dispositifs", "derogations", "infractions", "execution", "publicite"] },
+  { k: "drones", nom: "Survol par drones", desc: "Survol interdit au-dessus d’une zone pendant un événement, sauf les aéronefs de l’État.",
+    objet: "portant interdiction du survol par drones à l’occasion de {evenement}", visas: ["cgct", "csi", "aviation", "transports", "defense", "decret2004"],
+    consid: ["competence", "evenement", "drones", "proportion"], articles: ["drones", "derogations", "infractions", "execution", "publicite"] },
+  { k: "produits", nom: "Artifices, carburants, engins incendiaires", desc: "Vente, transport et usage d’artifices, de carburants au détail et de produits incendiaires interdits.",
+    objet: "portant interdiction de la vente, du transport et de l’usage d’artifices, de carburants au détail et de produits incendiaires {periode}", visas: ["cgct", "csi", "environnement", "energie", "cp", "decret2004"],
+    consid: ["competence", "produits", "proportion"], articles: ["artifices", "carburants", "incendiaires", "infractions", "execution", "publicite"] },
+  { k: "libre", nom: "Arrêté libre", desc: "Une page presque blanche : les visas de base, un article à écrire, l’exécution et les voies de recours.",
+    objet: "portant ", visas: ["cgct", "decret2004"], consid: ["competence"], articles: ["", "execution", "publicite"] }];
+const ARR_PARAMS = { evenement: "l’événement", lieu: "le lieu", debut: "le début", fin: "la fin", periode: "le début (et la fin)", jour: "le jour", perimetre: "le périmètre ou les voies", zone: "le territoire" };
+const ARR_PROPOSITIONS = ["Sur proposition du secrétaire général de la zone de défense et de sécurité de Paris ;", "Sur proposition du directeur de cabinet ;"];
+const arretesWriter = () => S.connected && !S.readOnly && (S.admin || S.role === "rh");
+const arrOf = id => (S.arretes || []).find(a => a.id === id) || null;
+const arrNo = a => `${a.annee || new Date().getFullYear()}-${String(Number(a.numero) || 0).padStart(5, "0")}`;
+const arrModele = k => ARR_MODELES.find(m => m.k === k) || ARR_MODELES[ARR_MODELES.length - 1];
+const arrLib = (lib, k) => (lib.find(x => x[0] === k) || [])[2] || "";
+const arrNom = nom => String(nom || "").replace(/^[^|]*\|\s*/, "").trim();
+const arrSigne = a => a.statut === "signe" || a.statut === "abroge";
+const arrEstPrefet = a => !!(a && a.prefet && ((S.monFid && a.prefet.fid === S.monFid) || (S.discordId && a.prefet.discordId === S.discordId)));
+function arrProchain(annee, sauf) {
+  const n = (S.arretes || []).filter(a => a.annee === annee && a.id !== sauf).reduce((m, a) => Math.max(m, Number(a.numero) || 0), (ARR_DEPART[annee] || 1) - 1);
+  return n + 1;
+}
+// « Le préfet de police », « La sous-préfète », « Le secrétaire général de… » : d'après le titre devant le nom
+// du compte (« Préfet de police | … ») quand il précise le grade de la fiche, sinon d'après le grade.
+function arrQualite(fid, nom) {
+  const f = foncOf(fid) || {}, ag = (S.agents || []).find(x => x.discord_id && x.discord_id === f.discordId);
+  const pre = [ag && ag.nom, nom].map(x => /\|/.test(String(x || "")) ? String(x).split("|")[0].trim() : "").find(Boolean) || "";
+  const gr = String(f.grade || "").trim();
+  let q = pre && (!gr || norm(pre).startsWith(norm(gr))) ? pre : gr || pre;
+  if (!q) return "";
+  if (norm(q) === "prefet") q = "Préfet de police"; // le préfet de la Préfecture de police
+  const mot = q.split(/[\s]/)[0], fem = /(ète|rice|ière|euse|esse|ée)$/i.test(mot), voy = /^[aeiouyéèêàâîôûh]/i.test(q);
+  return (voy ? "L’" : fem ? "La " : "Le ") + q.charAt(0).toLowerCase() + q.slice(1);
+}
+function arrPrefets() {
+  const l = foncs().filter(f => f.actif !== false && /^pr[ée]fet/i.test(String(f.grade || "").trim()));
+  const rang = f => /police/i.test(arrQualite(f.id, f.nom)) ? 0 : 1; // le préfet de police d'abord
+  return l.sort((x, y) => rang(x) - rang(y) || tauxBareme(y.grade) - tauxBareme(x.grade) || String(x.nom || "").localeCompare(String(y.nom || ""), "fr"));
+}
+function arrMoi() {
+  const f = S.monFid ? foncOf(S.monFid) : null;
+  return { fid: S.monFid || null, nom: arrNom((f && f.nom) || S.agentName || ""), qualite: arrQualite(S.monFid, S.agentName), discordId: S.discordId || (f && f.discordId) || null };
+}
+// Date des paramètres : « samedi 21 novembre 2026 à 18 h 00 ».
+function arrQuand(v, sansHeure) {
+  if (!v) return "";
+  const d = new Date(v); if (isNaN(d)) return "";
+  const j = `${d.toLocaleDateString("fr-FR", { weekday: "long" })} ${d.getDate() === 1 ? "1er" : d.getDate()} ${d.toLocaleDateString("fr-FR", { month: "long" })} ${d.getFullYear()}`;
+  return sansHeure ? j : `${j} à ${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function arrValeurs(a) {
+  const p = a.params || {}, deb = arrQuand(p.debut), fin = arrQuand(p.fin), t = x => String(x || "").trim();
+  return { evenement: t(p.evenement), lieu: t(p.lieu), perimetre: t(p.perimetre).replace(/\s*\n\s*/g, " ; "), zone: t(p.zone), debut: deb, fin,
+    periode: deb && fin ? `du ${deb} au ${fin}` : deb ? `à compter du ${deb}` : "", jour: arrQuand(p.debut, true) };
+}
+// Remplace les paramètres ; « de » ou « à » devant un paramètre qui commence par « le » ou « les » se
+// contractent (« à l’occasion du match », « aux abords »).
+const ARR_CONTR = { "de le": "du", "de les": "des", "à le": "au", "à les": "aux" };
+const arrTexte = (t, vals) => String(t || "")
+  .replace(/(^|[\s(])(de|à|De|À)\s+\{(\w+)\}/g, (m, av, prep, k) => {
+    const v = (vals[k] || "").trim(), x = v.match(/^(le|les)\s+([\s\S]*)$/i);
+    if (!x) return `${av}${prep} {${k}}`;
+    const c = ARR_CONTR[`${prep.toLowerCase()} ${x[1].toLowerCase()}`];
+    return `${av}${prep === prep.toLowerCase() ? c : c.charAt(0).toUpperCase() + c.slice(1)} ${x[2]}`;
+  })
+  .replace(/\{(\w+)\}/g, (m, k) => (vals[k] || "").trim() || "………………");
+const arrTextes = a => [a.objet, a.proposition, ...(a.visas || []), ...(a.considerants || []), ...(a.articles || []).map(x => x.texte)];
+function arrManque(a) {
+  const vals = arrValeurs(a), set = new Set();
+  for (const t of arrTextes(a)) for (const m of String(t || "").matchAll(/\{(\w+)\}/g)) if (!(vals[m[1]] || "").trim()) set.add(m[1]);
+  return [...set].map(k => ARR_PARAMS[k] ? ARR_PARAMS[k] : `{${k}} (inconnu)`);
+}
+const arrObjet = a => arrTexte(a.objet, arrValeurs(a)).replace(/\s+/g, " ").trim();
+const arrCourt = (a, n) => { const t = arrObjet(a); return t.length > (n || 90) ? t.slice(0, (n || 90) - 1) + "…" : t; };
+function arrDepuisModele(k) {
+  const m = arrModele(k);
+  return { modele: m.k, objet: m.objet, visas: m.visas.map(x => arrLib(ARR_VISAS, x)), considerants: m.consid.map(x => arrLib(ARR_CONSID, x)),
+    articles: m.articles.map(x => ({ t: "art", texte: x ? arrLib(ARR_ARTICLES, x) : "" })) };
+}
+
+/* Dessin de l'arrêté : pages A4 à 150 dpi, dans le cadre bleu et rouge, logos du serveur sur chaque page */
+const ARR_SERIF = '"Source Serif 4", Georgia, "Times New Roman", serif';
+async function arrPolice() {
+  if (!document.fonts) return;
+  if (!document.querySelector("link[data-arr-police]")) {
+    const l = h("link", { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,700;1,400;1,700&display=swap", "data-arr-police": "1" });
+    document.head.append(l);
+    await new Promise(ok => { l.onload = ok; l.onerror = ok; setTimeout(ok, 3000); });
+  }
+  try { await Promise.race([Promise.all(['400 22px "Source Serif 4"', '700 22px "Source Serif 4"', 'italic 400 22px "Source Serif 4"', 'italic 700 22px "Source Serif 4"'].map(x => document.fonts.load(x))), new Promise(ok => setTimeout(ok, 3000))]); } catch (x) { /* police de secours */ }
+}
+class ArrWriter {
+  constructor(o) { Object.assign(this, { W: 1240, H: 1754, L: 150, R: 150, B: 172, pages: [], ink: "#111827", gris: "#5b6472", navy: "#14275a" }, o); this.newPage(); }
+  get inner() { return this.W - this.L - this.R; }
+  newPage() {
+    const c = document.createElement("canvas"); c.width = this.W; c.height = this.H;
+    const g = c.getContext("2d"); g.fillStyle = "#ffffff"; g.fillRect(0, 0, this.W, this.H);
+    if (this.cadre) g.drawImage(this.cadre, 0, 0, this.W, this.H);
+    const premiere = !this.pages.length;
+    this.c = c; this.g = g; this.pages.push(c);
+    const rf = this.logoRF, pp = this.logoPP, lwRF = premiere ? 250 : 150, tPP = premiere ? 150 : 92, top = premiere ? 72 : 62;
+    if (rf) g.drawImage(rf, 122, top, lwRF, lwRF * rf.naturalHeight / rf.naturalWidth);
+    if (pp) g.drawImage(pp, this.W - 122 - tPP, top + (premiere ? 4 : 0), tPP, tPP);
+    g.textAlign = "center"; g.textBaseline = "alphabetic";
+    if (premiere) {
+      const yT = top + (rf ? lwRF * rf.naturalHeight / rf.naturalWidth : 120) + 34;
+      g.fillStyle = this.navy; g.font = `700 21px ${ARR_SERIF}`; if ("letterSpacing" in g) g.letterSpacing = "1.5px";
+      g.fillText("PRÉFECTURE DE POLICE", 122 + lwRF / 2, yT); if ("letterSpacing" in g) g.letterSpacing = "0px";
+      this.y = yT + 46;
+    } else {
+      g.fillStyle = this.gris; g.font = `italic 400 18px ${ARR_SERIF}`; g.fillText(`Arrêté n° ${this.no}`, this.W / 2, top + 52);
+      this.y = top + 140;
+    }
+    g.textAlign = "left";
+  }
+  // Style d'un morceau : "" (romain), "b" (gras), "i" (italique), "bi".
+  font(st, size) { const b = st === true || st === "b" || st === "bi", i = st === "i" || st === "bi"; return `${i ? "italic " : ""}${b ? 700 : 400} ${size}px ${ARR_SERIF}`; }
+  toks(runs, size) {
+    const out = [];
+    for (const [t, st] of runs) for (const part of String(t == null ? "" : t).split(/(\n|[ \t]+)/)) {
+      if (!part) continue;
+      if (part === "\n") { out.push({ br: true }); continue; }
+      if (/^[ \t]+$/.test(part)) { if (out.length && !out[out.length - 1].br) out[out.length - 1].sp = true; continue; }
+      this.g.font = this.font(st, size); out.push({ t: part, st: st || "", w: this.g.measureText(part).width, s: this.g.measureText(" ").width, sp: false });
+    }
+    return out;
+  }
+  lignes(runs, size, maxW) {
+    const lines = []; let cur = [], w = 0;
+    for (const tk of this.toks(runs, size)) {
+      if (tk.br) { cur.fin = true; lines.push(cur); cur = []; w = 0; continue; }
+      const prev = cur[cur.length - 1], add = (prev && prev.sp ? prev.s : 0) + tk.w;
+      if (cur.length && w + add > maxW) { lines.push(cur); cur = [tk]; w = tk.w; } else { cur.push(tk); w += add; }
+    }
+    cur.fin = true; lines.push(cur);
+    return lines;
+  }
+  largeur(line) { return line.reduce((t, tk, i) => t + tk.w + (i < line.length - 1 && tk.sp ? tk.s : 0), 0); }
+  ensure(hh) { if (this.y + hh > this.H - this.B) this.newPage(); }
+  p(runs, o) {
+    o = o || {}; if (typeof runs === "string") runs = [[runs]];
+    const size = o.size || 22, lh = Math.round(size * (o.lh || 1.42)), x0 = (o.x != null ? o.x : this.L) + (o.indent || 0), w = (o.w || this.inner) - (o.indent || 0);
+    const lines = this.lignes(runs, size, w);
+    if (o.garder) this.ensure(lines.length * lh);
+    lines.forEach((line, i) => {
+      if (!o.garder) this.ensure(lh);
+      const g = this.g;
+      if (o.puce && i === 0) { g.fillStyle = this.ink; g.beginPath(); g.arc(x0 - 24, this.y + size * 0.62, 4, 0, Math.PI * 2); g.fill(); }
+      const lw = this.largeur(line), gaps = line.filter((tk, j) => j < line.length - 1 && tk.sp).length;
+      const extra = o.align === "justify" && !line.fin && gaps ? Math.min((w - lw) / gaps, size * 0.9) : 0;
+      let x = o.align === "center" ? x0 + (w - lw) / 2 : o.align === "right" ? x0 + w - lw : x0;
+      g.fillStyle = o.color || this.ink; g.textBaseline = "alphabetic";
+      line.forEach((tk, j) => { g.font = this.font(tk.st, size); g.fillText(tk.t, x, this.y + size); x += tk.w + (j < line.length - 1 && tk.sp ? tk.s + extra : 0); });
+      this.y += lh;
+    });
+    this.y += o.after == null ? 12 : o.after;
+  }
+  // Pied de page (référence, page) et filigrane « PROJET » ou « ABROGÉ ».
+  finir(filigrane) {
+    const n = this.pages.length;
+    this.pages.forEach((c, i) => {
+      const g = c.getContext("2d");
+      if (filigrane) { g.save(); g.translate(this.W / 2, this.H / 2); g.rotate(-Math.PI / 5); g.globalAlpha = 0.07; g.fillStyle = "#c8102e"; g.font = `700 ${filigrane.length > 6 ? 200 : 230}px ${ARR_SERIF}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(filigrane, 0, 0); g.restore(); }
+      g.fillStyle = this.gris; g.font = `400 17px ${ARR_SERIF}`; g.textAlign = "center"; g.fillText(`Arrêté n° ${this.no} · page ${i + 1}/${n}`, this.W / 2, this.H - 96); g.textAlign = "left";
+    });
+    return this.pages;
+  }
+}
+// « Vu » et « Considérant » en gras en tête de leur paragraphe.
+const arrRuns = (t, re) => { const m = re && String(t).match(re); return m ? [[m[0], "b"], [String(t).slice(m[0].length)]] : [[t]]; };
+async function arrPages(a) {
+  const red = a.redacteur || {}, pr = a.prefet || {}, img = u => u ? ctrImage(u) : Promise.resolve(null);
+  const seul = !red.fid || !pr.fid ? !red.nom : red.fid === pr.fid;
+  const [cadre, logoRF, logoPP, sigRed, sigPr, manuscrite] = await Promise.all([ctrImage("assets/contrat-cadre.png"), ctrImage("assets/contrat-logo.png"), ctrImage("assets/logo-prefecture.png"),
+    red.signeLe && red.fid && !seul ? signatureMainUrl(red.fid).then(img) : Promise.resolve(null), pr.signeLe && pr.fid ? signatureMainUrl(pr.fid).then(img) : Promise.resolve(null),
+    red.signeLe || pr.signeLe ? ctrPoliceSignature().catch(() => false) : Promise.resolve(false), arrPolice()]);
+  const no = arrNo(a), vals = arrValeurs(a), T = t => arrTexte(t, vals);
+  const pw = new ArrWriter({ no, cadre, logoRF, logoPP });
+  pw.p([[`ARRÊTÉ N° ${no}`, "b"]], { align: "center", size: 36, after: 8, color: pw.navy });
+  if (String(a.objet || "").trim()) pw.p([[T(a.objet).trim(), "bi"]], { align: "center", size: 23, after: 18, x: (pw.W - 860) / 2, w: 860 });
+  pw.g.fillStyle = pw.navy; pw.g.fillRect(pw.W / 2 - 70, pw.y, 70, 3); pw.g.fillStyle = "#c8102e"; pw.g.fillRect(pw.W / 2, pw.y, 70, 3); pw.y += 34;
+  pw.p([[`${String(a.autorite || "Le préfet de police").trim().toUpperCase()},`, "b"]], { align: "center", size: 24, after: 22 });
+  for (const v of a.visas || []) if (String(v).trim()) pw.p(arrRuns(T(v).trim(), /^Vu\b/), { align: "justify", after: 9 });
+  if (String(a.proposition || "").trim()) { pw.y += 6; pw.p(arrRuns(T(a.proposition).trim(), /^Sur proposition\b/), { align: "justify", after: 9 }); }
+  pw.y += 8;
+  for (const c of a.considerants || []) if (String(c).trim()) pw.p(arrRuns(T(c).trim(), /^Considérant\b/), { align: "justify", after: 9 });
+  pw.ensure(120); pw.y += 14;
+  pw.p([["ARRÊTE :", "b"]], { align: "center", size: 26, after: 20, color: pw.navy });
+  let n = 0;
+  const arts = a.articles || [], dernier = arts.map(x => x.t !== "titre" && !!String(x.texte || "").trim()).lastIndexOf(true);
+  const lhA = Math.round(22 * 1.42);
+  for (const [i, x] of arts.entries()) {
+    const t = T(x.texte).trim();
+    // Le dernier article reste sur la page des signatures.
+    if (i === dernier) { const hA = lhA + 6 + t.split("\n").filter(z => z.trim()).reduce((s0, z) => s0 + pw.lignes([[z]], 22, pw.inner).length * lhA + 9, 0) + 8; pw.ensure(hA + 450); }
+    if (x.t === "titre") { if (!t) continue; pw.ensure(150); pw.y += 10; pw.p([[t.toUpperCase(), "b"]], { align: "center", size: 22, after: 14, color: pw.navy }); continue; }
+    n++;
+    pw.ensure(Math.round(22 * 1.42) * 3 + 12);
+    pw.p([[n === 1 ? "Article 1er" : `Article ${n}`, "b"]], { after: 6, color: pw.navy });
+    const pars = t.split("\n").map(s => s.trim()).filter(Boolean);
+    for (const par of pars.length ? pars : ["………………"]) {
+      const puce = /^[-•–]\s+/.test(par);
+      pw.p([[par.replace(/^[-•–]\s+/, "")]], { align: "justify", after: puce ? 4 : 9, indent: puce ? 52 : 0, puce });
+    }
+    pw.y += 8;
+  }
+  // Date et signatures, ensemble sur la même page.
+  pw.ensure(430); pw.y += 16;
+  pw.p([[`Fait à ${String(a.ville || "Paris").trim() || "Paris"}, le ${pr.signeLe ? longDate(new Date(pr.signeLe)) : "………………"}`]], { align: "right", after: 30 });
+  const colW = (pw.inner - 60) / 2, xG = pw.L, xD = pw.L + colW + 60, y0 = pw.y, g = pw.g;
+  const autoriteMin = String(a.autorite || "Le préfet de police").trim().replace(/^(Le|La|L’)\s*/i, m => m.toLowerCase());
+  const hautH = haut => haut.filter(([t]) => t).reduce((s, [t, st]) => s + pw.lignes([[t, st]], 22, colW).length * Math.round(22 * 1.42) + 2, 0);
+  const hautPr = [[`${String(pr.qualite || a.autorite || "Le préfet de police").trim()},`, "b"]], hautRed = [[`Pour ${autoriteMin},`, ""], [String(red.qualite || "").trim(), "i"]];
+  const ySig = y0 + Math.max(hautH(hautPr), seul ? 0 : hautH(hautRed)) + 8;
+  const bloc = (x, haut, nom, sig, signeLe) => {
+    pw.y = y0;
+    for (const [t, st] of haut) if (t) pw.p([[t, st]], { x, w: colW, align: "center", after: 2 });
+    const yS = ySig, mh = 124;
+    if (signeLe && sig) { const s = Math.min((colW - 40) / sig.naturalWidth, mh / sig.naturalHeight), sw = sig.naturalWidth * s, sh = sig.naturalHeight * s; g.drawImage(sig, x + (colW - sw) / 2, yS + (mh - sh) / 2, sw, sh); }
+    else if (signeLe) { g.fillStyle = "#1c2f6b"; g.font = manuscrite ? '62px "Allura", cursive' : `italic 400 40px ${ARR_SERIF}`; g.textAlign = "center"; g.fillText(nomSigne(nom), x + colW / 2, yS + 82); g.textAlign = "left"; }
+    else { g.save(); g.strokeStyle = "#9aa3ae"; g.setLineDash([8, 6]); g.lineWidth = 2; g.strokeRect(x + 40, yS + 10, colW - 80, mh - 20); g.restore(); g.fillStyle = "#9aa3ae"; g.font = `italic 400 18px ${ARR_SERIF}`; g.textAlign = "center"; g.fillText("Signature attendue", x + colW / 2, yS + mh / 2 + 6); g.textAlign = "left"; }
+    pw.y = yS + mh + 6;
+    pw.p([[arrNom(nom) || "………………", "b"]], { x, w: colW, align: "center", after: 2 });
+    if (signeLe) pw.p([[`Signé électroniquement le ${longDate(new Date(signeLe))} à ${hhmm(new Date(signeLe))}`, "i"]], { x, w: colW, align: "center", size: 15, color: pw.gris, after: 0 });
+    return pw.y;
+  };
+  const yP = bloc(xD, hautPr, pr.nom, sigPr, pr.signeLe);
+  const yR = seul ? 0 : bloc(xG, hautRed, red.nom, sigRed, red.signeLe);
+  pw.y = Math.max(yP, yR) + 16;
+  if (a.statut === "abroge" && a.abrogation) pw.p([[`Arrêté abrogé le ${longDate(new Date(a.abrogation.le))}${a.abrogation.motif ? " : " + a.abrogation.motif : "."}`, "bi"]], { align: "center", color: "#c8102e", size: 19, after: 0 });
+  return pw.finir(a.statut === "abroge" ? "ABROGÉ" : arrSigne(a) ? "" : "PROJET");
+}
+async function arrPdf(a) {
+  const pages = await arrPages(a), out = [];
+  for (const c of pages) { const blob = await canvasJpeg(c, 0.88); out.push({ bytes: new Uint8Array(await blob.arrayBuffer()), w: c.width, h: c.height }); }
+  return pdfFromJpegs(out, `Arrêté n° ${arrNo(a)}`);
+}
+const arrFichier = a => `arrete-${arrNo(a)}${arrSigne(a) ? "" : "-projet"}.pdf`;
+async function arrTelecharger(a, bt) {
+  if (bt) bt.disabled = true;
+  try { await S.downloads.save({ filename: arrFichier(a), data: await arrPdf(a) }); }
+  catch (x) { toast("Impossible de créer le PDF dans ce navigateur.", true); }
+  finally { if (bt) bt.disabled = false; }
+}
+// Publication sur Discord : les pages en images, dans le salon des arrêtés (à défaut, celui des entreprises).
+async function arrPublier(a, bt) {
+  if (!arrSigne(a)) return false;
+  if (!hookFor("arretes")) { toast("Aucun salon Discord pour les arrêtés (Réglages → Discord).", true); return false; }
+  if (bt) bt.disabled = true;
+  try {
+    const pages = await arrPages(a), files = [];
+    for (let i = 0; i < pages.length; i++) files.push({ blob: await canvasJpeg(pages[i], 0.88), name: `arrete-${arrNo(a)}-page-${i + 1}.jpg` });
+    const pr = a.prefet || {};
+    const res = await postDiscord("arretes", { content: `**Arrêté préfectoral n° ${arrNo(a)}** ${arrObjet(a)}\nSigné le ${longDate(new Date(pr.signeLe || a.modifieLe || Date.now()))} par ${arrNom(pr.nom)}${pr.qualite ? ", " + pr.qualite.charAt(0).toLowerCase() + pr.qualite.slice(1) : ""}.`, files });
+    if (!res.ok) { toast("Discord a refusé l’envoi : " + res.error + ".", true); signalerErreur("discord", res.error, { details: { salon: "arretes", document: "arrêté" } }); return false; }
+    await write(() => S.db.doc("arretes/" + a.id).update({ publieLe: nowISO(), publiePar: S.agentName || "" }));
+    toast(`Arrêté n° ${arrNo(a)} publié sur Discord.`);
+    return true;
+  } finally { if (bt) bt.disabled = false; }
+}
+// Enregistre l'arrêté ; refus d'un compte RH avant la mise à jour 53 : le dire.
+async function arrEcrire(id, body) {
+  const ok = await write(() => S.db.doc("arretes/" + id).set(body));
+  if (!ok && S.role === "rh") toast("Arrêtés pas encore ouverts aux ressources humaines : la Direction doit exécuter supabase/v53_arretes.sql.", true);
+  return ok;
+}
+
+/* La liste (onglet Personnel → Arrêtés) */
+const ARR_VUES = [["a_signer", "À signer"], ["brouillon", "Brouillons"], ["signe", "Signés"], ["tous", "Tous"]];
+function renderArretes() {
+  const box = $("#rh-arretes"); if (!box) return;
+  if (!S.loaded.has("arretes")) { fill(box, h("div", { class: "empty", text: S.offline ? "Aucune donnée hors connexion." : "Chargement…" })); return; }
+  const w = arretesWriter(), tous = (S.arretes || []).slice().sort((x, y) => (Number(y.annee) || 0) - (Number(x.annee) || 0) || (Number(y.numero) || 0) - (Number(x.numero) || 0));
+  const aMoi = tous.filter(a => a.statut === "a_signer" && arrEstPrefet(a));
+  let vue = S.arrVue || (aMoi.length ? "a_signer" : "tous"); if (!ARR_VUES.some(x => x[0] === vue)) vue = "tous";
+  const dans = (a, v) => v === "tous" || (v === "signe" ? arrSigne(a) : a.statut === v);
+  const list = tous.filter(a => dans(a, vue));
+  const ligne = a => {
+    const pr = a.prefet || {}, red = a.redacteur || {}, m = arrModele(a.modele);
+    const meta = [m.nom, red.nom ? "rédigé par " + arrNom(red.nom) : "",
+      a.statut === "a_signer" ? `à signer par ${arrNom(pr.nom) || "le préfet"}` : arrSigne(a) && pr.signeLe ? `signé le ${longDate(new Date(pr.signeLe))} par ${arrNom(pr.nom)}` : "",
+      a.statut === "brouillon" && a.renvoi ? `renvoyé par ${a.renvoi.par || "le préfet"} : ${a.renvoi.motif}` : "", a.publieLe ? "publié sur Discord" : ""].filter(Boolean).join(" · ");
+    return h("li", {}, h("div", { style: "min-width:0" },
+      h("button", { class: "linkbtn", type: "button", style: "font-weight:600", onclick: () => openArrete(a.id), text: `N° ${arrNo(a)} · ${arrCourt(a)}` }), h("span", { class: "meta", text: meta })),
+      chip(a.statut === "brouillon" && a.renvoi ? ["Renvoyé au rédacteur", "warn"] : ARR_STAT[a.statut] || ARR_STAT.brouillon),
+      a.statut === "a_signer" && arrEstPrefet(a) ? h("button", { class: "btn small", type: "button", onclick: () => openArrete(a.id), text: "Signer" }) : h("button", { class: "btn ghost small", type: "button", onclick: () => openArrete(a.id), text: "Ouvrir" }));
+  };
+  const cnt = Object.fromEntries(ARR_VUES.map(([k]) => [k, tous.filter(a => dans(a, k)).length]));
+  fill(box, h("div", { class: "card" },
+    h("div", { class: "card-head" }, h("div", {}, h("h3", { text: "Arrêtés préfectoraux" }), h("p", { class: "sub", text: "Rédigés ici à partir d’un modèle ; le rédacteur signe et transmet, puis le préfet signe depuis sa session." })),
+      w ? h("button", { class: "btn small", type: "button", id: "arr-nouveau", onclick: () => openArrModeles(), text: "Nouvel arrêté" }) : null),
+    aMoi.length ? h("div", { class: "notice arr-banniere", id: "arr-a-moi" }, h("strong", { text: `${aMoi.length} arrêté${plural(aMoi.length)} attend${aMoi.length > 1 ? "ent" : ""} votre signature.` }), " ",
+      h("button", { class: "linkbtn", type: "button", onclick: () => openArrete(aMoi[0].id), text: `Ouvrir le n° ${arrNo(aMoi[0])}` })) : null,
+    h("div", { class: "seg", role: "group", "aria-label": "Filtrer les arrêtés", style: "margin:4px 0 10px" }, ARR_VUES.map(([k, l]) => h("button", { type: "button", "aria-pressed": String(k === vue), onclick: () => { S.arrVue = k; renderArretes(); }, text: `${l} (${cnt[k]})` }))),
+    list.length ? h("ul", { class: "ent-list", id: "arr-liste" }, list.map(ligne))
+      : h("p", { class: "muted", style: "margin:8px 0 0", text: vue === "a_signer" ? "Aucun arrêté n’attend la signature du préfet." : vue === "brouillon" ? "Aucun brouillon." : vue === "signe" ? "Aucun arrêté signé pour l’instant." : w ? "Aucun arrêté : « Nouvel arrêté » pour rédiger le premier." : "Aucun arrêté." }),
+    S.role === "rh" && !tous.length ? h("p", { class: "hint", style: "margin:10px 0 0", text: "Si la liste reste vide alors que la Direction a déjà rédigé des arrêtés, la mise à jour supabase/v53_arretes.sql n’est pas encore exécutée." }) : null));
+}
+function openArrModeles(back) {
+  if (!arretesWriter()) return;
+  openDialog({ eyebrow: "Arrêtés préfectoraux", title: "Nouvel arrêté : choisir un modèle", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Le modèle remplit les visas, les considérants et les articles habituels. Tout se modifie ensuite : textes, ajouts depuis la bibliothèque, ordre." }),
+      h("ul", { class: "arr-modeles", id: "arr-modeles" }, ARR_MODELES.map(m => h("li", {}, h("button", { type: "button", "data-modele": m.k, onclick: () => openArrForm(null, back, m.k) },
+        h("strong", { text: m.nom }), h("span", { text: m.desc }), h("span", { class: "meta", text: `${m.visas.length} visa${plural(m.visas.length)} · ${m.consid.length} considérant${plural(m.consid.length)} · ${m.articles.length} article${plural(m.articles.length)}` })))))],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" })] });
+}
+
+/* Le formulaire de rédaction */
+// Liste modifiable (visas, considérants, articles) : chaque texte se corrige, se déplace, se retire ; on ajoute
+// depuis la bibliothèque ou en texte libre (et, pour les articles, un titre de partie).
+function arrListe(items, o) {
+  const box = h("div", { class: "arr-liste", id: o.id });
+  const texteDe = x => o.articles ? x.texte : x, poser = (i, v) => { if (o.articles) items[i].texte = v; else items[i] = v; };
+  const dessiner = () => {
+    let n = 0;
+    const lignes = items.map((x, i) => {
+      const titre = o.articles && x.t === "titre"; if (o.articles && !titre) n++;
+      const ta = h("textarea", { rows: String(Math.min(9, Math.max(titre ? 1 : 2, Math.ceil(String(texteDe(x) || "").length / 95) + (String(texteDe(x) || "").match(/\n/g) || []).length))), "aria-label": `${o.nomItem} ${i + 1}`, "data-i": String(i) });
+      ta.value = texteDe(x) || "";
+      ta.addEventListener("input", () => { poser(i, ta.value); o.change(); });
+      const bouge = (d, lab, sym) => h("button", { class: "icon-btn", type: "button", "aria-label": `${lab} : ${o.nomItem} ${i + 1}`, title: lab, disabled: i + d < 0 || i + d >= items.length,
+        onclick: () => { const [it] = items.splice(i, 1); items.splice(i + d, 0, it); dessiner(); o.change(); }, text: sym });
+      return h("li", { class: titre ? "arr-titre" : null },
+        h("span", { class: "arr-etiq", text: o.articles ? (titre ? "Titre" : n === 1 ? "Article 1er" : `Article ${n}`) : String(i + 1) }), ta,
+        h("div", { class: "arr-outils" }, bouge(-1, "Monter", "↑"), bouge(1, "Descendre", "↓"),
+          h("button", { class: "icon-btn", type: "button", "aria-label": `Retirer : ${o.nomItem} ${i + 1}`, title: "Retirer", onclick: () => { items.splice(i, 1); dessiner(); o.change(); }, text: "×" })));
+    });
+    const deja = new Set(items.map(texteDe).map(t => norm(t)));
+    const sel = h("select", { "aria-label": o.ajout, "data-ajout": o.id },
+      h("option", { value: "", text: o.ajout + "…" }),
+      h("optgroup", { label: "Bibliothèque" }, o.lib.filter(x => !deja.has(norm(x[2]))).map(x => h("option", { value: "lib:" + x[0], text: x[1] }))),
+      h("optgroup", { label: "Autre" }, h("option", { value: "libre", text: o.articles ? "Article à écrire" : "Texte libre" }), o.articles ? h("option", { value: "titre", text: "Titre de partie (TITRE I…)" }) : null));
+    sel.addEventListener("change", () => {
+      const v = sel.value; if (!v) return;
+      const t = v.startsWith("lib:") ? arrLib(o.lib, v.slice(4)) : v === "libre" ? (o.debut || "") : "TITRE ";
+      // Les articles « Exécution » et « Publication » restent en dernier : on ajoute avant eux.
+      let at = items.length;
+      if (o.articles) { const fin = ["execution", "publicite"].map(k => norm(arrLib(ARR_ARTICLES, k))); while (at > 0 && fin.includes(norm(texteDe(items[at - 1])))) at--; }
+      items.splice(at, 0, o.articles ? { t: v === "titre" ? "titre" : "art", texte: t } : t);
+      dessiner(); o.change();
+      const ta = box.querySelector(`textarea[data-i="${at}"]`); if (ta) { ta.focus(); if (v === "libre" || v === "titre") ta.setSelectionRange(ta.value.length, ta.value.length); }
+    });
+    fill(box, items.length ? h("ol", { class: "arr-items" }, lignes) : h("p", { class: "muted", style: "margin:0", text: o.vide }), h("div", { class: "paste-row", style: "margin-top:8px" }, sel));
+  };
+  dessiner();
+  return box;
+}
+// graine : l'état du formulaire repris après un changement de modèle.
+function openArrForm(a0, back, modeleK, graine) {
+  if (!arretesWriter()) return;
+  const moi = arrMoi(), annee = a0 ? Number(a0.annee) : new Date().getFullYear(), prefets = arrPrefets();
+  const st = graine ? JSON.parse(JSON.stringify(graine)) : a0 ? JSON.parse(JSON.stringify(a0)) : Object.assign({ annee, numero: arrProchain(annee), autorite: "Le préfet de police", ville: "Paris", proposition: "",
+    params: { evenement: "", lieu: "", debut: "", fin: "", perimetre: "", zone: "Paris" } }, arrDepuisModele(modeleK || "libre"));
+  delete st.id;
+  st.params = Object.assign({ evenement: "", lieu: "", debut: "", fin: "", perimetre: "", zone: "Paris" }, st.params || {});
+  st.visas = st.visas || []; st.considerants = st.considerants || []; st.articles = st.articles || [];
+  const pr0 = st.prefet && st.prefet.fid ? st.prefet : prefets[0] ? { fid: prefets[0].id } : {};
+  // Champs simples.
+  const inp = (val, attrs) => { const x = h("input", Object.assign({ autocomplete: "off" }, attrs || {})); x.value = val == null ? "" : val; return x; };
+  const ta = (val, rows, attrs) => { const x = h("textarea", Object.assign({ rows: String(rows) }, attrs || {})); x.value = val || ""; return x; };
+  const numero = inp(st.numero, { type: "number", min: "1", step: "1", inputmode: "numeric" });
+  const autorite = inp(st.autorite), objet = ta(st.objet, 2), ville = inp(st.ville);
+  const P = {};
+  for (const [k, ph] of [["evenement", "le match PSG – OM"], ["lieu", "au Parc des Princes (Paris 16e)"], ["zone", "Paris"]]) P[k] = inp(st.params[k], { placeholder: ph });
+  P.debut = inp(st.params.debut, { type: "datetime-local" }); P.fin = inp(st.params.fin, { type: "datetime-local" });
+  P.perimetre = ta(st.params.perimetre, 3, { placeholder: "les voies suivantes : avenue du Parc des Princes, rue Claude-Farrère, boulevard d’Auteuil…" });
+  const propos = inp(st.proposition, { list: "arr-propositions", placeholder: "Sur proposition du secrétaire général de la zone de défense et de sécurité de Paris ;" });
+  const qRed = inp((st.redacteur && st.redacteur.fid === moi.fid && st.redacteur.qualite) || moi.qualite, { placeholder: "Le secrétaire général de la zone de défense et de sécurité de Paris" });
+  const selPr = h("select", {}, prefets.length ? prefets.map(f => h("option", { value: f.id, text: `${arrNom(f.nom)} · ${f.grade || ""}` })) : h("option", { value: "", text: "Aucun préfet dans le personnel" }));
+  if (pr0.fid && prefets.some(f => f.id === pr0.fid)) selPr.value = pr0.fid;
+  const qPr = inp(st.prefet && st.prefet.fid === selPr.value && st.prefet.qualite ? st.prefet.qualite : selPr.value ? arrQualite(selPr.value, (foncOf(selPr.value) || {}).nom) : "");
+  selPr.addEventListener("change", () => { qPr.value = arrQualite(selPr.value, (foncOf(selPr.value) || {}).nom); change(); });
+  const manque = h("p", { class: "hint", id: "arr-manque", "aria-live": "polite", style: "margin:0" });
+  const apercu = h("div", { class: "arr-pages", id: "arr-apercu", hidden: true });
+  let tAp = 0;
+  const lire = () => {
+    st.numero = Math.round(Number(numero.value)) || 0; st.autorite = autorite.value.trim(); st.objet = objet.value; st.ville = ville.value.trim() || "Paris"; st.proposition = propos.value.trim();
+    for (const k of Object.keys(P)) st.params[k] = P[k].value;
+  };
+  const dessinerApercu = () => {
+    lire();
+    const brouillon = Object.assign({}, st, { statut: "brouillon", redacteur: { fid: moi.fid, nom: moi.nom, qualite: qRed.value.trim() }, prefet: selPr.value ? { fid: selPr.value, nom: arrNom((foncOf(selPr.value) || {}).nom), qualite: qPr.value.trim() } : {} });
+    arrPages(brouillon).then(cs => { if (apercu.hidden) return; fill(apercu, cs.map((c, i) => { c.className = "ct-page"; c.setAttribute("role", "img"); c.setAttribute("aria-label", `Aperçu, page ${i + 1} sur ${cs.length}`); return c; })); })
+      .catch(() => fill(apercu, h("p", { class: "err", text: "Aperçu impossible dans ce navigateur." })));
+  };
+  function change() {
+    lire();
+    const m = arrManque(st);
+    manque.textContent = m.length ? `À compléter avant la signature : ${m.join(", ")}.` : "Tous les paramètres utilisés dans les textes sont remplis.";
+    manque.classList.toggle("err", false);
+    if (!apercu.hidden) { clearTimeout(tAp); tAp = setTimeout(dessinerApercu, 700); }
+  }
+  [numero, autorite, objet, ville, propos, qRed, qPr, ...Object.values(P)].forEach(x => x.addEventListener("input", change));
+  const btApercu = h("button", { class: "btn ghost small", type: "button", id: "arr-voir-apercu", onclick: () => { apercu.hidden = !apercu.hidden; btApercu.textContent = apercu.hidden ? "Voir l’aperçu" : "Masquer l’aperçu"; if (!apercu.hidden) { fill(apercu, h("p", { class: "muted", style: "margin:0", text: "Préparation de l’aperçu…" })); dessinerApercu(); apercu.scrollIntoView({ behavior: "smooth", block: "start" }); } }, text: "Voir l’aperçu" });
+  const m = arrModele(st.modele), err = h("span", { class: "err", "aria-live": "polite" });
+  const changerModele = h("button", { class: "linkbtn", type: "button", id: "arr-changer-modele", onclick: ev => {
+    const b = ev.currentTarget; if (b.dataset.confirme !== "1") { b.dataset.confirme = "1"; b.textContent = "Confirmer : visas, considérants et articles seront remplacés"; return; }
+    lire(); openArrModelesPour(Object.assign({}, st, { prefet: selPr.value ? { fid: selPr.value, qualite: qPr.value.trim() } : st.prefet }), a0, back);
+  }, text: "Changer de modèle" });
+  // Contrôles avant d'enregistrer ; signer : le texte doit être complet.
+  const verifier = signer => {
+    lire();
+    const autre = (S.arretes || []).find(x => x.annee === st.annee && Number(x.numero) === st.numero && (!a0 || x.id !== a0.id));
+    if (!(st.numero > 0)) return "Donnez un numéro d’ordre.";
+    if (autre) return `Le n° ${arrNo(st)} est déjà pris (${arrCourt(autre, 60)}). Prochain libre : ${arrProchain(st.annee)}.`;
+    if (!String(st.objet).trim().replace(/^portant\s*$/i, "")) return "Écrivez l’objet de l’arrêté (« portant … »).";
+    if (!signer) return "";
+    if (!st.visas.some(v => String(v).trim())) return "Ajoutez au moins un visa.";
+    if (!st.articles.some(x => x.t !== "titre" && String(x.texte).trim())) return "Ajoutez au moins un article.";
+    if (st.articles.some(x => x.t !== "titre" && !String(x.texte).trim())) return "Un article est vide : écrivez-le ou retirez-le.";
+    const mq = arrManque(st); if (mq.length) return `Complétez d’abord : ${mq.join(", ")}.`;
+    if (!selPr.value) return "Choisissez le préfet qui signera.";
+    if (!qRed.value.trim()) return "Indiquez votre qualité (sous la signature du rédacteur).";
+    return "";
+  };
+  const corps = signe => {
+    const f = foncOf(selPr.value) || {}, now = nowISO(), body = Object.assign({}, st);
+    body.visas = st.visas.filter(v => String(v).trim()); body.considerants = st.considerants.filter(v => String(v).trim()); body.articles = st.articles.filter(x => String(x.texte).trim());
+    body.redacteur = { fid: moi.fid, nom: moi.nom, qualite: qRed.value.trim(), discordId: moi.discordId, signeLe: signe ? now : null };
+    body.prefet = selPr.value ? { fid: f.id, nom: arrNom(f.nom), qualite: qPr.value.trim(), discordId: f.discordId || null, signeLe: null } : null;
+    body.createdAt = st.createdAt || now; body.byNom = st.byNom || S.agentName || ""; body.modifieLe = a0 ? now : null;
+    body.statut = signe ? "a_signer" : "brouillon";
+    if (signe) body.renvoi = null;
+    // Le préfet rédige lui-même : sa signature vaut pour les deux.
+    if (signe && body.prefet && (body.prefet.fid === moi.fid || (moi.discordId && body.prefet.discordId === moi.discordId))) { body.prefet.signeLe = now; body.statut = "signe"; }
+    return body;
+  };
+  const id = a0 ? a0.id : S.db.collection("arretes").doc().id;
+  const go = async (signe, bt) => {
+    const e = verifier(signe); err.textContent = e; if (e) return;
+    bt.disabled = true;
+    const body = corps(signe);
+    if (await arrEcrire(id, body)) {
+      toast(body.statut === "signe" ? `Arrêté n° ${arrNo(body)} signé.` : signe ? `Arrêté n° ${arrNo(body)} signé et transmis à ${arrNom(body.prefet.nom)}.` : `Brouillon de l’arrêté n° ${arrNo(body)} enregistré.`);
+      if (body.statut === "signe" && autoOn("arretes")) await arrPublier(Object.assign({ id }, body));
+      openArrete(id, back);
+    } else bt.disabled = false;
+  };
+  const moiPrefet = () => !!selPr.value && (selPr.value === moi.fid || (moi.discordId && (foncOf(selPr.value) || {}).discordId === moi.discordId));
+  const btSigner = h("button", { class: "btn ink small", type: "button", id: "arr-signer", onclick: ev => go(true, ev.currentTarget), text: moiPrefet() ? "Signer l’arrêté" : "Signer et transmettre au préfet" });
+  selPr.addEventListener("change", () => { btSigner.textContent = moiPrefet() ? "Signer l’arrêté" : "Signer et transmettre au préfet"; });
+  const listes = {
+    visas: arrListe(st.visas, { id: "arr-visas", lib: ARR_VISAS, nomItem: "Visa", ajout: "Ajouter un visa", vide: "Aucun visa.", debut: "Vu ", change }),
+    consid: arrListe(st.considerants, { id: "arr-consid", lib: ARR_CONSID, nomItem: "Considérant", ajout: "Ajouter un considérant", vide: "Aucun considérant.", debut: "Considérant que ", change }),
+    articles: arrListe(st.articles, { id: "arr-articles", lib: ARR_ARTICLES, nomItem: "Article", ajout: "Ajouter un article", vide: "Aucun article.", articles: true, change })
+  };
+  openDialog({ eyebrow: `Arrêtés préfectoraux · modèle « ${m.nom} »`, title: a0 ? `Arrêté n° ${arrNo(a0)} : modifier` : `Nouvel arrêté n° ${arrNo(st)}`, wide: true,
+    body: [
+      a0 && a0.renvoi ? h("div", { class: "notice arr-banniere" }, h("strong", { text: `Renvoyé par ${a0.renvoi.par || "le préfet"} le ${longDate(new Date(a0.renvoi.le))} : ` }), a0.renvoi.motif || "") : null,
+      h("p", { class: "hint", style: "margin:0" }, `${m.desc} `, changerModele),
+      h("div", { class: "row3" }, field("arr-numero", `Numéro d’ordre (n° ${annee}-…)`, numero), field("arr-autorite", "Autorité", autorite), field("arr-ville", "Fait à", ville)),
+      field("arr-objet", "Objet (« portant … »)", objet),
+      sec("Paramètres", h("p", { class: "hint", style: "margin:0 0 6px", text: "Ils remplissent les textes là où figurent {evenement}, {lieu}, {periode} (du début à la fin), {debut}, {fin}, {perimetre} et {zone}. Écrivez-les tels qu’ils se lisent dans la phrase." }),
+        h("div", { class: "row2" }, field("arr-p-evenement", "Événement, avec son article", P.evenement), field("arr-p-lieu", "Lieu, avec « à », « au »…", P.lieu)),
+        h("div", { class: "row3" }, field("arr-p-debut", "Début", P.debut), field("arr-p-fin", "Fin", P.fin), field("arr-p-zone", "Territoire (artifices, carburants…)", P.zone)),
+        field("arr-p-perimetre", "Périmètre ou voies concernées", P.perimetre), manque),
+      sec("Visas", listes.visas),
+      field("arr-proposition", "Sur proposition de (facultatif)", propos), h("datalist", { id: "arr-propositions" }, ARR_PROPOSITIONS.map(t => h("option", { value: t }))),
+      sec("Considérants", listes.consid),
+      sec("Articles", h("p", { class: "hint", style: "margin:0 0 6px", text: "Numérotés tout seuls. Une ligne commençant par « - » devient une puce. Les articles ajoutés se placent avant l’exécution et les voies de recours." }), listes.articles),
+      sec("Signatures",
+        h("div", { class: "row2" },
+          h("div", {}, h("p", { class: "arr-sig-qui", text: `Rédacteur : ${moi.nom || "vous"} (vous)` }), field("arr-q-redacteur", "Votre qualité, sous « Pour le préfet de police »", qRed)),
+          h("div", {}, field("arr-prefet", "Préfet signataire", selPr), field("arr-q-prefet", "Sa qualité", qPr))),
+        h("p", { class: "hint", style: "margin:0", text: "Vous signez en transmettant ; le préfet choisi signe ensuite depuis sa session. Une signature manuscrite importée sur la fiche (« Signatures des agents ») remplace le nom écrit à la main." })),
+      h("div", { class: "paste-row" }, btApercu), apercu, err],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => a0 ? openArrete(a0.id, back) : back ? back() : closeDialog(), text: a0 ? "Retour" : "Annuler" }), h("span", { class: "spacer" }),
+      h("button", { class: "btn ghost small", type: "button", id: "arr-brouillon", onclick: ev => go(false, ev.currentTarget), text: "Enregistrer le brouillon" }), btSigner] });
+  change();
+}
+// Changer de modèle en cours de rédaction : garde le numéro, l'objet s'il a été écrit, les paramètres.
+function openArrModelesPour(st, a0, back) {
+  openDialog({ eyebrow: "Arrêtés préfectoraux", title: "Changer de modèle", wide: true,
+    body: [h("p", { class: "hint", style: "margin:0", text: "Le numéro, l’autorité, les paramètres et la proposition sont gardés ; l’objet, les visas, les considérants et les articles sont remplacés par ceux du modèle." }),
+      h("ul", { class: "arr-modeles" }, ARR_MODELES.map(m => h("li", {}, h("button", { type: "button", "data-modele": m.k, onclick: () => openArrForm(a0, back, m.k, Object.assign({}, st, arrDepuisModele(m.k))) },
+        h("strong", { text: m.nom }), h("span", { text: m.desc })))))],
+    foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openArrForm(a0, back, st.modele, st), text: "Retour" })] });
+}
+
+/* L'arrêté : aperçu, signature du préfet, PDF, publication */
+function openArrete(id, back) {
+  const a = arrOf(id); if (!a) { toast("Cet arrêté n’existe plus.", true); return; }
+  const w = arretesWriter(), reopen = () => openArrete(id, back), red = a.redacteur || {}, pr = a.prefet || {}, prefetMoi = arrEstPrefet(a);
+  const pages = h("div", { class: "arr-pages", id: "arr-pages", "aria-label": "Aperçu de l’arrêté" }, h("p", { class: "muted", style: "margin:0", text: "Préparation de l’arrêté…" }));
+  arrPages(a).then(cs => { if (!pages.isConnected && !dlg.open) return; fill(pages, cs.map((c, i) => { c.className = "ct-page"; c.setAttribute("role", "img"); c.setAttribute("aria-label", `Page ${i + 1} sur ${cs.length}`); return c; })); })
+    .catch(() => fill(pages, h("p", { class: "err", text: "Aperçu impossible dans ce navigateur." })));
+  const maj = async (bt, patch, msg) => {
+    bt.disabled = true;
+    const body = Object.assign({}, a, patch, { modifieLe: nowISO() }); delete body.id;
+    if (await arrEcrire(id, body)) { toast(msg); reopen(); return body; }
+    bt.disabled = false; return null;
+  };
+  const deuxClics = (bt, texte) => { if (bt.dataset.confirme === "1") return true; bt.dataset.confirme = "1"; bt.textContent = texte; return false; };
+  // Motif (renvoi au rédacteur, abrogation).
+  const motifBox = (idp, lab, btTxt, agir) => {
+    const t = h("textarea", { rows: "2", id: idp, maxlength: "600" }), e = h("span", { class: "err", "aria-live": "polite" });
+    return h("div", { class: "arr-motif", hidden: true }, field(idp, lab, t), h("div", { class: "paste-row" }, h("button", { class: "btn small", type: "button", id: idp + "-ok", onclick: ev => { if (!t.value.trim()) { e.textContent = "Écrivez le motif."; return; } agir(t.value.trim(), ev.currentTarget); }, text: btTxt }), e));
+  };
+  const renvoi = motifBox("arr-renvoi-motif", "Ce qu’il faut revoir", "Renvoyer au rédacteur", (motif, bt) => maj(bt, { statut: "brouillon", redacteur: Object.assign({}, red, { signeLe: null }), renvoi: { motif, par: arrNom(S.agentName) || pr.nom || "", le: nowISO() } }, `Arrêté n° ${arrNo(a)} renvoyé à ${arrNom(red.nom) || "son rédacteur"}.`));
+  const abrog = motifBox("arr-abrog-motif", "Motif de l’abrogation", "Abroger l’arrêté", (motif, bt) => maj(bt, { statut: "abroge", abrogation: { motif, par: S.agentName || "", le: nowISO() } }, `Arrêté n° ${arrNo(a)} abrogé.`));
+  const foot = [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Fermer" })];
+  const hb = histOk() ? boutonHistorique(["arretes"], id, `Arrêté n° ${arrNo(a)}`, reopen) : null; if (hb) foot.push(hb);
+  if (w && a.statut === "brouillon") foot.push(h("button", { class: "btn ghost small", type: "button", id: "arr-modifier", onclick: () => openArrForm(a, back), text: "Modifier" }));
+  if (w && ["brouillon", "a_signer"].includes(a.statut)) foot.push(h("button", { class: "btn ghost small danger", type: "button", id: "arr-supprimer", onclick: async ev => {
+    const b = ev.currentTarget; if (!deuxClics(b, "Confirmer la suppression")) return;
+    b.disabled = true;
+    if (await write(() => S.db.doc("arretes/" + id).delete())) { toast(`Projet d’arrêté n° ${arrNo(a)} supprimé.`); if (back) back(); else closeDialog(); } else b.disabled = false;
+  }, text: "Supprimer" }));
+  if (w && a.statut === "a_signer" && !prefetMoi) foot.push(h("button", { class: "btn ghost small", type: "button", id: "arr-reprendre", onclick: ev => {
+    const b = ev.currentTarget; if (!deuxClics(b, "Confirmer : la signature du rédacteur est retirée")) return;
+    maj(b, { statut: "brouillon", redacteur: Object.assign({}, red, { signeLe: null }) }, "Arrêté repris en brouillon.");
+  }, text: "Reprendre en brouillon" }));
+  if (S.admin && a.statut === "signe") foot.push(h("button", { class: "btn ghost small danger", type: "button", id: "arr-abroger", onclick: ev => { abrog.hidden = false; ev.currentTarget.hidden = true; abrog.querySelector("textarea").focus(); }, text: "Abroger" }));
+  foot.push(h("span", { class: "spacer" }));
+  if (prefetMoi && a.statut === "a_signer") foot.push(h("button", { class: "btn ghost small", type: "button", id: "arr-renvoyer", onclick: ev => { renvoi.hidden = false; ev.currentTarget.hidden = true; renvoi.querySelector("textarea").focus(); }, text: "Renvoyer au rédacteur" }));
+  if (S.admin && arrSigne(a) && a.statut === "signe") foot.push(h("button", { class: "btn ghost small", type: "button", id: "arr-publier", onclick: ev => arrPublier(a, ev.currentTarget).then(ok => { if (ok) reopen(); }), text: a.publieLe ? "Publier à nouveau" : "Publier sur Discord" }));
+  foot.push(h("button", { class: arrSigne(a) ? "btn ink small" : "btn ghost small", type: "button", id: "arr-pdf", onclick: ev => arrTelecharger(arrOf(id) || a, ev.currentTarget), text: arrSigne(a) ? "Télécharger le PDF" : "PDF du projet" }));
+  if (prefetMoi && a.statut === "a_signer") foot.push(h("button", { class: "btn ink small", type: "button", id: "arr-signer-prefet", onclick: async ev => {
+    const b = ev.currentTarget; b.disabled = true;
+    const now = nowISO(), body = Object.assign({}, a, { statut: "signe", prefet: Object.assign({}, pr, { signeLe: now }), modifieLe: now }); delete body.id;
+    if (await arrEcrire(id, body)) { toast(`Arrêté n° ${arrNo(a)} signé.`); if (autoOn("arretes")) await arrPublier(Object.assign({ id }, body)); reopen(); } else b.disabled = false;
+  }, text: "Signer l’arrêté" }));
+  const etat = a.statut === "brouillon" && a.renvoi ? ["RENVOYÉ", "warn"] : a.statut === "a_signer" ? ["À SIGNER", "warn"] : a.statut === "signe" ? ["SIGNÉ", "ok"] : a.statut === "abroge" ? ["ABROGÉ", "bad"] : ["BROUILLON", "muted"];
+  const quand = x => x ? `le ${longDate(new Date(x))} à ${hhmm(new Date(x))}` : "";
+  openDialog({ eyebrow: `Arrêté préfectoral · ${arrModele(a.modele).nom}`, title: `N° ${arrNo(a)} · ${arrCourt(a, 120)}`, wide: true, stampEl: stamp(etat),
+    body: [
+      prefetMoi && a.statut === "a_signer" ? h("div", { class: "notice arr-banniere" }, h("strong", { text: "Votre signature est attendue. " }), `${arrNom(red.nom) || "Le rédacteur"} a signé et transmis cet arrêté ${quand(red.signeLe)}. Relisez-le, puis « Signer l’arrêté » ou renvoyez-le avec ce qu’il faut revoir.`) : null,
+      a.statut === "brouillon" && a.renvoi ? h("div", { class: "notice arr-banniere" }, h("strong", { text: `Renvoyé par ${a.renvoi.par || "le préfet"} ${quand(a.renvoi.le)} : ` }), a.renvoi.motif || "") : null,
+      kv([["Rédacteur", red.nom ? `${arrNom(red.nom)}${red.qualite ? " · " + red.qualite : ""}${red.signeLe ? ` · signé ${quand(red.signeLe)}` : " · pas encore signé"}` : "—"],
+        ["Préfet signataire", pr.nom ? `${arrNom(pr.nom)}${pr.qualite ? " · " + pr.qualite : ""}${pr.signeLe ? ` · signé ${quand(pr.signeLe)}` : a.statut === "a_signer" ? " · signature attendue" : ""}` : "—"],
+        a.params && (a.params.debut || a.params.fin) ? ["Période", arrValeurs(a).periode || "—"] : null,
+        a.publieLe ? ["Publication", `sur Discord ${quand(a.publieLe)}${a.publiePar ? " par " + a.publiePar : ""}`] : null,
+        a.statut === "abroge" && a.abrogation ? ["Abrogation", `${quand(a.abrogation.le)}${a.abrogation.par ? " par " + a.abrogation.par : ""} : ${a.abrogation.motif || "—"}`] : null]),
+      renvoi, abrog, pages],
+    foot });
+}
+function arretesAttente() { return (S.arretes || []).filter(a => a.statut === "a_signer"); }
 
 /* ---------- Sanctions disciplinaires ---------- */
 // Prises par la Direction ou les ressources humaines. Chaque sanction est notifiée à l'agent (message dans
@@ -13497,7 +14133,7 @@ $("#form-ent").addEventListener("submit", async e => {
 });
 
 /* ---------- Sauvegarde ---------- */
-const BACKUP_COLS = ["delais", "reclamations", "paiementsAnnonces", "validations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
+const BACKUP_COLS = ["arretes", "delais", "reclamations", "paiementsAnnonces", "validations", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "messagesAgents", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "entreprises", "declarations", "decisions", "demandes", "arbitrages", "penalites", "echeanciers", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots", "interdictions", "rescrits", "signalements"];
 const ID_RE = /^(?!\.\.?$)[A-Za-z0-9_\-.~:@+]{1,200}$/;
 function since(iso) {
   const d = new Date(iso);
@@ -15103,6 +15739,14 @@ function describe(e) {
       if (a.statut !== b.statut) return a.statut === "levee" ? `a levé la sanction ${no} de ${v.nom || "un fonctionnaire"} (${t})` : a.statut === "annulee" ? `a annulé la sanction ${no} de ${v.nom || "un fonctionnaire"} (${t})` : `a remis en vigueur la sanction ${no}`;
       return `a modifié la sanction ${no} de ${v.nom || "un fonctionnaire"}`;
     }
+    case "arretes": {
+      const no = `l’arrêté n° ${arrNo(v)}`;
+      if (x === "ajout") return a.statut === "signe" ? `a rédigé et signé ${no}` : a.statut === "a_signer" ? `a rédigé, signé et transmis au préfet ${no}` : `a commencé ${no} (brouillon)`;
+      if (x === "suppression") return `a supprimé le projet d’arrêté n° ${arrNo(v)}`;
+      if (a.statut !== b.statut) return a.statut === "a_signer" ? `a signé et transmis au préfet ${no}` : a.statut === "signe" ? `a signé ${no}` : a.statut === "abroge" ? `a abrogé ${no}` : a.renvoi && (!b.renvoi || a.renvoi.le !== b.renvoi.le) ? `a renvoyé au rédacteur ${no} : ${a.renvoi.motif || ""}` : `a remis en brouillon ${no}`;
+      if (a.publieLe && a.publieLe !== b.publieLe) return `a publié sur Discord ${no}`;
+      return `a modifié ${no}`;
+    }
     case "notesService":
       if (x === "ajout") return `a publié la note de service « ${v.titre || ""} »`;
       if (a.retiree && !b.retiree) return `a retiré la note de service « ${v.titre || ""} »`;
@@ -15807,6 +16451,7 @@ const DISCORD_CHANNELS = [
   ["agents", "Salon des agents de la Préfecture", "Classement des heures de service et bilan du personnel, publiés le lundi. Laissez vide pour ne pas les publier."],
   ["direction", "Salon de la Direction", "Bilan de chaque semaine et de chaque mois, pour le staff : déclarations, montants, impayés, relevés, contrôles et mouvements suspects. Aussi les alertes de l’encadrement (message d’un fonctionnaire, absence signalée). Laissez vide pour ne pas le publier."],
   ["sauvegardes", "Salon des sauvegardes", "Sauvegarde complète du registre, chaque semaine, en fichier compressé. Réservé au staff : il contient tout le registre. Laissez vide pour utiliser le salon de la Direction."],
+  ["arretes", "Salon des arrêtés préfectoraux", "Arrêtés signés par le préfet, en images (le recueil des actes). Laissez vide pour utiliser le salon des entreprises."],
   ["personnel", "Salon des alertes du personnel", "Alertes aux fonctionnaires, postées par le service d’envoi : nouveau message dans leur espace (l’agent est mentionné), rendez-vous de l’agenda, notes de service, paye versée. Jamais le contenu d’un message ni d’une sanction. Laissez vide pour ne pas les publier."]
 ];
 const DISCORD_AUTO = [
@@ -15833,13 +16478,14 @@ const DISCORD_AUTO = [
   ["alertesAgents", "Alertes aux fonctionnaires : messages, agenda, notes de service, paye versée (salon des alertes du personnel)", "personnel"],
   ["alertesEquipe", "Alertes de l’encadrement : message d’un fonctionnaire, absence signalée (salon de la Direction)", "direction"],
   ["coherence", "Contrôle de cohérence de la semaine : budgets dépassés, oublis, doublons, seulement s’il y a des points à vérifier (salon de la Direction)", "direction"],
+  ["arretes", "Arrêtés préfectoraux, dès que le préfet les signe (salon des arrêtés ou, à défaut, des entreprises)", "arretes"],
   ["rapportSecu", "Rapport de sécurité de la semaine passée, le lundi : affluence par heure, contrôles non conformes, personnes signalées vues, objets retenus (salon de la Direction)", "direction"]
 ];
 // Publications actives tant que la Direction ne les a pas décochées (ajoutées après les premiers réglages).
-const AUTO_DEFAUT = new Set(["relancesAuto", "bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe", "coherence", "rapportSecu"]);
+const AUTO_DEFAUT = new Set(["arretes", "relancesAuto", "bilans", "bilanMois", "classement", "sauvegardes", "alertesAgents", "alertesEquipe", "coherence", "rapportSecu"]);
 function hookFor(ch) {
   const w = (S.discord && S.discord.webhooks) || {};
-  return w[ch] || (ch === "relances" || ch === "police" ? w.entreprises || "" : ch === "sauvegardes" ? w.direction || "" : "");
+  return w[ch] || (ch === "relances" || ch === "police" || ch === "arretes" ? w.entreprises || "" : ch === "sauvegardes" ? w.direction || "" : "");
 }
 const autoOn = k => { const a = (S.discord && S.discord.auto) || {}; const def = DISCORD_AUTO.find(x => x[0] === k); return (k in a ? !!a[k] : AUTO_DEFAUT.has(k)) && !!def && !!hookFor(def[2]); };
 
@@ -20012,7 +20658,7 @@ function restorable(e) {
   if (e.action === "suppression") return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
   return JSON.stringify(cur === undefined ? null : cur) !== JSON.stringify(e.avant);
 }
-const RESTORABLE = new Set(["delais", "reclamations", "paiementsAnnonces", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
+const RESTORABLE = new Set(["arretes", "delais", "reclamations", "paiementsAnnonces", "creneaux", "securiteEntrees", "securiteControles", "securiteRapports", "securiteSignalements", "securiteAttendus", "contratsTravail", "rh", "agenda", "absences", "notesService", "sanctions", "demandesAgents", "entretiens", "declarations", "decisions", "echeanciers", "penalites", "demandes", "arbitrages", "entreprises", "config", "relances", "clotures", "attestations", "controles", "saisies", "transmissions", "alertes", "releves", "soupcons", "prets", "vehicules", "convocations", "contrats", "conventions", "prestations", "versements", "catalogue", "fonctionnaires", "pointages", "payes", "rappels", "depots"]);
 const jPath = e => e.collection + "/" + e.doc_id;
 // Historique d'un dossier : ses lignes du journal, avec « Restaurer » ou « Annuler » comme dans le journal, sans
 // avoir à le chercher dans l'onglet Journal (Direction).
@@ -25822,6 +26468,7 @@ function searchIndex() {
   for (const p of payesVersees()) push("Paye", pyNo(p.id), `${pyNo(p.id)} · ${periodLabel(p.id)}`, `${(p.lignes || []).length} agent${plural((p.lignes || []).length)} · ${money(payeTotal(p))} versés${p.reprise ? " · reprise de " + (p.reprise.no || "la demande") : ""}`, "paye salaires", () => { S.payeSem = p.id; showTab("payes"); try { history.replaceState(null, "", "#payes"); } catch (e) { /* sans historique */ } renderPayes(true); }, p.verseeLe);
   for (const t of S.transmissions) push("Justice", dossierNo("TJ", t.id), `${dossierNo("TJ", t.id)} · ${t.entrepriseNom}`, `${(TSTAT[t.statut] || TSTAT.transmis)[0]} · ${money(t.montant)}`, t.patron, () => openTransmission(t.id), t.at);
   // Recouvrement : réclamations et demandes de délai venues de l'espace entreprise.
+  for (const a of S.arretes || []) push("Arrêté", arrNo(a), `Arrêté n° ${arrNo(a)} · ${arrCourt(a, 80)}`, `${(ARR_STAT[a.statut] || ARR_STAT.brouillon)[0]} · ${arrModele(a.modele).nom}${(a.prefet || {}).nom ? " · " + arrNom(a.prefet.nom) : ""}`, [(a.redacteur || {}).nom, (a.params || {}).evenement, (a.params || {}).lieu].filter(Boolean).join(" "), () => openArrete(a.id), (a.prefet || {}).signeLe || a.createdAt);
   for (const pa of S.paiementsAnnonces || []) push("Paiement annoncé", paNo(pa), `${paNo(pa)} · ${pa.entrepriseNom}`, `${money(pa.montant)} · ${paItemsTxt(pa)} · ${paIssue(pa)}`, pa.note, () => openPaiementAnnonce(pa.id), pa.at);
   for (const rc of S.reclamations || []) push("Réclamation", rcNo(rc), `${rcNo(rc)} · ${rc.entrepriseNom}`, `${rcCibleTxt(rc)} · ${rcIssue(rc)}`, rc.motif, () => openReclamation(rc.id), rc.at);
   for (const dl of S.delais || []) push("Demande de délai", "", `Délai · ${dl.entrepriseNom}`, `${(dl.decls || []).length} avis · ${({ attente: "en attente", accordee: "accordé", refusee: "refusé", annulee: "annulée" })[dl.statut] || dl.statut || ""}`, dl.motif || "", () => openDelai(dl.id), dl.at);
