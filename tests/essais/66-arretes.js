@@ -19,7 +19,8 @@ module.exports = {
     await r.locator("#arr-nouveau").click(); await pause(r, 300);
     await r.locator('#arr-modeles [data-modele="perimetre"]').click(); await pause(r, 500);
     t.egal(await r.locator("#arr-numero").inputValue(), "8", "numérotation de 2026 reprise à 00008");
-    t.egal(await r.locator("#arr-visas textarea").count(), 5, "visas du modèle");
+    t.egal(await r.locator("#arr-visas textarea").count(), 8, "visas du modèle (ceux des arrêtés publiés)");
+    t.ok((await r.locator("#arr-p-evenement").isVisible()) && !(await r.locator("#arr-p-etablissement").isVisible()), "seuls les paramètres employés par les textes sont demandés");
     t.egal(await r.locator("#arr-prefet").inputValue(), "f9", "préfet proposé");
     t.egal(await r.locator("#arr-q-redacteur").inputValue(), "Le secrétaire général de la zone de défense et de sécurité de Paris", "qualité du rédacteur tirée de sa fiche");
     // Paramètres manquants : signature refusée.
@@ -40,7 +41,7 @@ module.exports = {
     // Un article de la bibliothèque : placé avant l'exécution et les voies de recours.
     await r.locator('[data-ajout="arr-articles"]').selectOption("lib:drones"); await pause(r, 300);
     const arts = await r.locator("#arr-articles textarea").evaluateAll((l) => l.map((x) => x.value));
-    t.ok(arts.length === 11 && /drone/.test(arts[8]) && /exécution/.test(arts[9]), "article « drones » ajouté avant l'exécution", arts.map((x) => x.slice(0, 30)).join(" | "));
+    t.ok(arts.length === 10 && /drone/.test(arts[7]) && /exécution/.test(arts[8]), "article « drones » ajouté avant l'exécution", arts.map((x) => x.slice(0, 30)).join(" | "));
     t.contient(texte(await r.locator("#arr-manque").innerText()), "Tous les paramètres", "paramètres complets");
     await r.locator("#arr-voir-apercu").click(); await pause(r, 2500);
     t.ok((await r.locator("#arr-apercu canvas").count()) >= 2, "aperçu en pages A4");
@@ -78,10 +79,17 @@ module.exports = {
     const [dl] = await Promise.all([p.waitForEvent("download"), p.locator("#arr-pdf").click()]);
     t.egal(dl.suggestedFilename(), "arrete-2026-00008.pdf", "PDF de l'arrêté signé");
     t.contient(texte(await p.locator("#dlg").innerText()), "à l’occasion du match PSG – OM", "« de le » contracté en « du »");
+    // Arrêté d'abrogation : prérempli ; signé par le préfet lui-même, l'arrêté visé passe « abrogé ».
+    await p.locator("#arr-rediger-abrogation").click(); await pause(p, 600);
+    t.contient(await p.locator("#arr-p-reference").inputValue(), "2026-00008 du", "arrêté visé prérempli");
+    t.egal(await p.locator("#arr-signer").innerText(), "Signer l’arrêté", "le préfet rédige : il signe directement");
+    await p.locator("#arr-signer").click(); await pause(p, 3000);
+    const ab = (await arretes(p)).find((x) => x.modele === "abrogation") || {}, vise = (await arretes(p)).find((x) => x.id === a1.id) || {};
+    t.ok(ab.statut === "signe" && ab.numero === 9 && vise.statut === "abroge" && vise.abrogation && vise.abrogation.arreteId === ab.id, "abrogation signée, l'arrêté visé abrogé", JSON.stringify({ s: ab.statut, n: ab.numero, v: vise.statut, ab: vise.abrogation }).slice(0, 300));
     t.sansErreur(p);
 
     // 4. Le préfet renvoie un autre projet au rédacteur, avec ce qu'il faut revoir.
-    const a3 = Object.assign({}, a1, { id: undefined, numero: 9 });
+    const a3 = Object.assign({}, a1, { id: undefined, numero: 10 });
     const q = await ouvrir(env, { discord: "328947555771613184", nom: "Préfet de police | Maël BERGERON", hash: "personnel", avant: EQUIPE + `window.__SEED.push({ collection: "arretes", id: "ar9", data: ${JSON.stringify(a3)} });` });
     await pause(q, 900);
     await q.locator("#rh-espaces button", { hasText: "Arrêtés" }).click(); await pause(q, 400);

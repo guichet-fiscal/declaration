@@ -1089,6 +1089,11 @@ dialog::backdrop{background:rgba(9,15,32,.52);backdrop-filter:blur(3px);-webkit-
 .arr-modeles strong{font-size:15px}
 .arr-modeles span{font-size:13px;color:var(--ink-2);line-height:1.4}
 .arr-modeles .meta{color:var(--ink-3);font-size:12px}
+.arr-params{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 12px}
+.arr-champ.large,.arr-champ[data-param="etablissement"],.arr-champ[data-param="mission"]{grid-column:1/-1}
+.arr-champ[hidden]{display:none}
+.arr-cat{margin-top:14px}
+.arr-cat .arr-modeles{margin-top:6px}
 .arr-pages{display:grid;gap:14px;justify-items:center;margin-top:6px}
 .arr-pages .ct-page{width:min(100%,780px)}
 .arr-banniere{display:block;margin:4px 0 10px}
@@ -10576,70 +10581,178 @@ function noteDoc(n) {
 // Les n° 2026-00001 à 2026-00007 ont été pris avant le guichet : la numérotation de 2026 reprend à 00008.
 const ARR_DEPART = { 2026: 8 };
 const ARR_STAT = { brouillon: ["Brouillon", "muted"], a_signer: ["À signer par le préfet", "warn"], signe: ["Signé", "ok"], abroge: ["Abrogé", "bad"] };
+// Bibliothèque reprise des arrêtés publiés par la Préfecture de police (recueil des actes administratifs,
+// 2020-2026) : mêmes textes visés, mêmes formules ; les articles cités ont été vérifiés le 20 nov. 2026.
 const ARR_VISAS = [
-  ["cgct", "Code général des collectivités territoriales", "Vu le code général des collectivités territoriales, notamment ses articles L. 2512-13, L. 2512-14 et L. 2215-1 ;"],
-  ["csi", "Code de la sécurité intérieure", "Vu le code de la sécurité intérieure, notamment ses articles L. 122-1, L. 211-1, L. 211-3, L. 211-4 et L. 226-1 ;"],
-  ["cpp", "Code de procédure pénale (contrôles d’identité)", "Vu le code de procédure pénale, notamment son article 78-2 ;"],
-  ["cp", "Code pénal (armes, menaces)", "Vu le code pénal, notamment ses articles 132-75 et 222-17 ;"],
-  ["defense", "Code de la défense", "Vu le code de la défense ;"],
+  ["cgct", "CGCT : pouvoirs de police du préfet de police", "Vu le code général des collectivités territoriales, notamment son article L. 2512-13 ;"],
+  ["cgct_circ", "CGCT : police de la circulation à Paris", "Vu le code général des collectivités territoriales, notamment ses articles L. 2512-13 et L. 2512-14 ;"],
+  ["cgct_req", "CGCT : réquisition", "Vu le code général des collectivités territoriales, notamment ses articles L. 2215-1 et L. 2512-13 ;"],
+  ["route", "Code de la route", "Vu le code de la route, notamment son article L. 411-2 ;"],
+  ["cp", "Code pénal", "Vu le code pénal ;"],
+  ["cp_armes", "Code pénal : définition de l’arme", "Vu le code pénal, notamment son article 132-75 ;"],
+  ["cp_manif", "Code pénal : manifestations (organisation, visage dissimulé, participation)", "Vu le code pénal, notamment ses articles 431-9, 431-9-1 et R. 644-4 ;"],
+  ["cp_incendie", "Code pénal : destructions, engins incendiaires", "Vu le code pénal, notamment ses articles 322-5 et 322-11-1 ;"],
+  ["cpp", "Code de procédure pénale", "Vu le code de procédure pénale ;"],
+  ["cpp_manif", "Code de procédure pénale : fouilles sur réquisitions (manifestations)", "Vu le code de procédure pénale, notamment ses articles 78-2-4 et 78-2-5 ;"],
+  ["rural", "Code rural : chiens dangereux", "Vu le code rural et de la pêche maritime, notamment ses articles L. 211-11 et L. 211-12 ;"],
+  ["csi", "CSI : ordre public (préfet de police)", "Vu le code de la sécurité intérieure, notamment son article L. 122-1 ;"],
+  ["csi_perimetre", "CSI : périmètre de protection, sécurité privée", "Vu le code de la sécurité intérieure, notamment ses articles L. 122-1, L. 226-1, L. 611-1 et L. 613-2 ;"],
+  ["csi_manif", "CSI : manifestations", "Vu le code de la sécurité intérieure, notamment ses articles L. 211-1 à L. 211-4 ;"],
+  ["csi_fermeture", "CSI : fermeture (vente à emporter, nuisances)", "Vu le code de la sécurité intérieure, notamment ses articles L. 122-1 et L. 332-1 ;"],
+  ["csi_trafic", "CSI : fermeture d’un local lié au trafic de stupéfiants", "Vu le code de la sécurité intérieure, notamment ses articles L. 122-1 et L. 333-2 ;"],
+  ["csp", "Code de la santé publique", "Vu le code de la santé publique ;"],
+  ["csp_debits", "Code de la santé publique : fermeture des débits de boissons", "Vu le code de la santé publique, notamment ses articles L. 3332-15 et L. 3352-6 ;"],
+  ["crpa", "CRPA : procédure contradictoire, motivation", "Vu le code des relations entre le public et l’administration, notamment ses articles L. 121-1, L. 122-1 et L. 211-2 ;"],
+  ["environnement", "Code de l’environnement : artifices", "Vu le code de l’environnement, notamment le chapitre VII du titre V du livre V ;"],
+  ["decret2010", "Décret de 2010 sur les artifices de divertissement", "Vu le décret n° 2010-580 du 31 mai 2010 modifié relatif à l’acquisition, la détention et l’utilisation des artifices de divertissement et des articles pyrotechniques destinés au théâtre ;"],
+  ["transports", "Code des transports (drones)", "Vu le code des transports ;"],
   ["aviation", "Code de l’aviation civile", "Vu le code de l’aviation civile ;"],
-  ["transports", "Code des transports (survol)", "Vu le code des transports, notamment son article L. 6211-4 ;"],
-  ["environnement", "Code de l’environnement (artifices)", "Vu le code de l’environnement, notamment ses articles L. 557-1 et suivants ;"],
-  ["energie", "Code de l’énergie (carburants)", "Vu le code de l’énergie ;"],
+  ["arrete2020", "Arrêté du 3 décembre 2020 (drones)", "Vu l’arrêté du 3 décembre 2020 relatif à l’utilisation de l’espace aérien par les aéronefs sans équipage à bord ;"],
+  ["defense", "Code de la défense", "Vu le code de la défense ;"],
   ["loi2010", "Loi sur la dissimulation du visage", "Vu la loi n° 2010-1192 du 11 octobre 2010 interdisant la dissimulation du visage dans l’espace public ;"],
-  ["decret2004", "Décret sur les pouvoirs des préfets", "Vu le décret n° 2004-374 du 29 avril 2004 modifié relatif aux pouvoirs des préfets, à l’organisation et à l’action des services de l’État dans les régions et départements ;"],
+  ["cgfp", "Code général de la fonction publique", "Vu le code général de la fonction publique ;"],
+  ["decret2004", "Décret de 2004 sur les pouvoirs des préfets", "Vu le décret n° 2004-374 du 29 avril 2004 modifié relatif aux pouvoirs des préfets, à l’organisation et à l’action des services de l’État dans les régions et départements, notamment ses articles 72 et 73 ;"],
+  ["decret2004_deleg", "Décret de 2004 : délégations de signature", "Vu le décret n° 2004-374 du 29 avril 2004 modifié relatif aux pouvoirs des préfets, à l’organisation et à l’action des services de l’État dans les régions et départements, notamment son article 77 ;"],
+  ["nomination", "Décret de nomination du préfet de police", "Vu le décret portant nomination du préfet de police ;"],
+  ["arrete_vise", "Arrêté visé (par son numéro)", "Vu l’arrêté n° {reference} ;"],
   ["communique", "Communiqué annonçant l’événement", "Vu le communiqué annonçant {evenement} ;"]];
 const ARR_CONSID = [
-  ["competence", "Compétence du préfet de police", "Considérant qu’en application des articles L. 122-1 du code de la sécurité intérieure et L. 2512-13 du code général des collectivités territoriales, le préfet de police a la charge de l’ordre public à Paris ;"],
+  ["competence", "Compétence du préfet de police", "Considérant qu’en application de l’article L. 122-1 du code de la sécurité intérieure et de l’article 72 du décret n° 2004-374 du 29 avril 2004 susvisé, le préfet de police a la charge de l’ordre public à Paris, notamment la prévention des atteintes à la sécurité des personnes et des biens ;"],
+  ["circulation_comp", "Compétence en matière de circulation", "Considérant qu’en application de l’article L. 2512-14 du code général des collectivités territoriales, le préfet de police peut réglementer, de manière permanente ou temporaire, les conditions de circulation et de stationnement afin d’assurer la sécurité des personnes et des biens ;"],
+  ["perimetre_loi", "Ce que permet un périmètre de protection", "Considérant que l’article L. 226-1 du code de la sécurité intérieure permet d’instituer, par arrêté motivé, un périmètre de protection au sein duquel l’accès et la circulation des personnes sont réglementés, afin d’assurer la sécurité d’un lieu ou d’un événement exposé à un risque d’actes de terrorisme à raison de sa nature et de l’ampleur de sa fréquentation ;"],
   ["evenement", "L’événement : où et quand", "Considérant que {evenement} se tiendra {lieu} {periode} ;"],
   ["affluence", "Affluence et risques", "Considérant que cet événement est susceptible de rassembler un public nombreux et qu’il appartient à l’autorité de police de prévenir tout trouble à l’ordre public et toute atteinte à la sécurité des personnes et des biens ;"],
-  ["terrorisme", "Menace terroriste (périmètre de protection)", "Considérant le niveau élevé de la menace terroriste et que l’événement, par son ampleur et sa nature, y est particulièrement exposé, ce qui justifie l’instauration d’un périmètre de protection au sens de l’article L. 226-1 du code de la sécurité intérieure ;"],
+  ["terrorisme", "Menace terroriste", "Considérant que la menace terroriste demeure à un niveau élevé sur le territoire national, dans le cadre du plan Vigipirate, et que cet événement, par son ampleur et sa nature, constitue une cible potentielle ;"],
+  ["manif_sanction", "Sanction de la participation à une manifestation interdite", "Considérant que la participation à une manifestation interdite sur le fondement de l’article L. 211-4 du code de la sécurité intérieure est punie de l’amende prévue pour les contraventions de la 4e classe (article R. 644-4 du code pénal) ;"],
   ["debordements", "Appels à manifester, débordements récents", "Considérant que des appels à des rassemblements non déclarés ont été relayés et que des violences et des dégradations ont été commises lors de rassemblements récents de même nature ;"],
   ["nondeclare", "Manifestation non déclarée", "Considérant qu’aucune déclaration n’a été déposée dans les conditions prévues à l’article L. 211-1 du code de la sécurité intérieure ;"],
-  ["mobilisation", "Forces de l’ordre mobilisées", "Considérant que les forces de l’ordre sont fortement mobilisées et qu’il convient de prendre les mesures permettant de prévenir efficacement les troubles à l’ordre public ;"],
+  ["conciliation", "Concilier le droit de manifester et l’ordre public", "Considérant qu’il appartient à l’autorité de police de concilier l’exercice du droit de manifester avec les impératifs de l’ordre public ;"],
+  ["mobilisation", "Forces de l’ordre mobilisées", "Considérant que les forces de l’ordre sont fortement mobilisées, notamment dans le cadre du plan Vigipirate, et ne sauraient être détournées de leurs missions prioritaires ;"],
   ["circulation", "Sécurité des usagers (circulation)", "Considérant qu’il convient, pour garantir la sécurité des participants et des usagers de la voie publique, d’adapter les conditions de circulation et de stationnement aux abords des lieux concernés ;"],
-  ["drones", "Risque des drones", "Considérant que l’usage d’aéronefs circulant sans personne à bord au-dessus ou à proximité de rassemblements présente un risque pour la sécurité des personnes et peut servir à des fins malveillantes ;"],
-  ["produits", "Artifices, carburants, engins incendiaires", "Considérant que des artifices, des engins incendiaires et des carburants achetés au détail ont été utilisés lors de troubles récents, notamment contre les forces de l’ordre, et qu’il y a lieu d’en restreindre la vente, le transport et l’usage ;"],
+  ["drones", "Risque des drones", "Considérant que le survol de rassemblements par des aéronefs sans équipage à bord présente un risque pour la sécurité des personnes et des biens et peut servir à des fins malveillantes ;"],
+  ["produits", "Usage détourné des artifices et des carburants", "Considérant que des artifices de divertissement et des produits incendiaires (carburants, gaz inflammables) sont régulièrement utilisés de manière détournée, notamment contre les forces de l’ordre, les véhicules et les bâtiments publics, et que cet usage est de nature à troubler gravement l’ordre public ;"],
+  ["alcool", "Alcool et débordements", "Considérant que la consommation excessive d’alcool favorise les débordements, les rixes et les dégradations, et que les bouteilles et contenants en verre peuvent servir de projectiles ;"],
+  ["faits", "Faits constatés", "Considérant que les services de police ont constaté les faits suivants : {faits} ;"],
+  ["etab_lien", "Faits liés à l’établissement", "Considérant que ces faits sont en relation directe avec la fréquentation ou les conditions d’exploitation de l’établissement {etablissement} ;"],
+  ["trafic", "Lien avec un trafic de stupéfiants", "Considérant qu’il existe des raisons sérieuses de penser que l’activité de l’établissement {etablissement} est liée à un trafic de stupéfiants qui trouble l’ordre public ;"],
+  ["contradictoire", "Procédure contradictoire respectée", "Considérant que l’exploitant a été invité à présenter ses observations, conformément aux articles L. 121-1 et L. 122-1 du code des relations entre le public et l’administration ;"],
+  ["urgence_contradictoire", "Urgence : pas de procédure contradictoire", "Considérant que l’urgence justifie qu’il soit dérogé à la procédure contradictoire préalable, en application de l’article L. 121-2 du code des relations entre le public et l’administration ;"],
+  ["fermeture_motif", "Fermeture justifiée", "Considérant que ces faits portent atteinte à l’ordre, à la sécurité et à la tranquillité publics et justifient, à titre préventif, la fermeture de l’établissement ;"],
+  ["urgence_req", "Urgence (réquisition)", "Considérant l’urgence et l’atteinte à l’ordre et à la sécurité publics qui résultent de {evenement} ;"],
+  ["moyens_req", "Moyens de l’État insuffisants (réquisition)", "Considérant que les moyens dont dispose l’autorité de police ne permettent plus de faire face à la situation et que la réquisition de {personne} est nécessaire pour y remédier ;"],
+  ["abrogation", "Les circonstances ont cessé", "Considérant que les circonstances qui ont justifié l’arrêté n° {reference} ont cessé ;"],
+  ["service", "Nécessités du service", "Considérant les nécessités du service ;"],
   ["representants", "Protection des représentants de l’État", "Considérant que des menaces ont été proférées à l’encontre de représentants de l’État et qu’il convient d’assurer leur protection ;"],
   ["proportion", "Mesures proportionnées", "Considérant que les mesures prévues par le présent arrêté, limitées dans le temps et dans l’espace, sont adaptées, nécessaires et proportionnées ;"]];
 const ARR_ARTICLES = [
   ["perimetre", "Périmètre de protection et durée", "Un périmètre de protection est institué {periode}, à l’occasion de {evenement}, dans la zone délimitée par : {perimetre}."],
-  ["acces", "Accès au périmètre : palpations, fouilles", "L’accès au périmètre et la circulation à l’intérieur de celui-ci sont soumis à des points de contrôle. Les personnes qui refusent de se soumettre aux palpations de sécurité, à l’inspection visuelle ou à la fouille de leurs bagages se voient interdire l’accès au périmètre ou sont reconduites à l’extérieur de celui-ci."],
-  ["vehicules", "Visite des véhicules", "L’accès des véhicules au périmètre est subordonné à leur visite, avec le consentement de leur conducteur. À défaut, l’accès leur est refusé."],
+  ["interdits_perimetre", "Ce qui est interdit dans le périmètre", "Dans ce périmètre, sont interdits :\n- les rassemblements revendicatifs ;\n- le port, le transport et l’usage d’artifices de divertissement et d’articles pyrotechniques ;\n- le port et le transport d’armes, y compris factices, de munitions et d’objets pouvant constituer une arme ou servir de projectile au sens de l’article 132-75 du code pénal, ainsi que de bouteilles et de contenants en verre ;\n- l’accès des chiens dangereux mentionnés à l’article L. 211-12 du code rural et de la pêche maritime."],
+  ["acces", "Palpations, fouilles, visite des véhicules", "L’accès au périmètre et la circulation à l’intérieur de celui-ci sont subordonnés à des palpations de sécurité, à l’inspection visuelle et à la fouille des bagages ainsi qu’à la visite des véhicules. Ces vérifications sont réalisées, avec le consentement des personnes, par les officiers de police judiciaire et, sous leur responsabilité, par les agents de police judiciaire et les agents de police judiciaire adjoints, ainsi que, pour les palpations et la fouille des bagages, par des agents de sécurité privée agréés placés sous l’autorité d’un officier de police judiciaire."],
+  ["refus", "Refus des vérifications", "Les personnes qui refusent de se soumettre à ces vérifications se voient interdire l’accès au périmètre ou en sont reconduites d’office à l’extérieur, sans préjudice des poursuites pénales encourues."],
+  ["signalement", "Riverains et ayants droit", "Les personnes justifiant d’un motif personnel, professionnel ou familial d’accéder au périmètre sont invitées à se signaler auprès des forces de l’ordre présentes aux points d’accès."],
   ["circulation", "Circulation et stationnement, avec exemptions", "La circulation et le stationnement de tout véhicule sont interdits {periode} dans les voies suivantes : {perimetre}.\nCes interdictions ne s’appliquent pas :\n- aux véhicules de police, de gendarmerie, de secours et d’incendie ;\n- aux véhicules d’intérêt général prioritaires ;\n- aux véhicules des riverains justifiant de leur domicile dans la zone, pour y accéder ou en sortir."],
   ["dispositifs", "Dispositifs physiques : barrières, plots", "Des dispositifs physiques (barrières, plots, véhicules) peuvent être installés pour matérialiser la zone et en filtrer les accès. Il est interdit de les déplacer, de les franchir sans autorisation ou de les dégrader."],
-  ["controles", "Contrôles d’identité", "Dans la zone et pendant la période fixées à l’article 1er, les officiers de police judiciaire et, sous leur responsabilité, les agents de police judiciaire peuvent procéder aux contrôles d’identité prévus à l’article 78-2 du code de procédure pénale."],
-  ["armes", "Port et transport d’armes", "Le port et le transport, sans motif légitime, d’armes et d’objets pouvant constituer une arme au sens de l’article 132-75 du code pénal, ainsi que de bouteilles et de contenants en verre, sont interdits dans la zone et pendant la période fixées à l’article 1er."],
-  ["visage", "Dissimulation du visage", "Il est interdit de dissimuler volontairement son visage afin de ne pas être identifié dans la zone et pendant la période fixées à l’article 1er, dans les conditions prévues par la loi n° 2010-1192 du 11 octobre 2010."],
-  ["rassemblements", "Rassemblements et manifestations", "Tout rassemblement, toute manifestation et tout cortège sont interdits {periode} dans le périmètre délimité par : {perimetre}."],
-  ["drones", "Survol par drones", "Le survol par tout aéronef circulant sans personne à bord (drone) est interdit {periode} au-dessus de la zone délimitée par : {perimetre}. Cette interdiction ne s’applique pas aux aéronefs des services de l’État engagés dans une mission de sécurité ou de secours."],
-  ["artifices", "Artifices de divertissement", "La vente, la cession, le port, le transport et l’utilisation d’artifices de divertissement et d’articles pyrotechniques sont interdits {periode} sur le territoire suivant : {zone}."],
-  ["carburants", "Carburants au détail", "La vente au détail, l’achat et le transport de carburants dans tout récipient transportable sont interdits {periode} sur le territoire suivant : {zone}, sauf nécessité dûment justifiée par le client et vérifiée par le distributeur."],
+  ["rassemblements", "Cortèges et rassemblements interdits", "Les cortèges, défilés et rassemblements sont interdits {periode} dans le périmètre délimité par : {perimetre}."],
+  ["armes_manif", "Armes interdites (manifestation)", "Le port et le transport, sans motif légitime, d’armes et d’objets pouvant constituer une arme au sens de l’article 132-75 du code pénal sont interdits {periode} dans ce même périmètre."],
+  ["objets_manif", "Artifices, produits inflammables, équipements de protection", "Sont interdits {periode}, aux abords et au sein des rassemblements, le port et le transport par des particuliers, sans motif légitime :\n- d’artifices de divertissement et d’articles pyrotechniques ;\n- de substances ou mélanges dangereux, inflammables ou corrosifs dans des contenants individuels (essence, alcool à brûler, solvants…) ;\n- d’équipements de protection destinés à mettre en échec les moyens de maintien de l’ordre."],
+  ["visage", "Rappel : visage dissimulé", "Il est rappelé que le fait de dissimuler volontairement tout ou partie de son visage sans motif légitime, au sein ou aux abords immédiats d’une manifestation sur la voie publique, est puni d’un an d’emprisonnement et de 15 000 euros d’amende (article 431-9-1 du code pénal)."],
+  ["drones", "Survol par drones interdit", "Le survol par tout aéronef sans équipage à bord (drone) est interdit {periode} au-dessus de la zone délimitée par : {perimetre}. Cette interdiction ne s’applique pas aux aéronefs de l’État ou affrétés par lui, ni à ceux des services de secours engagés dans une mission de sécurité, de secours ou de sauvetage."],
+  ["drones_sanctions", "Sanctions (drones)", "Toute infraction au présent arrêté est passible des sanctions pénales prévues par le code des transports."],
+  ["artifices", "Artifices de divertissement", "Sont interdits {periode}, sur le territoire suivant : {zone}, la cession, à titre onéreux ou gratuit, des artifices de divertissement des catégories F2 à F4 et des articles pyrotechniques des catégories T2 et P2, ainsi que leur port et leur transport par des particuliers."],
+  ["artifices_pro", "Artifices : dérogation des professionnels", "Par dérogation, les personnes justifiant d’un usage professionnel et titulaires du certificat de qualification prévu par le décret n° 2010-580 du 31 mai 2010 susvisé peuvent acquérir, transporter et utiliser ces produits pour leur seul usage professionnel."],
+  ["carburants", "Carburants dans un récipient transportable", "Sont interdits {periode}, sur le territoire suivant : {zone}, la distribution et la vente de carburant, y compris de gaz inflammable, dans tout récipient transportable, ainsi que leur transport par des particuliers."],
+  ["carburants_urgence", "Carburants : dérogation d’urgence", "En cas d’urgence et pour un besoin dûment justifié, il peut être dérogé à l’article précédent sur autorisation des services de police lors des contrôles."],
   ["incendiaires", "Produits pour engins incendiaires", "La vente, l’achat, le port et le transport de produits inflammables ou chimiques pouvant servir à confectionner des engins incendiaires sont interdits {periode} sur le territoire suivant : {zone}."],
+  ["alcool", "Alcool : vente à emporter et consommation", "La vente à emporter de boissons alcooliques, ainsi que leur introduction, leur détention et leur consommation sur la voie publique, sont interdites {periode} dans le périmètre délimité par : {perimetre}.\nCes interdictions ne s’appliquent ni aux résidents, ni aux terrasses des débits de boissons et restaurants titulaires des autorisations nécessaires."],
+  ["terrasses", "Terrasses vidées", "Les terrasses et contre-terrasses situées dans le périmètre sont vidées de leur mobilier {periode}."],
   ["representants", "Protection des représentants de l’État", "Afin d’assurer la protection des représentants de l’État et des autorités présentes, l’accès aux abords immédiats de l’événement, {lieu}, est réservé {periode} aux personnes munies d’une accréditation ou d’une convocation."],
+  ["fermeture", "Fermeture de l’établissement", "L’établissement {etablissement} est fermé pour une durée de {duree} à compter de la notification du présent arrêté."],
+  ["fermeture_trafic", "Fermeture du local (trafic)", "L’établissement {etablissement} est fermé pour une durée de {duree} à compter de la notification du présent arrêté, en application de l’article L. 333-2 du code de la sécurité intérieure."],
+  ["fermeture_reouverture", "Rappel : réouverture interdite", "Le fait de ne pas respecter la présente mesure de fermeture est puni de deux mois d’emprisonnement et de 3 750 euros d’amende (article L. 3352-6 du code de la santé publique)."],
+  ["req", "Réquisition", "{personne} est requis{e} {periode} afin d’assurer la mission suivante : {mission}."],
+  ["req_retribution", "Réquisition : rétribution", "La rétribution par l’État de la personne requise ne peut se cumuler avec une rétribution par une autre personne physique ou morale ; elle compense uniquement les frais matériels, directs et certains résultant de l’application du présent arrêté."],
+  ["req_refus", "Réquisition : refus puni", "Le refus d’exécuter les mesures prescrites par le présent arrêté est puni de six mois d’emprisonnement et de 10 000 euros d’amende (article L. 2215-1 du code général des collectivités territoriales)."],
+  ["delegation", "Délégation de signature", "Délégation est donnée à {personne}, {fonction}, à l’effet de signer, au nom du préfet de police et dans la limite de ses attributions, tous actes, arrêtés, décisions et pièces comptables."],
+  ["nomination", "Nomination", "{personne} est nommé{e} en qualité de {fonction} à compter du {jour}."],
+  ["affectation", "Affectation", "{personne} est affecté{e} {lieu}."],
+  ["abrogation", "Abrogation", "L’arrêté n° {reference} est abrogé à compter de la publication du présent arrêté."],
+  ["mesures_compl", "Mesures adaptées sur place", "Les représentants sur place de l’autorité de police peuvent, en fonction de l’évolution de la situation, lever ou compléter les mesures prévues par le présent arrêté."],
   ["derogations", "Dérogations", "Des dérogations aux dispositions du présent arrêté peuvent être accordées par le préfet de police, au cas par cas, sur demande motivée."],
   ["infractions", "Infractions", "Les infractions au présent arrêté sont constatées par procès-verbal et poursuivies conformément aux lois et règlements en vigueur."],
-  ["execution", "Exécution", "Le secrétaire général de la zone de défense et de sécurité de Paris, le directeur de cabinet et les directeurs des services de la préfecture de police sont chargés, chacun en ce qui le concerne, de l’exécution du présent arrêté."],
-  ["publicite", "Publication et voies de recours", "Le présent arrêté est publié au recueil des actes administratifs de la préfecture de police et affiché aux abords des lieux concernés. Il peut faire l’objet, dans un délai de deux mois à compter de sa publication, d’un recours gracieux auprès du préfet de police ou d’un recours contentieux devant le tribunal administratif de Paris."]];
+  ["notification", "Notification à l’exploitant", "Le présent arrêté est notifié à l’exploitant et affiché sur la façade de l’établissement."],
+  ["notification_agent", "Notification à l’intéressé", "Le présent arrêté est notifié à {personne}."],
+  ["execution", "Exécution (ordre public)", "Le directeur de cabinet, le secrétaire général de la zone de défense et de sécurité de Paris et les directeurs des services de police de la préfecture de police sont chargés, chacun en ce qui le concerne, de l’exécution du présent arrêté."],
+  ["execution_fermeture", "Exécution (fermeture)", "Le directeur de cabinet et les directeurs des services de police de la préfecture de police sont chargés, chacun en ce qui le concerne, de l’exécution du présent arrêté."],
+  ["execution_rh", "Exécution (personnel)", "Le directeur des ressources humaines de la préfecture de police est chargé de l’exécution du présent arrêté, qui sera versé au dossier de l’intéressé{e}."],
+  ["execution_deleg", "Exécution (délégation)", "{personne} est chargé{e} de l’exécution du présent arrêté."],
+  ["publicite", "Entrée en vigueur et publication", "Le présent arrêté entre en vigueur dès son affichage aux portes de la préfecture de police. Il est publié au recueil des actes administratifs de la préfecture de police et consultable sur son site. Il est transmis au procureur de la République près le tribunal judiciaire de Paris et au maire de Paris."],
+  ["publicite_simple", "Publication", "Le présent arrêté est publié au recueil des actes administratifs de la préfecture de police."]];
+// Ce qui ferme un arrêté : un article ajouté se place avant.
+const ARR_FIN = ["notification", "notification_agent", "execution", "execution_fermeture", "execution_rh", "execution_deleg", "publicite", "publicite_simple"];
+const ARR_SERVICES = ["Cabinet du préfet", "Direction de l’ordre public et de la circulation", "Direction des transports et de la protection du public", "Direction des ressources humaines", "Secrétariat général de la zone de défense et de sécurité de Paris"];
+const ARR_CATS = [["ordre", "Ordre public et événements"], ["etab", "Établissements"], ["urgence", "Mesures d’urgence"], ["admin", "Administration et personnel"], ["libre", "Autre"]];
 const ARR_MODELES = [
-  { k: "perimetre", nom: "Périmètre de protection", desc: "Événement sensible : périmètre (article L. 226-1), accès filtrés, palpations et fouilles, armes interdites.",
-    objet: "portant création d’un périmètre de protection à l’occasion de {evenement}", visas: ["cgct", "csi", "cpp", "cp", "decret2004"],
-    consid: ["competence", "evenement", "affluence", "terrorisme", "proportion"], articles: ["perimetre", "acces", "vehicules", "dispositifs", "controles", "armes", "derogations", "infractions", "execution", "publicite"] },
-  { k: "manifestation", nom: "Interdiction de manifester", desc: "Rassemblements et cortèges interdits sur un périmètre et une période ; visage dissimulé et armes interdits.",
-    objet: "portant interdiction de rassemblements et de manifestations {periode}", visas: ["cgct", "csi", "cp", "loi2010", "decret2004"],
-    consid: ["competence", "debordements", "nondeclare", "mobilisation", "proportion"], articles: ["rassemblements", "visage", "armes", "dispositifs", "infractions", "execution", "publicite"] },
-  { k: "circulation", nom: "Circulation et stationnement", desc: "Voies fermées à la circulation et au stationnement, avec les exemptions habituelles (secours, riverains).",
-    objet: "portant restrictions de la circulation et du stationnement à l’occasion de {evenement}", visas: ["cgct", "decret2004"],
-    consid: ["competence", "evenement", "circulation", "proportion"], articles: ["circulation", "dispositifs", "derogations", "infractions", "execution", "publicite"] },
-  { k: "drones", nom: "Survol par drones", desc: "Survol interdit au-dessus d’une zone pendant un événement, sauf les aéronefs de l’État.",
-    objet: "portant interdiction du survol par drones à l’occasion de {evenement}", visas: ["cgct", "csi", "aviation", "transports", "defense", "decret2004"],
-    consid: ["competence", "evenement", "drones", "proportion"], articles: ["drones", "derogations", "infractions", "execution", "publicite"] },
-  { k: "produits", nom: "Artifices, carburants, engins incendiaires", desc: "Vente, transport et usage d’artifices, de carburants au détail et de produits incendiaires interdits.",
-    objet: "portant interdiction de la vente, du transport et de l’usage d’artifices, de carburants au détail et de produits incendiaires {periode}", visas: ["cgct", "csi", "environnement", "energie", "cp", "decret2004"],
-    consid: ["competence", "produits", "proportion"], articles: ["artifices", "carburants", "incendiaires", "infractions", "execution", "publicite"] },
-  { k: "libre", nom: "Arrêté libre", desc: "Une page presque blanche : les visas de base, un article à écrire, l’exécution et les voies de recours.",
-    objet: "portant ", visas: ["cgct", "decret2004"], consid: ["competence"], articles: ["", "execution", "publicite"] }];
-const ARR_PARAMS = { evenement: "l’événement", lieu: "le lieu", debut: "le début", fin: "la fin", periode: "le début (et la fin)", jour: "le jour", perimetre: "le périmètre ou les voies", zone: "le territoire" };
+  { k: "perimetre", cat: "ordre", nom: "Périmètre de protection", desc: "Événement sensible : périmètre (article L. 226-1), palpations et fouilles, armes, artifices et chiens dangereux interdits.", service: "Cabinet du préfet",
+    objet: "instituant un périmètre de protection et des mesures de police à l’occasion de {evenement}", visas: ["cgct_circ", "cp", "cpp", "route", "rural", "csi_perimetre", "decret2004", "nomination"],
+    consid: ["competence", "perimetre_loi", "evenement", "affluence", "terrorisme", "proportion"], articles: ["perimetre", "interdits_perimetre", "acces", "refus", "signalement", "dispositifs", "mesures_compl", "execution", "publicite"] },
+  { k: "manifestation", cat: "ordre", nom: "Interdiction de manifester", desc: "Cortèges et rassemblements interdits sur un périmètre et une période ; armes, artifices et produits inflammables interdits.", service: "Cabinet du préfet",
+    objet: "portant interdiction de cortèges, défilés et rassemblements {periode}", visas: ["cgct", "cp_manif", "cp_armes", "cpp_manif", "csi_manif", "decret2004", "nomination"],
+    consid: ["competence", "manif_sanction", "debordements", "nondeclare", "mobilisation", "conciliation", "proportion"], articles: ["rassemblements", "armes_manif", "objets_manif", "visage", "mesures_compl", "execution", "publicite"] },
+  { k: "circulation", cat: "ordre", nom: "Circulation et stationnement", desc: "Voies fermées à la circulation et au stationnement, avec les exemptions habituelles (secours, riverains).", service: "Direction de l’ordre public et de la circulation",
+    objet: "portant restrictions de la circulation et du stationnement à l’occasion de {evenement}", visas: ["cgct_circ", "route", "decret2004", "nomination"],
+    consid: ["competence", "circulation_comp", "evenement", "circulation", "proportion"], articles: ["circulation", "dispositifs", "derogations", "mesures_compl", "execution", "publicite"] },
+  { k: "drones", cat: "ordre", nom: "Survol par drones", desc: "Survol interdit au-dessus d’une zone pendant un événement, sauf les aéronefs de l’État et des secours.", service: "Cabinet du préfet",
+    objet: "portant interdiction temporaire du survol par des aéronefs sans équipage à bord (drones) à l’occasion de {evenement}", visas: ["transports", "aviation", "csi", "decret2004", "arrete2020", "nomination"],
+    consid: ["competence", "evenement", "drones", "proportion"], articles: ["drones", "drones_sanctions", "execution", "publicite"] },
+  { k: "produits", cat: "ordre", nom: "Artifices et carburants", desc: "Cession, port et transport d’artifices et de carburant en bidon interdits (fêtes, émeutes), avec les dérogations habituelles.", service: "Cabinet du préfet",
+    objet: "réglementant temporairement la cession, le port et le transport des artifices de divertissement et du carburant {periode}", visas: ["cgct", "environnement", "cp_incendie", "csi", "decret2004", "decret2010", "nomination"],
+    consid: ["competence", "produits", "mobilisation", "proportion"], articles: ["artifices", "artifices_pro", "carburants", "carburants_urgence", "execution", "publicite"] },
+  { k: "alcool", cat: "ordre", nom: "Alcool sur la voie publique", desc: "Vente à emporter et consommation d’alcool interdites dans un périmètre pendant un événement.", service: "Cabinet du préfet",
+    objet: "portant interdiction de la vente à emporter et de la consommation de boissons alcooliques sur la voie publique à l’occasion de {evenement}", visas: ["cgct", "csp", "csi", "decret2004", "nomination"],
+    consid: ["competence", "evenement", "alcool", "proportion"], articles: ["alcool", "mesures_compl", "execution", "publicite"] },
+  { k: "fermeture", cat: "etab", nom: "Fermeture d’un établissement", desc: "Bar, discothèque, restaurant, commerce : fermeture administrative après des faits graves (code de la santé publique, L. 3332-15).", service: "Direction des transports et de la protection du public",
+    objet: "portant fermeture administrative de l’établissement {etablissement}", visas: ["cgct", "csp_debits", "csi_fermeture", "crpa", "decret2004", "nomination"],
+    consid: ["competence", "faits", "etab_lien", "contradictoire", "fermeture_motif", "proportion"], articles: ["fermeture", "fermeture_reouverture", "notification", "execution_fermeture", "publicite_simple"] },
+  { k: "fermeture_trafic", cat: "etab", nom: "Fermeture pour trafic de stupéfiants", desc: "Commerce ou local lié à un trafic de stupéfiants (article L. 333-2 du code de la sécurité intérieure).", service: "Cabinet du préfet",
+    objet: "portant fermeture administrative de l’établissement {etablissement}", visas: ["cgct", "csi_trafic", "crpa", "decret2004", "nomination"],
+    consid: ["competence", "faits", "trafic", "contradictoire", "proportion"], articles: ["fermeture_trafic", "notification", "execution_fermeture", "publicite_simple"] },
+  { k: "requisition", cat: "urgence", nom: "Réquisition", desc: "Requérir une personne ou une entreprise (dépannage, médecin, matériel) quand les moyens de l’État ne suffisent plus.", service: "Cabinet du préfet",
+    objet: "portant réquisition de {personne}", visas: ["cgct_req", "csi", "decret2004", "nomination"],
+    consid: ["competence", "urgence_req", "moyens_req", "proportion"], articles: ["req", "req_retribution", "req_refus", "notification_agent", "execution", "publicite_simple"] },
+  { k: "delegation", cat: "admin", nom: "Délégation de signature", desc: "Le préfet de police délègue sa signature à un agent (directeur de cabinet, chef de service…).", service: "Cabinet du préfet",
+    objet: "accordant délégation de la signature préfectorale à {personne}, {fonction}", visas: ["cgct", "cgfp", "decret2004_deleg", "nomination"],
+    consid: [], articles: ["delegation", "execution_deleg", "publicite_simple"] },
+  { k: "nomination", cat: "admin", nom: "Nomination d’un agent", desc: "Nommer un fonctionnaire dans une fonction, à une date, et l’affecter à un service.", service: "Direction des ressources humaines",
+    objet: "portant nomination de {personne} en qualité de {fonction}", visas: ["cgfp", "decret2004", "nomination"],
+    consid: ["service"], articles: ["nomination", "affectation", "notification_agent", "execution_rh"] },
+  { k: "abrogation", cat: "admin", nom: "Abrogation d’un arrêté", desc: "Mettre fin à un arrêté avant son terme ; signé, l’arrêté visé passe « abrogé » dans le guichet.", service: "Cabinet du préfet",
+    objet: "portant abrogation de l’arrêté n° {reference}", visas: ["cgct", "decret2004", "arrete_vise", "nomination"],
+    consid: ["competence", "abrogation"], articles: ["abrogation", "execution", "publicite"] },
+  { k: "libre", cat: "libre", nom: "Arrêté libre", desc: "Une page presque blanche : les visas de base, un article à écrire, l’exécution et la publication.", service: "Cabinet du préfet",
+    objet: "portant ", visas: ["cgct", "decret2004", "nomination"], consid: ["competence"], articles: ["", "execution", "publicite"] }];
+// Paramètres : remplissent les textes ; seuls ceux que les textes emploient sont demandés.
+const ARR_CHAMPS = [
+  ["evenement", "Événement, avec son article", "le match PSG – OM"],
+  ["lieu", "Lieu, avec « à », « au »…", "au Parc des Princes (Paris 16e)"],
+  ["debut", "Début", "", "datetime-local"],
+  ["fin", "Fin", "", "datetime-local"],
+  ["zone", "Territoire", "Paris"],
+  ["personne", "Personne ou entreprise concernée", "M. Jean DUPONT, Mme Léa MARTIN, la société …"],
+  ["fonction", "Fonction", "chef du service de la protection"],
+  ["etablissement", "Établissement", "à l’enseigne « Le Galaxy », 12 rue de la Gaîté (14e), exploité par M. Karim DUVAL"],
+  ["duree", "Durée de la fermeture", "quinze jours"],
+  ["mission", "Mission demandée", "le dépannage et l’enlèvement des véhicules accidentés"],
+  ["reference", "Arrêté visé (n° et date)", "2026-00008 du 20 novembre 2026"],
+  ["faits", "Faits constatés", "le 15 novembre 2026 vers 2 h, une rixe a éclaté devant l’établissement…", "textarea"],
+  ["perimetre", "Périmètre ou voies concernées", "les voies suivantes : avenue du Parc des Princes, rue Claude-Farrère, boulevard d’Auteuil…", "textarea"]];
+// Ce que demande chaque paramètre quand il manque ; « debut » remplit {periode}, {debut} et {jour}.
+const ARR_PARAMS = { evenement: "l’événement", lieu: "le lieu", debut: "le début", fin: "la fin", periode: "le début (et la fin)", jour: "la date de début", perimetre: "le périmètre ou les voies", zone: "le territoire",
+  personne: "la personne concernée", fonction: "la fonction", etablissement: "l’établissement", duree: "la durée", mission: "la mission", reference: "l’arrêté visé", faits: "les faits" };
+const ARR_CHAMP_DE = { periode: "debut", jour: "debut" };
+const ARR_CALCULES = new Set(["e"]); // accord : « nommé{e} » (Mme, la société… → e)
+const ARR_RECOURS = ["Si vous estimez devoir contester la présente décision, vous pouvez, dans un délai de deux mois à compter de sa notification ou de sa publication, former :",
+  "- un recours gracieux auprès du préfet de police ;", "- un recours hiérarchique auprès du ministre de l’intérieur ;", "- un recours contentieux devant le tribunal administratif de Paris.",
+  "Aucun de ces recours ne suspend l’application de la présente décision. Le recours gracieux ou hiérarchique doit être écrit, exposer les arguments ou faits nouveaux et comprendre une copie de la décision contestée. En l’absence de réponse dans un délai de deux mois, il est implicitement rejeté."];
 const ARR_PROPOSITIONS = ["Sur proposition du secrétaire général de la zone de défense et de sécurité de Paris ;", "Sur proposition du directeur de cabinet ;"];
 const arretesWriter = () => S.connected && !S.readOnly && (S.admin || S.role === "rh");
 const arrOf = id => (S.arretes || []).find(a => a.id === id) || null;
@@ -10682,10 +10795,14 @@ function arrQuand(v, sansHeure) {
   return sansHeure ? j : `${j} à ${d.getHours()} h ${String(d.getMinutes()).padStart(2, "0")}`;
 }
 function arrValeurs(a) {
-  const p = a.params || {}, deb = arrQuand(p.debut), fin = arrQuand(p.fin), t = x => String(x || "").trim();
-  return { evenement: t(p.evenement), lieu: t(p.lieu), perimetre: t(p.perimetre).replace(/\s*\n\s*/g, " ; "), zone: t(p.zone), debut: deb, fin,
-    periode: deb && fin ? `du ${deb} au ${fin}` : deb ? `à compter du ${deb}` : "", jour: arrQuand(p.debut, true) };
+  const p = a.params || {}, deb = arrQuand(p.debut), fin = arrQuand(p.fin), t = x => String(x || "").trim(), v = {};
+  for (const [k] of ARR_CHAMPS) v[k] = t(p[k]);
+  v.perimetre = v.perimetre.replace(/\s*\n\s*/g, " ; "); v.faits = v.faits.replace(/\s*\n\s*/g, " ; ").replace(/[.;]\s*$/, "");
+  return Object.assign(v, { debut: deb, fin, periode: deb && fin ? `du ${deb} au ${fin}` : deb ? `à compter du ${deb}` : "", jour: arrQuand(p.debut, true),
+    e: /^(mme|madame|mlle|mademoiselle|la|l’entreprise|l'entreprise)\b/i.test(v.personne) ? "e" : "" });
 }
+// Paramètres employés par les textes (pour n'afficher que leurs champs).
+const arrEmployes = a => { const set = new Set(); for (const t of arrTextes(a)) for (const m of String(t || "").matchAll(/\{(\w+)\}/g)) set.add(ARR_CHAMP_DE[m[1]] || m[1]); if (set.has("debut") && arrTextes(a).some(t => /\{periode\}/.test(t || ""))) set.add("fin"); return set; };
 // Remplace les paramètres ; « de » ou « à » devant un paramètre qui commence par « le » ou « les » se
 // contractent (« à l’occasion du match », « aux abords »).
 const ARR_CONTR = { "de le": "du", "de les": "des", "à le": "au", "à les": "aux" };
@@ -10696,18 +10813,18 @@ const arrTexte = (t, vals) => String(t || "")
     const c = ARR_CONTR[`${prep.toLowerCase()} ${x[1].toLowerCase()}`];
     return `${av}${prep === prep.toLowerCase() ? c : c.charAt(0).toUpperCase() + c.slice(1)} ${x[2]}`;
   })
-  .replace(/\{(\w+)\}/g, (m, k) => (vals[k] || "").trim() || "………………");
+  .replace(/\{(\w+)\}/g, (m, k) => ARR_CALCULES.has(k) ? vals[k] || "" : (vals[k] || "").trim() || "………………");
 const arrTextes = a => [a.objet, a.proposition, ...(a.visas || []), ...(a.considerants || []), ...(a.articles || []).map(x => x.texte)];
 function arrManque(a) {
   const vals = arrValeurs(a), set = new Set();
-  for (const t of arrTextes(a)) for (const m of String(t || "").matchAll(/\{(\w+)\}/g)) if (!(vals[m[1]] || "").trim()) set.add(m[1]);
+  for (const t of arrTextes(a)) for (const m of String(t || "").matchAll(/\{(\w+)\}/g)) if (!ARR_CALCULES.has(m[1]) && !(vals[m[1]] || "").trim()) set.add(m[1]);
   return [...set].map(k => ARR_PARAMS[k] ? ARR_PARAMS[k] : `{${k}} (inconnu)`);
 }
 const arrObjet = a => arrTexte(a.objet, arrValeurs(a)).replace(/\s+/g, " ").trim();
 const arrCourt = (a, n) => { const t = arrObjet(a); return t.length > (n || 90) ? t.slice(0, (n || 90) - 1) + "…" : t; };
 function arrDepuisModele(k) {
   const m = arrModele(k);
-  return { modele: m.k, objet: m.objet, visas: m.visas.map(x => arrLib(ARR_VISAS, x)), considerants: m.consid.map(x => arrLib(ARR_CONSID, x)),
+  return { modele: m.k, objet: m.objet, service: m.service, visas: m.visas.map(x => arrLib(ARR_VISAS, x)), considerants: m.consid.map(x => arrLib(ARR_CONSID, x)),
     articles: m.articles.map(x => ({ t: "art", texte: x ? arrLib(ARR_ARTICLES, x) : "" })) };
 }
 
@@ -10739,7 +10856,15 @@ class ArrWriter {
       const yT = top + (rf ? lwRF * rf.naturalHeight / rf.naturalWidth : 120) + 34;
       g.fillStyle = this.navy; g.font = `700 21px ${ARR_SERIF}`; if ("letterSpacing" in g) g.letterSpacing = "1.5px";
       g.fillText("PRÉFECTURE DE POLICE", 122 + lwRF / 2, yT); if ("letterSpacing" in g) g.letterSpacing = "0px";
-      this.y = yT + 46;
+      // Service qui prend l'arrêté (« Cabinet du préfet »…), sur deux lignes au plus.
+      let yS = yT;
+      if (this.service) {
+        g.fillStyle = this.gris; g.font = `italic 400 17px ${ARR_SERIF}`;
+        const mots = String(this.service).split(/\s+/), lignes = [""];
+        for (const m of mots) { const t = lignes[lignes.length - 1] ? lignes[lignes.length - 1] + " " + m : m; if (g.measureText(t).width > 320 && lignes[lignes.length - 1] && lignes.length < 2) lignes.push(m); else lignes[lignes.length - 1] = t; }
+        for (const l of lignes) { yS += 24; g.fillText(l, 122 + lwRF / 2, yS); }
+      }
+      this.y = yS + 46;
     } else {
       g.fillStyle = this.gris; g.font = `italic 400 18px ${ARR_SERIF}`; g.fillText(`Arrêté n° ${this.no}`, this.W / 2, top + 52);
       this.y = top + 140;
@@ -10803,12 +10928,12 @@ class ArrWriter {
 const arrRuns = (t, re) => { const m = re && String(t).match(re); return m ? [[m[0], "b"], [String(t).slice(m[0].length)]] : [[t]]; };
 async function arrPages(a) {
   const red = a.redacteur || {}, pr = a.prefet || {}, img = u => u ? ctrImage(u) : Promise.resolve(null);
-  const seul = !red.fid || !pr.fid ? !red.nom : red.fid === pr.fid;
+  const seul = a.signatureSeule || (!red.fid || !pr.fid ? !red.nom : red.fid === pr.fid);
   const [cadre, logoRF, logoPP, sigRed, sigPr, manuscrite] = await Promise.all([ctrImage("assets/contrat-cadre.png"), ctrImage("assets/contrat-logo.png"), ctrImage("assets/logo-prefecture.png"),
     red.signeLe && red.fid && !seul ? signatureMainUrl(red.fid).then(img) : Promise.resolve(null), pr.signeLe && pr.fid ? signatureMainUrl(pr.fid).then(img) : Promise.resolve(null),
     red.signeLe || pr.signeLe ? ctrPoliceSignature().catch(() => false) : Promise.resolve(false), arrPolice()]);
   const no = arrNo(a), vals = arrValeurs(a), T = t => arrTexte(t, vals);
-  const pw = new ArrWriter({ no, cadre, logoRF, logoPP });
+  const pw = new ArrWriter({ no, cadre, logoRF, logoPP, service: String(a.service == null ? "Cabinet du préfet" : a.service).trim() });
   pw.p([[`ARRÊTÉ N° ${no}`, "b"]], { align: "center", size: 36, after: 8, color: pw.navy });
   if (String(a.objet || "").trim()) pw.p([[T(a.objet).trim(), "bi"]], { align: "center", size: 23, after: 18, x: (pw.W - 860) / 2, w: 860 });
   pw.g.fillStyle = pw.navy; pw.g.fillRect(pw.W / 2 - 70, pw.y, 70, 3); pw.g.fillStyle = "#c8102e"; pw.g.fillRect(pw.W / 2, pw.y, 70, 3); pw.y += 34;
@@ -10861,6 +10986,14 @@ async function arrPages(a) {
   const yR = seul ? 0 : bloc(xG, hautRed, red.nom, sigRed, red.signeLe);
   pw.y = Math.max(yP, yR) + 16;
   if (a.statut === "abroge" && a.abrogation) pw.p([[`Arrêté abrogé le ${longDate(new Date(a.abrogation.le))}${a.abrogation.motif ? " : " + a.abrogation.motif : "."}`, "bi"]], { align: "center", color: "#c8102e", size: 19, after: 0 });
+  // Annexe : voies et délais de recours, comme sur les arrêtés publiés.
+  if (a.annexeRecours !== false) {
+    const lhR = Math.round(19 * 1.42), hR = 60 + ARR_RECOURS.reduce((s0, t) => s0 + pw.lignes([[t.replace(/^- /, "")]], 19, pw.inner - 52).length * lhR + 6, 0);
+    if (pw.y + 40 + hR > pw.H - pw.B) pw.newPage(); else pw.y += 30;
+    pw.g.fillStyle = pw.navy; pw.g.fillRect(pw.L, pw.y, pw.inner, 1.5); pw.y += 18;
+    pw.p([["ANNEXE · VOIES ET DÉLAIS DE RECOURS", "b"]], { align: "center", size: 19, after: 10, color: pw.navy });
+    for (const t of ARR_RECOURS) { const puce = /^- /.test(t); pw.p([[t.replace(/^- /, "")]], { align: "justify", size: 19, after: puce ? 3 : 8, indent: puce ? 52 : 0, puce }); }
+  }
   return pw.finir(a.statut === "abroge" ? "ABROGÉ" : arrSigne(a) ? "" : "PROJET");
 }
 async function arrPdf(a) {
@@ -10929,13 +11062,33 @@ function renderArretes() {
       : h("p", { class: "muted", style: "margin:8px 0 0", text: vue === "a_signer" ? "Aucun arrêté n’attend la signature du préfet." : vue === "brouillon" ? "Aucun brouillon." : vue === "signe" ? "Aucun arrêté signé pour l’instant." : w ? "Aucun arrêté : « Nouvel arrêté » pour rédiger le premier." : "Aucun arrêté." }),
     S.role === "rh" && !tous.length ? h("p", { class: "hint", style: "margin:10px 0 0", text: "Si la liste reste vide alors que la Direction a déjà rédigé des arrêtés, la mise à jour supabase/v53_arretes.sql n’est pas encore exécutée." }) : null));
 }
+// Les modèles, par famille ; un clic choisit.
+const arrGrille = (id, choisir, compte) => h("div", { id }, ARR_CATS.map(([c, titre]) => {
+  const l = ARR_MODELES.filter(m => m.cat === c); if (!l.length) return null;
+  return h("div", { class: "arr-cat" }, h("h4", { class: "mini-title", text: titre }), h("ul", { class: "arr-modeles" }, l.map(m => h("li", {}, h("button", { type: "button", "data-modele": m.k, onclick: () => choisir(m.k) },
+    h("strong", { text: m.nom }), h("span", { text: m.desc }),
+    compte ? h("span", { class: "meta", text: `${m.visas.length} visa${plural(m.visas.length)} · ${m.consid.length} considérant${plural(m.consid.length)} · ${m.articles.length} article${plural(m.articles.length)}` }) : null)))));
+}));
 function openArrModeles(back) {
   if (!arretesWriter()) return;
   openDialog({ eyebrow: "Arrêtés préfectoraux", title: "Nouvel arrêté : choisir un modèle", wide: true,
-    body: [h("p", { class: "hint", style: "margin:0", text: "Le modèle remplit les visas, les considérants et les articles habituels. Tout se modifie ensuite : textes, ajouts depuis la bibliothèque, ordre." }),
-      h("ul", { class: "arr-modeles", id: "arr-modeles" }, ARR_MODELES.map(m => h("li", {}, h("button", { type: "button", "data-modele": m.k, onclick: () => openArrForm(null, back, m.k) },
-        h("strong", { text: m.nom }), h("span", { text: m.desc }), h("span", { class: "meta", text: `${m.visas.length} visa${plural(m.visas.length)} · ${m.consid.length} considérant${plural(m.consid.length)} · ${m.articles.length} article${plural(m.articles.length)}` })))))],
+    body: [h("p", { class: "hint", style: "margin:0", text: "Chaque modèle reprend les textes visés, les considérants et les articles des arrêtés publiés par la Préfecture de police. Tout se modifie ensuite : textes, ajouts depuis la bibliothèque, ordre." }),
+      arrGrille("arr-modeles", k => openArrForm(null, back, k), true)],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => back ? back() : closeDialog(), text: back ? "Retour" : "Annuler" })] });
+}
+const arrParamsVides = () => Object.assign(Object.fromEntries(ARR_CHAMPS.map(([k]) => [k, ""])), { zone: "Paris" });
+// Un arrêté neuf d'après un modèle (params : paramètres déjà connus ; extra : champs en plus).
+function arrNouveau(k, params, extra) {
+  const annee = new Date().getFullYear();
+  return Object.assign({ annee, numero: arrProchain(annee), autorite: "Le préfet de police", ville: "Paris", proposition: "", annexeRecours: true, signatureSeule: false,
+    params: Object.assign(arrParamsVides(), params || {}) }, arrDepuisModele(k), extra || {});
+}
+// Arrêté d'abrogation signé : l'arrêté qu'il vise passe « abrogé ».
+async function arrAbrogerVise(id, body) {
+  const v = body && body.abrogeId ? arrOf(body.abrogeId) : null;
+  if (!v || v.statut !== "signe") return;
+  const b2 = Object.assign({}, v, { statut: "abroge", abrogation: { motif: `voir l’arrêté n° ${arrNo(body)}`, par: S.agentName || "", le: nowISO(), arreteId: id }, modifieLe: nowISO() }); delete b2.id;
+  if (await write(() => S.db.doc("arretes/" + v.id).set(b2))) toast(`Arrêté n° ${arrNo(v)} marqué abrogé.`);
 }
 
 /* Le formulaire de rédaction */
@@ -10968,7 +11121,7 @@ function arrListe(items, o) {
       const t = v.startsWith("lib:") ? arrLib(o.lib, v.slice(4)) : v === "libre" ? (o.debut || "") : "TITRE ";
       // Les articles « Exécution » et « Publication » restent en dernier : on ajoute avant eux.
       let at = items.length;
-      if (o.articles) { const fin = ["execution", "publicite"].map(k => norm(arrLib(ARR_ARTICLES, k))); while (at > 0 && fin.includes(norm(texteDe(items[at - 1])))) at--; }
+      if (o.articles) { const fin = ARR_FIN.map(k => norm(arrLib(ARR_ARTICLES, k))); while (at > 0 && fin.includes(norm(texteDe(items[at - 1])))) at--; }
       items.splice(at, 0, o.articles ? { t: v === "titre" ? "titre" : "art", texte: t } : t);
       dessiner(); o.change();
       const ta = box.querySelector(`textarea[data-i="${at}"]`); if (ta) { ta.focus(); if (v === "libre" || v === "titre") ta.setSelectionRange(ta.value.length, ta.value.length); }
@@ -10982,10 +11135,10 @@ function arrListe(items, o) {
 function openArrForm(a0, back, modeleK, graine) {
   if (!arretesWriter()) return;
   const moi = arrMoi(), annee = a0 ? Number(a0.annee) : new Date().getFullYear(), prefets = arrPrefets();
-  const st = graine ? JSON.parse(JSON.stringify(graine)) : a0 ? JSON.parse(JSON.stringify(a0)) : Object.assign({ annee, numero: arrProchain(annee), autorite: "Le préfet de police", ville: "Paris", proposition: "",
-    params: { evenement: "", lieu: "", debut: "", fin: "", perimetre: "", zone: "Paris" } }, arrDepuisModele(modeleK || "libre"));
+  const st = graine ? JSON.parse(JSON.stringify(graine)) : a0 ? JSON.parse(JSON.stringify(a0)) : arrNouveau(modeleK || "libre");
   delete st.id;
-  st.params = Object.assign({ evenement: "", lieu: "", debut: "", fin: "", perimetre: "", zone: "Paris" }, st.params || {});
+  st.params = Object.assign(arrParamsVides(), st.params || {});
+  if (st.service == null) st.service = "Cabinet du préfet";
   st.visas = st.visas || []; st.considerants = st.considerants || []; st.articles = st.articles || [];
   const pr0 = st.prefet && st.prefet.fid ? st.prefet : prefets[0] ? { fid: prefets[0].id } : {};
   // Champs simples.
@@ -10993,10 +11146,15 @@ function openArrForm(a0, back, modeleK, graine) {
   const ta = (val, rows, attrs) => { const x = h("textarea", Object.assign({ rows: String(rows) }, attrs || {})); x.value = val || ""; return x; };
   const numero = inp(st.numero, { type: "number", min: "1", step: "1", inputmode: "numeric" });
   const autorite = inp(st.autorite), objet = ta(st.objet, 2), ville = inp(st.ville);
-  const P = {};
-  for (const [k, ph] of [["evenement", "le match PSG – OM"], ["lieu", "au Parc des Princes (Paris 16e)"], ["zone", "Paris"]]) P[k] = inp(st.params[k], { placeholder: ph });
-  P.debut = inp(st.params.debut, { type: "datetime-local" }); P.fin = inp(st.params.fin, { type: "datetime-local" });
-  P.perimetre = ta(st.params.perimetre, 3, { placeholder: "les voies suivantes : avenue du Parc des Princes, rue Claude-Farrère, boulevard d’Auteuil…" });
+  const service = inp(st.service, { list: "arr-services", placeholder: "Cabinet du préfet" });
+  const P = {}, champs = {};
+  for (const [k, lab, ph, kind] of ARR_CHAMPS) {
+    P[k] = kind === "textarea" ? ta(st.params[k], 3, { placeholder: ph }) : inp(st.params[k], kind ? { type: kind } : { placeholder: ph });
+    champs[k] = h("div", { class: "arr-champ" + (kind === "textarea" ? " large" : ""), "data-param": k }, field("arr-p-" + k, lab, P[k]));
+  }
+  const sansParam = h("p", { class: "muted", style: "margin:0", text: "Aucun paramètre : ce modèle s’écrit directement dans les textes." });
+  const annexe = h("input", { type: "checkbox", id: "arr-annexe" }); annexe.checked = st.annexeRecours !== false;
+  const seule = h("input", { type: "checkbox", id: "arr-seule" }); seule.checked = !!st.signatureSeule;
   const propos = inp(st.proposition, { list: "arr-propositions", placeholder: "Sur proposition du secrétaire général de la zone de défense et de sécurité de Paris ;" });
   const qRed = inp((st.redacteur && st.redacteur.fid === moi.fid && st.redacteur.qualite) || moi.qualite, { placeholder: "Le secrétaire général de la zone de défense et de sécurité de Paris" });
   const selPr = h("select", {}, prefets.length ? prefets.map(f => h("option", { value: f.id, text: `${arrNom(f.nom)} · ${f.grade || ""}` })) : h("option", { value: "", text: "Aucun préfet dans le personnel" }));
@@ -11008,6 +11166,7 @@ function openArrForm(a0, back, modeleK, graine) {
   let tAp = 0;
   const lire = () => {
     st.numero = Math.round(Number(numero.value)) || 0; st.autorite = autorite.value.trim(); st.objet = objet.value; st.ville = ville.value.trim() || "Paris"; st.proposition = propos.value.trim();
+    st.service = service.value.trim(); st.annexeRecours = annexe.checked; st.signatureSeule = seule.checked;
     for (const k of Object.keys(P)) st.params[k] = P[k].value;
   };
   const dessinerApercu = () => {
@@ -11018,12 +11177,15 @@ function openArrForm(a0, back, modeleK, graine) {
   };
   function change() {
     lire();
-    const m = arrManque(st);
-    manque.textContent = m.length ? `À compléter avant la signature : ${m.join(", ")}.` : "Tous les paramètres utilisés dans les textes sont remplis.";
+    const m = arrManque(st), emp = arrEmployes(st);
+    for (const [k, el] of Object.entries(champs)) el.hidden = !emp.has(k);
+    sansParam.hidden = Object.keys(champs).some(k => emp.has(k));
+    manque.textContent = m.length ? `À compléter avant la signature : ${m.join(", ")}.` : sansParam.hidden ? "Tous les paramètres utilisés dans les textes sont remplis." : "";
     manque.classList.toggle("err", false);
     if (!apercu.hidden) { clearTimeout(tAp); tAp = setTimeout(dessinerApercu, 700); }
   }
-  [numero, autorite, objet, ville, propos, qRed, qPr, ...Object.values(P)].forEach(x => x.addEventListener("input", change));
+  [numero, autorite, objet, ville, propos, qRed, qPr, service, ...Object.values(P)].forEach(x => x.addEventListener("input", change));
+  [annexe, seule].forEach(x => x.addEventListener("change", change));
   const btApercu = h("button", { class: "btn ghost small", type: "button", id: "arr-voir-apercu", onclick: () => { apercu.hidden = !apercu.hidden; btApercu.textContent = apercu.hidden ? "Voir l’aperçu" : "Masquer l’aperçu"; if (!apercu.hidden) { fill(apercu, h("p", { class: "muted", style: "margin:0", text: "Préparation de l’aperçu…" })); dessinerApercu(); apercu.scrollIntoView({ behavior: "smooth", block: "start" }); } }, text: "Voir l’aperçu" });
   const m = arrModele(st.modele), err = h("span", { class: "err", "aria-live": "polite" });
   const changerModele = h("button", { class: "linkbtn", type: "button", id: "arr-changer-modele", onclick: ev => {
@@ -11036,7 +11198,7 @@ function openArrForm(a0, back, modeleK, graine) {
     const autre = (S.arretes || []).find(x => x.annee === st.annee && Number(x.numero) === st.numero && (!a0 || x.id !== a0.id));
     if (!(st.numero > 0)) return "Donnez un numéro d’ordre.";
     if (autre) return `Le n° ${arrNo(st)} est déjà pris (${arrCourt(autre, 60)}). Prochain libre : ${arrProchain(st.annee)}.`;
-    if (!String(st.objet).trim().replace(/^portant\s*$/i, "")) return "Écrivez l’objet de l’arrêté (« portant … »).";
+    if (!String(st.objet).trim().replace(/^(portant|instituant|réglementant|accordant)\s*$/i, "")) return "Écrivez l’objet de l’arrêté (« portant … »).";
     if (!signer) return "";
     if (!st.visas.some(v => String(v).trim())) return "Ajoutez au moins un visa.";
     if (!st.articles.some(x => x.t !== "titre" && String(x.texte).trim())) return "Ajoutez au moins un article.";
@@ -11065,6 +11227,7 @@ function openArrForm(a0, back, modeleK, graine) {
     const body = corps(signe);
     if (await arrEcrire(id, body)) {
       toast(body.statut === "signe" ? `Arrêté n° ${arrNo(body)} signé.` : signe ? `Arrêté n° ${arrNo(body)} signé et transmis à ${arrNom(body.prefet.nom)}.` : `Brouillon de l’arrêté n° ${arrNo(body)} enregistré.`);
+      if (body.statut === "signe") await arrAbrogerVise(id, body);
       if (body.statut === "signe" && autoOn("arretes")) await arrPublier(Object.assign({ id }, body));
       openArrete(id, back);
     } else bt.disabled = false;
@@ -11081,20 +11244,22 @@ function openArrForm(a0, back, modeleK, graine) {
     body: [
       a0 && a0.renvoi ? h("div", { class: "notice arr-banniere" }, h("strong", { text: `Renvoyé par ${a0.renvoi.par || "le préfet"} le ${longDate(new Date(a0.renvoi.le))} : ` }), a0.renvoi.motif || "") : null,
       h("p", { class: "hint", style: "margin:0" }, `${m.desc} `, changerModele),
-      h("div", { class: "row3" }, field("arr-numero", `Numéro d’ordre (n° ${annee}-…)`, numero), field("arr-autorite", "Autorité", autorite), field("arr-ville", "Fait à", ville)),
-      field("arr-objet", "Objet (« portant … »)", objet),
-      sec("Paramètres", h("p", { class: "hint", style: "margin:0 0 6px", text: "Ils remplissent les textes là où figurent {evenement}, {lieu}, {periode} (du début à la fin), {debut}, {fin}, {perimetre} et {zone}. Écrivez-les tels qu’ils se lisent dans la phrase." }),
-        h("div", { class: "row2" }, field("arr-p-evenement", "Événement, avec son article", P.evenement), field("arr-p-lieu", "Lieu, avec « à », « au »…", P.lieu)),
-        h("div", { class: "row3" }, field("arr-p-debut", "Début", P.debut), field("arr-p-fin", "Fin", P.fin), field("arr-p-zone", "Territoire (artifices, carburants…)", P.zone)),
-        field("arr-p-perimetre", "Périmètre ou voies concernées", P.perimetre), manque),
+      h("div", { class: "row2" }, field("arr-numero", `Numéro d’ordre (n° ${annee}-…)`, numero), field("arr-service", "Service (en-tête, sous « Préfecture de police »)", service)),
+      h("datalist", { id: "arr-services" }, ARR_SERVICES.map(t => h("option", { value: t }))),
+      h("div", { class: "row2" }, field("arr-autorite", "Autorité", autorite), field("arr-ville", "Fait à", ville)),
+      field("arr-objet", "Objet (« portant … », « instituant … »)", objet),
+      sec("Paramètres", h("p", { class: "hint", style: "margin:0 0 6px", text: "Seuls ceux dont les textes ont besoin sont demandés ; ils s’écrivent tels qu’ils se lisent dans la phrase (« le match… », « au Parc des Princes », « M. Jean DUPONT »). Un texte peut en employer d’autres : {evenement}, {lieu}, {periode}, {debut}, {fin}, {jour}, {zone}, {perimetre}, {personne}, {fonction}, {etablissement}, {duree}, {mission}, {reference}, {faits}." }),
+        h("div", { class: "arr-params" }, Object.values(champs)), sansParam, manque),
       sec("Visas", listes.visas),
       field("arr-proposition", "Sur proposition de (facultatif)", propos), h("datalist", { id: "arr-propositions" }, ARR_PROPOSITIONS.map(t => h("option", { value: t }))),
       sec("Considérants", listes.consid),
-      sec("Articles", h("p", { class: "hint", style: "margin:0 0 6px", text: "Numérotés tout seuls. Une ligne commençant par « - » devient une puce. Les articles ajoutés se placent avant l’exécution et les voies de recours." }), listes.articles),
+      sec("Articles", h("p", { class: "hint", style: "margin:0 0 6px", text: "Numérotés tout seuls. Une ligne commençant par « - » devient une puce. Les articles ajoutés se placent avant la notification, l’exécution et la publication." }), listes.articles,
+        h("label", { class: "switch", style: "margin-top:10px" }, annexe, h("span", { text: "Joindre en annexe les voies et délais de recours (comme sur les arrêtés publiés)" }))),
       sec("Signatures",
         h("div", { class: "row2" },
           h("div", {}, h("p", { class: "arr-sig-qui", text: `Rédacteur : ${moi.nom || "vous"} (vous)` }), field("arr-q-redacteur", "Votre qualité, sous « Pour le préfet de police »", qRed)),
           h("div", {}, field("arr-prefet", "Préfet signataire", selPr), field("arr-q-prefet", "Sa qualité", qPr))),
+        h("label", { class: "switch" }, seule, h("span", { text: "N’imprimer que la signature du préfet, comme sur les vrais arrêtés (la vôtre reste enregistrée dans le guichet)" })),
         h("p", { class: "hint", style: "margin:0", text: "Vous signez en transmettant ; le préfet choisi signe ensuite depuis sa session. Une signature manuscrite importée sur la fiche (« Signatures des agents ») remplace le nom écrit à la main." })),
       h("div", { class: "paste-row" }, btApercu), apercu, err],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => a0 ? openArrete(a0.id, back) : back ? back() : closeDialog(), text: a0 ? "Retour" : "Annuler" }), h("span", { class: "spacer" }),
@@ -11104,9 +11269,8 @@ function openArrForm(a0, back, modeleK, graine) {
 // Changer de modèle en cours de rédaction : garde le numéro, l'objet s'il a été écrit, les paramètres.
 function openArrModelesPour(st, a0, back) {
   openDialog({ eyebrow: "Arrêtés préfectoraux", title: "Changer de modèle", wide: true,
-    body: [h("p", { class: "hint", style: "margin:0", text: "Le numéro, l’autorité, les paramètres et la proposition sont gardés ; l’objet, les visas, les considérants et les articles sont remplacés par ceux du modèle." }),
-      h("ul", { class: "arr-modeles" }, ARR_MODELES.map(m => h("li", {}, h("button", { type: "button", "data-modele": m.k, onclick: () => openArrForm(a0, back, m.k, Object.assign({}, st, arrDepuisModele(m.k))) },
-        h("strong", { text: m.nom }), h("span", { text: m.desc })))))],
+    body: [h("p", { class: "hint", style: "margin:0", text: "Le numéro, l’autorité, les paramètres et la proposition sont gardés ; le service, l’objet, les visas, les considérants et les articles sont remplacés par ceux du modèle." }),
+      arrGrille("arr-modeles-pour", k => openArrForm(a0, back, k, Object.assign({}, st, arrDepuisModele(k))), false)],
     foot: [h("button", { class: "btn ghost small", type: "button", onclick: () => openArrForm(a0, back, st.modele, st), text: "Retour" })] });
 }
 
@@ -11143,6 +11307,8 @@ function openArrete(id, back) {
     const b = ev.currentTarget; if (!deuxClics(b, "Confirmer : la signature du rédacteur est retirée")) return;
     maj(b, { statut: "brouillon", redacteur: Object.assign({}, red, { signeLe: null }) }, "Arrêté repris en brouillon.");
   }, text: "Reprendre en brouillon" }));
+  if (w && a.statut === "signe") foot.push(h("button", { class: "btn ghost small", type: "button", id: "arr-rediger-abrogation", title: "Rédiger l’arrêté qui abroge celui-ci ; signé, celui-ci passe « abrogé »",
+    onclick: () => openArrForm(null, () => openArrete(id, back), "abrogation", arrNouveau("abrogation", { reference: `${arrNo(a)} du ${longDate(new Date(pr.signeLe || a.modifieLe || Date.now()))}` }, { abrogeId: id })), text: "Arrêté d’abrogation" }));
   if (S.admin && a.statut === "signe") foot.push(h("button", { class: "btn ghost small danger", type: "button", id: "arr-abroger", onclick: ev => { abrog.hidden = false; ev.currentTarget.hidden = true; abrog.querySelector("textarea").focus(); }, text: "Abroger" }));
   foot.push(h("span", { class: "spacer" }));
   if (prefetMoi && a.statut === "a_signer") foot.push(h("button", { class: "btn ghost small", type: "button", id: "arr-renvoyer", onclick: ev => { renvoi.hidden = false; ev.currentTarget.hidden = true; renvoi.querySelector("textarea").focus(); }, text: "Renvoyer au rédacteur" }));
@@ -11151,7 +11317,7 @@ function openArrete(id, back) {
   if (prefetMoi && a.statut === "a_signer") foot.push(h("button", { class: "btn ink small", type: "button", id: "arr-signer-prefet", onclick: async ev => {
     const b = ev.currentTarget; b.disabled = true;
     const now = nowISO(), body = Object.assign({}, a, { statut: "signe", prefet: Object.assign({}, pr, { signeLe: now }), modifieLe: now }); delete body.id;
-    if (await arrEcrire(id, body)) { toast(`Arrêté n° ${arrNo(a)} signé.`); if (autoOn("arretes")) await arrPublier(Object.assign({ id }, body)); reopen(); } else b.disabled = false;
+    if (await arrEcrire(id, body)) { toast(`Arrêté n° ${arrNo(a)} signé.`); await arrAbrogerVise(id, body); if (autoOn("arretes")) await arrPublier(Object.assign({ id }, body)); reopen(); } else b.disabled = false;
   }, text: "Signer l’arrêté" }));
   const etat = a.statut === "brouillon" && a.renvoi ? ["RENVOYÉ", "warn"] : a.statut === "a_signer" ? ["À SIGNER", "warn"] : a.statut === "signe" ? ["SIGNÉ", "ok"] : a.statut === "abroge" ? ["ABROGÉ", "bad"] : ["BROUILLON", "muted"];
   const quand = x => x ? `le ${longDate(new Date(x))} à ${hhmm(new Date(x))}` : "";
@@ -11163,6 +11329,8 @@ function openArrete(id, back) {
         ["Préfet signataire", pr.nom ? `${arrNom(pr.nom)}${pr.qualite ? " · " + pr.qualite : ""}${pr.signeLe ? ` · signé ${quand(pr.signeLe)}` : a.statut === "a_signer" ? " · signature attendue" : ""}` : "—"],
         a.params && (a.params.debut || a.params.fin) ? ["Période", arrValeurs(a).periode || "—"] : null,
         a.publieLe ? ["Publication", `sur Discord ${quand(a.publieLe)}${a.publiePar ? " par " + a.publiePar : ""}`] : null,
+        a.abrogeId && arrOf(a.abrogeId) ? ["Abroge", h("button", { class: "linkbtn", type: "button", onclick: () => openArrete(a.abrogeId, reopen), text: `l’arrêté n° ${arrNo(arrOf(a.abrogeId))} (${arrCourt(arrOf(a.abrogeId), 60)})` })] : null,
+        a.abrogation && a.abrogation.arreteId && arrOf(a.abrogation.arreteId) ? ["Abrogé par", h("button", { class: "linkbtn", type: "button", onclick: () => openArrete(a.abrogation.arreteId, reopen), text: `l’arrêté n° ${arrNo(arrOf(a.abrogation.arreteId))}` })] : null,
         a.statut === "abroge" && a.abrogation ? ["Abrogation", `${quand(a.abrogation.le)}${a.abrogation.par ? " par " + a.abrogation.par : ""} : ${a.abrogation.motif || "—"}`] : null]),
       renvoi, abrog, pages],
     foot });
